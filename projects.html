@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>โครงการ</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <!-- link css -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar nav-banner position-relative d-flex align-items-center px-3">
+  
+  <ul class="navbar-nav d-flex flex-row gap-2 me-auto">
+    <li class="nav-item px-2">
+      <a class="nav-link" href="homepage.html">หน้าแรก</a>
+    </li>
+    <li class="nav-item px-2">
+      <a class="nav-link" href="donation.html">บริจาค</a>
+    </li>
+    <li class="nav-item px-2 ">
+      <a class="nav-link active text-danger" href="projects.html">โครงการ</a>
+    </li>
+    <li class="nav-item px-2">
+      <a class="nav-link" href="about.html">เกี่ยวกับเรา</a>
+    </li>
+    <li class="nav-item px-2">
+      <a class="nav-link" href="contact.html">ติดต่อ</a>
+    </li>
+  </ul>
+
+  <img 
+    src="img/logobanner.png" 
+    alt="DrawDream logo"
+    class="position-absolute start-50 translate-middle-x"
+  >
+
+  <a href="login.html" class="btn btn-outline-dark btn-radis" aria-label="เข้าสู่ระบบ">
+    เข้าสู่ระบบ
+  </a>
+
+</nav>
+
+
+<div class="container">   
+  <!-- Hero Section -->
+  <section class="hero-section text-center py-5">
+    <div class="container">
+      <h1 class="hero-title">
+        โครงการที่ใช่ <span class="highlight">ในวันที่จุดคุณอยากให้</span>
+      </h1>
+      <p class="hero-subtitle">บริจาคให้โครงการที่ใช่</p>
+
+      <!-- Search Box -->
+      <div class="search-container mx-auto mt-4">
+        <input 
+          type="text" 
+          class="search-input" 
+          placeholder="พิมพ์คำค้นหา"
+        >
+        <button class="search-button" aria-label="ค้นหา">
+          <i class="bi bi-search"></i>
+        </button>
+      </div>
+
+      <!-- Filter Pills -->
+      <div class="filter-pills mt-4 d-flex justify-content-center gap-2 flex-wrap">
+        <button class="pill-btn active">หมวดหมู่ <i class="bi bi-chevron-down"></i></button>
+        <button class="pill-btn">ตำแหน่งที่ตั้ง <i class="bi bi-chevron-down"></i></button>
+        <button class="pill-btn pill-blue">คำขึ้นระบบคุณ <i class="bi bi-chevron-down"></i></button>
+        <button class="pill-btn">เรียงตาม <i class="bi bi-chevron-down"></i></button>
+      </div>
+    </div>
+  </section>
+
+  <div class="carousel-wrapper">
+    <div id="projectCarousel" class="carousel slide">
+      <div class="carousel-inner">
+
+        <div class="carousel-item active">
+          <div class="row g-3">
+
+            <div class="col-md-4">
+              <div class="project-card">
+                <div class="card-img-wrap">
+                  <img src="img/project1.png" alt="หมวกกันน็อกเด็ก">
+                  <span class="badge-new">โครงการใหม่</span>
+                </div>
+                <div class="card-title-bar">หมวกกันน็อกเด็ก</div>
+                <div class="card-body-custom">
+                  <p class="card-desc">เดินหน้าส่งเสริมความปลอดภัยผ่านโครงการ LET'sponsible แจกหมวกกันน็อกเด็ก 4,500 ใบ ในแคมเปญ The Life Saver</p>
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+                  </div>
+                  <span class="card-amount">25 THB ได้รับแล้ว</span>
+                  <div class="card-footer-row">
+                    
+                    <button class="btn-donate">บริจาค</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="project-card">
+                <div class="card-img-wrap">
+                  <img src="img/project2.png" alt="อาหารกลางวันเพื่อน้อง">
+                  <span class="badge-new">โครงการใหม่</span>
+                </div>
+                <div class="card-title-bar">อาหารกลางวันเพื่อน้อง</div>
+                <div class="card-body-custom">
+                  <p class="card-org">มูลนิธิบ้านสายรุ้ง</p>
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                  </div>
+                  <span class="card-amount">0 THB ได้รับแล้ว</span>
+                  <div class="card-footer-row">
+                    
+                    <button class="btn-donate">บริจาค</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="project-card">
+                <div class="card-img-wrap">
+                  <img src="img/project3.png" alt="กระเป๋าใหม่ เติมใจ เติมยิ้ม">
+                  <span class="badge-new">โครงการใหม่</span>
+                </div>
+                <div class="card-title-bar">กระเป๋าใหม่ เติมใจ เติมยิ้ม</div>
+                <div class="card-body-custom">
+                  <p class="card-org">มูลนิธิบ้านสายรุ้ง</p>
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 10%;" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">10%</div>
+                  </div>
+                  <span class="card-amount">10 THB ได้รับแล้ว</span>
+                  <div class="card-footer-row">
+                    
+                    <button class="btn-donate">บริจาค</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="carousel-item">
+          <div class="row g-3">
+
+            <div class="col-md-4">
+              <div class="project-card">
+                <div class="card-img-wrap">
+                  <img src="img/project1.png" alt="หมวกกันน็อกเด็ก">
+                  <span class="badge-new">โครงการใหม่</span>
+                </div>
+                <div class="card-title-bar">หมวกกันน็อกเด็ก</div>
+                <div class="card-body-custom">
+                  <p class="card-desc">เดินหน้าส่งเสริมความปลอดภัยผ่านโครงการ LET'sponsible แจกหมวกกันน็อกเด็ก 4,500 ใบ ในแคมเปญ The Life Saver</p>
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+                  </div>
+                  <span class="card-amount">25 THB ได้รับแล้ว</span>
+                  <div class="card-footer-row">
+                    
+                    <button class="btn-donate">บริจาค</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="project-card">
+                <div class="card-img-wrap">
+                  <img src="img/project2.png" alt="อาหารกลางวันเพื่อน้อง">
+                  <span class="badge-new">โครงการใหม่</span>
+                </div>
+                <div class="card-title-bar">อาหารกลางวันเพื่อน้อง</div>
+                <div class="card-body-custom">
+                  <p class="card-org">มูลนิธิบ้านสายรุ้ง</p>
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                  </div>
+                  <span class="card-amount">0 THB ได้รับแล้ว</span>
+                  <div class="card-footer-row">
+                    
+                    <button class="btn-donate">บริจาค</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="project-card">
+                <div class="card-img-wrap">
+                  <img src="img/project3.png" alt="กระเป๋าใหม่ เติมใจ เติมยิ้ม">
+                  <span class="badge-new">โครงการใหม่</span>
+                </div>
+                <div class="card-title-bar">กระเป๋าใหม่ เติมใจ เติมยิ้ม</div>
+                <div class="card-body-custom">
+                  <p class="card-org">มูลนิธิบ้านสายรุ้ง</p>
+                  <div class="progress">
+                    <div class="progress-bar" role="progressbar" style="width: 10%;" aria-valuenow="10" aria-valuemin="0" aria-valuemax="100">10%</div>
+                  </div>
+                  <span class="card-amount">10 THB ได้รับแล้ว</span>
+                  <div class="card-footer-row">
+                    
+                    <button class="btn-donate">บริจาค</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+       
+      </div>
+
+      <!-- ปุ่มซ้าย-ขวา -->
+      <button class="carousel-control-prev" type="button" data-bs-target="#projectCarousel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#projectCarousel" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Hero Section -->
+  <section class="hero-section text-center py-5">
+    <div class="container">
+      <h1 class="hero-title">
+        โครงการร่วมบริจาค
+      </h1>
+      <p class="hero-subtitle">เงินที่คุณร่วมบริจาค ทำให้เกิดสิ่งดีๆเหล่านี้..</p>
+    </div>
+  </section>
+
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/project4.png" alt="หมวกกันน็อกเด็ก">
+        </div>
+        <div class="card-body-custom">
+          <p class="card-desc">
+            เด็กไทยไปได้ไกล การเรียนรู้ต้องไม่จำกัดแค่ในห้องเรียน หวังสร้างศึกษาบนโจทย์ชุมชน ให้เด็กมีส่วนร่วมท้องถิ่น นักวิชาการเผย การศึกษาไทยแตกสลายไปคนละทาง ทุกภาคส่วนต้องร่วมกันทำให้การเรียนรู้เกิดขึ้นได้ไม่ใช่แค่ในห้องเรียน
+          </p>
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+          </div>
+          <span class="card-amount">25 THB ได้รับแล้ว</span>
+          <div class="card-footer-row">
+            
+            <a href="project_detail.html" class="btn btn-donate">บริจาค</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/project5.png" alt="หมวกกันน็อกเด็ก">
+        </div>
+        <div class="card-body-custom">
+          <p class="card-desc">
+            โครงการ Let’s Read and Play ช่วยเพิ่มทักษะการอ่าน สร้างพัฒนาการเรียนรู้ ในเด็กปฐมวัย
+          </p>
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          <span class="card-amount">0 THB ได้รับแล้ว</span>
+          <div class="card-footer-row">
+            
+            <a href="project_detail.html" class="btn btn-donate">บริจาค</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/project6.png" alt="หมวกกันน็อกเด็ก">
+        </div>
+        <div class="card-body-custom">
+          <p class="card-desc">
+            จัดโครงการให้ยืม “คาร์ซีท” นำร่อง 6 รพ. ลดอุบัติเหตุเสียชีวิตในเด็กเล็ก 70%
+          </p>
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          <span class="card-amount">0 THB ได้รับแล้ว</span>
+          <div class="card-footer-row">
+            
+            <a href="project_detail.html" class="btn btn-donate">บริจาค</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mt-2 mb-2">
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/project7.png" alt="หมวกกันน็อกเด็ก">
+        </div>
+        <div class="card-body-custom">
+          <p class="card-desc">
+            โครงการ "เด็กไทยว่ายน้ำได้" สอนมีทักษะการว่ายน้ำเบื้องต้นที่ถูกต้องกับเด็กและเยาวชน เอาชีวิตรอดจากการจมน้ำ รู้หลักการใช้อุปกรณ์ในการช่วยชีวิตผู้ประสบภัยทางน้ำ เพื่อลดอัตราการจมน้ำของประชากรเด็ก
+          </p>
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 25%;" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100">25%</div>
+          </div>
+          <span class="card-amount">25 THB ได้รับแล้ว</span>
+          <div class="card-footer-row">
+            
+            <a href="project_detail.html" class="btn btn-donate">บริจาค</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/project8.png" alt="หมวกกันน็อกเด็ก">
+        </div>
+        <div class="card-body-custom">
+          <p class="card-desc">
+            จาก “หนังสือเล่มแรก” ถึง “ห้องสมุดเด็กปฐมวัย” โครงการดีๆ เพื่อเยาวชนไทย
+          </p>
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          <span class="card-amount">0 THB ได้รับแล้ว</span>
+          <div class="card-footer-row">
+            
+            <a href="project_detail.html" class="btn btn-donate">บริจาค</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/project9.png" alt="หมวกกันน็อกเด็ก">
+        </div>
+        <div class="card-body-custom">
+          <p class="card-desc">
+            โครงการชุดนักเรียนให้น้องก่อนเปิดเทอม เตรียมตัวก่อนไปเรียนให้พร้อมชุดนักเรียน อุปกรณ์การศึกษา 
+          </p>
+          <div class="progress">
+            <div class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          <span class="card-amount">0 THB ได้รับแล้ว</span>
+          <div class="card-footer-row">
+            
+            <a href="project_detail.html" class="btn btn-donate">บริจาค</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <center>
+    <button class="btn btn-danger mt-2 mb-5" style="background-color: #CC583F; width: 200px;">ดูทั้งหมด</button>
+  </center>
+</div>
+
+
+<div class="section-wrap">
+  <div class="container">
+    <div class="row align-items-center g-4">
+
+      <!-- Left -->
+      <div class="col-md-6">
+        <h4>บ้านทานตะวัน</h4>
+        <p class="subtitle">ของใช้จำเป็นเพื่อการดูแลเด็กเล็กและเด็กพิการของทางมูลนิธิ</p>
+
+        <div class="progress">
+          <div class="progress-bar" role="progressbar" style="width: 37.5%;" aria-valuenow="300" aria-valuemin="0" aria-valuemax="800"></div>
+        </div>
+        <div class="progress-label">ยอดปัจจุบัน 300/800บาท</div>
+
+        <div class="tags-row">
+          <button class="tag-pill">เด็กเล็ก</button>
+          <button class="tag-pill">เด็กพิการ</button>
+        </div>
+
+        <div class="products-row">
+          <div class="product-card">
+            <span class="badge-urgent">ต้องการด่วน</span>
+            <img src="img/dettol.png" alt="Dettol">
+          </div>
+          <div class="product-card">
+            <span class="badge-urgent">ต้องการด่วน</span>
+            <img src="img/babylove.png" alt="BabyLove">
+          </div>
+          <div class="product-card">
+            <span class="badge-urgent">ต้องการด่วน</span>
+            <img src="img/omo.jpg" alt="โอโม">
+          </div>
+        </div>
+
+        <button class="btn-donate">บริจาค</button>
+      </div>
+
+      <!-- Right -->
+      <div class="col-md-6">
+        <img src="img/baan-tantawan.jpg" alt="บ้านทานตะวัน" class="hero-img">
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Hero Section -->
+<section class="hero-section text-center py-5">
+  <div class="container">
+    <h1 class="hero-title">
+      มูลนิธิที่คุณอาจสนใจ
+    </h1>
+    
+  </div>
+</section>
+
+<div class="container py-3">
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/foundation1.png" alt="หมวกกันน็อกเด็ก">
+          <div class="card-img-overlay-btn">
+            <button class="btn btn-warning px-4 fw-bold">ร่วมบริจาค</button>
+          </div>
+        </div>
+
+        <div class="card-body-custom-foundation">
+          <center><h5 class="text-light">บ้านเด็กหมีเนย</h5></center>
+          <p class="card-desc text-light">
+            โรงเรียนบ้านเด็กหมีเนย สังกัดมูลนิธิธรรมิก… ชนเพื่อเด็กในประเทศไทย ในพระบรม ราชูปถัมภ์ สาขากรุงเทพฯ เปิดดำเนินการมาตั้งแต่
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/foundation2.png" alt="หมวกกันน็อกเด็ก">
+          <div class="card-img-overlay-btn">
+            <button class="btn btn-warning px-4 fw-bold">ร่วมบริจาค</button>
+          </div>
+        </div>
+
+        <div class="card-body-custom-foundation">
+          <center><h5 class="text-light">บ้านเด็กหมีเนย</h5></center>
+          <p class="card-desc text-light">
+            โรงเรียนบ้านเด็กหมีเนย สังกัดมูลนิธิธรรมิก… ชนเพื่อเด็กในประเทศไทย ในพระบรม ราชูปถัมภ์ สาขากรุงเทพฯ เปิดดำเนินการมาตั้งแต่
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="project-card">
+        <div class="card-img-wrap">
+          <img src="img/foundation3.png" alt="หมวกกันน็อกเด็ก">
+          <div class="card-img-overlay-btn">
+            <button class="btn btn-warning px-4 fw-bold">ร่วมบริจาค</button>
+          </div>
+        </div>
+
+        <div class="card-body-custom-foundation">
+          <center><h5 class="text-light">บ้านเด็กหมีเนย</h5></center>
+          <p class="card-desc text-light">
+            โรงเรียนบ้านเด็กหมีเนย สังกัดมูลนิธิธรรมิก… ชนเพื่อเด็กในประเทศไทย ในพระบรม ราชูปถัมภ์ สาขากรุงเทพฯ เปิดดำเนินการมาตั้งแต่
+          </p>
+        </div>
+      </div>
+    </div>  
+  </div>
+</div>
+
+<div class="row g-0">
+  <div class="col-md-6">
+    <img src="img/project_run.png" alt="เด็กวิ่ง" class="w-100">
+  </div>
+  <div class="col-md-6 d-flex align-items-center p-5" style="background-color: #CC583F;">
+    <p class="text-white lh-lg m-0">
+      ด้วยน้ำใจจากคุณ<br>
+      เราสามารถสร้างผลกระทบกับชีวิตเด็กกว่า 1.7 ล้านคน ด้วยการ<br>
+      ดำเนินงานพัฒนาเพื่อแก้ไขปัญหาอันเป็นรากของความยากจน<br>
+      ผ่านการดำเนินงาน
+      พัฒนาชุมชนและงานรณรงค์เพื่อความยุติธรรมในสังคม
+    </p>
+  </div>
+</div>
+
+
+<div class="py-5 px-4 text-center" style="background-color: #f5ede0;">
+  <h2 class="fw-bold">กลุ่มองค์กรเพื่อสังคม</h2>
+  <h2 class="fw-bold mb-3">ที่ร่วมงานกับเรา</h2>
+  <p class="text-muted mb-5">
+    องค์กรที่เปิดระดมทุนบนแพลตฟอร์มของเรา มีความตั้งใจสร้างการเปลี่ยนแปลงทางสังคม<br>
+    ผ่านการสร้างสรรค์โครงการต่างๆ โดยมีเป้าหมายในหลากหลายประเด็น
+  </p>
+  <div class="d-flex justify-content-center gap-4 flex-wrap">
+    <img src="img/partner1.png" alt="partner1" class="partner-img">
+    <img src="img/partner2.png" alt="partner2" class="partner-img">
+    <img src="img/partner3.png" alt="partner3" class="partner-img">
+  </div>
+</div>
+
+<div class="py-5 text-center bg-white">
+  <h3 class="fw-bold mb-5">ช่วยเหลือมูลนิธิเด็กเพื่อสังคม</h3>
+  <div class="d-flex justify-content-center align-items-center gap-5 flex-wrap">
+    <img src="img/logo-santisuk.png" alt="มูลนิธิสันติสุข" class="foundation-logo">
+    <img src="img/logo-baannok.png" alt="มูลนิธิบ้านนกขมิ้น" class="foundation-logo">
+    <img src="img/logo-holt.png" alt="สหทัยมูลนิธิ" class="foundation-logo">
+    <img src="img/logo-hope.png" alt="House of Blessing Foundation" class="foundation-logo">
+  </div>
+</div>
+<div style="background-color:#CC583F; height: 20px;"></div>
+<div style="background-color:#F8CE32; height: 20px;"></div>
+<div style="background-color:#597D57; height: 20px;"></div>
+
+<!-- Footer -->
+<div class="row" style="background-color: #3f4f9a;"> 
+  <footer class="mt-auto text-light" >
+    <div class="container" >
+      <div class="row mt-3">
+        <div class="col-md-6 mb-3">
+          <img src="img/logobanner.png" alt="DrawDream logo">
+          <p>ร่วมบริจาคเพื่อเหล่าเด็กได้<br>อบรมศิลปะการศึกษา<br>เสิร์ฟชี่ 011-1-11111-1</p>
+        </div>
+        
+        <div class="col-md-6 mb-3">
+          <center><h5>ติดต่อเรา</h5></center>
+          <p>
+            <i class="bi bi-geo-alt-fill"></i> ชั้น 3 อาคาร Drawdrem ถนนพหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400 
+          </p>
+
+          <div class="row text-center">
+            <div class="col-md-3"></div>
+            <div class="col-md-3">
+              <i class="bi bi-telephone-fill"></i> 0949278518
+            </div>
+            <div class="col-md-3">
+              <i class="bi bi-printer-fill"></i> 0123456789
+            </div>
+          </div>
+          <div class="row text-center mt-2">
+            <div class="col-md-4"></div>
+            <div class="col-md-1">
+              <button class="btn btn-light"><i class="bi bi-facebook"></i></button>
+            </div>
+            <div class="col-md-1">
+              <button class="btn btn-light"><i class="bi bi-tiktok"></i></button>
+            </div>
+            <div class="col-md-1">
+              <button class="btn btn-light"><i class="bi bi-instagram"></i></button>
+            </div>
+            <div class="col-md-1">
+              <button class="btn btn-light"><i class="bi bi-youtube"></i></button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      <hr class="mb-4">
+      <div class="row">
+        <div class="col-md-12 text-center">
+          <p>&copy; © All right reserved 2025 WVFT</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+
+<script src="Drawdream/main.js"></script>
+</body>
+</html>
