@@ -44,6 +44,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt->bind_param("sisi", $newStatus, $uid, $note, $item_id);
             if ($stmt->execute()) {
+                
+                // ✅ บันทึก log ลงตาราง admin
+                $action_type = ($newStatus === 'approved') ? 'Approve_Need' : 'Reject_Need';
+                $log_stmt = $conn->prepare("INSERT INTO admin (admin_id, action_type, target_id, remark) VALUES (?, ?, ?, ?)");
+                $log_stmt->bind_param("isis", $uid, $action_type, $item_id, $note);
+                $log_stmt->execute();
+                
                 $msg = ($newStatus === 'approved') ? "อนุมัติรายการแล้ว" : "ปฏิเสธรายการแล้ว";
                 header("Location: admin_needlist.php?msg=" . urlencode($msg));
                 exit();

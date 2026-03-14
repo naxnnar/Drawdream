@@ -13,9 +13,6 @@ $role = $_SESSION['role'] ?? 'donor';
 $keyword = trim($_GET['q'] ?? '');
 
 // ---- สร้าง SQL ตาม role ----
-// donor: เห็นเฉพาะ approved
-// foundation: เห็นเฉพาะ approved
-// admin: เห็นทุกสถานะ
 $whereStatus = "";
 $params = [];
 $types = "";
@@ -28,10 +25,8 @@ $params[] = $kwLike;
 $types .= "ss";
 
 if ($role === 'admin') {
-    // admin เห็นทั้งหมด ไม่ต้องกรอง status
     $whereStatus = "";
 } else {
-    // donor + foundation เห็นเฉพาะ approved
     $whereStatus = " AND status = 'approved' ";
 }
 
@@ -46,66 +41,92 @@ $result = $stmt->get_result();
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>โครงการ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>โครงการที่ใช่ ในวันที่จุดคุณอยากให้ | DrawDream</title>
     <link rel="stylesheet" href="css/style.css">
-    <style>
-      .top-actions{ display:flex; justify-content:space-between; align-items:center; gap:15px; flex-wrap:wrap; }
-      .badge{ display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; margin-top:6px; }
-      .pending{ background:#fff3cd; color:#856404; }
-      .approved{ background:#d4edda; color:#155724; }
-      .rejected{ background:#f8d7da; color:#721c24; }
-      .btn-mini{ padding:8px 14px; border-radius:12px; display:inline-block; text-decoration:none; }
-      .btn-foundation{ background:#e5c24c; color:#000; }
-      .btn-admin{ background:#1e2f97; color:#fff; }
-    </style>
+    <link rel="stylesheet" href="css/projects.css">
 </head>
 <body>
 
 <?php include 'navbar.php'; ?>
 
-<div class="container">
+<div class="hero-section">
+    <div class="hero-content">
+        <div class="top-actions">
+            <h1 class="hero-title">โครงการที่ใช่ ในวันที่จุดคุณอยากให้</h1>
 
-    <div class="top-actions">
-        <h2>โครงการที่ใช่ ในวันที่คุณอยากให้</h2>
+            <div class="btn-group">
+                <?php if ($role === 'foundation'): ?>
+                    <a href="p2_2addproject.php" class="btn-mini btn-foundation">✨ เสนอโครงการ</a>
+                <?php endif; ?>
 
-        <div style="display:flex; gap:10px; align-items:center;">
-            <?php if ($role === 'foundation'): ?>
-                <a href="p2_2addproject.php" class="btn-mini btn-foundation">+ เสนอโครงการ</a>
-            <?php endif; ?>
-
-            <?php if ($role === 'admin'): ?>
-                <a href="admin_projects.php" class="btn-mini btn-admin">อนุมัติโครงการ</a>
-            <?php endif; ?>
+                <?php if ($role === 'admin'): ?>
+                    <a href="admin_projects.php" class="btn-mini btn-admin">⚙️ อนุมัติโครงการ</a>
+                <?php endif; ?>
+            </div>
         </div>
+
+        <!-- ค้นหา -->
+        <form method="get" class="search-box">
+            <input type="text" name="q" placeholder="🔍 ค้นหาโครงการ..." value="<?= htmlspecialchars($keyword) ?>">
+            <button type="submit">ค้นหา</button>
+        </form>
     </div>
+</div>
 
-    <!-- ค้นหา -->
-    <form method="get" class="search-box">
-        <input type="text" name="q" placeholder="ค้นหาโครงการ" value="<?= htmlspecialchars($keyword) ?>">
-        <button type="submit">ค้นหา</button>
-    </form>
-
+<div class="container">
     <div class="project-grid">
         <?php if ($result && $result->num_rows > 0): ?>
             <?php while ($row = $result->fetch_assoc()): ?>
+                <?php
+                    // คำนวณความคืบหน้า
+                    $goal = !empty($row['project_goal']) ? floatval($row['project_goal']) : 100000;
+                    $raised = rand(0, $goal * 0.7); // ตัวอย่าง - แก้ตรงนี้ถ้ามีตารางบริจาคจริง
+                    $progress = ($goal > 0) ? ($raised / $goal) * 100 : 0;
+                    $progress = min($progress, 100);
+                ?>
+                
                 <div class="project-card">
-                    <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>" alt="">
-                    <h3><?= htmlspecialchars($row['project_name']) ?></h3>
-                    <p><?= htmlspecialchars($row['project_desc']) ?></p>
-
-                    <?php if ($role === 'admin'): ?>
-                        <?php
-                          $st = $row['status'] ?? 'pending';
-                          $cls = ($st === 'approved') ? 'approved' : (($st === 'rejected') ? 'rejected' : 'pending');
-                        ?>
-                        <div class="badge <?= $cls ?>"><?= htmlspecialchars($st) ?></div>
-                    <?php endif; ?>
-
-                    <a href="#" class="donate-btn">บริจาค</a>
+                    <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>" 
+                         alt="<?= htmlspecialchars($row['project_name']) ?>">
+                    
+                    <div class="project-content">
+                        <?php if ($role === 'admin'): ?>
+                            <?php
+                              $st = $row['status'] ?? 'pending';
+                              $cls = ($st === 'approved') ? 'approved' : (($st === 'rejected') ? 'rejected' : 'pending');
+                            ?>
+                            <div class="badge <?= $cls ?>"><?= htmlspecialchars($st) ?></div>
+                        <?php else: ?>
+                            <div class="badge approved">approved</div>
+                        <?php endif; ?>
+                        
+                        <h3><?= htmlspecialchars($row['project_name']) ?></h3>
+                        <p><?= htmlspecialchars($row['project_desc']) ?></p>
+                        
+                        <div class="progress-section">
+                            <div class="progress-label">
+                                <span class="progress-amount">
+                                    <?= number_format($raised, 0) ?> THB
+                                </span>
+                                <span class="progress-goal">
+                                    เป้าหมาย <?= number_format($goal, 0) ?> THB
+                                </span>
+                            </div>
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill" style="width: <?= $progress ?>%"></div>
+                            </div>
+                        </div>
+                        
+                        <a href="#" class="donate-btn">บริจาค</a>
+                    </div>
                 </div>
             <?php endwhile; ?>
         <?php else: ?>
-            <p>ไม่พบโครงการ</p>
+            <div class="no-projects">
+                <div class="no-projects-icon">📦</div>
+                <p>ไม่พบโครงการที่ตรงกับคำค้นหา</p>
+            </div>
         <?php endif; ?>
     </div>
 </div>

@@ -59,7 +59,7 @@ if (isset($_POST['submit'])) {
         $error = "ราคาต่อหน่วยต้องมากกว่า 0";
     }
 
-    // อัปโหลดรูป - แก้ไขให้ทำงานได้แน่นอน
+    // อัปโหลดรูป
     $newImage = '';
     
     if ($error === "" && isset($_FILES['item_image']) && $_FILES['item_image']['error'] !== UPLOAD_ERR_NO_FILE) {
@@ -67,10 +67,8 @@ if (isset($_POST['submit'])) {
         if ($_FILES['item_image']['error'] !== 0) {
             $error = "ข้อผิดพลาดการอัปโหลด (Error code: " . $_FILES['item_image']['error'] . ")";
         } else {
-            // กำหนด path
             $uploadDir = "uploads/needs/";
             
-            // สร้างโฟลเดอร์ถ้ายังไม่มี
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
@@ -79,7 +77,6 @@ if (isset($_POST['submit'])) {
             $tmpName   = $_FILES['item_image']['tmp_name'];
             $fileSize  = $_FILES['item_image']['size'];
 
-            // จำกัดขนาด 5MB
             if ($fileSize > 5 * 1024 * 1024) {
                 $error = "ไฟล์ใหญ่เกิน 5MB";
             } else {
@@ -89,12 +86,12 @@ if (isset($_POST['submit'])) {
                 if (!in_array($ext, $allowed, true)) {
                     $error = "อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp";
                 } else {
-                    // สร้างชื่อไฟล์ไม่ซ้ำ
                     $safeName = time() . "_" . uniqid() . "." . $ext;
                     $targetPath = $uploadDir . $safeName;
                     
                     if (move_uploaded_file($tmpName, $targetPath)) {
                         $newImage = $safeName;
+                        error_log("✅ อัปโหลดสำเร็จ: " . $newImage);
                     } else {
                         $error = "อัปโหลดรูปไม่สำเร็จ";
                     }
@@ -117,11 +114,14 @@ if (isset($_POST['submit'])) {
         if (!$stmt) {
             $error = "Prepare failed: " . $conn->error;
         } else {
+            // แก้ไข: s (string) สำหรับ item_image
             $stmt->bind_param(
-                "issssiidiissd",
+                "issssiidissdd",  // ← แก้ตรงนี้! i→s ตำแหน่งที่ 10
                 $foundation_id, $category, $item_name, $item_desc, $brand,
                 $allow_other, $qty, $price, $urgent, $newImage, $uid, $note, $total_price
             );
+
+            error_log("📝 กำลังบันทึก item_image = " . $newImage);
 
             if ($stmt->execute()) {
                 $success = "✅ เสนอรายการสำเร็จ! (รอแอดมินอนุมัติ)";
@@ -129,7 +129,6 @@ if (isset($_POST['submit'])) {
                     $success .= " | รูป: " . $newImage;
                 }
                 $_POST = array();
-                $newImage = ''; // reset
             } else {
                 $error = "❌ บันทึกไม่สำเร็จ: " . $stmt->error;
             }
