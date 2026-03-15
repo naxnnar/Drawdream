@@ -52,27 +52,28 @@ $result = $stmt->get_result();
 
 <div class="hero-section">
     <div class="hero-content">
-        <div class="top-actions">
-            <h1 class="hero-title">โครงการที่ใช่ ในวันที่จุดคุณอยากให้</h1>
-
-            <div class="btn-group">
-                <?php if ($role === 'foundation'): ?>
-                    <a href="p2_2addproject.php" class="btn-mini btn-foundation">✨ เสนอโครงการ</a>
-                <?php endif; ?>
-
-                <?php if ($role === 'admin'): ?>
-                    <a href="admin_projects.php" class="btn-mini btn-admin">⚙️ อนุมัติโครงการ</a>
-                <?php endif; ?>
-            </div>
-        </div>
+        <h1 class="hero-title">โครงการที่ใช่ <span class="highlight">ในวันที่จุดคุณอยากให้</span></h1>
+        <p class="hero-subtitle">บริจาคให้โครงการที่ใช่</p>
 
         <!-- ค้นหา -->
         <form method="get" class="search-box">
-            <input type="text" name="q" placeholder="🔍 ค้นหาโครงการ..." value="<?= htmlspecialchars($keyword) ?>">
+            <input type="text" name="q" placeholder="พิมพ์คำค้นหา" value="<?= htmlspecialchars($keyword) ?>">
             <button type="submit">ค้นหา</button>
         </form>
     </div>
 </div>
+
+<?php if ($role === 'foundation' || $role === 'admin'): ?>
+<div class="top-actions">
+    <?php if ($role === 'foundation'): ?>
+        <a href="p2_2addproject.php" class="btn-mini btn-foundation">✨ เสนอโครงการ</a>
+    <?php endif; ?>
+
+    <?php if ($role === 'admin'): ?>
+        <a href="admin_projects.php" class="btn-mini btn-admin">⚙️ อนุมัติโครงการ</a>
+    <?php endif; ?>
+</div>
+<?php endif; ?>
 
 <div class="container">
     <div class="project-grid">
@@ -90,6 +91,8 @@ $result = $stmt->get_result();
                     <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>" 
                          alt="<?= htmlspecialchars($row['project_name']) ?>">
                     
+                    <h3><?= htmlspecialchars($row['project_name']) ?></h3>
+                    
                     <div class="project-content">
                         <?php if ($role === 'admin'): ?>
                             <?php
@@ -101,7 +104,6 @@ $result = $stmt->get_result();
                             <div class="badge approved">approved</div>
                         <?php endif; ?>
                         
-                        <h3><?= htmlspecialchars($row['project_name']) ?></h3>
                         <p><?= htmlspecialchars($row['project_desc']) ?></p>
                         
                         <div class="progress-section">
@@ -114,7 +116,9 @@ $result = $stmt->get_result();
                                 </span>
                             </div>
                             <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" style="width: <?= $progress ?>%"></div>
+                                <div class="progress-bar-fill" style="width: <?= $progress ?>%">
+                                    <?= round($progress) ?>%
+                                </div>
                             </div>
                         </div>
                         

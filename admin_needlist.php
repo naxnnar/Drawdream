@@ -77,6 +77,7 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
 <!DOCTYPE html>
 <html lang="th">
 <head>
+    <link rel="stylesheet" href="css/navbar.css">
     <meta charset="UTF-8">
     <title>อนุมัติรายการสิ่งของ | Admin</title>
     <link rel="stylesheet" href="css/style.css?v=2">

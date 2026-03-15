@@ -48,6 +48,7 @@ $result = mysqli_query($conn, "SELECT * FROM project WHERE status='pending' ORDE
   <meta charset="UTF-8">
   <title>อนุมัติโครงการ | Admin</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/navbar.css">
   <style>
     .wrap{ max-width:1100px; margin:30px auto; padding:0 15px; }
     table{ width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; }

@@ -37,6 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
   <meta charset="UTF-8">
   <title>บริจาค | DrawDream</title>
+  <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>

@@ -62,6 +62,7 @@ if (isset($_POST['submit'])) {
 <head>
 <meta charset="UTF-8">
 <title>เสนอโครงการ</title>
+<link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/style.css">
 <style>
 .form-container{ display:flex; gap:60px; padding:50px; }
