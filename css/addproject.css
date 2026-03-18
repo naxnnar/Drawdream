@@ -1,0 +1,124 @@
+/* ========================================
+   addproject.css — สำหรับหน้า p2_2addproject.php
+   ======================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+}
+
+.form-container {
+    display: flex;
+    gap: 60px;
+    max-width: 1100px;
+    margin: 50px auto;
+    padding: 50px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.left-box {
+    width: 38%;
+}
+
+.left-box h2 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.upload-box {
+    width: 100%;
+    height: 280px;
+    background: #f0f0f0;
+    border-radius: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #999;
+    font-size: 15px;
+    border: 2px dashed #ddd;
+}
+
+.right-box {
+    flex: 1;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #555;
+    font-size: 14px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group input[type="date"],
+.form-group input[type="file"],
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: 'Sarabun', sans-serif;
+    transition: border-color 0.3s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #E74C3C;
+}
+
+.form-group textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.btn-submit {
+    background: #e5c24c;
+    color: #333;
+    padding: 15px 40px;
+    border: none;
+    border-radius: 15px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Prompt', sans-serif;
+    transition: all 0.3s;
+    margin-top: 10px;
+}
+
+.btn-submit:hover {
+    background: #d4b03a;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(229, 194, 76, 0.4);
+}
+
+@media (max-width: 768px) {
+    .form-container {
+        flex-direction: column;
+        padding: 30px 20px;
+        margin: 20px;
+    }
+    .left-box { width: 100%; }
+}

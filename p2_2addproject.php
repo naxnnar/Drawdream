@@ -2,20 +2,25 @@
 session_start();
 include 'db.php';
 
-// ให้เข้าได้เฉพาะ foundation
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header("Location: p2_project.php");
     exit();
 }
 
+$categories = ['เด็กเล็ก', 'เด็กพิการ', 'เด็กด้อยโอกาส', 'เด็กป่วย', 'การศึกษา', 'อาหารและโภชนาการ'];
+
 if (isset($_POST['submit'])) {
+    $name     = trim($_POST['project_name'] ?? '');
+    $desc     = trim($_POST['project_desc'] ?? '');
+    $goal     = (int)($_POST['project_goal'] ?? 0);
+    $enddate  = $_POST['project_enddate'] ?? '';
+    $category = $_POST['category'] ?? '';
 
-    $name    = trim($_POST['project_name'] ?? '');
-    $desc    = trim($_POST['project_desc'] ?? '');
-    $goal    = (int)($_POST['project_goal'] ?? 0);
-    $enddate = $_POST['project_enddate'] ?? '';
+    if (!in_array($category, $categories, true)) {
+        echo "<script>alert('กรุณาเลือกประเภทโครงการ'); history.back();</script>";
+        exit();
+    }
 
-    // ตรวจไฟล์รูป
     if (!isset($_FILES['project_image']) || $_FILES['project_image']['error'] !== 0) {
         echo "<script>alert('กรุณาอัปโหลดรูปภาพให้ถูกต้อง'); history.back();</script>";
         exit();
@@ -23,29 +28,25 @@ if (isset($_POST['submit'])) {
 
     $imageName = $_FILES['project_image']['name'];
     $tmpName   = $_FILES['project_image']['tmp_name'];
+    $ext       = strtolower(pathinfo($imageName, PATHINFO_EXTENSION));
+    $allowed   = ['jpg','jpeg','png','gif','webp'];
 
-    // เช็คชนิดไฟล์ (อนุญาตเฉพาะรูป)
-    $ext = strtolower(pathinfo($imageName, PATHINFO_EXTENSION));
-    $allowed = ['jpg','jpeg','png','gif','webp'];
     if (!in_array($ext, $allowed)) {
         echo "<script>alert('อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp เท่านั้น'); history.back();</script>";
         exit();
     }
 
-    // กันชื่อไฟล์ซ้ำ + กันอักขระแปลก
     $newName = time() . "_" . preg_replace("/[^a-zA-Z0-9\._-]/", "", $imageName);
-
     if (!move_uploaded_file($tmpName, "uploads/" . $newName)) {
         echo "<script>alert('อัปโหลดรูปไม่สำเร็จ'); history.back();</script>";
         exit();
     }
 
-    // ✅ INSERT พร้อม status = pending (รอแอดมินอนุมัติ)
     $stmt = $conn->prepare("
-        INSERT INTO project (project_name, project_desc, project_goal, project_enddate, project_image, status)
-        VALUES (?, ?, ?, ?, ?, 'pending')
+        INSERT INTO project (project_name, project_desc, project_goal, project_enddate, project_image, category, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'pending')
     ");
-    $stmt->bind_param("ssiss", $name, $desc, $goal, $enddate, $newName);
+    $stmt->bind_param("ssiss s", $name, $desc, $goal, $enddate, $newName, $category);
 
     if ($stmt->execute()) {
         echo "<script>alert('เสนอโครงการสำเร็จ (รอแอดมินอนุมัติ)'); window.location='p2_project.php';</script>";
@@ -56,59 +57,66 @@ if (isset($_POST['submit'])) {
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="UTF-8">
-<title>เสนอโครงการ</title>
-<link rel="stylesheet" href="css/navbar.css">
-<link rel="stylesheet" href="css/style.css">
-<style>
-.form-container{ display:flex; gap:60px; padding:50px; }
-.left-box{ width:40%; }
-.upload-box{ width:100%; height:300px; background:#ccc; border-radius:15px; display:flex; justify-content:center; align-items:center; }
-.right-box{ width:50%; }
-input, textarea, select{ width:100%; padding:10px; border-radius:10px; border:1px solid #aaa; margin-bottom:20px; }
-button{ background:#e5c24c; padding:15px 40px; border:none; border-radius:15px; font-size:18px; cursor:pointer; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>เสนอโครงการ | DrawDream</title>
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/addproject.css">
 </head>
 <body>
 
 <?php include 'navbar.php'; ?>
 
 <div class="form-container">
-
     <div class="left-box">
         <h2>เสนอโครงการ</h2>
-        <div class="upload-box">
-            เลือกรูปด้านขวา →
-        </div>
+        <div class="upload-box">เลือกรูปด้านขวา</div>
     </div>
 
     <div class="right-box">
         <form method="POST" enctype="multipart/form-data">
 
-            <label>หัวข้อโครงการ</label>
-            <input type="text" name="project_name" required>
+            <div class="form-group">
+                <label>ประเภทโครงการ *</label>
+                <select name="category" required>
+                    <option value="">-- เลือกประเภท --</option>
+                    <?php foreach ($categories as $c): ?>
+                        <option value="<?= $c ?>"><?= $c ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
 
-            <label>รายละเอียดโครงการ</label>
-            <textarea name="project_desc" rows="5" required></textarea>
+            <div class="form-group">
+                <label>หัวข้อโครงการ *</label>
+                <input type="text" name="project_name" required>
+            </div>
 
-            <label>เป้าหมาย (บาท)</label>
-            <input type="number" name="project_goal" required>
+            <div class="form-group">
+                <label>รายละเอียดโครงการ *</label>
+                <textarea name="project_desc" rows="5" required></textarea>
+            </div>
 
-            <label>วันที่ปิดรับบริจาค</label>
-            <input type="date" name="project_enddate" required>
+            <div class="form-group">
+                <label>เป้าหมาย (บาท) *</label>
+                <input type="number" name="project_goal" min="1" required>
+            </div>
 
-            <label>อัปโหลดรูปภาพ</label>
-            <input type="file" name="project_image" accept="image/*" required>
+            <div class="form-group">
+                <label>วันที่ปิดรับบริจาค *</label>
+                <input type="date" name="project_enddate" required>
+            </div>
 
-            <button type="submit" name="submit">เสนอโครงการ</button>
+            <div class="form-group">
+                <label>อัปโหลดรูปภาพ *</label>
+                <input type="file" name="project_image" accept="image/*" required>
+            </div>
 
+            <button type="submit" name="submit" class="btn-submit">เสนอโครงการ</button>
         </form>
     </div>
-
 </div>
 
 </body>

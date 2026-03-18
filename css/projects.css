@@ -1,29 +1,18 @@
 /* ========================================
-   Projects Page - Style 2 (Like Reference Image)
+   projects.css — สำหรับหน้า p2_project.php โดยเฉพาะ
    ======================================== */
 
-/* Import Thai Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap');
 
-/* Reset & Base */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
 
-body {
-    font-family: 'Prompt', 'Sarabun', sans-serif;
+.projects-page {
     background: #f5f5f5;
-    color: #333;
 }
 
-/* Hero Section - White Background */
+/* ======== Hero ======== */
 .hero-section {
     background: white;
-    padding: 50px 20px;
+    padding: 50px 20px 30px;
     text-align: center;
-    margin-bottom: 40px;
 }
 
 .hero-title {
@@ -45,7 +34,7 @@ body {
     margin-bottom: 30px;
 }
 
-/* Search Box */
+/* ======== Search Box ======== */
 .search-box {
     max-width: 600px;
     margin: 0 auto 25px;
@@ -78,232 +67,42 @@ body {
     font-family: 'Prompt', sans-serif;
 }
 
-/* Filter Pills */
-.filter-pills {
+/* ======== Filter Chips ======== */
+.filter-row {
     display: flex;
     justify-content: center;
     gap: 12px;
     flex-wrap: wrap;
+    padding: 20px 20px 30px;
+    background: white;
     margin-bottom: 40px;
 }
 
-.pill-btn {
-    padding: 10px 20px;
-    border: none;
+.chip {
+    padding: 10px 22px;
+    border: 2px solid #ddd;
     border-radius: 25px;
-    background: #FFC107;
-    color: #333;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'Prompt', sans-serif;
-    transition: all 0.3s;
-}
-
-.pill-btn.pill-blue {
-    background: #5C6BC0;
-    color: white;
-}
-
-.pill-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-/* Container */
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 20px 60px;
-}
-
-/* Project Grid */
-.project-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 25px;
-}
-
-/* Project Card - Yellow/Orange Background */
-.project-card {
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    transition: all 0.3s;
-}
-
-/* Card Background Colors - Rotating */
-.project-card:nth-child(3n+1) {
-    background: linear-gradient(to bottom, transparent 200px, #FFF9E6 200px);
-}
-
-.project-card:nth-child(3n+2) {
-    background: linear-gradient(to bottom, transparent 200px, #FFF3E0 200px);
-}
-
-.project-card:nth-child(3n+3) {
-    background: linear-gradient(to bottom, transparent 200px, #FFF8E1 200px);
-}
-
-.project-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-
-/* Card Image */
-.project-card img {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-}
-
-/* Title - Plain Black Text */
-.project-card h3 {
-    padding: 15px 20px 10px;
-    font-size: 20px;
-    font-weight: 700;
-    color: #333;
-    margin: 0;
-    font-family: 'Prompt', sans-serif;
-    text-align: left;
-    background: transparent;
-    line-height: 1.4;
-}
-
-/* Content */
-.project-content {
-    padding: 20px;
-}
-
-/* Badge */
-.badge {
-    display: inline-block;
-    padding: 5px 12px;
-    border-radius: 15px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-bottom: 10px;
-    font-family: 'Prompt', sans-serif;
-}
-
-.approved {
-    background: #C8E6C9;
-    color: #2E7D32;
-}
-
-.pending {
-    background: #FFF9C4;
-    color: #F57F17;
-}
-
-.rejected {
-    background: #FFCDD2;
-    color: #C62828;
-}
-
-/* Description */
-.project-card p {
-    font-size: 14px;
-    color: #555;
-    line-height: 1.5;
-    margin-bottom: 15px;
-    min-height: 60px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    font-family: 'Sarabun', sans-serif;
-}
-
-/* Progress Section */
-.progress-section {
-    margin-bottom: 15px;
-}
-
-.progress-label {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 8px;
-    font-size: 13px;
-    font-family: 'Sarabun', sans-serif;
-}
-
-.progress-amount {
-    font-weight: 700;
-    color: #1976D2;
-}
-
-.progress-goal {
-    color: #757575;
-}
-
-/* Progress Bar - Bootstrap Style */
-.progress-bar-bg {
-    position: relative;
-    width: 100%;
-    height: 24px;
-    background: #E0E0E0;
-    border-radius: 12px;
-    overflow: hidden;
-}
-
-.progress-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #42A5F5 0%, #1976D2 100%);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 12px;
-    font-weight: 700;
-    font-family: 'Prompt', sans-serif;
-    transition: width 0.5s ease;
-}
-
-/* Donate Button - Blue */
-.donate-btn {
-    display: block;
-    width: 100%;
-    padding: 13px;
-    background: #1976D2;
-    color: white;
-    text-align: center;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
     text-decoration: none;
+    color: #666;
+    font-weight: 500;
+    font-family: 'Prompt', sans-serif;
+    font-size: 14px;
     transition: all 0.3s;
-    font-family: 'Prompt', sans-serif;
+    background: white;
 }
 
-.donate-btn:hover {
-    background: #1565C0;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+.chip:hover {
+    border-color: #E74C3C;
+    color: #E74C3C;
 }
 
-/* No Projects */
-.no-projects {
-    text-align: center;
-    padding: 60px 20px;
-    grid-column: 1 / -1;
+.chip.active {
+    background: #E74C3C;
+    color: white;
+    border-color: #E74C3C;
 }
 
-.no-projects-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
-    opacity: 0.3;
-}
-
-.no-projects p {
-    color: #999;
-    font-size: 18px;
-    font-family: 'Prompt', sans-serif;
-}
-
-/* Top Actions (for admin/foundation buttons) */
+/* ======== Top Actions ======== */
 .top-actions {
     display: flex;
     justify-content: flex-end;
@@ -332,48 +131,203 @@ body {
     color: white;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-    .project-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-    
-    .hero-title {
-        font-size: 36px;
-    }
+/* ======== Container ======== */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px 60px;
 }
 
-@media (max-width: 640px) {
-    .project-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .hero-title {
-        font-size: 28px;
-    }
-    
-    .filter-pills {
-        flex-direction: column;
-        align-items: stretch;
-    }
+/* ======== Project Grid ======== */
+.project-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 25px;
 }
 
-/* Animation */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
+/* ======== Project Card ======== */
 .project-card {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s;
     animation: fadeIn 0.5s ease-out;
+}
+
+.project-card:nth-child(3n+1) {
+    background: linear-gradient(to bottom, transparent 200px, #FFF9E6 200px);
+}
+.project-card:nth-child(3n+2) {
+    background: linear-gradient(to bottom, transparent 200px, #FFF3E0 200px);
+}
+.project-card:nth-child(3n+3) {
+    background: linear-gradient(to bottom, transparent 200px, #FFF8E1 200px);
+}
+
+.project-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.project-card img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+.project-card h3 {
+    padding: 15px 20px 10px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #333;
+    margin: 0;
+    font-family: 'Prompt', sans-serif;
+    text-align: left;
+    line-height: 1.4;
+}
+
+/* ======== Category Tag ======== */
+.category-tag {
+    display: inline-block;
+    padding: 4px 12px;
+    background: #FFF3E0;
+    color: #E65100;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-family: 'Prompt', sans-serif;
+}
+
+/* ======== Card Content ======== */
+.project-content {
+    padding: 20px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 15px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-family: 'Prompt', sans-serif;
+}
+
+.approved { background: #C8E6C9; color: #2E7D32; }
+.pending  { background: #FFF9C4; color: #F57F17; }
+.rejected { background: #FFCDD2; color: #C62828; }
+
+.project-card p {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.5;
+    margin-bottom: 15px;
+    min-height: 60px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-family: 'Sarabun', sans-serif;
+}
+
+/* ======== Progress ======== */
+.progress-section { margin-bottom: 15px; }
+
+.progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.progress-amount { font-weight: 700; color: #1976D2; }
+.progress-goal   { color: #757575; }
+
+.progress-bar-bg {
+    width: 100%;
+    height: 24px;
+    background: #E0E0E0;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #42A5F5 0%, #1976D2 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    font-family: 'Prompt', sans-serif;
+    transition: width 0.5s ease;
+}
+
+/* ======== Donate Button ======== */
+.donate-btn {
+    display: block;
+    width: 100%;
+    padding: 13px;
+    background: #1976D2;
+    color: white;
+    text-align: center;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s;
+    font-family: 'Prompt', sans-serif;
+}
+
+.donate-btn:hover {
+    background: #1565C0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
+}
+
+/* ======== No Projects ======== */
+.no-projects {
+    text-align: center;
+    padding: 60px 20px;
+    grid-column: 1 / -1;
+}
+
+.no-projects-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.3;
+}
+
+.no-projects p {
+    color: #999;
+    font-size: 18px;
+    font-family: 'Prompt', sans-serif;
+}
+
+/* ======== Animation ======== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 .project-card:nth-child(1) { animation-delay: 0.1s; }
 .project-card:nth-child(2) { animation-delay: 0.2s; }
 .project-card:nth-child(3) { animation-delay: 0.3s; }
+
+/* ======== Responsive ======== */
+@media (max-width: 1024px) {
+    .project-grid  { grid-template-columns: repeat(2, 1fr); }
+    .hero-title    { font-size: 36px; }
+}
+
+@media (max-width: 640px) {
+    .project-grid  { grid-template-columns: 1fr; }
+    .hero-title    { font-size: 28px; }
+    .filter-row    { gap: 8px; }

@@ -180,3 +180,14 @@
     border-radius: 50%;
     display: inline-block;
 }
+.nav-left {
+    gap: 25px !important;
+}
+.navbar {
+    font-size: 16px;
+    font-family: 'Prompt', sans-serif;
+}
+
+.nav-left a {
+    font-size: 16px !important;
+}
