@@ -239,6 +239,99 @@ input {
 /* list = เรียงลงล่าง */
 .foundation-list{display:flex;flex-direction:column;gap:28px;}
 
+/* Homepage center hero content from stashed design */
+.center-section {
+  text-align: center;
+  margin: 40px 0 0 0;
+}
+
+.center-section h2 {
+  color: #2e7d32;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.5em;
+}
+
+.center-section h3 {
+  color: #222;
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 0.8em;
+}
+
+.center-section p {
+  color: #222;
+  font-size: 1.15rem;
+  margin-bottom: 0.5em;
+}
+
+.rights-box {
+  background: #fcf5ea;
+  border: 2px solid #d9cbb0;
+  border-radius: 16px;
+  padding: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  max-width: 1200px;
+  margin: 40px auto 0;
+}
+
+.rights-content {
+  flex: 1 1 0;
+  min-width: 260px;
+}
+
+.rights-content h4 {
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: #222;
+  font-size: 2rem;
+}
+
+.rights-content p {
+  margin-bottom: 28px;
+  color: #222;
+  font-size: 1.15rem;
+}
+
+.rights-actions {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.rights-image {
+  flex: 0 0 260px;
+}
+
+.rights-image img {
+  max-width: 260px;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 768px) {
+  .center-section h3 {
+    font-size: 1.6rem;
+  }
+
+  .rights-box {
+    padding: 24px;
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .rights-actions {
+    justify-content: center;
+  }
+
+  .rights-image {
+    flex: 0 0 auto;
+  }
+}
+
 /* 1 การ์ดใหญ่ */
 .foundation-card{
   background:#f6eadf;
