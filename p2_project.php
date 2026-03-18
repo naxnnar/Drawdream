@@ -43,7 +43,7 @@ $result = $stmt->get_result();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>โครงการที่ใช่ ในวันที่จุดคุณอยากให้ | DrawDream</title>
+    <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/projects.css">
 </head>
@@ -53,7 +53,7 @@ $result = $stmt->get_result();
 
 <div class="hero-section">
     <div class="hero-content">
-        <h1 class="hero-title">โครงการที่ใช่ <span class="highlight">ในวันที่จุดคุณอยากให้</span></h1>
+        <h1 class="hero-title">โครงการที่ใช่ <span class="highlight">ในวันที่คุณอยากให้</span></h1>
         <p class="hero-subtitle">บริจาคให้โครงการที่ใช่</p>
 
         <!-- ค้นหา -->
