@@ -2,6 +2,8 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
+$is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
+
 // filter หมวดหมู่
 $cat = $_GET['cat'] ?? 'all';
 $allowedCats = ['all','เด็กเล็ก','เด็กพิการ'];
@@ -350,7 +352,11 @@ body {
 <div class="page-wrap">
   <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
     <div class="foundation-actions">
-      <a href="foundation_add_need.php" class="btn-propose">เสนอรายการสิ่งของ</a>
+      <?php if ($is_verified): ?>
+        <a href="foundation_add_need.php" class="btn-propose">เสนอรายการสิ่งของ</a>
+      <?php else: ?>
+        <span style="color:#E8A020; font-size:13px;"> รอการอนุมัติก่อนจึงจะเสนอรายการสิ่งของได้</span>
+      <?php endif; ?>
     </div>
   <?php endif; ?>
 

@@ -81,6 +81,7 @@ if (isset($_POST['submit'])) {
 <head>
 <meta charset="UTF-8">
 <title>เพิ่มข้อมูลเด็ก - Children Profile</title>
+<link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/style.css">
 <style>
     .form-container { display:flex; gap:60px; padding:40px; max-width: 1200px; margin: auto; }

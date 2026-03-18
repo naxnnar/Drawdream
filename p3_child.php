@@ -50,6 +50,7 @@ if (!$result) {
 <head>
   <meta charset="UTF-8">
   <title>อนุมัติรายการสิ่งของ | Admin</title>
+  <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
