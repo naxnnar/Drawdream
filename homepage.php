@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>Homepage</title>
+  <title>หน้าหลัก | DrawDream</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -63,17 +63,16 @@
         </div>
       </div>
 
-      <div class="col-md-7 text-center px-4 px-md-5">
-        <p class="kicker">
-          ให้ในแบบที่ใช่ สนับสนุนในสิ่งที่เขาต้องการ...
-          <span class="kicker-tail"> เพื่ออนาคตเด็กไทยที่ยั่งยืน</span>
-        </p>
-        <p class="hero-subtitle">เพราะความต้องการของเด็กแต่ละคนนั้นแตกต่างกัน</p>
-        <p class="hero-strong">DrawDream ช่วยให้คุณ เลือกส่งต่อ ได้ตรงจุดที่สุด</p>
-        <p class="hero-desc">สามารถเข้าร่วม โครงการอุปการะรายบุคคล เพื่อส่งน้องๆ ให้ถึงฝั่งฝัน</p>
-        <div class="hero-actions mt-4">
-          <a href="donation.html" class="btn btn-hero">อุปการะ</a>
-          <a href="projects.html" class="btn btn-hero">โครงการ</a>
+      <div class="col-md-7">
+        <div class="center-section">
+          <h2>ให้ในแบบที่ใช่ สนับสนุนในสิ่งที่เขาต้องการ...</h2>
+          <h3>เพราะความต้องการของเด็กแต่ละคนนั้นแตกต่างกัน</h3>
+          <p>DrawDream ช่วยให้คุณ เลือกส่งต่อ ได้ตรงจุดที่สุด</p>
+          <p>สามารถเข้าร่วมโครงการอุปการะรายบุคคล เพื่อส่งน้องๆ ให้ถึงฝั่งฝัน</p>
+          <div class="hero-actions mt-4">
+            <a href="donation.html" class="btn btn-hero">อุปการะ</a>
+            <a href="projects.html" class="btn btn-hero">โครงการ</a>
+          </div>
         </div>
       </div>
 
@@ -131,7 +130,7 @@
           วันนี้น้องอลินไม่ได้มีเพียงหนังสืออ่านนอกจากการอ่านแล้วน้องอลินมักชอบเล่าเรื่องที่เธออ่านให้เพื่อนๆฟัง
           เธอกลายเป็นตัวแทนโรงเรียนไปแข่งขันทักษะทางภาษาไทยจนได้รับรางวัล
         </p>
-        <a href="detail.php" class="btn btn-light btn-home">อ่านต่อ</a>
+        <a href="detail_alin.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
     </div>
 
@@ -145,7 +144,7 @@
           ผู้บริจาครายหนึ่งได้เห็นโปรไฟล์ของน้องและตัดสินใจสนับสนุนผ่านฟีเจอร์ "บริจาครายบุคคล"
           ปัจจุบันเสียงเพลงของน้องพิณเพลงไม่ได้ก้องกังวานแค่ในมูลนิธิอีกต่อไป เธอได้รับโอกาสขึ้นแสดงในงานโรงเรียน
         </p>
-        <a href="detail.php" class="btn btn-light btn-home">อ่านต่อ</a>
+        <a href="detail_pin.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
       <div class="col-md-6 text-center text-light">
         <img src="img/san.png" alt="น้องแซน" class="img-fluid rounded shadow mb-3">
@@ -155,7 +154,7 @@
           รูปที่เขาชอบวาดที่สุดคือ "บ้านที่มีความสุข" น้องได้รับรางวัลชนะเลิศการประกวดวาดภาพระดับท้องถิ่น
           อุปกรณ์ศิลปะเหล่านั้นไม่ได้แค่ใช้ระบายสีลงบนกระดาษ แต่กำลังช่วยระบายความหวังและอนาคตที่สวยงาม
         </p>
-        <a href="detail.php" class="btn btn-light btn-home">อ่านต่อ</a>
+        <a href="detail_san.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
     </div>
 
@@ -165,21 +164,21 @@
 <!-- ===== SECTION 4: RIGHTS HOLDER ===== -->
 <div class="home-section" style="background-color: #F3EFE7;">
   <div class="container py-5">
-    <div class="row align-items-center justify-content-center">
-      <div class="col-md-10">
-        <div class="row align-items-center">
-            <div class="col-md-7">
-              <h3><b>หากคุณเป็นผู้มีสิทธิรักษา</b></h3>
-              <p class="mb-4">เรารับมิตรสัมพันธ์แบบแต่งขอและการใช้สิทธิแบบก่อสร้างสิ่งที่ผ่อนผ่อนรับบัญชี</p>
-              <div class="d-flex gap-3">
-                <button class="btn btn-success btn-lg btn-radis">ติดต่อเรา</button>
-                <button class="btn btn-success btn-lg btn-radis">มูลนิธิ</button>
-              </div>
-            </div>
-            <div class="col-md-5 text-center">
-              <img src="img/star.png" alt="Rights holder" class="img-fluid">
+    <div class="row justify-content-center">
+      <div class="col-lg-12">
+        <div class="rights-box">
+          <div class="rights-content">
+            <h4>หากคุณเป็นผู้มีสิทธิรักษา</h4>
+            <p>เรายินดีช่วยแนะนำขั้นตอนการใช้สิทธิและการประสานงานกับมูลนิธิที่เหมาะสมกับเด็กแต่ละคน</p>
+            <div class="rights-actions">
+              <a href="#" class="btn btn-success btn-lg btn-radis">ติดต่อเรา</a>
+              <a href="#" class="btn btn-success btn-lg btn-radis">มูลนิธิ</a>
             </div>
           </div>
+          <div class="rights-image text-center text-md-end">
+            <img src="img/star.png" alt="Rights holder" class="img-fluid">
+          </div>
+        </div>
       </div>
     </div>
   </div>

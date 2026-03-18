@@ -48,9 +48,15 @@ $result = $stmt->get_result();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<<<<<<< HEAD
     <title>โครงการที่ใช่ ในวันที่จุดคุณอยากให้ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/projects.css?v=5">
+=======
+    <title>โครงการ | DrawDream</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/projects.css">
+>>>>>>> 154231a9fd97f341b052a0a041374f62b5a1bcc1
 </head>
 <body class="projects-page">
 
@@ -58,7 +64,7 @@ $result = $stmt->get_result();
 
 <div class="hero-section">
     <div class="hero-content">
-        <h1 class="hero-title">โครงการที่ใช่ <span class="highlight">ในวันที่จุดคุณอยากให้</span></h1>
+        <h1 class="hero-title">โครงการที่ใช่ <span class="highlight">ในวันที่คุณอยากให้</span></h1>
         <p class="hero-subtitle">บริจาคให้โครงการที่ใช่</p>
         <form method="get" class="search-box">
             <input type="hidden" name="cat" value="<?= htmlspecialchars($cat) ?>">
