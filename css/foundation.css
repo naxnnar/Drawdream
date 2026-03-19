@@ -6,12 +6,15 @@
 .foundation-page {
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     min-height: 100vh;
+    margin: 0;
 }
 
 .page-wrap {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 40px 20px;
+    padding: 32px 24px 56px;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 /* Top bar — ปุ่มทั้งหมดชิดขวา */
@@ -90,6 +93,7 @@
     display: flex;
     flex-direction: column;
     gap: 40px;
+    width: 100%;
 }
 
 .foundation-card {
@@ -98,22 +102,27 @@
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     overflow: hidden;
     display: grid;
-    grid-template-columns: 1fr 500px;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
     min-height: 400px;
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
 }
 
 .fc-left {
     background: #F5E6D3;
-    padding: 40px;
+    padding: 32px;
+    min-width: 0;
 }
 
 .fc-right {
     background: white;
-    padding: 40px;
+    padding: 32px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    min-width: 0;
 }
 
 .fc-title {

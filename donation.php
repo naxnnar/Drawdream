@@ -67,26 +67,173 @@ if ($result && $result->num_rows > 0) {
     .footer-wrap div {
       color: rgba(255,255,255,0.9);
     }
+
+    body.donation-page {
+      background: #fff;
+      overflow-x: hidden;
+    }
+
+    .donation-shell {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 12px 24px 56px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .donation-shell .container {
+      max-width: 100% !important;
+      margin: 0;
+      padding-left: 0;
+      padding-right: 0;
+      background: transparent !important;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .donation-band {
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+      border-radius: 0;
+      margin-bottom: 0;
+    }
+
+    .donation-top-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+
+    .donation-grid {
+      display: grid !important;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 22px 14px;
+      justify-content: flex-start;
+      margin-left: 0;
+      margin-right: 0;
+    }
+
+    .donation-grid > [class*="col-"] {
+      display: flex;
+      width: auto;
+      max-width: none;
+      padding-left: 0;
+      padding-right: 0;
+    }
+
+    .donation-grid .child-card {
+      width: 100%;
+    }
+
+    .donation-grid .card-info {
+      padding-top: 6px;
+    }
+
+    .donation-grid .card-img {
+      border-radius: 16px;
+    }
+
+    .donation-grid .card-info h3 {
+      font-size: 1.08rem;
+      margin-top: 10px;
+      margin-bottom: 6px;
+    }
+
+    .donation-grid .card-info p {
+      font-size: 0.92rem;
+      margin: 3px 0;
+    }
+
+    .child-status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 6px 16px;
+      margin-top: 8px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0.2px;
+      width: auto;
+      min-width: 136px;
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+    }
+
+    .child-status-pill.status-approved {
+      background: linear-gradient(135deg, #799677, #597D57);
+      color: #fff;
+    }
+
+    .child-status-pill.status-pending {
+      background: linear-gradient(135deg, #f7cc47, #e8b923);
+      color: #3b2f09;
+    }
+
+    .child-status-pill.status-rejected {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: #fff;
+    }
+
+    @media (max-width: 1199.98px) {
+      .donation-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 991.98px) {
+      .donation-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .donation-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px 10px;
+      }
+
+      .donation-grid .card-info h3 {
+        font-size: 1rem;
+      }
+
+      .donation-grid .card-info p {
+        font-size: 0.86rem;
+      }
+    }
+
+    @media (max-width: 575.98px) {
+      .donation-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
   </style>
+
+</head>
  
-<body>
+<body class="donation-page donation-role-<?php echo htmlspecialchars($role); ?>">
 
 <?php include 'navbar.php'; ?>
 
-<div class="top-actions mt-3 mb-3">
-  <div style="display:flex; gap:10px; align-items:center; margin-left: 85%;">
+<div class="donation-shell">
+
+<div class="donation-top-actions">
+  <div style="display:flex; gap:10px; align-items:center;">
       <?php if ($role === 'foundation'): ?>
           <a href="p2_2addprofile.php" class="btn btn-success">+ เพิ่มโปรไฟล์เด็ก</a>
       <?php endif; ?>
   </div>
 </div>
 
-<h2 class="section-title danger">เด็กที่ยังไม่มีผู้อุปการะ</h2>
+<h2 class="section-title danger donation-band">เด็กที่ยังไม่มีผู้อุปการะ</h2>
 
 <div class="container py-4">
-  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-3">
+  <div class="row donation-grid row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-6 g-4">
     <?php foreach ($unadopted as $child): ?>
-    <div class="col-md-2">
+    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
       <a href="profile-child.php?id=<?php echo $child['child_id']; ?>" class="child-card">
         <div class="card-img danger-bg">
           <img src="uploads/Children/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="รูปเด็ก">
@@ -95,29 +242,40 @@ if ($result && $result->num_rows > 0) {
             <h3><?php echo htmlspecialchars($child['child_name']); ?></h3>
             <p><i class="bi bi-cake-fill"></i> <?php echo $child['age']; ?> ปี</p>
             <p><i class="bi bi-briefcase-fill"></i> <?php echo htmlspecialchars($child['dream']); ?></p>
-            <?php if ($role === 'foundation'): ?>
-                <div class="badge <?php echo ($child['approve_profile'] == 'อนุมัติ') ? 'bg-success' : 'bg-secondary'; ?> w-100">
-                    <?php echo $child['approve_profile']; ?>
+            <p><i class="bi bi-building"></i> <?php echo htmlspecialchars($child['foundation_name'] ?? '-'); ?></p>
+            <?php if ($role === 'foundation' || $role === 'admin'): ?>
+                <?php
+                  $statusText = $child['approve_profile'] ?? 'รอดำเนินการ';
+                  if ($statusText === 'กำลังดำเนินการ') {
+                    $statusText = 'รอดำเนินการ';
+                  }
+                  $statusClass = 'status-pending';
+                  if ($statusText == 'อนุมัติ') {
+                    $statusClass = 'status-approved';
+                    $statusText = 'อนุมัติแล้ว';
+                  } elseif ($statusText == 'ไม่อนุมัติ') {
+                    $statusClass = 'status-rejected';
+                  }
+                ?>
+                <div class="child-status-pill <?php echo $statusClass; ?>">
+                  <?php echo $statusText; ?>
                 </div>
             <?php endif; ?>
         </div>
         
       </a>
-      <?php if ($role === 'admin' && $child['approve_profile'] !== 'อนุมัติ'): ?>
-        <button onclick="approveProfile(<?php echo $child['child_id']; ?>)" class="btn btn-sm btn-primary w-100 mt-2">อนุมัติ</button>
-        <?php endif; ?>
     </div>
     <?php endforeach; ?>
     
   </div>
 </div>
 
-<h2 class="section-title success">เด็กที่มีผู้อุปการะ</h2>
+<h2 class="section-title success donation-band">เด็กที่มีผู้อุปการะ</h2>
 
 <div class="container py-4">
-  <div class="row row-cols-2 row-cols-sm-3 row-cols-md-4 g-3">
+  <div class="row donation-grid row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-6 g-4">
     <?php foreach ($adopted as $child): ?>
-    <div class="col-md-2">
+    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
       <a href="profile-renni.html" class="child-card">
         <div class="card-img success-bg">
           <img src="uploads/Children/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="รูปเด็ก">
@@ -130,7 +288,7 @@ if ($result && $result->num_rows > 0) {
       </a>
     </div>
     <?php endforeach; ?>
-    <div class="col-md-2">
+    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
       <a href="profile-renni.html" class="child-card">
       <!-- <a href="profile-focus.html" class="child-card"> -->
         <div class="card-img success-bg"><img src="img/focus.png" alt="โฟกัส"></div>
@@ -144,6 +302,7 @@ if ($result && $result->num_rows > 0) {
     
 
   </div>
+</div>
 </div>
 <div class="footer-wrap page-section" style="background-color:#3f4f9a;">
   <footer style="background-color:#3f4f9a;">
@@ -181,16 +340,6 @@ if ($result && $result->num_rows > 0) {
   </footer>
 </div>
 
-
-
-
-<script src="Drawdream/main.js"></script>ฃ
-<script>
-function approveProfile(id) {
-    if(confirm('คุณต้องการอนุมัติโปรไฟล์เด็กคนนี้ใช่หรือไม่?')) {
-        window.location.href = 'approve_process.php?id=' + id;
-    }
-}
-</script>
+<script src="Drawdream/main.js"></script>
 </body>
 </html>

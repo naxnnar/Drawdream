@@ -24,17 +24,42 @@ if ($fetchArr = $result->fetch_assoc()) {
     $f_name = "ไม่พบชื่อมูลนิธิ";
 }
 
+// รองรับคอลัมน์วันเกิด (กรณียังไม่มีในฐานข้อมูล ให้เพิ่มอัตโนมัติ)
+$has_birth_date_column = false;
+$colCheck = $conn->query("SHOW COLUMNS FROM Children LIKE 'birth_date'");
+if ($colCheck && $colCheck->num_rows > 0) {
+    $has_birth_date_column = true;
+} else {
+    $conn->query("ALTER TABLE Children ADD COLUMN birth_date DATE NULL AFTER child_name");
+    $colCheck = $conn->query("SHOW COLUMNS FROM Children LIKE 'birth_date'");
+    $has_birth_date_column = ($colCheck && $colCheck->num_rows > 0);
+}
+
 if (isset($_POST['submit'])) {
 
     $child_name    = trim($_POST['child_name'] ?? '');
-    $age           = (int)($_POST['age'] ?? 0);
+    $birth_date_raw = trim($_POST['birth_date'] ?? '');
+    $age           = 0;
     $education     = trim($_POST['education'] ?? '');
     $dream         = trim($_POST['dream'] ?? '');
     $wish          = trim($_POST['wish'] ?? '');
     $bank_name     = trim($_POST['bank_name'] ?? '');
     $child_bank    = trim($_POST['child_bank'] ?? '');
     $status        = "ยังไม่มีผู้อุปการะ"; // ค่าเริ่มต้นตามตัวอย่าง
-    $approve_status = "กำลังดำเนินการ"; // ตามรูป approve_profile
+    $approve_status = "รอดำเนินการ";
+
+    // คำนวณอายุจากวันเกิด
+    $dob = DateTime::createFromFormat('Y-m-d', $birth_date_raw);
+    $today = new DateTime('today');
+    if (!$dob || $dob->format('Y-m-d') !== $birth_date_raw) {
+        echo "<script>alert('กรุณาเลือกวันเกิดให้ถูกต้อง'); history.back();</script>";
+        exit();
+    }
+    if ($dob > $today) {
+        echo "<script>alert('วันเกิดต้องไม่เป็นวันที่ในอนาคต'); history.back();</script>";
+        exit();
+    }
+    $age = (int)$today->diff($dob)->y;
 
     // จัดการไฟล์รูปภาพ
     if (!isset($_FILES['photo_child']) || $_FILES['photo_child']['error'] !== 0) {
@@ -60,11 +85,32 @@ if (isset($_POST['submit'])) {
     }
 
 
-    $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-    
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ississssssss", $f_id, $f_name, $child_name, $age, $education, $dream, $wish, $bank_name, $child_bank, $status, $newName, $approve_status);
+    if ($has_birth_date_column) {
+        $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param(
+            "isssissssssss",
+            $f_id,
+            $f_name,
+            $child_name,
+            $birth_date_raw,
+            $age,
+            $education,
+            $dream,
+            $wish,
+            $bank_name,
+            $child_bank,
+            $status,
+            $newName,
+            $approve_status
+        );
+    } else {
+        $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ississssssss", $f_id, $f_name, $child_name, $age, $education, $dream, $wish, $bank_name, $child_bank, $status, $newName, $approve_status);
+    }
 
     if ($stmt->execute()) {
         echo "<script>alert('เพิ่มข้อมูลเด็กสำเร็จ'); window.location='donation.php';</script>";
@@ -118,12 +164,17 @@ if (isset($_POST['submit'])) {
                     <input type="text" name="child_name" placeholder="ตัวอย่าง: น้องฟ้า" required>
                 </div>
                 <div>
-                    <label>อายุ (ปี)</label>
-                    <input type="number" name="age" required>
+                    <label>วันเกิดเด็ก</label>
+                    <input type="date" id="birth_date" name="birth_date" max="<?php echo date('Y-m-d'); ?>" required onchange="syncAgeAndEducation()">
+                </div>
+                <div>
+                    <label>อายุ (คำนวณอัตโนมัติ)</label>
+                    <input type="number" id="age" name="age_preview" readonly>
                 </div>
                 <div>
                     <label>ระดับการศึกษา</label>
-                    <input type="text" name="education" placeholder="ตัวอย่าง: ป.6" required>
+                    <input type="text" id="education" name="education" placeholder="ตัวอย่าง: ป.6" required>
+                    <small style="color:#777;">ระบบจะแนะนำชั้นเรียนตามอายุ แต่สามารถแก้ไขเองได้หากเด็กเรียนช้ากว่ากำหนด</small>
                 </div>
                 <div>
                     <label>ความฝันในอนาคต</label>
@@ -162,6 +213,59 @@ function previewImage(input) {
             preview.innerHTML = `<img src="${e.target.result}">`;
         }
         reader.readAsDataURL(input.files[0]);
+    }
+}
+
+let educationManuallyEdited = false;
+document.getElementById('education').addEventListener('input', function() {
+    educationManuallyEdited = true;
+});
+
+function getSuggestedEducation(age) {
+    if (age <= 5) return 'อนุบาล';
+    if (age === 6) return 'ป.1';
+    if (age === 7) return 'ป.2';
+    if (age === 8) return 'ป.3';
+    if (age === 9) return 'ป.4';
+    if (age === 10) return 'ป.5';
+    if (age === 11) return 'ป.6';
+    if (age === 12) return 'ม.1';
+    if (age === 13) return 'ม.2';
+    if (age === 14) return 'ม.3';
+    if (age === 15) return 'ม.4';
+    if (age === 16) return 'ม.5';
+    if (age === 17) return 'ม.6';
+    return 'อุดมศึกษา/อาชีวะ';
+}
+
+function syncAgeAndEducation() {
+    const birthDateEl = document.getElementById('birth_date');
+    const ageEl = document.getElementById('age');
+    const educationEl = document.getElementById('education');
+
+    if (!birthDateEl.value) {
+        ageEl.value = '';
+        return;
+    }
+
+    const today = new Date();
+    const dob = new Date(birthDateEl.value + 'T00:00:00');
+
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    const dayDiff = today.getDate() - dob.getDate();
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+        age--;
+    }
+
+    if (age < 0) {
+        ageEl.value = '';
+        return;
+    }
+
+    ageEl.value = age;
+    if (!educationManuallyEdited || !educationEl.value.trim()) {
+        educationEl.value = getSuggestedEducation(age);
     }
 }
 </script>

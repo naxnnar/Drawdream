@@ -24,7 +24,13 @@
     /* FIX: container ไม่ให้มีพื้นขาว */
     .page-section .container {
       background: transparent !important;
-      max-width: 1100px;
+      max-width: 1400px;
+      padding-left: 24px;
+      padding-right: 24px;
+    }
+
+    body.about-page {
+      background: #fff;
     }
 
     /* FIX: ตัวหนังสือ section เขียว เป็นสีขาว */
@@ -50,21 +56,218 @@
       color: rgba(255,255,255,0.9);
     }
 
+    .footer-logo {
+      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+    }
+
+    .footer-address {
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    .social-links {
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+    }
+
+    .social-link {
+      color: #ffffff;
+      font-size: 1.85rem;
+      line-height: 1;
+      text-decoration: none;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .social-link:hover {
+      opacity: 0.85;
+      transform: translateY(-1px);
+    }
+
     /* Hero section */
     .hero-section {
       background-color: #f5ede0;
-      padding: 60px 0 40px;
+      padding: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-section .container {
+      max-width: 1400px;
+      position: relative;
+      min-height: 628px;
+      padding-top: 0;
+    }
+    .hero-section .hero-copy {
+      max-width: 980px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 3;
+      text-align: center;
+      padding-top: 150px;
+    }
+    .hero-brand {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .hero-logo {
+      height: 72px;
+      width: auto;
     }
     .hero-section .hero-tagline {
-      font-size: 1.6rem;
+      font-size: 2.1rem;
       font-weight: 700;
       color: #3f4f9a;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
+      line-height: 1.3;
     }
     .hero-section .hero-body {
-      font-size: 1rem;
+      font-size: 1.15rem;
       color: #444;
-      line-height: 2;
+      line-height: 1.7;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .hero-decor {
+      position: absolute;
+      pointer-events: none;
+      user-select: none;
+      z-index: 1;
+    }
+    .hero-rainbow {
+      left: -220px;
+      bottom: 0;
+      width: 640px;
+    }
+    .hero-rocket {
+      right: 166px;
+      top: 28px;
+      width: 96px;
+    }
+    .hero-cloud-left {
+      left: 690px;
+      bottom: -120px;
+      width: 390px;
+    }
+    .hero-cloud-right {
+      left: 948px;
+      bottom: -80px;
+      width: 450px;
+    }
+    .hero-star-red {
+      right: 64px;
+      top: 138px;
+      width: 36px;
+    }
+    .hero-star-yellow {
+      right: 8px;
+      top: 186px;
+      width: 40px;
+    }
+    .hero-star-green {
+      right: 58px;
+      top: 248px;
+      width: 36px;
+    }
+    .hero-star-blue {
+      right: 18px;
+      top: 318px;
+      width: 38px;
+    }
+
+    @media (max-width: 991.98px) {
+      .hero-section .container {
+        min-height: auto;
+        padding-top: 12px;
+        padding-bottom: 120px;
+      }
+      .hero-section .hero-copy {
+        padding-top: 36px;
+      }
+      .hero-section .hero-tagline {
+        font-size: 1.55rem;
+      }
+      .hero-section .hero-body {
+        font-size: 1.02rem;
+      }
+      .hero-rainbow {
+        left: -110px;
+        bottom: 0;
+        width: 460px;
+        opacity: 0.9;
+      }
+      .hero-cloud-left {
+        left: 350px;
+        bottom: -16px;
+        width: 280px;
+      }
+      .hero-cloud-right {
+        left: 570px;
+        bottom: -16px;
+        width: 300px;
+      }
+      .hero-rocket {
+        right: 82px;
+        width: 76px;
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .hero-brand {
+        gap: 10px;
+      }
+      .hero-logo {
+        height: 46px;
+      }
+      .hero-section .hero-tagline {
+        font-size: 1.35rem;
+        line-height: 1.45;
+      }
+      .hero-section .hero-body {
+        font-size: 0.95rem;
+        line-height: 1.75;
+      }
+      .hero-rainbow {
+        left: -110px;
+        bottom: 0;
+        width: 330px;
+      }
+      .hero-cloud-left {
+        left: 150px;
+        bottom: -10px;
+        width: 200px;
+      }
+      .hero-cloud-right {
+        left: 300px;
+        bottom: -10px;
+        width: 220px;
+      }
+      .hero-cloud-left,
+      .hero-cloud-right,
+      .hero-star-red,
+      .hero-star-yellow,
+      .hero-star-green,
+      .hero-star-blue,
+      .hero-rocket {
+        opacity: 0.72;
+      }
+    }
+
+    .about-work-card {
+      border-radius: 28px;
+      padding: 32px 24px;
+      min-height: 260px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .about-work-card p {
+      max-width: 320px;
+      margin: 0 auto;
+      line-height: 1.8;
     }
 
     /* FAQ */
@@ -83,22 +286,33 @@
     }
   </style>
 </head>
-<body>
+<body class="about-page">
 <?php include 'navbar.php'; ?>
 
 <!-- ===== HERO ===== -->
 <section class="hero-section page-section">
   <div class="container text-center">
-    <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
-      <img src="img/logobanner.png" alt="Draw Dream Logo" style="height:64px;">
-      <span style="font-size:1.3rem; font-weight:600; color:#333;">เริ่มต้นจากความตั้งใจ</span>
+    <img src="img/about1.png" alt="" class="hero-decor hero-rainbow">
+    <img src="img/about2.png" alt="" class="hero-decor hero-rocket">
+    <img src="img/about3.png" alt="" class="hero-decor hero-cloud-left">
+    <img src="img/about4.png" alt="" class="hero-decor hero-cloud-right">
+    <img src="img/about5.png" alt="" class="hero-decor hero-star-red">
+    <img src="img/about6.png" alt="" class="hero-decor hero-star-green">
+    <img src="img/about7.png" alt="" class="hero-decor hero-star-yellow">
+    <img src="img/about8.png" alt="" class="hero-decor hero-star-blue">
+
+    <div class="hero-copy">
+      <div class="hero-brand">
+        <img src="img/logobanner.png" alt="Draw Dream Logo" class="hero-logo">
+        <span style="font-size:1.45rem; font-weight:600; color:#333;">เริ่มต้นจากความตั้งใจ</span>
+      </div>
+      <p class="hero-tagline">อยากเห็นเด็กในสถานสงเคราะห์มีโอกาสได้เลือก&amp;ทำตามความฝัน</p>
+      <p class="hero-body">
+        วาดฝันเป็นสื่อกลางส่งต่อความช่วยเหลือจากผู้อุปการะไปยังเด็กแบบเฉพาะบุคคลซึ่งสะท้อนความสนใจ
+        และความฝันของตัวเด็ก เราเป็นองค์กรไม่แสวงหาผลกำไร ภายใต้แนวคิดของคนรุ่นใหม่
+        และให้สมาชิกมีส่วนร่วมติดตามผลที่ตนบริจาคได้
+      </p>
     </div>
-    <p class="hero-tagline">อยากเห็นเด็กในสถานสงเคราะห์มีโอกาสได้เลือก&amp;ทำตามความฝัน</p>
-    <p class="hero-body">
-      วาดฝันเป็นสื่อกลางส่งต่อความช่วยเหลือจากผู้อุปการะไปยังเด็กแบบเฉพาะบุคคลซึ่งสะท้อนความสนใจ<br>
-      และความฝันของตัวเด็ก &nbsp; เราเป็นองค์กรไม่แสวงหาผลกำไร ภายใต้แนวคิดของคนรุ่นใหม่<br>
-      และให้สมาชิกมีส่วนร่วมติดตามผลที่ตนบริจาคได้
-    </p>
   </div>
 </section>
 
@@ -108,21 +322,21 @@
     <h2 class="text-center fw-bold mb-5">งานของเรา</h2>
     <div class="row g-4 justify-content-center">
       <div class="col-md-4">
-        <div class="rounded-4 p-4 text-center h-100" style="background-color:#f5c518;">
+        <div class="about-work-card text-center h-100" style="background-color:#f5c518;">
           <i class="bi-person-hearts mb-3" style="font-size:2rem;"></i>
           <h5 class="fw-bold">สิทธิเด็ก</h5>
           <p>เราสนับสนุนสิทธิเด็ก และส่งเสริมให้เด็กมีส่วนร่วมในการแสดงความคิดเห็นที่สะท้อนความสนใจและความฝันของเด็ก</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="rounded-4 p-4 text-center h-100" style="background-color:#c0392b; color:#fff;">
+        <div class="about-work-card text-center h-100" style="background-color:#c0392b; color:#fff;">
           <i class="bi-heart-fill mb-3" style="font-size:2rem;"></i>
           <h5 class="fw-bold">คุณค่าที่สัมผัสได้</h5>
           <p>เราต้องการให้เด็กได้รับความรัก และให้เขารู้ว่าเขาเป็นคนที่มีคุณค่า ผ่านการบริจาคแบบรายบุคคลแบบ1ต่อ1</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="rounded-4 p-4 text-center h-100" style="background-color:#7a9e7e; color:#fff;">
+        <div class="about-work-card text-center h-100" style="background-color:#7a9e7e; color:#fff;">
           <i class="bi-book-fill mb-3" style="font-size:2rem;"></i>
           <h5 class="fw-bold">การศึกษา</h5>
           <p>เราเพิ่มโอกาสในการเข้าถึงการศึกษาที่มีคุณภาพและเครื่องมือที่จำเป็น ทำให้พวกเขาได้รับการศึกษาที่มีคุณภาพ</p>
@@ -227,7 +441,7 @@
     <div class="container py-4" style="background-color:#3f4f9a;">
       <div class="row text-light">
         <div class="col-md-6 mb-4">
-          <img src="img/logobanner.png" alt="DrawDream logo" class="mb-3">
+          <img src="img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo">
           <p class="text-light">
             ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
             ธนาคารไทยพาณิชย์<br>
@@ -236,7 +450,7 @@
         </div>
         <div class="col-md-6 mb-4">
           <h5 class="text-center mb-3 text-light">ติดต่อเรา</h5>
-          <p class="text-light">
+          <p class="text-light footer-address">
             <i class="bi bi-geo-alt-fill me-2"></i>
             ชั้น 3 อาคาร Drawdream ถนนพหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400
           </p>
@@ -244,16 +458,16 @@
             <span class="text-light"><i class="bi bi-telephone-fill me-1"></i> 0949278518</span>
             <span class="text-light"><i class="bi bi-printer-fill me-1"></i> 0123456789</span>
           </div>
-          <div class="d-flex justify-content-center gap-2">
-            <a href="#" class="btn btn-light btn-sm"><i class="bi bi-facebook"></i></a>
-            <a href="#" class="btn btn-light btn-sm"><i class="bi bi-tiktok"></i></a>
-            <a href="#" class="btn btn-light btn-sm"><i class="bi bi-instagram"></i></a>
-            <a href="#" class="btn btn-light btn-sm"><i class="bi bi-youtube"></i></a>
+          <div class="social-links">
+            <a href="#" class="social-link" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
+            <a href="#" class="social-link" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>
+            <a href="#" class="social-link" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
+            <a href="#" class="social-link" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
           </div>
         </div>
       </div>
       <hr style="border-color:rgba(255,255,255,0.25);">
-      <p class="text-center text-light mb-0 small" style="opacity:0.7;">&copy; All right reserved 2025 WVFT</p>
+      <p class="text-center text-light mb-0 small" style="opacity:0.7;">&copy; All right reserved 2026</p>
     </div>
   </footer>
 </div>

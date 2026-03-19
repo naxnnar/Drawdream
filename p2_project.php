@@ -48,10 +48,11 @@ $result = $stmt->get_result();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <title>โครงการ | DrawDream</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/projects.css">
 
-    <title>โครงการที่ใช่ ในวันที่จุดคุณอยากให้ | DrawDream</title>
-    <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/projects.css?v=5">
 </head>
 <body class="projects-page">
 
