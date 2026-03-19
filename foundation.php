@@ -109,7 +109,7 @@ $stmtCat = $conn->prepare($sqlItemsByCat);
                 </div>
               <?php endforeach; ?>
             </div>
-            <a class="btn-donate" href="foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
+            <a class="btn-donate" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
           </div>
           <div class="fc-right">
             <?php if (!empty($foundationImage)): ?>

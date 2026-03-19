@@ -10,8 +10,10 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
   $r = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile WHERE account_verified = 0");
   if ($r) $pending_count = mysqli_fetch_assoc($r)['cnt'];
 }
+$_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
+$_nav_base = str_repeat('../', max(0, $_nav_depth));
 ?>
-<link rel="stylesheet" href="css/navbar.css">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
 <nav class="navbar">
 
   <div class="nav-left">
@@ -24,7 +26,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
 
   <div class="nav-center">
     <a href="homepage.php">
-      <img src="img/logobig.png" class="nav-logo" alt="DrawDream Logo">
+      <img src="<?= $_nav_base ?>img/logobig.png" class="nav-logo" alt="DrawDream Logo">
     </a>
   </div>
 
@@ -33,7 +35,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
 
       <?php if ($_SESSION['role'] === 'admin'): ?>
         <a href="admin_approve_foundation.php" class="notif-btn" title="มูลนิธิรออนุมัติ">
-          <img src="img/bell.png" alt="แจ้งเตือน" class="nav-icon">
+          <img src="<?= $_nav_base ?>img/bell.png" alt="แจ้งเตือน" class="nav-icon">
           <?php if ($pending_count > 0): ?>
             <span class="notif-badge"><?= $pending_count ?></span>
           <?php endif; ?>
@@ -41,7 +43,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
       <?php endif; ?>
 
       <a href="profile.php" class="profile-btn">
-        <img src="img/user.png" alt="โปรไฟล์" class="nav-icon">
+        <img src="<?= $_nav_base ?>img/user.png" alt="โปรไฟล์" class="nav-icon">
       </a>
       <a href="logout.php" class="logout-btn">ออกจากระบบ</a>
 

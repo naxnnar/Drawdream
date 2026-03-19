@@ -48,15 +48,10 @@ $result = $stmt->get_result();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<<<<<<< HEAD
+
     <title>โครงการที่ใช่ ในวันที่จุดคุณอยากให้ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/projects.css?v=5">
-=======
-    <title>โครงการ | DrawDream</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/projects.css">
->>>>>>> 154231a9fd97f341b052a0a041374f62b5a1bcc1
 </head>
 <body class="projects-page">
 
@@ -139,7 +134,7 @@ $result = $stmt->get_result();
                             </div>
                         </div>
 
-                        <a href="donation.php?project_id=<?= $row['project_id'] ?>" class="donate-btn">บริจาค</a>
+                        <a href="payment/payment_project.php?project_id=<?= $row['project_id'] ?>" class="donate-btn">บริจาค</a>
                     </div>
                 </div>
             <?php endwhile; ?>

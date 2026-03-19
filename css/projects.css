@@ -331,3 +331,5 @@
     .project-grid  { grid-template-columns: 1fr; }
     .hero-title    { font-size: 28px; }
     .filter-row    { gap: 8px; }
+    .top-actions   { justify-content: center; }
+}   
