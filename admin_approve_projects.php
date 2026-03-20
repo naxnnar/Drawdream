@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'reject')  $newStatus = 'rejected';
 
     if ($project_id > 0 && in_array($newStatus, ['approved','rejected'], true)) {
-        $stmt = $conn->prepare("UPDATE project SET status=? WHERE project_id=?");
+        $stmt = $conn->prepare("UPDATE project SET project_status=? WHERE project_id=?");
         $stmt->bind_param("si", $newStatus, $project_id);
         $stmt->execute();
 
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ดึงรายการที่รออนุมัติ
-$result = mysqli_query($conn, "SELECT * FROM project WHERE status='pending' ORDER BY project_id DESC");
+$result = mysqli_query($conn, "SELECT * FROM project WHERE project_status='pending' ORDER BY project_id DESC");
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -94,8 +94,8 @@ $result = mysqli_query($conn, "SELECT * FROM project WHERE status='pending' ORDE
             </td>
             <td><?= htmlspecialchars($row['project_name']) ?></td>
             <td><?= nl2br(htmlspecialchars($row['project_desc'])) ?></td>
-            <td><?= htmlspecialchars($row['project_goal']) ?></td>
-            <td><?= htmlspecialchars($row['project_enddate']) ?></td>
+            <td><?= htmlspecialchars($row['goal_amount']) ?></td>
+            <td><?= htmlspecialchars($row['end_date']) ?></td>
             <td>
               <form id="pf<?= (int)$row['project_id'] ?>" method="post">
                 <input type="hidden" name="project_id" value="<?= (int)$row['project_id'] ?>">

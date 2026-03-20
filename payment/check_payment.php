@@ -73,9 +73,9 @@ if ($is_success) {
     $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
     $stmt->execute();
 
-    // อัปเดต current_amount ในตาราง project
+    // อัปเดต current_donate ในตาราง project
     $net_amount = $amount;
-    $stmt = $conn->prepare("UPDATE project SET current_amount = current_amount + ? WHERE project_id = ?");
+    $stmt = $conn->prepare("UPDATE project SET current_donate = current_donate + ? WHERE project_id = ?");
     $stmt->bind_param("di", $net_amount, $project_id);
     $stmt->execute();
 

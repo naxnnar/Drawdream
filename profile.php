@@ -18,18 +18,18 @@ function checkCompletedProjects($conn) {
     // เช็คโครงการที่ครบเป้าหมาย
     $conn->query("
         UPDATE project 
-        SET status = 'completed'
-        WHERE status = 'approved'
-        AND current_amount >= project_goal
-        AND project_goal > 0
+        SET project_status = 'completed'
+        WHERE project_status = 'approved'
+        AND current_donate >= goal_amount
+        AND goal_amount > 0
     ");
 
     // เช็คโครงการที่หมดเวลา
     $conn->query("
         UPDATE project 
-        SET status = 'completed'
-        WHERE status = 'approved'
-        AND project_enddate < CURDATE()
+        SET project_status = 'completed'
+        WHERE project_status = 'approved'
+        AND end_date < CURDATE()
     ");
 }
 
@@ -47,11 +47,11 @@ if ($role === 'foundation') {
     // ดึงโครงการทั้งหมดของมูลนิธินี้
     $fid = (int)($profile['foundation_id'] ?? 0);
     $stmt_proj = $conn->prepare("
-        SELECT project_id, project_name, project_goal, current_amount, 
-               status, project_enddate, project_image, category
+         SELECT project_id, project_name, goal_amount, current_donate,
+             project_status, end_date, project_image, category
         FROM project 
         WHERE foundation_id = ?
-        ORDER BY status DESC, project_id DESC
+         ORDER BY project_status DESC, project_id DESC
     ");
     $stmt_proj->bind_param("i", $fid);
     $stmt_proj->execute();
@@ -293,12 +293,12 @@ function statusLabel($status) {
                 <div class="project-list">
                 <?php foreach ($foundation_projects as $proj): ?>
                     <?php
-                        $st = statusLabel($proj['status']);
-                        $goal = (float)($proj['project_goal'] ?? 0);
-                        $current = (float)($proj['current_amount'] ?? 0);
+                        $st = statusLabel($proj['project_status']);
+                        $goal = (float)($proj['goal_amount'] ?? 0);
+                        $current = (float)($proj['current_donate'] ?? 0);
                         $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
                     ?>
-                    <div class="project-item <?= htmlspecialchars($proj['status']) ?>">
+                    <div class="project-item <?= htmlspecialchars($proj['project_status']) ?>">
                         <?php if (!empty($proj['project_image'])): ?>
                             <img src="uploads/<?= htmlspecialchars($proj['project_image']) ?>" class="project-thumb" alt="">
                         <?php else: ?>
@@ -309,7 +309,7 @@ function statusLabel($status) {
                             <span class="project-status" style="background:<?= $st['color'] ?>">
                                 <?= $st['label'] ?>
                             </span>
-                            <?php if ($proj['status'] !== 'pending' && $proj['status'] !== 'rejected'): ?>
+                            <?php if ($proj['project_status'] !== 'pending' && $proj['project_status'] !== 'rejected'): ?>
                                 <div class="project-bar-wrap">
                                     <div class="project-bar-fill" style="width:<?= (int)$percent ?>%"></div>
                                 </div>
@@ -317,14 +317,14 @@ function statusLabel($status) {
                                     ได้รับ <strong><?= number_format($current, 0) ?></strong> / 
                                     <?= number_format($goal, 0) ?> บาท
                                     (<?= round($percent) ?>%)
-                                    <?php if ($proj['status'] === 'completed'): ?>
+                                    <?php if ($proj['project_status'] === 'completed'): ?>
                                         — <span style="color:#4A5BA8; font-weight:600;">โครงการสำเร็จแล้ว</span>
                                     <?php endif; ?>
                                 </div>
                             <?php endif; ?>
-                            <?php if (!empty($proj['project_enddate'])): ?>
+                            <?php if (!empty($proj['end_date'])): ?>
                                 <div style="font-size:12px; color:#999; margin-top:4px;">
-                                    วันสิ้นสุด: <?= date('d/m/Y', strtotime($proj['project_enddate'])) ?>
+                                    วันสิ้นสุด: <?= date('d/m/Y', strtotime($proj['end_date'])) ?>
                                 </div>
                             <?php endif; ?>
                         </div>

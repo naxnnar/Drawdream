@@ -205,3 +205,38 @@ body {
 .nav-left a {
     font-size: 16px !important;
 }
+
+/* ปุ่มสลับโหมด admin */
+.mode-toggle-btn {
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Prompt', sans-serif;
+    text-decoration: none;
+    background: #f0f0f0;
+    color: #666;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.mode-toggle-btn:hover { background: #e0e0e0; }
+
+.mode-toggle-btn.mode-admin {
+    background: #4A5BA8;
+    color: white;
+}
+
+.mode-toggle-btn.mode-admin:hover { background: #3d4d8f; }
+
+/* badge จำนวนรออนุมัติในเมนู */
+.menu-badge {
+    background: #E74C3C;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 3px;
+    vertical-align: middle;
+}

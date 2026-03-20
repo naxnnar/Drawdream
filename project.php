@@ -28,7 +28,7 @@ $params[] = $kwLike;
 $types   .= "ss";
 
 if ($role !== 'admin') {
-    $where[] = "status = 'approved'";
+    $where[] = "project_status = 'approved'";
 }
 
 if ($cat !== 'all') {
@@ -98,8 +98,8 @@ $result = $stmt->get_result();
         <?php if ($result && $result->num_rows > 0): ?>
             <?php while ($row = $result->fetch_assoc()): ?>
                 <?php
-                    $goal     = !empty($row['project_goal']) ? floatval($row['project_goal']) : 100000;
-                    $raised = (float)($row['current_amount'] ?? 0); // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
+                    $goal     = !empty($row['goal_amount']) ? floatval($row['goal_amount']) : 100000;
+                    $raised = (float)($row['current_donate'] ?? 0); // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                 ?>
                 <div class="project-card">
@@ -115,7 +115,7 @@ $result = $stmt->get_result();
 
                         <?php if ($role === 'admin'): ?>
                             <?php
-                                $st  = $row['status'] ?? 'pending';
+                                $st  = $row['project_status'] ?? 'pending';
                                 $cls = ($st === 'approved') ? 'approved' : (($st === 'rejected') ? 'rejected' : 'pending');
                             ?>
                             <div class="badge <?= $cls ?>"><?= htmlspecialchars($st) ?></div>

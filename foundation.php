@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
@@ -18,11 +18,12 @@ $q = mysqli_query($conn, "
 if ($q) while ($r = mysqli_fetch_assoc($q)) $donationTotals[(int)$r['foundation_id']] = (float)$r['total'];
 
 $goalTotals = [];
-$q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE status='approved' GROUP BY foundation_id");
+$q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE approve_item='approved' GROUP BY foundation_id");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
-$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image FROM foundation_needlist WHERE foundation_id=? AND status='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
+$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
+
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -32,8 +33,6 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>มูลนิธิ | DrawDream</title>
   <link rel="stylesheet" href="css/navbar.css">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/foundation.css?v=3">
 </head>
 
@@ -106,7 +105,7 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
             </div>
             <div class="fc-right">
               <?php if (!empty($foundationImage)): ?>
-                <img class="cover" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
+                <img class="cover" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ"> 
               <?php else: ?>
                 <div class="cover-empty">ยังไม่มีรูปมูลนิธิ</div>
               <?php endif; ?>

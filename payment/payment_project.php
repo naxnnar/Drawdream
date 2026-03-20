@@ -19,7 +19,7 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("SELECT * FROM project WHERE project_id = ? AND status = 'approved' LIMIT 1");
+$stmt = $conn->prepare("SELECT * FROM project WHERE project_id = ? AND project_status = 'approved' LIMIT 1");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
@@ -133,7 +133,7 @@ function omise_request($method, $path, $data = []) {
         <?php endif; ?>
         <p class="project-desc"><?= htmlspecialchars($project['project_desc']) ?></p>
         <div class="goal-info">
-            เป้าหมาย <?= number_format($project['project_goal'], 0) ?> บาท
+            เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท
         </div>
     </div>
 

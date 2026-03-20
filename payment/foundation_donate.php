@@ -31,7 +31,7 @@ if (!$foundation) {
 }
 
 // ดึงยอดรวมราคาสิ่งของทั้งหมดที่อนุมัติแล้ว
-$stmt2 = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND status = 'approved'");
+$stmt2 = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved'");
 $stmt2->bind_param("i", $fid);
 $stmt2->execute();
 $goal_row = $stmt2->get_result()->fetch_assoc();
@@ -52,7 +52,7 @@ $current = (float)($current_row['current'] ?? 0);
 $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
 
 // ดึงรายการสิ่งของ
-$items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND status = 'approved' ORDER BY urgent DESC, item_id DESC");
+$items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved' ORDER BY urgent DESC, item_id DESC");
 $items_stmt->bind_param("i", $fid);
 $items_stmt->execute();
 $items = $items_stmt->get_result()->fetch_all(MYSQLI_ASSOC);

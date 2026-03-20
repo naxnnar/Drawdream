@@ -33,11 +33,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $stmt = $conn->prepare("
             UPDATE foundation_needlist
-            SET status=?,
+            SET approve_item=?,
                 reviewed_by_user_id=?,
                 reviewed_at=NOW(),
                 review_note=?
-            WHERE item_id=? AND status='pending'
+            WHERE item_id=? AND approve_item='pending'
         ");
         if (!$stmt) {
             $error = "Prepare failed: " . $conn->error;
@@ -68,7 +68,7 @@ $sql = "
   SELECT nl.*, fp.foundation_name
   FROM foundation_needlist nl
   JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
-  WHERE nl.status='pending'
+  WHERE nl.approve_item='pending'
   ORDER BY nl.urgent DESC, nl.item_id DESC
 ";
 $result = mysqli_query($conn, $sql);
