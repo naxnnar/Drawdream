@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
@@ -23,25 +23,6 @@ if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id
 
 $stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image FROM foundation_needlist WHERE foundation_id=? AND status='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
-
-/* ====================================================
-   โค้ด filter หมวดหมู่ (เก็บไว้ใช้กับหน้าโครงการ)
-   =====================================================
-$cat = $_GET['cat'] ?? 'all';
-$allowedCats = ['all','เด็กเล็ก','เด็กพิการ'];
-if (!in_array($cat, $allowedCats, true)) $cat = 'all';
-$sqlItemsByCat = "SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image
-                  FROM foundation_needlist
-                  WHERE foundation_id=? AND status='approved' AND category=?
-                  ORDER BY urgent DESC, item_id DESC LIMIT 3";
-$stmtCat = $conn->prepare($sqlItemsByCat);
-// Filter chips HTML:
-// <div class="filter-row">
-//   <a class="chip <?= ($cat==='all')?'active':'' ?>" href="?cat=all">ทั้งหมด</a>
-//   <a class="chip <?= ($cat==='เด็กเล็ก')?'active':'' ?>" href="?cat=เด็กเล็ก">เด็กเล็ก</a>
-//   <a class="chip <?= ($cat==='เด็กพิการ')?'active':'' ?>" href="?cat=เด็กพิการ">เด็กพิการ</a>
-// </div>
-==================================================== */
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -62,21 +43,9 @@ $stmtCat = $conn->prepare($sqlItemsByCat);
 
   <div class="page-wrap">
 
-<<<<<<< Updated upstream
-  <div class="top-bar">
-    <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
-      <a href="admin_approve_needlist.php" class="admin-btn">ไปหน้าอนุมัติรายการ</a>
-    <?php endif; ?>
-    <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
-      <?php if ($is_verified): ?>
-        <a href="foundation_add_need.php" class="btn-propose">เสนอรายการสิ่งของ</a>
-      <?php else: ?>
-        <span style="color:#E8A020; font-size:13px;">รอการอนุมัติก่อนจึงจะเสนอรายการสิ่งของได้</span>
-=======
     <div class="top-bar">
       <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
-        <a href="admin_needlist.php" class="admin-btn">ไปหน้าอนุมัติรายการ</a>
->>>>>>> Stashed changes
+        <a href="admin_approve_needlist.php" class="admin-btn">ไปหน้าอนุมัติรายการ</a>
       <?php endif; ?>
       <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
         <?php if ($is_verified): ?>
