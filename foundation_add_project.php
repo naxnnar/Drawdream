@@ -1,7 +1,12 @@
 <?php
 session_start();
 include 'db.php';
-
+// ดึง foundation_id
+$stmt_fp = $conn->prepare("SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1");
+$stmt_fp->bind_param("i", $_SESSION['user_id']);
+$stmt_fp->execute();
+$fp = $stmt_fp->get_result()->fetch_assoc();
+$foundation_id = (int)($fp['foundation_id'] ?? 0);
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header("Location: project.php");
     exit();
@@ -29,7 +34,7 @@ if (isset($_POST['submit'])) {
     $imageName = $_FILES['project_image']['name'];
     $tmpName   = $_FILES['project_image']['tmp_name'];
     $ext       = strtolower(pathinfo($imageName, PATHINFO_EXTENSION));
-    $allowed   = ['jpg','jpeg','png','gif','webp'];
+    $allowed   = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 
     if (!in_array($ext, $allowed)) {
         echo "<script>alert('อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp เท่านั้น'); history.back();</script>";
@@ -43,10 +48,10 @@ if (isset($_POST['submit'])) {
     }
 
     $stmt = $conn->prepare("
-        INSERT INTO project (project_name, project_desc, project_goal, project_enddate, project_image, category, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending')
-    ");
-    $stmt->bind_param("ssiss s", $name, $desc, $goal, $enddate, $newName, $category);
+    INSERT INTO project (foundation_id, project_name, project_desc, project_goal, project_enddate, project_image, category, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+");
+    $stmt->bind_param("ississs", $foundation_id, $name, $desc, $goal, $enddate, $newName, $category);
 
     if ($stmt->execute()) {
         echo "<script>alert('เสนอโครงการสำเร็จ (รอแอดมินอนุมัติ)'); window.location='project.php';</script>";
@@ -59,6 +64,7 @@ if (isset($_POST['submit'])) {
 ?>
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -66,58 +72,60 @@ if (isset($_POST['submit'])) {
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/addproject.css">
 </head>
+
 <body>
 
-<?php include 'navbar.php'; ?>
+    <?php include 'navbar.php'; ?>
 
-<div class="form-container">
-    <div class="left-box">
-        <h2>เสนอโครงการ</h2>
-        <div class="upload-box">เลือกรูปด้านขวา</div>
+    <div class="form-container">
+        <div class="left-box">
+            <h2>เสนอโครงการ</h2>
+            <div class="upload-box">เลือกรูปด้านขวา</div>
+        </div>
+
+        <div class="right-box">
+            <form method="POST" enctype="multipart/form-data">
+
+                <div class="form-group">
+                    <label>ประเภทโครงการ *</label>
+                    <select name="category" required>
+                        <option value="">-- เลือกประเภท --</option>
+                        <?php foreach ($categories as $c): ?>
+                            <option value="<?= $c ?>"><?= $c ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>หัวข้อโครงการ *</label>
+                    <input type="text" name="project_name" required>
+                </div>
+
+                <div class="form-group">
+                    <label>รายละเอียดโครงการ *</label>
+                    <textarea name="project_desc" rows="5" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>เป้าหมาย (บาท) *</label>
+                    <input type="number" name="project_goal" min="1" required>
+                </div>
+
+                <div class="form-group">
+                    <label>วันที่ปิดรับบริจาค *</label>
+                    <input type="date" name="project_enddate" required>
+                </div>
+
+                <div class="form-group">
+                    <label>อัปโหลดรูปภาพ *</label>
+                    <input type="file" name="project_image" accept="image/*" required>
+                </div>
+
+                <button type="submit" name="submit" class="btn-submit">เสนอโครงการ</button>
+            </form>
+        </div>
     </div>
-
-    <div class="right-box">
-        <form method="POST" enctype="multipart/form-data">
-
-            <div class="form-group">
-                <label>ประเภทโครงการ *</label>
-                <select name="category" required>
-                    <option value="">-- เลือกประเภท --</option>
-                    <?php foreach ($categories as $c): ?>
-                        <option value="<?= $c ?>"><?= $c ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>หัวข้อโครงการ *</label>
-                <input type="text" name="project_name" required>
-            </div>
-
-            <div class="form-group">
-                <label>รายละเอียดโครงการ *</label>
-                <textarea name="project_desc" rows="5" required></textarea>
-            </div>
-
-            <div class="form-group">
-                <label>เป้าหมาย (บาท) *</label>
-                <input type="number" name="project_goal" min="1" required>
-            </div>
-
-            <div class="form-group">
-                <label>วันที่ปิดรับบริจาค *</label>
-                <input type="date" name="project_enddate" required>
-            </div>
-
-            <div class="form-group">
-                <label>อัปโหลดรูปภาพ *</label>
-                <input type="file" name="project_image" accept="image/*" required>
-            </div>
-
-            <button type="submit" name="submit" class="btn-submit">เสนอโครงการ</button>
-        </form>
-    </div>
-</div>
 
 </body>
+
 </html>

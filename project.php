@@ -99,7 +99,7 @@ $result = $stmt->get_result();
             <?php while ($row = $result->fetch_assoc()): ?>
                 <?php
                     $goal     = !empty($row['project_goal']) ? floatval($row['project_goal']) : 100000;
-                    $raised   = 0; // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
+                    $raised = (float)($row['current_amount'] ?? 0); // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                 ?>
                 <div class="project-card">
