@@ -163,8 +163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <h2>คุณมีบัญชีอยู่แล้วหรือยัง?</h2>
             <p class="subtitle">เลือกเพื่อเริ่มต้นใช้งาน DrawDream</p>
             <div class="role-buttons">
-                <a href="index.php?page=register&step=choose" class="role-btn">สมัครสมาชิก</a>
-                <a href="index.php?page=login&step=choose" class="role-btn role-btn-outline">เข้าสู่ระบบ (มีบัญชีอยู่แล้ว)</a>
+                <a href="login.php?page=register&step=choose" class="role-btn">สมัครสมาชิก</a>
+                <a href="login.php?page=login&step=choose" class="role-btn role-btn-outline">เข้าสู่ระบบ (มีบัญชีอยู่แล้ว)</a>
             </div>
 
         <?php elseif ($page === 'login'): ?>
@@ -172,10 +172,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 <h2>คุณเป็นใคร?</h2>
                 <p class="subtitle">เลือกประเภทบัญชีเพื่อเข้าสู่ระบบ</p>
                 <div class="role-buttons">
-                    <a href="index.php?page=login&step=form&role=donor" class="role-btn">ผู้บริจาค</a>
-                    <a href="index.php?page=login&step=form&role=foundation" class="role-btn">มูลนิธิ</a>
+                    <a href="login.php?page=login&step=form&role=donor" class="role-btn">ผู้บริจาค</a>
+                    <a href="login.php?page=login&step=form&role=foundation" class="role-btn">มูลนิธิ</a>
                 </div>
-                <a href="index.php" class="back-link">← ย้อนกลับ</a>
+                <a href="login.php" class="back-link">← ย้อนกลับ</a>
             <?php else: ?>
                 <h2>เข้าสู่ระบบ (<?= $role === 'donor' ? 'ผู้บริจาค' : 'มูลนิธิ' ?>)</h2>
                 <p class="subtitle">ยินดีต้อนรับกลับมา!</p>
@@ -189,9 +189,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     </div>
                     <button type="submit" name="login" class="btn-submit">เข้าสู่ระบบ</button>
                 </form>
-                <a href="index.php?page=login&step=choose" class="back-link">← เปลี่ยนประเภทบัญชี</a>
+                <a href="login.php?page=login&step=choose" class="back-link">← เปลี่ยนประเภทบัญชี</a>
                 <div class="register-link">
-                    ยังไม่มีบัญชี? <a href="index.php?page=register&step=choose">สมัครสมาชิก</a>
+                    ยังไม่มีบัญชี? <a href="login.php?page=register&step=choose">สมัครสมาชิก</a>
                 </div>
             <?php endif; ?>
 
@@ -200,10 +200,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 <h2>คุณเป็นใคร?</h2>
                 <p class="subtitle">เลือกประเภทบัญชีที่ต้องการสมัคร</p>
                 <div class="role-buttons">
-                    <a href="index.php?page=register&step=form&role=donor" class="role-btn">ผู้บริจาค</a>
-                    <a href="index.php?page=register&step=form&role=foundation" class="role-btn">มูลนิธิ</a>
+                    <a href="login.php?page=register&step=form&role=donor" class="role-btn">ผู้บริจาค</a>
+                    <a href="login.php?page=register&step=form&role=foundation" class="role-btn">มูลนิธิ</a>
                 </div>
-                <a href="index.php" class="back-link">← ย้อนกลับ</a>
+                <a href="login.php" class="back-link">← ย้อนกลับ</a>
             <?php else: ?>
                 <?php if ($role === 'donor'): ?>
                     <h2>สมัครสมาชิก (ผู้บริจาค)</h2>
@@ -256,9 +256,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         <button type="submit" name="register" class="btn-submit">สมัครสมาชิก</button>
                     </form>
                 <?php endif; ?>
-                <a href="index.php?page=register&step=choose" class="back-link">← เปลี่ยนประเภทบัญชี</a>
+                <a href="login.php?page=register&step=choose" class="back-link">← เปลี่ยนประเภทบัญชี</a>
                 <div class="register-link">
-                    มีบัญชีอยู่แล้ว? <a href="index.php?page=login&step=choose">เข้าสู่ระบบ</a>
+                    มีบัญชีอยู่แล้ว? <a href="login.php?page=login&step=choose">เข้าสู่ระบบ</a>
                 </div>
             <?php endif; ?>
         <?php endif; ?>

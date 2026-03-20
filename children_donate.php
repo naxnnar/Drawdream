@@ -19,9 +19,29 @@ $result = $stmt->get_result();
 $child = $result->fetch_assoc();
 
 if (!$child) {
-    echo "<script>alert('ไม่พบข้อมูลเด็กที่ระบุ'); window.location='donation.php';</script>";
+    echo "<script>alert('ไม่พบข้อมูลเด็กที่ระบุ'); window.location='children_.php';</script>";
     exit();
 }
+
+// Auto-migrate child_donations table
+$conn->query("
+    CREATE TABLE IF NOT EXISTS child_donations (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        child_id INT NOT NULL,
+        donor_user_id INT NULL,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+        donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX(child_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+");
+
+// Donation stats for this child
+$donationStats = ['donor_count' => 0, 'total_amount' => 0, 'month_amount' => 0];
+$stmtDs = $conn->prepare("SELECT COUNT(DISTINCT donor_user_id) AS donor_count, COALESCE(SUM(amount),0) AS total_amount, COALESCE(SUM(CASE WHEN MONTH(donated_at)=MONTH(NOW()) AND YEAR(donated_at)=YEAR(NOW()) THEN amount ELSE 0 END),0) AS month_amount FROM child_donations WHERE child_id=?");
+$stmtDs->bind_param("i", $child_id);
+$stmtDs->execute();
+$dsRow = $stmtDs->get_result()->fetch_assoc();
+if ($dsRow) $donationStats = $dsRow;
 
 $birthDateText = '-';
 if (!empty($child['birth_date'] ?? '')) {
@@ -44,7 +64,7 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        body { background-color: #f2f4f7; }
+        body { background-color: #F7ECDE; }
 
         .admin-review-card {
             max-width: 1100px;
@@ -179,18 +199,131 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
         }
 
         .admin-actions .btn-primary {
-            background: linear-gradient(135deg, #f6c744, #efb81f);
-            color: #1f2937;
+            background: #597D57;
+            color: #fff;
         }
 
         .admin-actions .btn-danger {
-            background: linear-gradient(135deg, #ef5350, #e53935);
+            background: #CE573F;
             color: #fff;
+        }
+
+        .extra-info-panel {
+            margin-top: 18px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.35);
+            border-radius: 16px;
+            padding: 16px 18px;
+            text-align: left;
+        }
+
+        .extra-info-panel h4 {
+            margin: 0 0 10px;
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #182338;
+        }
+
+        .extra-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 14px;
+        }
+
+        .extra-grid div {
+            font-size: .94rem;
+            color: #27364b;
+            font-weight: 600;
+        }
+
+        .qr-preview {
+            margin-top: 12px;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid rgba(24, 36, 58, 0.15);
+            padding: 8px;
+            display: inline-flex;
+        }
+
+        .qr-preview img {
+            width: 110px;
+            height: 110px;
+            object-fit: contain;
         }
 
         .admin-actions .btn:hover {
             transform: translateY(-1px);
             box-shadow: 0 14px 24px rgba(15, 23, 42, 0.14);
+        }
+
+        /* Override global white container background */
+        main.child-profile-main {
+            background: transparent !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            max-width: 1100px !important;
+            border-radius: 0 !important;
+        }
+
+        /* Donation Stats Panel (approved profiles only) */
+        .donation-stats-panel {
+            width: 100%;
+            margin-top: 18px;
+            margin-bottom: 18px;
+        }
+        .stats-row { display: flex; gap: 16px; margin-bottom: 10px; }
+        .stat-box {
+            flex: 1;
+            border-radius: 12px;
+            padding: 16px 12px;
+            text-align: center;
+        }
+        .stats-row .stat-box:nth-child(1) { background: #d7eef8; }
+        .stats-row .stat-box:nth-child(2) { background: #f8d8e5; }
+        .stats-row .stat-box:nth-child(3) { background: #f8dca8; }
+        .stat-box .stat-num { font-size: 2rem; font-weight: 900; color: #1a1f3a; line-height: 1; }
+        .stat-box .stat-label { font-size: 1rem; color: #4b5563; font-weight: 800; margin-top: 6px; }
+        .stats-row .stat-box:nth-child(1) .stat-icon,
+        .stats-row .stat-box:nth-child(1) .stat-num,
+        .stats-row .stat-box:nth-child(1) .stat-label { color: #3C5099; }
+        .stats-row .stat-box:nth-child(2) .stat-icon,
+        .stats-row .stat-box:nth-child(2) .stat-num,
+        .stats-row .stat-box:nth-child(2) .stat-label { color: #597D57; }
+        .stats-row .stat-box:nth-child(3) .stat-icon,
+        .stats-row .stat-box:nth-child(3) .stat-num,
+        .stats-row .stat-box:nth-child(3) .stat-label { color: #CE573F; }
+        .stat-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: auto;
+            height: auto;
+            margin-bottom: 8px;
+            font-size: 34px;
+            background: transparent;
+            line-height: 1;
+        }
+
+        .foundation-full-info {
+            width: 100%;
+            margin-top: 16px;
+            margin-bottom: 12px;
+            text-align: left;
+        }
+
+        .foundation-full-info h4 {
+            margin: 0 0 8px;
+            font-size: 1.02rem;
+            font-weight: 800;
+            color: #1f2937;
+        }
+
+        .foundation-full-info p {
+            margin: 0 0 5px;
+            font-size: 0.94rem;
+            color: #27364b;
+            font-weight: 600;
+            line-height: 1.4;
         }
 
         .custom-profile-card {
@@ -369,7 +502,6 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                 <h4 class="mb-1">ตรวจสอบโปรไฟล์เด็ก</h4>
                 <div>มูลนิธิ: <?php echo htmlspecialchars($child['display_foundation_name'] ?? '-'); ?></div>
             </div>
-            <a href="donation.php" class="btn btn-light btn-sm" style="position:absolute; right:24px; top:50%; transform:translateY(-50%);">กลับหน้ารายการเด็ก</a>
         </div>
 
         <div class="admin-review-body">
@@ -404,6 +536,14 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                             <span class="label">ความฝัน</span>
                             <span class="value"><?php echo htmlspecialchars($child['dream'] ?? '-'); ?></span>
                         </div>
+                        <div class="data-item">
+                            <span class="label">สิ่งที่ชอบ</span>
+                            <span class="value"><?php echo htmlspecialchars($child['likes'] ?? '-'); ?></span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">หมวดหมู่สิ่งที่ต้องการ</span>
+                            <span class="value"><?php echo htmlspecialchars($child['wish_cat'] ?? '-'); ?></span>
+                        </div>
                         <div class="data-item full">
                             <span class="label">สิ่งที่อยากขอ / ความต้องการ</span>
                             <span class="value"><?php echo htmlspecialchars($child['wish'] ?? '-'); ?></span>
@@ -424,20 +564,34 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                             <span class="label">สถานะการตรวจสอบ</span>
                             <?php
                               $cls = 'status-pending';
-                                                            if ($reviewStatus === 'อนุมัติ') $cls = 'status-approved';
-                                                            if ($reviewStatus === 'ไม่อนุมัติ') $cls = 'status-rejected';
+                              if ($reviewStatus === 'อนุมัติ') $cls = 'status-approved';
+                              if ($reviewStatus === 'ไม่อนุมัติ') $cls = 'status-rejected';
                             ?>
-                                                        <span class="status-badge <?php echo $cls; ?>"><?php echo htmlspecialchars($reviewStatus); ?></span>
+                            <span class="status-badge <?php echo $cls; ?>"><?php echo htmlspecialchars($reviewStatus); ?></span>
+                        </div>
+                        <?php if ($reviewStatus === 'ไม่อนุมัติ'): ?>
+                        <div class="data-item full">
+                            <span class="label">เหตุผลไม่อนุมัติ</span>
+                            <span class="value"><?php echo htmlspecialchars($child['reject_reason'] ?? '-'); ?></span>
+                        </div>
+                        <?php endif; ?>
+                        <div class="data-item full">
+                            <span class="label">QR PromptPay</span>
+                            <span class="value"><?php echo !empty($child['qr_account_image']) ? 'มีไฟล์แนบ' : 'ไม่มีไฟล์แนบ'; ?></span>
+                            <?php if (!empty($child['qr_account_image'])): ?>
+                                <div class="qr-preview"><img src="uploads/Children/<?php echo htmlspecialchars($child['qr_account_image']); ?>" alt="QR PromptPay"></div>
+                            <?php endif; ?>
                         </div>
                     </div>
 
                                         <?php if ($reviewStatus !== 'อนุมัติ'): ?>
-                    <div class="admin-actions">
-                        <a href="approve_process.php?id=<?php echo (int)$child['child_id']; ?>&action=approve" class="btn btn-primary"
-                           onclick="return confirm('ยืนยันอนุมัติโปรไฟล์เด็กคนนี้?');">อนุมัติ</a>
-                        <a href="approve_process.php?id=<?php echo (int)$child['child_id']; ?>&action=reject" class="btn btn-danger"
-                           onclick="return confirm('ยืนยันไม่อนุมัติโปรไฟล์เด็กคนนี้?');">ไม่อนุมัติ</a>
-                    </div>
+                    <form method="post" action="admin_approve_children.php" class="admin-actions" onsubmit="return submitChildReview(this, event)">
+                        <input type="hidden" name="id" value="<?php echo (int)$child['child_id']; ?>">
+                        <input type="hidden" name="return" value="children_donate.php?id=<?php echo (int)$child['child_id']; ?>">
+                        <textarea name="reject_reason" data-role="reject-reason" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ" style="min-width:280px;min-height:96px;border-radius:12px;border:1px solid #e5e7eb;padding:10px 12px;"></textarea>
+                        <button type="submit" name="action" value="approve" class="btn btn-primary" onclick="this.form.dataset.action='approve';">อนุมัติ</button>
+                        <button type="submit" name="action" value="reject" class="btn btn-danger" onclick="this.form.dataset.action='reject';">ไม่อนุมัติ</button>
+                    </form>
                     <?php endif; ?>
                 </div>
             </div>
@@ -446,9 +600,9 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
 </main>
 
 <?php else: ?>
-<main class="container my-5">
+<main class="child-profile-main container my-5">
     <div class="custom-profile-card">
-        <div class="profile-label">เด็กในอุปการะ</div>
+        <div class="profile-label">เด็กรายบุคคล</div>
 
         <div class="profile-inner">
             <div class="col-left">
@@ -463,15 +617,58 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                     <p><strong>อายุ:</strong> <?php echo (int)$child['age']; ?> ปี</p>
                     <p><strong>อาชีพในฝัน:</strong> <?php echo htmlspecialchars($child['dream']); ?></p>
                     <p><strong>พรที่ขอ:</strong> <?php echo htmlspecialchars($child['wish']); ?></p>
+                    <?php if (($role === 'foundation' || $role === 'admin') && $reviewStatus === 'ไม่อนุมัติ' && !empty($child['reject_reason'] ?? '')): ?>
+                    <p style="color:#b32525;"><strong>เหตุผลไม่อนุมัติ:</strong> <?php echo htmlspecialchars($child['reject_reason']); ?></p>
+                    <?php endif; ?>
                 </div>
             </div>
 
             <div class="col-right">
                 <h1 class="brand-header">Drawdream</h1>
                 <p class="donate-text">
-                    โครงการนี้เป็นการบริจาคเงิน 700 บาทต่อการอุปการะเด็ก 1 คน<br>
-                    ในรูปแบบต่อเนื่องทุกๆ เดือน
+                    โครงการนี้เป็นการบริจาคให้รายบุคคลซึ่งเงินที่บริจาค<br>
+                    จะถูกจัดสรรให้ตรงกับความต้องการของเด็ก
                 </p>
+
+                <?php if ($role === 'foundation'): ?>
+                <div class="foundation-full-info">
+                    <h4>ข้อมูลทั้งหมดที่กรอกไว้</h4>
+                    <p><strong>หมวดที่ขอ:</strong> <?php echo htmlspecialchars($child['wish_cat'] ?? '-'); ?></p>
+                    <p><strong>สิ่งที่ชอบ:</strong> <?php echo htmlspecialchars($child['likes'] ?? '-'); ?></p>
+                    <p><strong>ธนาคาร:</strong> <?php echo htmlspecialchars($child['bank_name'] ?? '-'); ?></p>
+                    <p><strong>เลขบัญชี:</strong> <?php echo htmlspecialchars($child['child_bank'] ?? '-'); ?></p>
+                    <?php if (!empty($child['qr_account_image'])): ?>
+                        <div class="qr-preview" style="margin-top:10px;"><img src="uploads/Children/<?php echo htmlspecialchars($child['qr_account_image']); ?>" alt="QR PromptPay"></div>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+
+                <?php
+                    $monthAmount = (float)$donationStats['month_amount'];
+                    $totalAmount = (float)$donationStats['total_amount'];
+                    $donorCount  = (int)$donationStats['donor_count'];
+                ?>
+                <?php if ($reviewStatus === 'อนุมัติ'): ?>
+                <div class="donation-stats-panel">
+                    <div class="stats-row">
+                        <div class="stat-box">
+                            <div class="stat-icon"><i class="bi bi-heart-fill"></i></div>
+                            <div class="stat-num"><?php echo $donorCount; ?></div>
+                            <div class="stat-label">ผู้อุปการะทั้งหมด</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-icon"><i class="bi bi-piggy-bank-fill"></i></div>
+                            <div class="stat-num"><?php echo number_format($totalAmount, 0); ?></div>
+                            <div class="stat-label">ยอดสะสม (บาท)</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-icon"><i class="bi bi-stars"></i></div>
+                            <div class="stat-num"><?php echo number_format($monthAmount, 0); ?></div>
+                            <div class="stat-label">เดือนนี้ (บาท)</div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <?php if ($role === 'donor'): ?>
                 <div class="money-row">
@@ -488,8 +685,6 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                 <button class="btn-submit-donation" onclick="processDonation(<?php echo $child['child_id']; ?>)">
                     บริจาค
                 </button>
-                <?php else: ?>
-                <a href="donation.php" class="btn btn-dark mt-3">กลับหน้ารายการเด็ก</a>
                 <?php endif; ?>
             </div>
         </div>
@@ -498,6 +693,24 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
 <?php endif; ?>
 
 <script>
+function submitChildReview(form) {
+    const action = form.dataset.action || '';
+    if (action === 'approve') {
+        return confirm('ยืนยันอนุมัติโปรไฟล์เด็กคนนี้?');
+    }
+    if (action === 'reject') {
+        const reasonEl = form.querySelector('[data-role="reject-reason"]');
+        const reason = reasonEl ? reasonEl.value.trim() : '';
+        if (!reason) {
+            alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');
+            if (reasonEl) reasonEl.focus();
+            return false;
+        }
+        return confirm('ยืนยันไม่อนุมัติโปรไฟล์เด็กคนนี้?');
+    }
+    return true;
+}
+
 function selectAmount(amount, btn) {
     const amountInput = document.getElementById('display-amount');
     if (!amountInput) return;

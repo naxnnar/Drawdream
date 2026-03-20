@@ -139,7 +139,7 @@
       z-index: 1;
     }
     .hero-rainbow {
-      left: -220px;
+      left: -300px;
       bottom: 0;
       width: 640px;
     }
@@ -472,6 +472,5 @@
   </footer>
 </div>
 
-<script src="Drawdream/main.js"></script>
 </body>
 </html>

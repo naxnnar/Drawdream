@@ -55,6 +55,5 @@ $story = [
   </div>
 </div>
 
-<script src="Drawdream/main.js"></script>
 </body>
 </html>

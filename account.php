@@ -1,23 +1,28 @@
 <?php
+// ------------------------------
+// Backend: ตัดสินใจปลายทางหลังล็อกอินตาม role
+// ------------------------------
 session_start();
 
 if (!isset($_SESSION['email'])) {
-  header("Location: login.php?as=donor");
+  // ยังไม่ล็อกอินให้กลับหน้าเข้าสู่ระบบหลัก
+  header("Location: login.php");
   exit();
 }
 
 $role = $_SESSION['role'] ?? 'donor';
 
 if ($role === 'foundation') {
-  header("Location: foundation_profile.php");
+  // มูลนิธิไปหน้ารายการมูลนิธิ
+  header("Location: foundation.php");
   exit();
 }
 
 if ($role === 'admin') {
-  header("Location: admin_projects.php");
+  header("Location: admin+approve_projects.php");
   exit();
 }
 
 // donor (ค่า default)
-header("Location: p1_home.php");
+header("Location: welcome.php");
 exit();

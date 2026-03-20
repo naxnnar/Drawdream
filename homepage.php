@@ -171,8 +171,8 @@
           <p>DrawDream ช่วยให้คุณ เลือกส่งต่อ ได้ตรงจุดที่สุด</p>
           <p>สามารถเข้าร่วมโครงการอุปการะรายบุคคล เพื่อส่งน้องๆ ให้ถึงฝั่งฝัน</p>
           <div class="hero-actions mt-4">
-            <a href="donation.html" class="btn btn-hero">อุปการะ</a>
-            <a href="projects.html" class="btn btn-hero">โครงการ</a>
+            <a href="children_.php" class="btn btn-hero">อุปการะ</a>
+            <a href="project.php" class="btn btn-hero">โครงการ</a>
           </div>
         </div>
       </div>
@@ -346,8 +346,6 @@
   </div>
 </footer>
 </div>
-
-<script src="Drawdream/main.js"></script>
 
 <script>
   // Donation amount buttons

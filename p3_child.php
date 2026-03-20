@@ -10,11 +10,11 @@ if (!$conn) {
 
 // ตรวจสอบว่าผู้ใช้เป็นแอดมินหรือไม่
 if (!isset($_SESSION['email'])) {
-    header("Location: index.php");
+  header("Location: login.php");
     exit();
 }
 if (($_SESSION['role'] ?? '') !== 'admin') {
-    header("Location: p1_home.php");
+  header("Location: welcome.php");
     exit();
 }
 

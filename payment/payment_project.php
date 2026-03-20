@@ -1,17 +1,20 @@
 <?php
+// ------------------------------
+// Backend: สร้างรายการชำระเงินโครงการผ่าน Omise
+// ------------------------------
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 
 // ต้อง login ก่อน
 if (!isset($_SESSION['user_id'])) {
-    header("Location: index.php");
+    header("Location: ../login.php");
     exit();
 }
 
 $project_id = (int)($_GET['project_id'] ?? 0);
 if ($project_id <= 0) {
-    header("Location: ../p2_project.php");
+    header("Location: ../project.php");
     exit();
 }
 
@@ -22,7 +25,7 @@ $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
 
 if (!$project) {
-    header("Location: ../p2_project.php");
+    header("Location: ../project.php");
     exit();
 }
 
@@ -179,7 +182,7 @@ function omise_request($method, $path, $data = []) {
                 <button type="submit" name="pay" class="btn-pay">สร้าง QR Code</button>
             </form>
 
-            <a href="../p2_project.php" class="btn-back">ย้อนกลับ</a>
+            <a href="../project.php" class="btn-back">ย้อนกลับ</a>
         <?php endif; ?>
 
     </div>

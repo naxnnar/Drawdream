@@ -1,4 +1,7 @@
 <?php
+// ------------------------------
+// Backend: เตรียมข้อมูลและบันทึกการบริจาคมูลนิธิ
+// ------------------------------
 session_start();
 include 'db.php';
 
@@ -6,7 +9,7 @@ $fid = (int)($_GET['fid'] ?? 1);
 
 /* ต้องล็อกอินก่อนบริจาค */
 if (!isset($_SESSION['email'])) {
-  header("Location: login.php?as=donor");
+  header("Location: login.php");
   exit();
 }
 

@@ -5,7 +5,7 @@ include 'db.php';
 $is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
 
 if (!isset($_SESSION['email'])) {
-    header("Location: index.php");
+    header("Location: login.php");
     exit();
 }
 
@@ -82,13 +82,13 @@ $result = $stmt->get_result();
 <div class="top-actions">
     <?php if ($role === 'foundation'): ?>
         <?php if ($is_verified): ?>
-            <a href="p2_2addproject.php" class="btn-mini btn-foundation">เสนอโครงการ</a>
+            <a href="foundation_add_project.php" class="btn-mini btn-foundation">เสนอโครงการ</a>
         <?php else: ?>
             <span style="color:#E8A020; font-size:13px;">รอการอนุมัติก่อนจึงจะเสนอโครงการได้</span>
         <?php endif; ?>
     <?php endif; ?>
     <?php if ($role === 'admin'): ?>
-        <a href="admin_projects.php" class="btn-mini btn-admin">อนุมัติโครงการ</a>
+        <a href="admin+approve_projects.php" class="btn-mini btn-admin">อนุมัติโครงการ</a>
     <?php endif; ?>
 </div>
 <?php endif; ?>

@@ -4,7 +4,7 @@ include 'db.php';
 
 // ให้เข้าได้เฉพาะ foundation
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
-    header("Location: index.php");
+    header("Location: login.php");
     exit();
 }
 
@@ -113,7 +113,7 @@ if (isset($_POST['submit'])) {
     }
 
     if ($stmt->execute()) {
-        echo "<script>alert('เพิ่มข้อมูลเด็กสำเร็จ'); window.location='donation.php';</script>";
+        echo "<script>alert('เพิ่มข้อมูลเด็กสำเร็จ'); window.location='children_.php';</script>";
         exit();
     } else {
         // เปลี่ยนตรงนี้เพื่อดู Error จริงๆ จาก MySQL

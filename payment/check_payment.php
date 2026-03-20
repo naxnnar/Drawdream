@@ -4,7 +4,7 @@ include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: ../index.php");
+    header("Location: ../login.php");
     exit();
 }
 
@@ -12,7 +12,7 @@ $charge_id  = $_GET['charge_id'] ?? '';
 $project_id = (int)($_GET['project_id'] ?? 0);
 
 if (empty($charge_id)) {
-    header("Location: ../p2_project.php");
+    header("Location: ../project.php");
     exit();
 }
 
@@ -105,7 +105,7 @@ if ($is_success) {
             <p>ขอบคุณที่ร่วมบริจาคให้โครงการ</p>
             <p>จำนวน <strong><?= number_format($amount, 2) ?> บาท</strong></p>
             <p class="charge-ref">อ้างอิง: <?= htmlspecialchars($charge_id) ?></p>
-            <a href="../p2_project.php" class="btn-pay">กลับหน้าโครงการ</a>
+            <a href="../project.php" class="btn-pay">กลับหน้าโครงการ</a>
 
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
@@ -120,7 +120,7 @@ if ($is_success) {
             <p class="charge-ref">Charge: <?= htmlspecialchars($charge_id) ?> | Status: <?= htmlspecialchars($status) ?> | Paid: <?= $paid ? 'true' : 'false' ?></p>
             <a href="check_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= $project_id ?>" 
                class="btn-pay">เช็คอีกครั้ง</a>
-            <a href="../p2_project.php" class="btn-back">กลับหน้าโครงการ</a>
+            <a href="../project.php" class="btn-back">กลับหน้าโครงการ</a>
 
         <?php else: ?>
             <div class="result-icon error">✕</div>
@@ -131,7 +131,7 @@ if ($is_success) {
                 <p>รายละเอียด: <?= htmlspecialchars($failure_message) ?></p>
             <?php endif; ?>
             <a href="payment_project.php?project_id=<?= $project_id ?>" class="btn-pay">ลองใหม่</a>
-            <a href="../p2_project.php" class="btn-back">กลับหน้าโครงการ</a>
+            <a href="../project.php" class="btn-back">กลับหน้าโครงการ</a>
         <?php endif; ?>
 
     </div>

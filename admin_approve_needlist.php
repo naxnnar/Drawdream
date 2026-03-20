@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $log_stmt->execute();
                 
                 $msg = ($newStatus === 'approved') ? "อนุมัติรายการแล้ว" : "ปฏิเสธรายการแล้ว";
-                header("Location: admin_needlist.php?msg=" . urlencode($msg));
+                header("Location: admin_approve_needlist.php?msg=" . urlencode($msg));
                 exit();
             } else {
                 $error = "อัปเดตไม่สำเร็จ: " . $stmt->error;

@@ -132,6 +132,5 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
   </footer>
 </div>
 
-<script src="Drawdream/main.js"></script>
 </body>
 </html>

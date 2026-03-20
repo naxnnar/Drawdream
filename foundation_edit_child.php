@@ -1,0 +1,256 @@
+<?php
+session_start();
+include 'db.php';
+
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
+    header('Location: homepage.php');
+    exit();
+}
+
+$currentUserId = (int)($_SESSION['user_id'] ?? 0);
+$foundationId = 0;
+$stmtFP = $conn->prepare('SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1');
+$stmtFP->bind_param('i', $currentUserId);
+$stmtFP->execute();
+$resFP = $stmtFP->get_result();
+if ($rowFP = $resFP->fetch_assoc()) {
+    $foundationId = (int)$rowFP['foundation_id'];
+}
+
+if ($foundationId <= 0) {
+    die('ไม่พบข้อมูลมูลนิธิ');
+}
+
+$childId = (int)($_GET['id'] ?? $_POST['child_id'] ?? 0);
+if ($childId <= 0) {
+    die('ไม่พบรหัสโปรไฟล์เด็ก');
+}
+
+$sqlGet = "SELECT * FROM Children WHERE child_id = ? AND foundation_id = ? LIMIT 1";
+$stmtGet = $conn->prepare($sqlGet);
+$stmtGet->bind_param('ii', $childId, $foundationId);
+$stmtGet->execute();
+$child = $stmtGet->get_result()->fetch_assoc();
+
+if (!$child) {
+    die('ไม่พบข้อมูลโปรไฟล์นี้ หรือไม่มีสิทธิ์แก้ไข');
+}
+
+if (($child['approve_profile'] ?? '') !== 'อนุมัติ') {
+    die('แก้ไขได้เฉพาะโปรไฟล์ที่อนุมัติแล้วเท่านั้น');
+}
+
+$error = '';
+$success = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $child_name = trim($_POST['child_name'] ?? '');
+    $birth_date = trim($_POST['birth_date'] ?? '');
+    $education = trim($_POST['education'] ?? '');
+    $dream = trim($_POST['dream'] ?? '');
+    $likes = trim($_POST['likes'] ?? '');
+    $wish = trim($_POST['wish'] ?? '');
+    $wish_cat = trim($_POST['wish_cat'] ?? '');
+    $bank_name = trim($_POST['bank_name'] ?? '');
+    $child_bank = trim($_POST['child_bank'] ?? '');
+
+    if ($child_name === '' || $birth_date === '' || $education === '' || $dream === '' || $wish === '' || $wish_cat === '' || $bank_name === '') {
+        $error = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน';
+    }
+
+    $dob = DateTime::createFromFormat('Y-m-d', $birth_date);
+    $today = new DateTime('today');
+    if ($error === '' && (!$dob || $dob->format('Y-m-d') !== $birth_date)) {
+        $error = 'กรุณาระบุวันเกิดให้ถูกต้อง';
+    }
+    if ($error === '' && $dob > $today) {
+        $error = 'วันเกิดต้องไม่เป็นอนาคต';
+    }
+
+    $age = 0;
+    if ($error === '') {
+        $age = (int)$today->diff($dob)->y;
+        if ($age < 6 || $age > 18) {
+            $error = 'อายุต้องอยู่ในช่วง 6-18 ปี';
+        }
+    }
+
+    if ($error === '' && !preg_match('/^\d{10}$/', $child_bank)) {
+        $error = 'เลขบัญชีต้องเป็นตัวเลข 10 หลัก';
+    }
+
+    $allowed = ['jpg','jpeg','png','gif','webp'];
+    $photoName = $child['photo_child'] ?? null;
+    $qrName = $child['qr_account_image'] ?? null;
+
+    if ($error === '' && isset($_FILES['photo_child']) && $_FILES['photo_child']['error'] !== UPLOAD_ERR_NO_FILE) {
+        if ($_FILES['photo_child']['error'] !== 0) {
+            $error = 'อัปโหลดรูปเด็กไม่สำเร็จ';
+        } else {
+            $ext = strtolower(pathinfo($_FILES['photo_child']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed, true)) {
+                $error = 'รูปเด็กต้องเป็นไฟล์รูปภาพเท่านั้น';
+            } else {
+                $photoName = 'child_' . time() . '_' . mt_rand(1000,9999) . '.' . $ext;
+                if (!move_uploaded_file($_FILES['photo_child']['tmp_name'], 'uploads/Children/' . $photoName)) {
+                    $error = 'บันทึกรูปเด็กไม่สำเร็จ';
+                }
+            }
+        }
+    }
+
+    $hasQrUpload = isset($_FILES['qr_account_image']) && $_FILES['qr_account_image']['error'] !== UPLOAD_ERR_NO_FILE;
+    if ($error === '' && $age >= 15 && !$hasQrUpload && empty($qrName)) {
+        $error = 'เด็กอายุ 15-18 ปี ต้องมีภาพ QR';
+    }
+
+    if ($error === '' && $hasQrUpload) {
+        if ($_FILES['qr_account_image']['error'] !== 0) {
+            $error = 'อัปโหลดภาพ QR ไม่สำเร็จ';
+        } else {
+            $ext = strtolower(pathinfo($_FILES['qr_account_image']['name'], PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowed, true)) {
+                $error = 'ภาพ QR ต้องเป็นไฟล์รูปภาพเท่านั้น';
+            } else {
+                $qrName = 'qr_' . time() . '_' . mt_rand(1000,9999) . '.' . $ext;
+                if (!move_uploaded_file($_FILES['qr_account_image']['tmp_name'], 'uploads/Children/' . $qrName)) {
+                    $error = 'บันทึกภาพ QR ไม่สำเร็จ';
+                }
+            }
+        }
+    }
+
+    if ($error === '') {
+        $sqlUpd = "UPDATE Children
+                   SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?
+                   WHERE child_id=? AND foundation_id=?";
+        $stmtUpd = $conn->prepare($sqlUpd);
+        $stmtUpd->bind_param(
+            'ssisssssssssii',
+            $child_name,
+            $birth_date,
+            $age,
+            $education,
+            $dream,
+            $likes,
+            $wish,
+            $wish_cat,
+            $bank_name,
+            $child_bank,
+            $qrName,
+            $photoName,
+            $childId,
+            $foundationId
+        );
+
+        if ($stmtUpd->execute()) {
+            header('Location: children_.php?msg=' . urlencode('แก้ไขโปรไฟล์เด็กสำเร็จ'));
+            exit();
+        }
+        $error = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
+    }
+
+    $child['child_name'] = $child_name;
+    $child['birth_date'] = $birth_date;
+    $child['age'] = $age;
+    $child['education'] = $education;
+    $child['dream'] = $dream;
+    $child['likes'] = $likes;
+    $child['wish'] = $wish;
+    $child['wish_cat'] = $wish_cat;
+    $child['bank_name'] = $bank_name;
+    $child['child_bank'] = $child_bank;
+    $child['qr_account_image'] = $qrName;
+    $child['photo_child'] = $photoName;
+}
+?>
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>แก้ไขโปรไฟล์เด็ก</title>
+<link rel="stylesheet" href="css/navbar.css">
+<style>
+body { background:#f7ecde; font-family:Tahoma,sans-serif; }
+.wrap { max-width:900px; margin:26px auto; background:#fff; border:1px solid #f1cf54; border-radius:16px; padding:22px; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.group { display:flex; flex-direction:column; }
+.group.full { grid-column:1 / -1; }
+label { font-weight:700; margin-bottom:6px; }
+input, select, textarea { border:1.5px solid #f1cf54; border-radius:10px; padding:10px 12px; font-size:1rem; }
+textarea { min-height:90px; resize:vertical; }
+.actions { display:flex; gap:10px; margin-top:16px; }
+.btn { border:0; border-radius:10px; padding:10px 16px; font-weight:800; text-decoration:none; display:inline-flex; }
+.btn-save { background:#3C5099; color:#fff; }
+.btn-back { background:#CE573F; color:#fff; }
+.alert { border-radius:10px; padding:10px 12px; margin-bottom:12px; font-weight:700; }
+.alert.err { background:#fde8e8; color:#b32525; }
+.note { color:#6b7280; font-size:.9rem; margin-top:5px; }
+@media (max-width:780px){ .grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<?php include 'navbar.php'; ?>
+<div class="wrap">
+  <h2 style="margin-top:0;color:#24314a;">แก้ไขโปรไฟล์เด็ก</h2>
+  <?php if ($error !== ''): ?><div class="alert err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
+
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="child_id" value="<?php echo (int)$childId; ?>">
+    <div class="grid">
+      <div class="group">
+        <label>ชื่อเล่นเด็ก</label>
+        <input type="text" name="child_name" required value="<?php echo htmlspecialchars($child['child_name'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>วันเกิด</label>
+        <input type="date" name="birth_date" required value="<?php echo htmlspecialchars($child['birth_date'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>ระดับการศึกษา</label>
+        <input type="text" name="education" required value="<?php echo htmlspecialchars($child['education'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>ความฝัน</label>
+        <input type="text" name="dream" required value="<?php echo htmlspecialchars($child['dream'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>สิ่งที่ชอบ</label>
+        <input type="text" name="likes" value="<?php echo htmlspecialchars($child['likes'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>หมวดหมู่สิ่งที่ต้องการ</label>
+        <input type="text" name="wish_cat" required value="<?php echo htmlspecialchars($child['wish_cat'] ?? ''); ?>">
+      </div>
+      <div class="group full">
+        <label>สิ่งที่อยากขอ / ความต้องการ</label>
+        <textarea name="wish" required><?php echo htmlspecialchars($child['wish'] ?? ''); ?></textarea>
+      </div>
+      <div class="group">
+        <label>ธนาคาร</label>
+        <input type="text" name="bank_name" required value="<?php echo htmlspecialchars($child['bank_name'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>เลขบัญชี 10 หลัก</label>
+        <input type="text" name="child_bank" required maxlength="10" pattern="\d{10}" value="<?php echo htmlspecialchars($child['child_bank'] ?? ''); ?>">
+      </div>
+      <div class="group">
+        <label>เปลี่ยนรูปภาพเด็ก (ถ้ามี)</label>
+        <input type="file" name="photo_child" accept="image/*">
+      </div>
+      <div class="group">
+        <label>ภาพ QR (อายุ 15-18 ต้องมี)</label>
+        <input type="file" name="qr_account_image" accept="image/*">
+        <div class="note">หากไม่อัปใหม่ จะใช้รูปเดิม</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" class="btn btn-save">บันทึกการแก้ไข</button>
+      <a href="children_.php" class="btn btn-back">ย้อนกลับ</a>
+    </div>
+  </form>
+</div>
+</body>
+</html>

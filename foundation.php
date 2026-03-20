@@ -56,7 +56,7 @@ $stmtCat = $conn->prepare($sqlItemsByCat);
 
   <div class="top-bar">
     <?php if (($_SESSION['role'] ?? '') === 'admin'): ?>
-      <a href="admin_needlist.php" class="admin-btn">ไปหน้าอนุมัติรายการ</a>
+      <a href="admin_approve_needlist.php" class="admin-btn">ไปหน้าอนุมัติรายการ</a>
     <?php endif; ?>
     <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
       <?php if ($is_verified): ?>

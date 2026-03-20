@@ -3,7 +3,7 @@ session_start();
 include 'db.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
-    header("Location: p2_project.php");
+    header("Location: project.php");
     exit();
 }
 
@@ -49,7 +49,7 @@ if (isset($_POST['submit'])) {
     $stmt->bind_param("ssiss s", $name, $desc, $goal, $enddate, $newName, $category);
 
     if ($stmt->execute()) {
-        echo "<script>alert('เสนอโครงการสำเร็จ (รอแอดมินอนุมัติ)'); window.location='p2_project.php';</script>";
+        echo "<script>alert('เสนอโครงการสำเร็จ (รอแอดมินอนุมัติ)'); window.location='project.php';</script>";
         exit();
     } else {
         echo "<script>alert('บันทึกข้อมูลไม่สำเร็จ'); history.back();</script>";
