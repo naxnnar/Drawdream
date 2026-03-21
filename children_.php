@@ -149,9 +149,25 @@ if ($result && $result->num_rows > 0) {
     .donation-shell {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 12px 24px 56px;
+      padding: 40px 24px 56px;
       width: 100%;
       box-sizing: border-box;
+    }
+
+    .page-header {
+      margin-bottom: 28px;
+    }
+    .page-header h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      color: #27364b;
+      margin: 0 0 6px;
+      line-height: 1.2;
+    }
+    .page-header p {
+      font-size: 1rem;
+      color: #6b7a95;
+      margin: 0;
     }
 
     .donation-shell .container {
@@ -208,7 +224,6 @@ if ($result && $result->num_rows > 0) {
       border-radius: 10px;
       font-weight: 800;
       padding: 9px 16px;
-      margin-left: auto;
     }
 
     .btn-toggle-edit {
@@ -293,6 +308,36 @@ if ($result && $result->num_rows > 0) {
 
     body.mode-delete .child-status-pill {
       display: none;
+    }
+
+    /* ซ่อน status pill เมื่ออยู่ใน edit mode */
+    body.mode-edit .child-status-pill {
+      display: none;
+    }
+
+    /* ปุ่มแก้ไขโปรไฟล์ภายในการ์ด (แสดงแทน status pill เมื่อ mode-edit) */
+    .edit-pill-wrap {
+      display: none;
+      margin-top: 8px;
+    }
+    body.mode-edit .edit-pill-wrap {
+      display: block;
+    }
+    .btn-edit-pill {
+      background: linear-gradient(135deg, #F1CF54, #e8b923);
+      color: #3b2f09;
+      border: 0;
+      border-radius: 999px;
+      padding: 6px 16px;
+      min-height: 34px;
+      min-width: 136px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+      cursor: pointer;
+      box-shadow: 0 6px 14px rgba(15,23,42,0.08);
+      width: 100%;
+      text-align: center;
     }
 
     .inline-delete-actions {
@@ -574,6 +619,11 @@ if ($result && $result->num_rows > 0) {
 <!-- Main content area -->
 <div class="donation-shell">
 
+<div class="page-header">
+  <h1>บริจาคให้เด็กรายบุคคล</h1>
+  <p>ร่วมสนับสนุนเด็กที่ต้องการความช่วยเหลือ เลือกบริจาคโดยตรงให้กับเด็กแต่ละคนได้ที่นี่</p>
+</div>
+
 <!-- Top action buttons (role-based) -->
 <div class="donation-top-actions">
   <?php if ($role === 'foundation'): ?>
@@ -643,9 +693,6 @@ if ($result && $result->num_rows > 0) {
 </div>
 <?php endif; ?>
 
-<!-- Section: Children waiting for sponsors -->
-<h2 class="section-title danger donation-band">บริจาคให้เด็กรายบุคคล</h2>
-
 <div class="container py-4">
   <div class="row donation-grid row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-6 g-4">
     <?php foreach ($unadopted as $child): ?>
@@ -690,16 +737,16 @@ if ($result && $result->num_rows > 0) {
               <?php if ($role === 'foundation' && $rawStatus === 'ไม่อนุมัติ' && !empty($child['reject_reason'] ?? '')): ?>
                   <p class="reject-reason">เหตุผลไม่อนุมัติ: <?php echo htmlspecialchars($child['reject_reason']); ?></p>
               <?php endif; ?>
+              <?php if ($role === 'foundation' && $canEdit): ?>
+                <div class="edit-pill-wrap">
+                  <button type="button" class="btn-edit-pill"
+                    onclick="event.stopPropagation(); window.location.href='foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>'">
+                    แก้ไขโปรไฟล์
+                  </button>
+                </div>
+              <?php endif; ?>
           </div>
         </a>
-
-        <?php if ($role === 'foundation'): ?>
-          <div class="card-actions edit-mode">
-            <?php if ($canEdit): ?>
-              <a href="foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>" class="btn-edit-profile">แก้ไขโปรไฟล์</a>
-            <?php endif; ?>
-          </div>
-        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -707,55 +754,6 @@ if ($result && $result->num_rows > 0) {
   </div>
 </div>
 
-<!-- Section: Sponsored children -->
-<h2 class="section-title success donation-band">เด็กที่มีผู้อุปการะ</h2>
-
-<div class="container py-4">
-  <div class="row donation-grid row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-6 g-4">
-    <?php foreach ($adopted as $child): ?>
-    <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-      <?php
-        $rawStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
-        if ($rawStatus === 'กำลังดำเนินการ') $rawStatus = 'รอดำเนินการ';
-        $canEdit = ($role === 'foundation' && $rawStatus === 'อนุมัติ');
-      ?>
-      <div class="child-card-wrap">
-        <a href="children_donate.php?id=<?php echo $child['child_id']; ?>" class="child-card">
-          <label class="delete-corner">
-            <input type="checkbox" class="delete-check" name="child_ids[]" value="<?php echo (int)$child['child_id']; ?>" form="bulkDeleteForm" aria-label="เลือกลบโปรไฟล์นี้">
-          </label>
-          <div class="card-img success-bg">
-            <img src="uploads/Children/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="รูปเด็ก">
-          </div>
-          <div class="card-info">
-              <h3><?php echo htmlspecialchars($child['child_name']); ?></h3>
-              <p class="meta-row"><span class="meta-icon age"><i class="bi bi-cake2-fill"></i></span> <?php echo $child['age']; ?> ปี</p>
-              <p class="meta-row"><span class="meta-icon dream"><i class="bi bi-stars"></i></span> <?php echo htmlspecialchars($child['dream']); ?></p>
-              <?php if ($role === 'foundation' || $role === 'admin'): ?>
-                <div class="child-status-pill status-approved">อนุมัติแล้ว</div>
-                <?php if ($role === 'foundation'): ?>
-                  <div class="inline-delete-actions">
-                    <button type="button" class="confirm-inline">ยืนยันลบ</button>
-                    <button type="button" class="cancel-inline">ยกเลิก</button>
-                  </div>
-                <?php endif; ?>
-              <?php endif; ?>
-          </div>
-        </a>
-
-        <?php if ($role === 'foundation'): ?>
-          <div class="card-actions edit-mode">
-            <?php if ($canEdit): ?>
-              <a href="foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>" class="btn-edit-profile">แก้ไขโปรไฟล์</a>
-            <?php endif; ?>
-          </div>
-        <?php endif; ?>
-      </div>
-    </div>
-    <?php endforeach; ?>
-
-  </div>
-</div>
 </div>
 
 <!-- Footer section -->

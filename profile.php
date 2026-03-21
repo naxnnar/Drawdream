@@ -46,30 +46,18 @@ if ($role === 'foundation') {
 
     // ดึงโครงการทั้งหมดของมูลนิธินี้
     $fid = (int)($profile['foundation_id'] ?? 0);
-    $stmt_proj = $conn->prepare("
-         SELECT project_id, project_name, goal_amount, current_donate,
-            project_status, end_date, project_image, category
+        // ดึงเฉพาะโครงการของมูลนิธิที่ล็อกอินอยู่ (ยึดตาม foundation_name ในตาราง project)
+        $foundationName = trim((string)($profile['foundation_name'] ?? ''));
+        $stmt_proj = $conn->prepare("
+             SELECT project_id, project_name, goal_amount, current_donate,
+                 project_status, end_date, project_image
         FROM project 
-        WHERE foundation_id = ?
+            WHERE foundation_name = ?
          ORDER BY project_status DESC, project_id DESC
     ");
-    $stmt_proj->bind_param("i", $fid);
+        $stmt_proj->bind_param("s", $foundationName);
     $stmt_proj->execute();
     $foundation_projects = $stmt_proj->get_result()->fetch_all(MYSQLI_ASSOC);
-
-    // ดึงโครงการที่ completed แต่ยังไม่มี project_updates (ต้องอัปเดต)
-    $stmt_need_update = $conn->prepare("
-           SELECT p.project_id, p.project_name, p.end_date AS completed_at,
-                DATEDIFF(DATE_ADD(COALESCE(p.end_date, NOW()), INTERVAL 30 DAY), NOW()) AS days_left,
-               (SELECT COUNT(*) FROM project_updates pu WHERE pu.project_id = p.project_id) AS update_count
-        FROM project p
-        WHERE p.foundation_id = ? 
-          AND p.project_status = 'completed'
-           ORDER BY p.end_date ASC
-    ");
-    $stmt_need_update->bind_param("i", $fid);
-    $stmt_need_update->execute();
-    $need_updates = $stmt_need_update->get_result()->fetch_all(MYSQLI_ASSOC);
 
 } elseif ($role === 'donor') {
     $stmt = $conn->prepare("SELECT d.*, u.email FROM donor d 
@@ -160,7 +148,84 @@ function statusLabel($status) {
     <title>โปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/profile.css">
-    
+    <style>
+    .donation-summary {
+        background: #f0f4ff;
+        border-radius: 10px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        color: #4A5BA8;
+        font-size: 15px;
+    }
+    .project-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        margin-top: 15px;
+    }
+    .project-item {
+        background: #f9f9f9;
+        border-radius: 12px;
+        padding: 20px;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        border-left: 4px solid #ddd;
+        transition: all 0.3s;
+    }
+    .project-item.completed { border-left-color: #4A5BA8; background: #f0f4ff; }
+    .project-item.approved  { border-left-color: #4CAF50; background: #f1f8f4; }
+    .project-item.pending   { border-left-color: #FFC107; background: #fffdf0; }
+    .project-item.rejected  { border-left-color: #E57373; background: #fff5f5; }
+    .project-thumb {
+        width: 80px;
+        height: 80px;
+        object-fit: cover;
+        border-radius: 10px;
+        flex-shrink: 0;
+    }
+    .project-thumb-empty {
+        width: 80px;
+        height: 80px;
+        background: #e0e0e0;
+        border-radius: 10px;
+        flex-shrink: 0;
+    }
+    .project-detail { flex: 1; }
+    .project-name {
+        font-size: 16px;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 5px;
+    }
+    .project-status {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        color: white;
+        margin-bottom: 8px;
+    }
+    .project-bar-wrap {
+        background: #e0e0e0;
+        border-radius: 10px;
+        height: 10px;
+        overflow: hidden;
+        margin-bottom: 5px;
+    }
+    .project-bar-fill {
+        height: 100%;
+        border-radius: 10px;
+        background: linear-gradient(90deg, #4A5BA8, #667eea);
+        transition: width 0.5s ease;
+    }
+    .project-amount {
+        font-size: 13px;
+        color: #666;
+    }
+    .project-amount strong { color: #4A5BA8; }
+    </style>
 </head>
 <body>
 
@@ -221,48 +286,6 @@ function statusLabel($status) {
 
     <?php if ($role === 'foundation'): ?>
         <a href="update_profile.php" class="btn-edit">แก้ไขโปรไฟล์</a>
-
-        <!-- ===== โครงการที่ต้องอัปเดต ===== -->
-        <?php if (!empty($need_updates)): ?>
-            <?php foreach ($need_updates as $nu):
-                $days_left    = (int)$nu['days_left'];
-                $update_count = (int)$nu['update_count'];
-                $is_overdue   = $days_left < 0;
-                $is_urgent    = $days_left <= 7 && $days_left >= 0;
-            ?>
-                <?php if ($update_count === 0): ?>
-                    <div style="
-                        background: <?= $is_overdue ? '#fdecea' : ($is_urgent ? '#fff8e1' : '#f0f4ff') ?>;
-                        border: 1.5px solid <?= $is_overdue ? '#ef9a9a' : ($is_urgent ? '#ffe082' : '#b3c2f0') ?>;
-                        border-radius: 12px; padding: 16px 20px; margin-bottom: 16px;
-                        display: flex; justify-content: space-between; align-items: center; gap: 16px;
-                    ">
-                        <div>
-                            <?php if ($is_overdue): ?>
-                                <div style="font-size:13px; font-weight:700; color:#c62828; margin-bottom:4px;">⚠️ เกินกำหนดอัปเดตแล้ว!</div>
-                            <?php elseif ($is_urgent): ?>
-                                <div style="font-size:13px; font-weight:700; color:#f57f17; margin-bottom:4px;">⏰ ใกล้ครบกำหนดอัปเดต!</div>
-                            <?php else: ?>
-                                <div style="font-size:13px; font-weight:700; color:#4A5BA8; margin-bottom:4px;">📋 โครงการรอการอัปเดต</div>
-                            <?php endif; ?>
-                            <div style="font-size:15px; font-weight:700; color:#222;"><?= htmlspecialchars($nu['project_name']) ?></div>
-                            <div style="font-size:12px; color:#666; margin-top:4px;">
-                                <?php if ($is_overdue): ?>
-                                    เกินกำหนด <?= abs($days_left) ?> วันแล้ว กรุณาโพสต์ความคืบหน้าโดยด่วน
-                                <?php else: ?>
-                                    เหลือเวลาอีก <strong><?= $days_left ?> วัน</strong> ในการโพสต์ความคืบหน้า
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <a href="foundation_post_update.php?project_id=<?= $nu['project_id'] ?>"
-                           style="background:#4A5BA8; color:white; padding:10px 18px; border-radius:8px;
-                                  text-decoration:none; font-size:13px; font-weight:600; white-space:nowrap; flex-shrink:0;">
-                            โพสต์ความคืบหน้า
-                        </a>
-                    </div>
-                <?php endif; ?>
-            <?php endforeach; ?>
-        <?php endif; ?>
 
         <!-- โครงการของมูลนิธิ -->
         <div class="logs-section">

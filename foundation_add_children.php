@@ -497,8 +497,8 @@ if (isset($_POST['submit'])) {
         <div class="upload-preview" id="preview-container" onclick="document.getElementById('photo_child_input').click()">
             <span id="preview-text">ตัวอย่างรูปภาพ</span>
         </div>
-        <div class="field-group" style="margin-top:12px;">
-            <label>รูปภาพเด็ก</label>
+        <div class="left-info-card" style="text-align:left;">
+            <h3>รูปภาพเด็ก</h3>
             <input type="file" id="photo_child_input" name="photo_child" form="mainForm" accept="image/*" required onchange="previewImage(this)" style="display:block;">
         </div>
         <div class="left-info-card">

@@ -18,11 +18,9 @@ $pending_needs     = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS 
 $escrow_total      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM escrow_funds WHERE status='holding'"))['total'];
 
 $active_projects = mysqli_query($conn, "
-    SELECT p.*, fp.foundation_name 
-    FROM project p
-    LEFT JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    WHERE p.project_status IN ('approved','completed')
-    ORDER BY p.project_status DESC, p.project_id DESC
+    SELECT * FROM project
+    WHERE project_status IN ('approved','completed')
+    ORDER BY project_status DESC, project_id DESC
     LIMIT 10
 ");
 

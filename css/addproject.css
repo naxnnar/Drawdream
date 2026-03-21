@@ -1,8 +1,18 @@
 /* ========================================
-   addproject.css — สำหรับหน้า p2_2addproject.php
+   addproject.css — สำหรับหน้า foundation_add_project.php
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=Sarabun:wght@400;500&display=swap');
+
+:root {
+    --theme-primary: #3C5099;
+    --theme-primary-dark: #2e407f;
+    --theme-soft: #F1CF54;
+    --theme-ink: #27364b;
+    --theme-bg: #F7ECDE;
+    --theme-card: #fff;
+    --theme-border: #F1CF54;
+}
 
 * {
     box-sizing: border-box;
@@ -12,113 +22,220 @@
 
 body {
     font-family: 'Prompt', 'Sarabun', sans-serif;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: var(--theme-bg);
+    color: var(--theme-ink);
+    font-size: 16px;
     min-height: 100vh;
 }
 
+/* ── Layout ─────────────────────────── */
 .form-container {
     display: flex;
-    gap: 60px;
-    max-width: 1100px;
-    margin: 50px auto;
-    padding: 50px;
-    background: white;
-    border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    gap: 42px;
+    max-width: 1280px;
+    margin: auto;
+    padding: 42px 40px;
 }
 
+/* ── Left panel ─────────────────────── */
 .left-box {
-    width: 38%;
+    width: 32%;
+    flex-shrink: 0;
 }
 
 .left-box h2 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #333;
-    margin-bottom: 20px;
+    color: #24314a;
+    margin-bottom: 6px;
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.2;
 }
 
+.left-foundation-name {
+    color: #000;
+    font-size: 1.05rem;
+    margin-bottom: 14px;
+    font-weight: 600;
+}
+
+/* รูปภาพ preview */
 .upload-box {
     width: 100%;
-    height: 280px;
-    background: #f0f0f0;
-    border-radius: 15px;
+    aspect-ratio: 3 / 2;
+    background: #de8168;
+    border: 4px dashed #597D57;
+    border-radius: 18px;
     display: flex;
     justify-content: center;
     align-items: center;
-    color: #999;
+    overflow: hidden;
+    cursor: pointer;
+    color: #fff;
     font-size: 15px;
-    border: 2px dashed #ddd;
+    font-weight: 600;
+    background-size: cover;
+    background-position: center;
 }
 
+/* ไฟล์ input ภายใน left-info-card */
+.left-info-card input[type="file"] {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    font-size: 0.95rem;
+    font-family: 'Sarabun', sans-serif;
+}
+
+/* label + file input แบบไม่มีกล่อง */
+.left-file-bare {
+    margin-top: 10px;
+}
+.left-file-bare label {
+    display: block;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1f3654;
+    margin-bottom: 6px;
+}
+.left-file-bare input[type="file"] {
+    display: block;
+    width: 100%;
+    font-size: 0.95rem;
+    font-family: 'Sarabun', sans-serif;
+}
+
+/* กล่องข้อมูลติดต่อ */
+.left-info-card {
+    margin-top: 14px;
+    background: #fff;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 4px 12px rgba(16, 53, 90, 0.05);
+}
+
+.left-info-card h3 {
+    margin: 0 0 9px;
+    font-size: 1rem;
+    color: #17406a;
+    font-weight: 800;
+}
+
+.left-info-card p {
+    margin: 3px 0;
+    font-size: 0.9rem;
+    color: #333;
+    line-height: 1.65;
+}
+
+/* ── Right panel ─────────────────────── */
 .right-box {
     flex: 1;
+    background: var(--theme-card);
+    padding: 34px;
+    border-radius: 22px;
+    border: 1.5px solid var(--theme-border);
+    box-shadow: 0 10px 26px rgba(25, 48, 77, 0.08);
 }
 
+
+/* ── Field groups ──────────────────── */
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: #555;
-    font-size: 14px;
+    margin-bottom: 6px;
+    font-weight: 700;
+    color: #1f3654;
+    font-size: 1rem;
 }
 
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group input[type="date"],
-.form-group input[type="file"],
 .form-group textarea,
 .form-group select {
     width: 100%;
-    padding: 12px 15px;
-    border: 1px solid #ddd;
-    border-radius: 10px;
-    font-size: 14px;
-    font-family: 'Sarabun', sans-serif;
-    transition: border-color 0.3s;
+    padding: 12px 14px;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-family: 'Sarabun', 'Prompt', sans-serif;
+    background: #fff;
+    box-sizing: border-box;
+    transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #E74C3C;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 4px rgba(60, 80, 153, 0.14);
 }
 
 .form-group textarea {
     resize: vertical;
-    min-height: 120px;
+    min-height: 110px;
 }
 
+/* ตัวเลือกยอดบริจาค */
+.donation-opts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+.donation-opts-grid input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-family: 'Sarabun', 'Prompt', sans-serif;
+    background: #fff;
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    box-sizing: border-box;
+}
+
+.donation-opts-grid input:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 4px rgba(60, 80, 153, 0.14);
+}
+
+/* ── Submit ──────────────────────────── */
 .btn-submit {
-    background: #e5c24c;
-    color: #333;
-    padding: 15px 40px;
+    background: var(--theme-primary);
+    color: #fff;
+    padding: 14px;
     border: none;
-    border-radius: 15px;
-    font-size: 18px;
-    font-weight: 600;
+    border-radius: 13px;
+    font-size: 1.1rem;
     cursor: pointer;
+    font-weight: 800;
+    width: 100%;
+    margin-top: 14px;
     font-family: 'Prompt', sans-serif;
-    transition: all 0.3s;
-    margin-top: 10px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-shadow: 0 7px 14px rgba(60, 80, 153, 0.28);
 }
 
 .btn-submit:hover {
-    background: #d4b03a;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(229, 194, 76, 0.4);
+    transform: translateY(-1px);
+    background: var(--theme-primary-dark);
+    box-shadow: 0 10px 18px rgba(60, 80, 153, 0.32);
 }
 
-@media (max-width: 768px) {
+/* ── Responsive ──────────────────────── */
+@media (max-width: 860px) {
     .form-container {
         flex-direction: column;
-        padding: 30px 20px;
-        margin: 20px;
+        padding: 20px;
     }
     .left-box { width: 100%; }
+    .donation-opts-grid { grid-template-columns: 1fr; }
 }
