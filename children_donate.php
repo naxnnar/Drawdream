@@ -65,7 +65,7 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/children.css">
+    <link rel="stylesheet" href="css/children.css?v=4">
 </head>
 <body>
 
@@ -187,13 +187,13 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                     <img src="uploads/Children/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="Profile">
                 </div>
                 <div class="child-details">
-                    <p><strong>ชื่อ:</strong> <?php echo htmlspecialchars($child['child_name']); ?></p>
-                    <p><strong>มูลนิธิ:</strong> <?php echo htmlspecialchars($child['display_foundation_name'] ?? '-'); ?></p>
-                    <p><strong>วันเกิด:</strong> <?php echo htmlspecialchars($birthDateText); ?></p>
-                    <p><strong>ชั้น:</strong> <?php echo htmlspecialchars($child['education']); ?></p>
-                    <p><strong>อายุ:</strong> <?php echo (int)$child['age']; ?> ปี</p>
-                    <p><strong>อาชีพในฝัน:</strong> <?php echo htmlspecialchars($child['dream']); ?></p>
-                    <p><strong>พรที่ขอ:</strong> <?php echo htmlspecialchars($child['wish']); ?></p>
+                    <p><strong>ชื่อ</strong> <?php echo htmlspecialchars($child['child_name']); ?></p>
+                    <p><strong>มูลนิธิ</strong> <?php echo htmlspecialchars($child['display_foundation_name'] ?? '-'); ?></p>
+                    <p><strong>วันเกิด</strong> <?php echo htmlspecialchars($birthDateText); ?></p>
+                    <p><strong>ชั้น</strong> <?php echo htmlspecialchars($child['education']); ?></p>
+                    <p><strong>อายุ</strong> <?php echo (int)$child['age']; ?> ปี</p>
+                    <p><strong>อาชีพในฝัน</strong> <?php echo htmlspecialchars($child['dream']); ?></p>
+                    <p><strong>พรที่ขอ</strong> <?php echo htmlspecialchars($child['wish']); ?></p>
                     <?php if (($role === 'foundation' || $role === 'admin') && $reviewStatus === 'ไม่อนุมัติ' && !empty($child['reject_reason'] ?? '')): ?>
                     <p style="color:#b32525;"><strong>เหตุผลไม่อนุมัติ:</strong> <?php echo htmlspecialchars($child['reject_reason']); ?></p>
                     <?php endif; ?>
@@ -210,10 +210,10 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                 <?php if ($role === 'foundation'): ?>
                 <div class="foundation-full-info">
                     <h4>ข้อมูลทั้งหมดที่กรอกไว้</h4>
-                    <p><strong>หมวดที่ขอ:</strong> <?php echo htmlspecialchars($child['wish_cat'] ?? '-'); ?></p>
-                    <p><strong>สิ่งที่ชอบ:</strong> <?php echo htmlspecialchars($child['likes'] ?? '-'); ?></p>
-                    <p><strong>ธนาคาร:</strong> <?php echo htmlspecialchars($child['bank_name'] ?? '-'); ?></p>
-                    <p><strong>เลขบัญชี:</strong> <?php echo htmlspecialchars($child['child_bank'] ?? '-'); ?></p>
+                    <p><strong>หมวดที่ขอ</strong> <?php echo htmlspecialchars($child['wish_cat'] ?? '-'); ?></p>
+                    <p><strong>สิ่งที่ชอบ</strong> <?php echo htmlspecialchars($child['likes'] ?? '-'); ?></p>
+                    <p><strong>ธนาคาร</strong> <?php echo htmlspecialchars($child['bank_name'] ?? '-'); ?></p>
+                    <p><strong>เลขบัญชี</strong> <?php echo htmlspecialchars($child['child_bank'] ?? '-'); ?></p>
                     <?php if (!empty($child['qr_account_image'])): ?>
                         <div class="qr-preview" style="margin-top:10px;"><img src="uploads/Children/<?php echo htmlspecialchars($child['qr_account_image']); ?>" alt="QR PromptPay"></div>
                     <?php endif; ?>
@@ -225,7 +225,7 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                     $totalAmount = (float)$donationStats['total_amount'];
                     $donorCount  = (int)$donationStats['donor_count'];
                 ?>
-                <?php if ($reviewStatus === 'อนุมัติ'): ?>
+                <?php if ($role === 'foundation'): ?>
                 <div class="donation-stats-panel">
                     <div class="stats-row">
                         <div class="stat-box">

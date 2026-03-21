@@ -71,6 +71,21 @@ if (isset($_GET['admin_mode'])) {
   exit();
 }
 
+// โหมดดูตัวอย่างผู้บริจาค (foundation เท่านั้น)
+if (isset($_GET['preview_mode'])) {
+  if ($_GET['preview_mode'] === 'donor' && ($_SESSION['real_role'] ?? $_SESSION['role'] ?? '') === 'foundation') {
+    $_SESSION['real_role'] = 'foundation';
+    $_SESSION['role']      = 'donor';
+  } elseif ($_GET['preview_mode'] === 'exit' && isset($_SESSION['real_role'])) {
+    $_SESSION['role']      = $_SESSION['real_role'];
+    unset($_SESSION['real_role']);
+  }
+  $redirect = strtok($_SERVER['REQUEST_URI'], '?');
+  header("Location: $redirect");
+  exit();
+}
+
+$is_donor_preview = isset($_SESSION['real_role']) && $_SESSION['real_role'] === 'foundation';
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode'] ?? true);
 ?>
 <link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
@@ -122,6 +137,13 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
         <?php endif; ?>
 
       <?php elseif (in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])): ?>
+        <?php if (($_SESSION['real_role'] ?? '') === 'foundation'): ?>
+          <!-- กำลังอยู่ในโหมดดูตัวอย่างผู้บริจาค -->
+        <?php elseif (($_SESSION['role'] ?? '') === 'foundation'): ?>
+          <a href="?preview_mode=donor" class="donor-view-btn" title="ดูหน้าเว็บในมุมมองผู้บริจาค">
+            <span class="donor-view-icon">&#128065;</span> มุมมองผู้บริจาค
+          </a>
+        <?php endif; ?>
         <!-- ระฆังแจ้งเตือน -->
         <div class="notif-wrap" id="notifWrap">
           <button class="notif-btn" onclick="toggleNotif(event)" style="background:none;border:none;cursor:pointer;position:relative;padding:0;">
@@ -165,6 +187,13 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
   </div>
 
 </nav>
+
+<?php if ($is_donor_preview): ?>
+<div class="donor-preview-banner">
+  <span>&#128065; กำลังดูในโหมด <strong>มุมมองผู้บริจาค</strong> &mdash; เห็นเหมือนผู้บริจาคทั่วไป</span>
+  <a href="?preview_mode=exit" class="donor-preview-exit">✕ ออกจากโหมดดูตัวอย่าง</a>
+</div>
+<?php endif; ?>
 
 <script>
 function toggleNotif(e) {

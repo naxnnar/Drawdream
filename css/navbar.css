@@ -233,6 +233,76 @@ body {
 
 .mode-toggle-btn.mode-admin:hover { background: #3d4d8f; }
 
+/* ปุ่มมุมมองผู้บริจาค (เสนอเฉพาะ foundation) */
+.donor-view-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Prompt', sans-serif;
+    text-decoration: none;
+    background: #597D57;
+    color: #fff;
+    transition: background 0.2s, transform 0.15s;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(89,125,87,0.25);
+}
+
+.donor-view-btn:hover {
+    background: #4a6a49;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(89,125,87,0.35);
+}
+
+.donor-view-icon { font-size: 15px; }
+
+/* แถบแจ้งเตือนโหมดดูตัวอย่างผู้บริจาค */
+.donor-preview-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9999;
+    background: #597D57;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 10px 20px;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+
+.donor-preview-banner strong { font-weight: 800; }
+
+.donor-preview-exit {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    text-decoration: none;
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 13px;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.donor-preview-exit:hover {
+    background: rgba(255,255,255,0.35);
+    color: #fff;
+}
+
+body:has(.donor-preview-banner) .navbar {
+    margin-top: 40px;
+}
+
 /* badge จำนวนรออนุมัติในเมนู */
 .menu-badge {
     background: #E74C3C;
