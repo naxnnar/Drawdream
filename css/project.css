@@ -1,5 +1,5 @@
-/* ========================================
-    projects.css — สำหรับหน้า project.php โดยเฉพาะ
+﻿/* ========================================
+    project.css - merged styles for project pages
     ======================================== */
 
 
@@ -43,71 +43,55 @@
 
 .foundation-view-actions {
     display: flex;
-    align-items: center;
     gap: 10px;
     flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    justify-content: flex-start;
 }
 
 .foundation-manage-btn {
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 9px 16px;
+    text-decoration: none;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    padding: 9px 16px;
-    border: none;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 800;
-    font-family: 'Prompt', sans-serif;
-    text-align: center;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.3s;
-    box-sizing: border-box;
+    gap: 6px;
 }
 
 .foundation-manage-btn-primary {
     background: #3C5099;
     color: #fff;
-}
-
-.foundation-manage-btn-primary:hover {
-    background: #334584;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(60, 80, 153, 0.3);
+    padding: 12px 20px;
+    font-size: 1.05rem;
 }
 
 .foundation-manage-btn-edit {
     background: #F1CF54;
     color: #1f2937;
-}
-
-.foundation-manage-btn-edit:hover {
-    background: #e0be40;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(241, 207, 84, 0.4);
+    padding: 12px 20px;
+    font-size: 1.05rem;
 }
 
 .foundation-manage-btn-danger {
     background: #CE573F;
     color: #fff;
-}
-
-.foundation-manage-btn-danger:hover {
-    background: #b84a34;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(206, 87, 63, 0.28);
+    padding: 12px 20px;
+    font-size: 1.05rem;
 }
 
 .foundation-manage-btn-donor {
-    margin-left: auto;
     background: #597D57;
     color: #fff;
-}
-
-.foundation-manage-btn-donor:hover {
-    background: #4f704d;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(89, 125, 87, 0.3);
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 9px 16px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
 }
 
 .foundation-warn {
@@ -213,14 +197,14 @@
     margin-top: 14px;
 }
 
-/* per-card edit/delete blocks — ซ่อนไว้จนกว่าจะเปิด mode */
+/* per-card edit/delete blocks â€” à¸‹à¹ˆà¸­à¸™à¹„à¸§à¹‰à¸ˆà¸™à¸à¸§à¹ˆà¸²à¸ˆà¸°à¹€à¸›à¸´à¸” mode */
 .project-edit-wrap,
 .project-delete-wrap {
     display: none;
     margin-top: 10px;
 }
 
-/* ปุ่ม toolbar ที่เปิด mode อยู่ — แสดงด้วยเส้นขอบใต้ */
+/* à¸›à¸¸à¹ˆà¸¡ toolbar à¸—à¸µà¹ˆà¹€à¸›à¸´à¸” mode à¸­à¸¢à¸¹à¹ˆ â€” à¹à¸ªà¸”à¸‡à¸”à¹‰à¸§à¸¢à¹€à¸ªà¹‰à¸™à¸‚à¸­à¸šà¹ƒà¸•à¹‰ */
 .foundation-manage-btn.btn-mode-active {
     outline: 3px solid #1f2937;
     outline-offset: 2px;
@@ -302,7 +286,7 @@
     box-shadow: 0 0 0 3px rgba(245, 201, 66, 0.3);
 }
 
-/* override style.css .search-box button ที่มีสีเหลือง */
+/* override style.css .search-box button à¸—à¸µà¹ˆà¸¡à¸µà¸ªà¸µà¹€à¸«à¸¥à¸·à¸­à¸‡ */
 .search-box .search-button,
 .search-button {
     position: absolute;
@@ -408,7 +392,7 @@
     font-weight: 600;
 }
 
-/* สถานะ: ปุ่มถูกเลือก → สีน้ำเงิน */
+/* à¸ªà¸–à¸²à¸™à¸°: à¸›à¸¸à¹ˆà¸¡à¸–à¸¹à¸à¹€à¸¥à¸·à¸­à¸ â†’ à¸ªà¸µà¸™à¹‰à¸³à¹€à¸‡à¸´à¸™ */
 .pill-btn.pill-active {
     background-color: #3C5099;
     color: white;
@@ -418,7 +402,7 @@
     background-color: #2e3f7f;
 }
 
-/* เปลี่ยน arrow สีขาวเมื่อ active */
+/* à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™ arrow à¸ªà¸µà¸‚à¸²à¸§à¹€à¸¡à¸·à¹ˆà¸­ active */
 .pill-select.pill-active {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
@@ -535,7 +519,7 @@
     color: white;
 }
 
-/* ======== Simple Custom Dropdown (หมวดหมู่, สถานะ, เรียงตาม) ======== */
+/* ======== Simple Custom Dropdown (à¸«à¸¡à¸§à¸”à¸«à¸¡à¸¹à¹ˆ, à¸ªà¸–à¸²à¸™à¸°, à¹€à¸£à¸µà¸¢à¸‡à¸•à¸²à¸¡) ======== */
 .cust-dropdown {
     position: relative;
 }
@@ -562,7 +546,7 @@
     overflow-y: auto;
     max-height: 260px;
     padding: 6px 0;
-    /* scrollbar สี #3C5099 */
+    /* scrollbar à¸ªà¸µ #3C5099 */
     scrollbar-width: thin;
     scrollbar-color: #3C5099 #f0f0f0;
 }
@@ -820,6 +804,10 @@
     box-shadow: 0 8px 25px rgba(0,0,0,0.15);
 }
 
+.project-card.clickable-card {
+    cursor: pointer;
+}
+
 .project-card img {
     width: 100%;
     height: 200px;
@@ -930,6 +918,8 @@
 .donate-btn {
     display: block;
     width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: 13px;
     background: #3C5099;
     color: white;
@@ -1003,13 +993,20 @@
     .project-grid  { grid-template-columns: 1fr; }
     .hero-title    { font-size: 28px; }
     .top-actions   { justify-content: center; }
-    .foundation-view-toolbar,
-    .foundation-view-actions,
     .foundation-project-actions {
         flex-direction: column;
         align-items: stretch;
     }
-    .foundation-manage-btn-donor,
+    .foundation-view-actions {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    .foundation-view-toolbar {
+        flex-direction: row;
+        align-items: center;
+        flex-wrap: wrap;
+    }
     .foundation-project-actions .foundation-manage-btn,
     .foundation-delete-form,
     .foundation-delete-form .foundation-manage-btn {
@@ -1051,3 +1048,320 @@
         font-size: 28px;
     }
 }   
+
+/* ========================================
+   addproject.css (scoped) for foundation_add_project.php
+   ======================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=Sarabun:wght@400;500&display=swap');
+
+body.project-form-page {
+    --theme-primary: #3C5099;
+    --theme-primary-dark: #2e407f;
+    --theme-soft: #F1CF54;
+    --theme-ink: #27364b;
+    --theme-bg: #F7ECDE;
+    --theme-card: #fff;
+    --theme-border: #F1CF54;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    background: var(--theme-bg);
+    color: var(--theme-ink);
+    font-size: 16px;
+    min-height: 100vh;
+}
+
+body.project-form-page *,
+body.project-form-page *::before,
+body.project-form-page *::after {
+    box-sizing: border-box;
+}
+
+body.project-form-page .form-container {
+    display: flex;
+    gap: 42px;
+    max-width: 1280px;
+    margin: auto;
+    padding: 42px 40px;
+}
+
+body.project-form-page .left-box {
+    width: 32%;
+    flex-shrink: 0;
+}
+
+body.project-form-page .left-box h2 {
+    color: #24314a;
+    margin-bottom: 6px;
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+body.project-form-page .left-foundation-name {
+    color: #000;
+    font-size: 1.05rem;
+    margin-bottom: 14px;
+    font-weight: 600;
+}
+
+body.project-form-page .upload-box {
+    width: 100%;
+    aspect-ratio: 3 / 2;
+    background: #de8168;
+    border: 4px dashed #597D57;
+    border-radius: 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    cursor: pointer;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    background-size: cover;
+    background-position: center;
+}
+
+body.project-form-page .left-info-card input[type="file"] {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    font-size: 0.95rem;
+    font-family: 'Sarabun', sans-serif;
+}
+
+body.project-form-page .left-file-bare {
+    margin-top: 10px;
+}
+
+body.project-form-page .left-file-bare label {
+    display: block;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #1f3654;
+    margin-bottom: 6px;
+}
+
+body.project-form-page .left-file-bare input[type="file"] {
+    display: block;
+    width: 100%;
+    font-size: 0.95rem;
+    font-family: 'Sarabun', sans-serif;
+}
+
+body.project-form-page .left-info-card {
+    margin-top: 14px;
+    background: #fff;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 14px;
+    padding: 14px;
+    box-shadow: 0 4px 12px rgba(16, 53, 90, 0.05);
+}
+
+body.project-form-page .left-info-card h3 {
+    margin: 0 0 9px;
+    font-size: 1rem;
+    color: #17406a;
+    font-weight: 800;
+}
+
+body.project-form-page .left-info-card p {
+    margin: 3px 0;
+    font-size: 0.9rem;
+    color: #333;
+    line-height: 1.65;
+}
+
+body.project-form-page .right-box {
+    flex: 1;
+    background: var(--theme-card);
+    padding: 34px;
+    border-radius: 22px;
+    border: 1.5px solid var(--theme-border);
+    box-shadow: 0 10px 26px rgba(25, 48, 77, 0.08);
+}
+
+body.project-form-page .form-group {
+    margin-bottom: 16px;
+}
+
+body.project-form-page .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 700;
+    color: #1f3654;
+    font-size: 1rem;
+}
+
+body.project-form-page .form-group input[type="text"],
+body.project-form-page .form-group input[type="number"],
+body.project-form-page .form-group input[type="date"],
+body.project-form-page .form-group textarea,
+body.project-form-page .form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-family: 'Sarabun', 'Prompt', sans-serif;
+    background: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+body.project-form-page .form-group input:focus,
+body.project-form-page .form-group textarea:focus,
+body.project-form-page .form-group select:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 4px rgba(60, 80, 153, 0.14);
+}
+
+body.project-form-page .form-group textarea {
+    resize: vertical;
+    min-height: 110px;
+}
+
+body.project-form-page .donation-opts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+body.project-form-page .donation-opts-grid input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    font-size: 1.05rem;
+    font-family: 'Sarabun', 'Prompt', sans-serif;
+    background: #fff;
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+body.project-form-page .donation-opts-grid input:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 4px rgba(60, 80, 153, 0.14);
+}
+
+body.project-form-page .btn-submit {
+    background: var(--theme-primary);
+    color: #fff;
+    padding: 14px;
+    border: none;
+    border-radius: 13px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-weight: 800;
+    width: 100%;
+    margin-top: 14px;
+    font-family: 'Prompt', sans-serif;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-shadow: 0 7px 14px rgba(60, 80, 153, 0.28);
+}
+
+body.project-form-page .btn-submit:hover {
+    transform: translateY(-1px);
+    background: var(--theme-primary-dark);
+    box-shadow: 0 10px 18px rgba(60, 80, 153, 0.32);
+}
+
+@media (max-width: 860px) {
+    body.project-form-page .form-container {
+        flex-direction: column;
+        padding: 20px;
+    }
+
+    body.project-form-page .left-box {
+        width: 100%;
+    }
+
+    body.project-form-page .donation-opts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ========================================
+   admin project pages
+   used by: admin_projects.php, admin_approve_projects.php
+   ======================================== */
+
+body.admin-projects-page .wrap,
+body.admin-approve-projects-page .wrap {
+    max-width: 1100px;
+    margin: 30px auto;
+    padding: 0 15px;
+}
+
+body.admin-projects-page table,
+body.admin-approve-projects-page table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+body.admin-projects-page th,
+body.admin-projects-page td,
+body.admin-approve-projects-page th,
+body.admin-approve-projects-page td {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+}
+
+body.admin-projects-page th,
+body.admin-approve-projects-page th {
+    background: #f7f7f7;
+    text-align: left;
+}
+
+body.admin-projects-page .thumb,
+body.admin-approve-projects-page .thumb {
+    width: 120px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 10px;
+    background: #ddd;
+}
+
+body.admin-projects-page .btn,
+body.admin-approve-projects-page .btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    margin: 2px;
+}
+
+body.admin-projects-page .approve,
+body.admin-approve-projects-page .approve {
+    background: #1e2f97;
+    color: #fff;
+}
+
+body.admin-projects-page .reject,
+body.admin-approve-projects-page .reject {
+    background: #c0392b;
+    color: #fff;
+}
+
+body.admin-projects-page .msg,
+body.admin-approve-projects-page .msg {
+    margin: 10px 0 15px;
+    padding: 10px 12px;
+    background: #e8f5e9;
+    border: 1px solid #c8e6c9;
+    border-radius: 10px;
+}
+
+body.admin-projects-page textarea,
+body.admin-approve-projects-page textarea {
+    width: 100%;
+    min-height: 60px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}

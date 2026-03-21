@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: payment\foundation_donate.php
+// หน้าที่: หน้าบริจาคให้มูลนิธิ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
@@ -134,9 +136,9 @@ function omise_request($method, $path, $data = []) {
     <title>บริจาครายการสิ่งของ | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css">
     <link rel="stylesheet" href="../css/payment.css">
-    <link rel="stylesheet" href="../css/foundation_donate.css">
+    <link rel="stylesheet" href="../css/foundation.css">
 </head>
-<body>
+<body class="foundation-donate-page">
 
 <?php include '../navbar.php'; ?>
 
@@ -164,9 +166,13 @@ function omise_request($method, $path, $data = []) {
         <div class="items-list">
             <h3>รายการสิ่งของที่ต้องการ</h3>
             <?php foreach ($items as $item): ?>
+                <?php
+                    $itemImages = array_values(array_filter(explode('|', (string)($item['item_image'] ?? ''))));
+                    $mainItemImage = $itemImages[0] ?? '';
+                ?>
                 <div class="item-row <?= $item['urgent'] ? 'urgent' : '' ?>">
-                    <?php if (!empty($item['item_image'])): ?>
-                        <img src="../uploads/needs/<?= htmlspecialchars($item['item_image']) ?>" class="item-thumb" alt="">
+                    <?php if ($mainItemImage !== ''): ?>
+                        <img src="../uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" class="item-thumb" alt="">
                     <?php endif; ?>
                     <div class="item-detail">
                         <div class="item-name">

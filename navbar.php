@@ -1,6 +1,8 @@
-<?php
-if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
-  session_start();
+﻿<?php
+// ไฟล์นี้: navbar.php
+// หน้าที่: คอมโพเนนต์เมนูนำทางและแจ้งเตือน
+if (session_status() === PHP_SESSION_NONE) {
+  @session_start();
 }
 
 // นับรายการรออนุมัติ (เฉพาะ admin)
@@ -26,19 +28,36 @@ $total_pending = $pending_count + $pending_projects + $pending_needs;
 // ===== แจ้งเตือนสำหรับ foundation และ donor =====
 $user_notif_count = 0;
 $user_notifs      = [];
+$is_logged_in = isset($_SESSION['user_id']);
 if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])) {
   include_once 'db.php';
   $uid = (int)$_SESSION['user_id'];
-  $nq = mysqli_query($conn, "
-    SELECT notif_id, title, message, link, is_read, created_at 
-    FROM notifications 
-    WHERE user_id = $uid 
-    ORDER BY created_at DESC 
-    LIMIT 10
-  ");
-  if ($nq) {
-    while ($n = mysqli_fetch_assoc($nq)) $user_notifs[] = $n;
-    $user_notif_count = count(array_filter($user_notifs, fn($n) => !$n['is_read']));
+  try {
+    $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
+    $hasNotificationsTable = $tableCheck && mysqli_num_rows($tableCheck) > 0;
+
+    if ($hasNotificationsTable) {
+      $stmtNotif = $conn->prepare(
+        "SELECT notif_id, title, message, link, is_read, created_at
+         FROM notifications
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+         LIMIT 10"
+      );
+
+      if ($stmtNotif) {
+        $stmtNotif->bind_param("i", $uid);
+        $stmtNotif->execute();
+        $notifResult = $stmtNotif->get_result();
+        while ($n = mysqli_fetch_assoc($notifResult)) {
+          $user_notifs[] = $n;
+        }
+        $user_notif_count = count(array_filter($user_notifs, fn($n) => !$n['is_read']));
+      }
+    }
+  } catch (Throwable $e) {
+    $user_notifs = [];
+    $user_notif_count = 0;
   }
 }
 
@@ -87,7 +106,7 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
   </div>
 
   <div class="nav-right">
-    <?php if (isset($_SESSION['email'])): ?>
+    <?php if ($is_logged_in): ?>
 
       <?php if ($_SESSION['role'] === 'admin'): ?>
         <?php if ($is_admin_mode): ?>

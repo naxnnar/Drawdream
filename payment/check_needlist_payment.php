@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: payment\check_needlist_payment.php
+// หน้าที่: ไฟล์ตรวจสอบสถานะการชำระเงินรายการสิ่งของ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';

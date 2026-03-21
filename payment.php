@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: payment.php
+// หน้าที่: หน้าชำระเงินด้วย QR สำหรับบริจาคเด็ก
 // ------------------------------
 // Backend: เตรียมข้อมูลหน้า QR สำหรับบริจาคเด็ก
 // ------------------------------
@@ -64,113 +66,7 @@ if ($child_id > 0) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="css/style.css">
-  <style>
-    body {
-      background-color: #eeeeee;
-    }
-
-    /* ===== การ์ดหลักสีน้ำเงิน ===== */
-    .payment-card {
-      background-color: #3B4CC0;
-      border-radius: 36px;
-      padding: 40px 40px 44px 40px;
-      max-width: 520px;
-      margin: 50px auto;
-      text-align: center;
-      color: #fff;
-    }
-
-    /* ===== กล่อง QR ===== */
-    .qr-wrapper {
-      background-color: #fff;
-      border-radius: 24px;
-      padding: 24px;
-      display: inline-block;
-      margin-bottom: 32px;
-    }
-
-    .qr-wrapper img {
-      width: 260px;
-      height: 260px;
-      display: block;
-      object-fit: contain;
-    }
-
-    /* ===== ตารางข้อมูล ===== */
-    .payment-info {
-      width: 100%;
-      margin-bottom: 30px;
-    }
-
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 8px 10px;
-      font-size: 1.05rem;
-      color: #fff;
-    }
-
-    .info-row span:first-child {
-      color: #c8d0ff;
-      font-weight: 400;
-    }
-
-    .info-row span:last-child {
-      font-weight: 600;
-      text-align: right;
-    }
-
-    .amount-text {
-      font-size: 1.6rem !important;
-      font-weight: 900 !important;
-      color: #fff !important;
-    }
-
-    /* ===== ปุ่มแนบสลิป (สีเหลือง) ===== */
-    .btn-attach-slip {
-      display: block;
-      background-color: #F8CE32;
-      color: #222;
-      font-size: 1.2rem;
-      font-weight: 800;
-      border: none;
-      border-radius: 18px;
-      padding: 18px 30px;
-      width: 100%;
-      margin-bottom: 28px;
-      text-decoration: none;
-      box-shadow: 0 6px 0 #c9a20a;
-      transition: transform 0.1s, box-shadow 0.1s;
-    }
-
-    .btn-attach-slip:hover {
-      background-color: #f0c200;
-      color: #222;
-    }
-
-    .btn-attach-slip:active {
-      transform: translateY(4px);
-      box-shadow: 0 2px 0 #c9a20a;
-    }
-
-    /* ===== ข้อความขอบคุณ ===== */
-    .thank-you-text {
-      font-size: 0.95rem;
-      color: #c8d0ff;
-      line-height: 1.9;
-      margin: 0;
-      font-weight: 400;
-    }
-
-    /* ===== Divider เส้นบาง ===== */
-    .info-divider {
-      border: none;
-      border-top: 1px solid rgba(255,255,255,0.15);
-      margin: 4px 10px;
-    }
-  </style>
+  <link rel="stylesheet" href="css/payment_qr.css">
 </head>
 <body>
 
@@ -206,7 +102,7 @@ if ($child_id > 0) {
       <button type="submit" name="confirm_paid" class="btn-attach-slip">ฉันชำระเงินแล้ว</button>
     </form>
 
-    <a href="children_donate.php?id=<?php echo (int)$child_id; ?>" class="btn btn-outline-light w-100" style="border-radius:14px; font-weight:700; padding:10px 14px;">กลับหน้าโปรไฟล์เด็ก</a>
+    <a href="children_donate.php?id=<?php echo (int)$child_id; ?>" class="btn btn-outline-light w-100 btn-back-child">กลับหน้าโปรไฟล์เด็ก</a>
 
     <!-- ข้อความขอบคุณ -->
     <p class="thank-you-text">
@@ -218,7 +114,7 @@ if ($child_id > 0) {
   </div>
 </main>
 
-<footer style="background-color: #3f4f9a; padding: 20px 0; color: white;" class="mt-5">
+<footer class="payment-footer mt-5">
   <div class="container text-center">
     <p class="mb-0">&copy; All right reserved 2025 DrawDream Foundation</p>
   </div>

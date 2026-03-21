@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: admin_approve_needlist.php
+// หน้าที่: หน้าแอดมินสำหรับอนุมัติรายการสิ่งของ
 session_start();
 include 'db.php';
 
@@ -80,9 +82,9 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
     <link rel="stylesheet" href="css/navbar.css">
     <meta charset="UTF-8">
     <title>อนุมัติรายการสิ่งของ | Admin</title>
-    <link rel="stylesheet" href="css/style.css?v=2">
+    <link rel="stylesheet" href="css/admin.css">
 </head>
-<body>
+<body class="admin-approve-needlist-page">
 
 <?php include 'navbar.php'; ?>
 
@@ -114,10 +116,14 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
             <tbody>
             <?php while($row = mysqli_fetch_assoc($result)): ?>
                 <?php $total = (float)$row['qty_needed'] * (float)$row['price_estimate']; ?>
+                <?php
+                    $itemImages = array_values(array_filter(explode('|', (string)($row['item_image'] ?? ''))));
+                    $mainItemImage = $itemImages[0] ?? '';
+                ?>
                 <tr>
                     <td>
-                        <?php if (!empty($row['item_image'])): ?>
-                            <img class="admin-thumb" src="uploads/needs/<?= htmlspecialchars($row['item_image']) ?>" alt="">
+                        <?php if ($mainItemImage !== ''): ?>
+                            <img class="admin-thumb" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="">
                         <?php else: ?>
                             <div class="admin-noimg">ไม่มีรูป</div>
                         <?php endif; ?>

@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: foundation_post_update.php
+// หน้าที่: หน้ามูลนิธิสำหรับโพสต์อัปเดตสถานะ/โครงการ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
@@ -155,9 +157,9 @@ $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>อัปเดตโครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/foundation_post_update.css">
+    <link rel="stylesheet" href="css/foundation.css">
 </head>
-<body>
+<body class="foundation-post-update-page">
 <?php include 'navbar.php'; ?>
 
 <div class="wrap">

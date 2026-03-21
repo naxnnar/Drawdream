@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: admin_dashboard.php
+// หน้าที่: แดชบอร์ดภาพรวมสำหรับผู้ดูแลระบบ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
@@ -66,65 +68,8 @@ for ($i = 29; $i >= 0; $i--) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/admin_dashboard.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-    <style>
-    body { background:#f4f6f9; font-family:'Prompt','Sarabun',sans-serif; margin:0; }
-    .dashboard { max-width:1400px; margin:30px auto; padding:0 20px; }
-    .dash-title { font-size:26px; font-weight:700; color:#333; margin-bottom:25px; }
-
-    .cards { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-bottom:30px; }
-    .card { background:white; border-radius:15px; padding:25px; box-shadow:0 2px 10px rgba(0,0,0,0.07); border-left:5px solid #ddd; }
-    .card.blue   { border-left-color:#4A5BA8; }
-    .card.green  { border-left-color:#4CAF50; }
-    .card.orange { border-left-color:#FF9800; }
-    .card.purple { border-left-color:#9C27B0; }
-    .card.teal   { border-left-color:#009688; }
-    .card-label  { font-size:13px; color:#999; margin-bottom:8px; }
-    .card-value  { font-size:28px; font-weight:700; color:#333; }
-    .card-sub    { font-size:12px; color:#bbb; margin-top:5px; }
-
-    .pending-row { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-bottom:30px; }
-    .pending-card { background:white; border-radius:15px; padding:20px 25px; box-shadow:0 2px 10px rgba(0,0,0,0.07); display:flex; justify-content:space-between; align-items:center; text-decoration:none; color:#333; transition:all 0.3s; }
-    .pending-card:hover { transform:translateY(-3px); box-shadow:0 6px 20px rgba(0,0,0,0.12); }
-    .pending-label { font-size:15px; font-weight:600; }
-    .pending-sub   { font-size:12px; color:#999; margin-top:3px; }
-    .pending-count { font-size:36px; font-weight:700; color:#E74C3C; }
-    .pending-count.zero { color:#4CAF50; }
-
-    /* กราฟ */
-    .chart-box { background:white; border-radius:15px; padding:25px; box-shadow:0 2px 10px rgba(0,0,0,0.07); margin-bottom:30px; }
-    .chart-title { font-size:16px; font-weight:700; color:#333; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f0f0f0; }
-    .chart-wrap { position:relative; height:260px; }
-
-    .sections { display:grid; grid-template-columns:1.2fr 1fr; gap:20px; }
-    .section-box { background:white; border-radius:15px; padding:25px; box-shadow:0 2px 10px rgba(0,0,0,0.07); }
-    .section-title { font-size:16px; font-weight:700; color:#333; margin-bottom:20px; padding-bottom:12px; border-bottom:2px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
-    .section-link { font-size:12px; color:#4A5BA8; text-decoration:none; font-weight:500; }
-
-    .proj-item { padding:12px 0; border-bottom:1px solid #f5f5f5; }
-    .proj-item:last-child { border-bottom:none; }
-    .proj-name { font-size:14px; font-weight:600; color:#333; margin-bottom:5px; display:flex; justify-content:space-between; }
-    .proj-foundation { font-size:12px; color:#999; margin-bottom:6px; }
-    .proj-bar-bg { background:#f0f0f0; border-radius:6px; height:8px; overflow:hidden; }
-    .proj-bar-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#4A5BA8,#667eea); }
-    .proj-amount { font-size:11px; color:#aaa; margin-top:4px; display:flex; justify-content:space-between; }
-    .status-badge { font-size:11px; padding:2px 8px; border-radius:8px; font-weight:600; }
-    .status-approved  { background:#e8f5e9; color:#4CAF50; }
-    .status-completed { background:#e8eaf6; color:#4A5BA8; }
-
-    .don-item { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #f5f5f5; font-size:13px; }
-    .don-item:last-child { border-bottom:none; }
-    .don-type   { font-weight:600; color:#333; margin-bottom:2px; }
-    .don-ref    { font-size:11px; color:#bbb; }
-    .don-amount { font-weight:700; color:#E74C3C; white-space:nowrap; }
-    .don-date   { font-size:11px; color:#bbb; text-align:right; margin-top:2px; }
-
-    @media (max-width:1024px) {
-        .cards       { grid-template-columns:repeat(2,1fr); }
-        .pending-row { grid-template-columns:1fr; }
-        .sections    { grid-template-columns:1fr; }
-    }
-    </style>
 </head>
 <body>
 
@@ -228,7 +173,7 @@ for ($i = 29; $i >= 0; $i--) {
                     </div>
                 <?php endwhile; ?>
             <?php else: ?>
-                <p style="color:#999;text-align:center;padding:20px;">ยังไม่มีโครงการ</p>
+                <p class="empty-text">ยังไม่มีโครงการ</p>
             <?php endif; ?>
         </div>
 
@@ -248,14 +193,14 @@ for ($i = 29; $i >= 0; $i--) {
                             </div>
                             <div class="don-ref"><?= htmlspecialchars($don['omise_charge_id'] ?? '-') ?></div>
                         </div>
-                        <div style="text-align:right;">
+                        <div class="don-right">
                             <div class="don-amount"><?= number_format((float)$don['amount'], 0) ?> บาท</div>
                             <div class="don-date"><?= date('d/m/Y H:i', strtotime($don['transfer_datetime'])) ?></div>
                         </div>
                     </div>
                 <?php endwhile; ?>
             <?php else: ?>
-                <p style="color:#999;text-align:center;padding:20px;">ยังไม่มีการบริจาค</p>
+                <p class="empty-text">ยังไม่มีการบริจาค</p>
             <?php endif; ?>
         </div>
     </div>

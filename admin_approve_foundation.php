@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: admin_approve_foundation.php
+// หน้าที่: หน้าแอดมินสำหรับอนุมัติมูลนิธิ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 

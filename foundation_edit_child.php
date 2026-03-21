@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: foundation_edit_child.php
+// หน้าที่: หน้ามูลนิธิสำหรับแก้ไขข้อมูลเด็ก
 session_start();
 include 'db.php';
 
@@ -171,24 +173,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>แก้ไขโปรไฟล์เด็ก</title>
 <link rel="stylesheet" href="css/navbar.css">
-<style>
-body { background:#f7ecde; font-family:Tahoma,sans-serif; }
-.wrap { max-width:900px; margin:26px auto; background:#fff; border:1px solid #f1cf54; border-radius:16px; padding:22px; }
-.grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.group { display:flex; flex-direction:column; }
-.group.full { grid-column:1 / -1; }
-label { font-weight:700; margin-bottom:6px; }
-input, select, textarea { border:1.5px solid #f1cf54; border-radius:10px; padding:10px 12px; font-size:1rem; }
-textarea { min-height:90px; resize:vertical; }
-.actions { display:flex; gap:10px; margin-top:16px; }
-.btn { border:0; border-radius:10px; padding:10px 16px; font-weight:800; text-decoration:none; display:inline-flex; }
-.btn-save { background:#3C5099; color:#fff; }
-.btn-back { background:#CE573F; color:#fff; }
-.alert { border-radius:10px; padding:10px 12px; margin-bottom:12px; font-weight:700; }
-.alert.err { background:#fde8e8; color:#b32525; }
-.note { color:#6b7280; font-size:.9rem; margin-top:5px; }
-@media (max-width:780px){ .grid { grid-template-columns:1fr; } }
-</style>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/children.css">
 </head>
 <body>
 <?php include 'navbar.php'; ?>

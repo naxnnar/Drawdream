@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: update_profile.php
+// หน้าที่: ไฟล์อัปเดตข้อมูลโปรไฟล์ผ่านฟอร์ม
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 

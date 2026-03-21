@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: foundation_add_project.php
+// หน้าที่: หน้ามูลนิธิสำหรับสร้างหรือแก้ไขโครงการ
 session_start();
 include 'db.php';
 
@@ -87,6 +89,11 @@ if (isset($_POST['submit'])) {
     $needInfo = trim($_POST['need_info'] ?? '');
     $updateInfo = trim($_POST['update_info'] ?? '');
 
+    // ฟอร์มปัจจุบันซ่อนช่อง urgent_info ไว้ จึง fallback จากรายละเอียดโครงการ
+    if ($urgentInfo === '') {
+        $urgentInfo = $desc;
+    }
+
     if (!in_array($category, $categories, true)) {
         echo "<script>alert('กรุณาเลือกประเภทโครงการ'); history.back();</script>";
         exit();
@@ -102,8 +109,8 @@ if (isset($_POST['submit'])) {
         exit();
     }
 
-    if ($urgentInfo === '' || $needInfo === '') {
-        echo "<script>alert('กรุณากรอกข้อมูลข้อความขาดแคลนทางข้อมูล และกิจกรรมทางมูลนิธิ'); history.back();</script>";
+    if ($needInfo === '') {
+        echo "<script>alert('กรุณากรอกกิจกรรมและการดำเนินงานของมูลนิธิ'); history.back();</script>";
         exit();
     }
 
@@ -268,9 +275,9 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $isEditMode ? 'แก้ไขโครงการ' : 'เสนอโครงการ' ?> | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/addproject.css">
+    <link rel="stylesheet" href="css/project.css">
 </head>
-<body>
+<body class="project-form-page">
 
 <?php include 'navbar.php'; ?>
 

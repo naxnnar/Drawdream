@@ -1,10 +1,12 @@
-<?php
+﻿<?php
+// ไฟล์นี้: project.php
+// หน้าที่: หน้ารวมโครงการพร้อมระบบค้นหาและกรอง
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
 $is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
 
-if (!isset($_SESSION['email'])) {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
@@ -16,7 +18,7 @@ $isFoundationOwnView = ($role === 'foundation' && $viewMode === 'foundation');
 $keyword = trim($_GET['q'] ?? '');
 $cat     = $_GET['cat'] ?? 'all';
 $location = trim($_GET['loc'] ?? 'all');
-$status = $_GET['status'] ?? 'fundraising';
+$status = $_GET['status'] ?? 'all';
 $sort = $_GET['sort'] ?? 'latest';
 
 $foundationName = '';
@@ -146,41 +148,9 @@ if ($role !== 'admin') {
 }
 
 if ($cat !== 'all') {
-    $categoryKeywords = [
-        'การศึกษา' => ['การศึกษา', 'เรียน', 'ทุนการศึกษา', 'โรงเรียน', 'หนังสือ'],
-        'สุขภาพและอนามัย' => ['ป่วย', 'รักษา', 'โรงพยาบาล', 'ยา'],
-        'อาหารและโภชนาการ' => ['อาหาร', 'โภชนาการ', 'นม', 'ข้าวกลางวัน'],
-        'สิ่งอำนวยความสะดวก' => ['ด้อยโอกาส', 'ยากไร้', 'ขาดแคลน', 'เปราะบาง'],
-    ];
-
-    if ($cat === 'สิ่งอำนวยความสะดวก') {
-        // ให้ตรงกับการแสดงแท็ก: สิ่งอำนวยความสะดวก = ไม่เข้า 3 หมวดหลัก (การศึกษา/สุขภาพ/อาหาร)
-        $nonFacilityWhere = [];
-        foreach (['การศึกษา', 'สุขภาพและอนามัย', 'อาหารและโภชนาการ'] as $baseCat) {
-            foreach ($categoryKeywords[$baseCat] as $kw) {
-                $nonFacilityWhere[] = "(p.project_name LIKE ? OR p.project_desc LIKE ?)";
-                $kwLike = "%{$kw}%";
-                $params[] = $kwLike;
-                $params[] = $kwLike;
-                $types .= "ss";
-            }
-        }
-        if (!empty($nonFacilityWhere)) {
-            $where[] = "NOT (" . implode(" OR ", $nonFacilityWhere) . ")";
-        }
-    } else {
-        $catWhere = [];
-        foreach ($categoryKeywords[$cat] as $kw) {
-            $catWhere[] = "(p.project_name LIKE ? OR p.project_desc LIKE ?)";
-            $kwLike = "%{$kw}%";
-            $params[] = $kwLike;
-            $params[] = $kwLike;
-            $types .= "ss";
-        }
-        if (!empty($catWhere)) {
-            $where[] = "(" . implode(" OR ", $catWhere) . ")";
-        }
-    }
+    $where[] = "pd.category = ?";
+    $params[] = $cat;
+    $types .= "s";
 }
 
 $statusWhere = [
@@ -211,8 +181,9 @@ $latestProjects = [];
 
 if ($isFoundationOwnView) {
     $foundationSql = "
-        SELECT p.*, fp.address AS foundation_address
+        SELECT p.*, pd.category, fp.address AS foundation_address
         FROM project p
+        LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
         WHERE p.foundation_name = ?
         ORDER BY p.project_id DESC
@@ -228,8 +199,9 @@ if ($isFoundationOwnView) {
     }
 } else {
     $sql  = "
-        SELECT p.*, fp.address AS foundation_address
+        SELECT p.*, pd.category, fp.address AS foundation_address
         FROM project p
+        LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
         WHERE " . implode(" AND ", $where) . "
         ORDER BY {$orderBy}
@@ -252,8 +224,9 @@ if ($isFoundationOwnView) {
         $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
     }
     $latestSql = "
-        SELECT p.*, fp.address AS foundation_address
+        SELECT p.*, pd.category, fp.address AS foundation_address
         FROM project p
+        LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
     ";
     if (!empty($latestWhere)) {
@@ -279,8 +252,8 @@ if ($isFoundationOwnView) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <title>โครงการ | DrawDream</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/projects.css">
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/project.css?v=10">
 
 </head>
 <body class="projects-page">
@@ -459,7 +432,7 @@ if ($isFoundationOwnView) {
                         $latestRaised = (float)($latest['current_donate'] ?? 0);
                         $latestProgress = ($latestGoal > 0) ? min(100, ($latestRaised / $latestGoal) * 100) : 0;
                     ?>
-                    <article class="project-card latest-card">
+                    <article class="project-card latest-card clickable-card" data-href="payment/payment_project.php?project_id=<?= (int)$latest['project_id'] ?>">
                         <img src="uploads/<?= htmlspecialchars($latest['project_image']) ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
                         <span class="latest-badge"><?= htmlspecialchars(formatTimeAgoThai($latest['start_date'] ?? null)) ?></span>
                         <h3><?= htmlspecialchars($latest['project_name']) ?></h3>
@@ -497,7 +470,7 @@ if ($isFoundationOwnView) {
                     $raised = (float)($row['current_donate'] ?? 0); // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                 ?>
-                <div class="project-card">
+                <div class="project-card clickable-card" data-href="payment/payment_project.php?project_id=<?= (int)$row['project_id'] ?>">
                     <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>"
                          alt="<?= htmlspecialchars($row['project_name']) ?>">
 
@@ -580,6 +553,17 @@ if ($isFoundationOwnView) {
     });
 })();
 
+// ===== Clickable project cards =====
+(function() {
+    document.querySelectorAll('.clickable-card').forEach(function(card) {
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('a, button, input, textarea, select, form')) return;
+            const href = this.dataset.href;
+            if (href) window.location.href = href;
+        });
+    });
+})();
+
 // ข้อมูลภาค-จังหวัด สำหรับ location dropdown
 const thaiRegionsData = <?= json_encode($thaiRegions, JSON_UNESCAPED_UNICODE) ?>;
 const currentLocValue = <?= json_encode($location, JSON_UNESCAPED_UNICODE) ?>;
@@ -626,7 +610,7 @@ function initSimpleDropdown(id, defaultVal) {
 }
 
 initSimpleDropdown('cat', 'all');
-initSimpleDropdown('status', 'fundraising');
+initSimpleDropdown('status', 'all');
 initSimpleDropdown('sort', 'latest');
 
 // ===== Latest projects horizontal slider =====

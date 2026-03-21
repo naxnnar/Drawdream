@@ -5,26 +5,32 @@
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500&display=swap');
 
 body {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: #F7ECDE;
     min-height: 100vh;
     font-family: 'Prompt', 'Sarabun', sans-serif;
 }
 
 .payment-container {
-    max-width: 900px;
+    max-width: 960px;
     margin: 40px auto;
     padding: 0 20px;
+}
+
+/* กล่องเดียวครอบทั้งสองฝั่ง */
+.payment-card {
+    background: #ffffff;
+    border: 1.5px solid #f1cf54;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 30px;
+    overflow: hidden;
 }
 
 /* ======== Project Info ======== */
 .project-info {
-    background: white;
-    border-radius: 20px;
     padding: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    border-right: 1px solid #f1e4a6;
 }
 
 .project-info h2 {
@@ -69,12 +75,31 @@ body {
     font-size: 14px;
 }
 
+.contact-card {
+    margin-top: 16px;
+    background: #fff;
+    border: 1px solid #e7e2d8;
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.contact-card h4 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #b28721;
+}
+
+.contact-card p {
+    margin: 5px 0;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+}
+
 /* ======== Payment Box ======== */
 .payment-box {
-    background: white;
-    border-radius: 20px;
     padding: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
 }
 
 .payment-box h3 {
@@ -82,6 +107,32 @@ body {
     font-weight: 700;
     color: #333;
     margin-bottom: 20px;
+}
+
+.project-detail-summary {
+    background: #fff7ea;
+    border: 1px solid #f1cf54;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+}
+
+.project-detail-summary h4 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #734f00;
+}
+
+.detail-row {
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #333;
+    line-height: 1.45;
+}
+
+.detail-row strong {
+    color: #1f2c46;
 }
 
 /* ======== Amount Presets ======== */

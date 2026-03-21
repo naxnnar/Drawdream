@@ -1,0 +1,114 @@
+/* ========================================
+   payment_qr.css — สำหรับหน้า payment.php (QR ชำระเงิน)
+   ======================================== */
+
+body {
+    background-color: #eeeeee;
+}
+
+.payment-card {
+    background-color: #3B4CC0;
+    border-radius: 36px;
+    padding: 40px 40px 44px;
+    max-width: 520px;
+    margin: 50px auto;
+    text-align: center;
+    color: #fff;
+}
+
+.qr-wrapper {
+    background-color: #fff;
+    border-radius: 24px;
+    padding: 24px;
+    display: inline-block;
+    margin-bottom: 32px;
+}
+
+.qr-wrapper img {
+    width: 260px;
+    height: 260px;
+    display: block;
+    object-fit: contain;
+}
+
+.payment-info {
+    width: 100%;
+    margin-bottom: 30px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 8px 10px;
+    font-size: 1.05rem;
+    color: #fff;
+}
+
+.info-row span:first-child {
+    color: #c8d0ff;
+    font-weight: 400;
+}
+
+.info-row span:last-child {
+    font-weight: 600;
+    text-align: right;
+}
+
+.amount-text {
+    font-size: 1.6rem !important;
+    font-weight: 900 !important;
+    color: #fff !important;
+}
+
+.btn-attach-slip {
+    display: block;
+    background-color: #F8CE32;
+    color: #222;
+    font-size: 1.2rem;
+    font-weight: 800;
+    border: none;
+    border-radius: 18px;
+    padding: 18px 30px;
+    width: 100%;
+    margin-bottom: 28px;
+    text-decoration: none;
+    box-shadow: 0 6px 0 #c9a20a;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.btn-attach-slip:hover {
+    background-color: #f0c200;
+    color: #222;
+}
+
+.btn-attach-slip:active {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 #c9a20a;
+}
+
+.btn-back-child {
+    border-radius: 14px;
+    font-weight: 700;
+    padding: 10px 14px;
+}
+
+.thank-you-text {
+    font-size: 0.95rem;
+    color: #c8d0ff;
+    line-height: 1.9;
+    margin: 0;
+    font-weight: 400;
+}
+
+.info-divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    margin: 4px 10px;
+}
+
+.payment-footer {
+    background-color: #3f4f9a;
+    padding: 20px 0;
+    color: white;
+}

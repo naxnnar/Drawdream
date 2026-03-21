@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: admin_children.php
+// หน้าที่: หน้าสร้างโปรไฟล์เด็กฝั่งมูลนิธิ/แอดมิน
 session_start();
 include 'db.php';
 
@@ -128,29 +130,16 @@ if (isset($_POST['submit'])) {
 <meta charset="UTF-8">
 <title>เพิ่มข้อมูลเด็ก - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
-<link rel="stylesheet" href="css/style.css">
-<style>
-    .form-container { display:flex; gap:60px; padding:40px; max-width: 1200px; margin: auto; }
-    .left-box { width:35%; }
-    .upload-preview { width:100%; height:350px; background:#f0f0f0; border: 2px dashed #bbb; border-radius:15px; display:flex; justify-content:center; align-items:center; overflow:hidden; }
-    .upload-preview img { width: 100%; height: 100%; object-fit: cover; }
-    .right-box { width:65%; background: #fff; padding: 30px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    label { font-weight: bold; display: block; margin-bottom: 5px; color: #555; }
-    input, textarea, select { width:100%; padding:12px; border-radius:10px; border:1px solid #ddd; margin-bottom:15px; box-sizing: border-box; }
-    .full-width { grid-column: span 2; }
-    button { background:#e5c24c; padding:15px 50px; border:none; border-radius:15px; font-size:18px; cursor:pointer; font-weight:bold; width: 100%; margin-top: 10px; }
-    button:hover { background: #d4b13a; }
-</style>
+<link rel="stylesheet" href="css/children.css">
 </head>
-<body>
+<body class="admin-children-page">
 
 <?php include 'navbar.php'; ?>
 
 <div class="form-container">
     <div class="left-box">
-        <h2 style="color: #333;">เพิ่มโปรไฟล์เด็ก</h2>
-        <p style="color: #777;">มูลนิธิ: <?php echo $f_name; ?></p>
+        <h2 class="admin-title">เพิ่มโปรไฟล์เด็ก</h2>
+        <p class="admin-foundation">มูลนิธิ: <?php echo $f_name; ?></p>
         <div class="upload-preview" id="preview-container">
             <span id="preview-text">ตัวอย่างรูปภาพ</span>
         </div>
@@ -174,7 +163,7 @@ if (isset($_POST['submit'])) {
                 <div>
                     <label>ระดับการศึกษา</label>
                     <input type="text" id="education" name="education" placeholder="ตัวอย่าง: ป.6" required>
-                    <small style="color:#777;">ระบบจะแนะนำชั้นเรียนตามอายุ แต่สามารถแก้ไขเองได้หากเด็กเรียนช้ากว่ากำหนด</small>
+                    <small class="edu-help">ระบบจะแนะนำชั้นเรียนตามอายุ แต่สามารถแก้ไขเองได้หากเด็กเรียนช้ากว่ากำหนด</small>
                 </div>
                 <div>
                     <label>ความฝันในอนาคต</label>

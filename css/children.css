@@ -1,0 +1,1259 @@
+/* ======================================================
+   children.css — CSS ร่วมสำหรับหน้าที่เกี่ยวกับเด็ก
+   ใช้ใน: children_.php, children_donate.php,
+           foundation_add_children.php, foundation_edit_child.php
+   ====================================================== */
+
+/* ── ตัวแปรสีร่วม ─────────────────────────────────── */
+:root {
+    --theme-primary:      #3C5099;
+    --theme-primary-dark: #2e407f;
+    --theme-soft:         #F1CF54;
+    --theme-accent:       #18a999;
+    --theme-ink:          #27364b;
+    --theme-bg:           #F7ECDE;
+    --theme-card:         #fff;
+    --theme-border:       #F1CF54;
+}
+
+/* พื้นหลังหน้าเด็กทุกหน้า */
+body {
+    background: #F7ECDE;
+}
+
+
+/* =====================================================
+   1. children_.php — รายการเด็ก
+   ===================================================== */
+
+body.donation-page {
+    background: #fff;
+    overflow-x: hidden;
+}
+
+.donation-shell {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 40px 24px 56px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* หัวข้อหน้า (แสดงก่อนปุ่มสำหรับมูลนิธิ) */
+.page-header {
+    margin-bottom: 20px;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 38px;
+    font-weight: 700;
+    font-family: 'Prompt', sans-serif;
+    color: #2e3f7f;
+    line-height: 1.2;
+}
+
+.page-header p {
+    margin: 6px 0 14px;
+    color: #5b6470;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.donation-shell .container {
+    max-width: 100% !important;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+    background: transparent !important;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.donation-band {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    border-radius: 0;
+    margin-bottom: 0;
+}
+
+/* banner title used in children_.php */
+.section-title {
+    width: 100%;
+    padding: 15px;
+    text-align: center;
+    color: #fff;
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+}
+
+.section-title.danger { background: #CE573F; }
+
+/* ── ปุ่มจัดการโปรไฟล์ (foundation) ─── */
+.donation-top-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.foundation-action-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.btn-create-profile {
+    background: #3C5099;
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-delete-selected {
+    background: #CE573F;
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+}
+
+.btn-delete-selected:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.btn-toggle-edit {
+    background: #F1CF54;
+    color: #1f2937;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+}
+
+/* ── Grid การ์ดเด็ก ─── */
+.donation-grid {
+    display: grid !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 22px 14px;
+    justify-content: flex-start;
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.donation-grid > [class*="col-"] {
+    display: flex;
+    width: auto;
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.donation-grid .child-card { width: 100%; }
+
+.child-card {
+    text-decoration: none;
+    color: inherit;
+    text-align: left;
+    display: block;
+    transition: transform 0.2s ease;
+}
+
+.child-card:hover { transform: translateY(-4px); }
+
+.child-card-wrap {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.child-card-wrap .child-card { flex: 1; }
+
+.card-actions {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 4px 2px;
+}
+
+body.mode-edit .card-actions.edit-mode { display: flex; }
+
+/* ── delete corner checkbox ─── */
+.delete-corner {
+    display: none !important;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 6;
+    padding: 0;
+}
+
+.delete-corner input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    accent-color: #CE573F;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+body.mode-delete .delete-corner { display: inline-flex !important; }
+body.mode-delete .child-status-pill { display: none; }
+body.mode-edit   .child-status-pill { display: none; }
+
+/* ── edit pill ─── */
+.edit-pill-wrap { display: none; margin-top: 8px; }
+body.mode-edit .edit-pill-wrap { display: block; }
+
+.btn-edit-pill {
+    background: linear-gradient(135deg, #F1CF54, #e8b923);
+    color: #3b2f09;
+    border: 0;
+    border-radius: 999px;
+    padding: 6px 16px;
+    min-height: 34px;
+    min-width: 136px;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(15,23,42,0.08);
+    width: 100%;
+    text-align: center;
+}
+
+/* ── inline delete actions ─── */
+.inline-delete-actions {
+    display: none;
+    margin-top: 8px;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+body.mode-delete .inline-delete-actions { display: inline-flex; }
+
+.inline-delete-actions .confirm-inline {
+    background: #CE573F;
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: .88rem;
+    font-weight: 800;
+}
+
+.inline-delete-actions .cancel-inline {
+    background: #fff;
+    color: #24324a;
+    border: 1.5px solid #c7cdd7;
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: .88rem;
+    font-weight: 800;
+}
+
+.btn-edit-profile {
+    background: #F1CF54;
+    color: #1f2937;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+}
+
+.delete-check-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #24324a;
+    white-space: nowrap;
+}
+
+.delete-check-wrap input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: #CE573F;
+}
+
+.reject-reason {
+    margin-top: 7px;
+    font-size: 0.84rem;
+    color: #b3422f;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+/* ── card info inside grid ─── */
+.donation-grid .card-info  { padding-top: 6px; }
+
+.donation-grid .card-img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.donation-grid .card-img img {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.danger-bg { background-color: #CE573F; }
+
+.donation-grid .card-info h3 {
+    font-size: 1.42rem;
+    margin-top: 10px;
+    margin-bottom: 8px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    color: #13213a;
+}
+
+.donation-grid .card-info p {
+    font-size: 0.92rem;
+    margin: 3px 0;
+}
+
+/* ── meta icons ─── */
+.meta-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #24324a;
+    line-height: 1.25;
+    font-weight: 600;
+}
+
+.meta-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex: 0 0 24px;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
+}
+
+.meta-icon.age        { background: #ffe5cf; color: #d9602f; }
+.meta-icon.dream      { background: #e5f0ff; color: #2f59c7; }
+.meta-icon.foundation { background: #e6f8ed; color: #2f8f55; }
+
+/* ── status pill ─── */
+.child-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 6px 16px;
+    margin-top: 8px;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    width: auto;
+    min-width: 136px;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.child-status-pill.status-approved { background: linear-gradient(135deg, #799677, #597D57); color: #fff; }
+.child-status-pill.status-pending  { background: linear-gradient(135deg, #f7cc47, #e8b923); color: #3b2f09; }
+.child-status-pill.status-rejected { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+
+/* ── Reason Bottom Sheet ─── */
+.reason-sheet-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1055;
+    background: rgba(0,0,0,0.45);
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.reason-sheet-overlay.open { display: flex; }
+
+.reason-sheet-panel {
+    background: #fff;
+    width: 100%;
+    max-width: 560px;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px 28px;
+    animation: sheetSlideUp 0.28s ease;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+@keyframes sheetSlideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+}
+
+.reason-sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.reason-sheet-title    { font-size: 1.12rem; font-weight: 800; color: #13213a; }
+.reason-sheet-subtitle { font-size: 0.86rem; color: #6b7280; margin-top: 2px; }
+.reason-sheet-close    { background: none; border: none; font-size: 1.4rem; line-height: 1; color: #9ca3af; cursor: pointer; padding: 0 4px; }
+.reason-sheet-prompt   { font-size: 0.9rem; color: #374151; font-weight: 600; margin-bottom: 14px; }
+
+.reason-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.reason-option {
+    background: #f9fafb;
+    border: 2px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: center;
+}
+
+.reason-option:hover,
+.reason-option.selected                        { border-color: #CE573F; background: #fff5f3; }
+.reason-option-hide:hover,
+.reason-option-hide.selected                   { border-color: #6b7280 !important; background: #f3f4f6 !important; }
+
+.reason-icon {
+    width: 54px;
+    height: 54px;
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.45rem;
+}
+
+.reason-label { font-size: 0.80rem; font-weight: 700; color: #374151; line-height: 1.3; }
+
+.reason-sheet-footer { display: flex; gap: 10px; margin-top: 4px; }
+
+.reason-confirm-btn {
+    flex: 1;
+    background: #CE573F;
+    color: #fff;
+    border: 0;
+    border-radius: 999px;
+    padding: 12px;
+    font-size: 0.96rem;
+    font-weight: 800;
+    transition: background 0.15s;
+}
+
+.reason-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.reason-cancel-btn {
+    flex: 1;
+    background: #fff;
+    color: #374151;
+    border: 1.5px solid #d1d5db;
+    border-radius: 999px;
+    padding: 12px;
+    font-size: 0.96rem;
+    font-weight: 700;
+}
+
+/* Responsive — children grid */
+@media (max-width: 1199.98px) { .donation-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (max-width:  991.98px) { .donation-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width:  767.98px) {
+    .donation-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 10px; }
+    .donation-grid .card-info h3 { font-size: 1.18rem; }
+    .donation-grid .card-info p  { font-size: 0.86rem; }
+}
+@media (max-width:  575.98px) { .donation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+
+/* =====================================================
+   2. children_donate.php — โปรไฟล์เด็ก/หน้าบริจาค
+   ===================================================== */
+
+/* admin review card */
+.admin-review-card {
+    max-width: 1100px;
+    margin: 24px auto;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    overflow: hidden;
+}
+
+.admin-review-header {
+    background: #1e2f97;
+    color: #fff;
+    padding: 18px 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    position: relative;
+    text-align: center;
+}
+
+.admin-review-title {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.admin-review-title h4,
+.admin-review-title div { color: #fff; }
+
+.admin-review-body { padding: 24px; }
+
+.admin-review-layout {
+    max-width: 760px;
+    margin: 0 auto;
+    justify-content: center;
+}
+
+.admin-image-col {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    flex: 0 0 100%;
+}
+
+.admin-details-col {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-child-image {
+    width: 100%;
+    max-width: 320px;
+    max-height: 360px;
+    object-fit: cover;
+    border-radius: 14px;
+    background: #f3f3f3;
+    box-shadow: 0 8px 22px rgba(15,23,42,0.08);
+}
+
+/* data grid */
+.data-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.data-item {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+.data-item.full { grid-column: 1 / -1; }
+
+.label {
+    display: block;
+    font-size: 0.86rem;
+    color: #5b6470;
+    margin-bottom: 4px;
+}
+
+.value {
+    font-weight: 600;
+    color: #1f2937;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+/* admin action buttons */
+.admin-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.admin-actions .btn {
+    min-width: 150px;
+    min-height: 48px;
+    padding: 12px 20px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 800;
+    box-shadow: 0 10px 18px rgba(15,23,42,0.12);
+}
+
+.admin-actions .btn-primary { background: #597D57; color: #fff; }
+.admin-actions .btn-danger  { background: #CE573F; color: #fff; }
+.admin-actions .btn:hover   { transform: translateY(-1px); box-shadow: 0 14px 24px rgba(15,23,42,0.14); }
+
+/* extra info panel */
+.extra-info-panel {
+    margin-top: 18px;
+    width: 100%;
+    background: rgba(255,255,255,0.35);
+    border-radius: 16px;
+    padding: 16px 18px;
+    text-align: left;
+}
+
+.extra-info-panel h4 { margin: 0 0 10px; font-size: 1.05rem; font-weight: 800; color: #182338; }
+
+.extra-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.extra-grid div { font-size: .94rem; color: #27364b; font-weight: 600; }
+
+.qr-preview {
+    margin-top: 12px;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid rgba(24,36,58,0.15);
+    padding: 8px;
+    display: inline-flex;
+}
+
+.qr-preview img { width: 110px; height: 110px; object-fit: contain; }
+
+main.child-profile-main {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    max-width: 1100px !important;
+    border-radius: 0 !important;
+}
+
+/* donation stats panel */
+.donation-stats-panel { width: 100%; margin-top: 18px; margin-bottom: 18px; }
+.stats-row { display: flex; gap: 16px; margin-bottom: 10px; }
+
+.stat-box { flex: 1; border-radius: 12px; padding: 16px 12px; text-align: center; }
+.stats-row .stat-box:nth-child(1) { background: #d7eef8; }
+.stats-row .stat-box:nth-child(2) { background: #f8d8e5; }
+.stats-row .stat-box:nth-child(3) { background: #f8dca8; }
+
+.stat-box .stat-num   { font-size: 2rem;  font-weight: 900; color: #1a1f3a; line-height: 1; }
+.stat-box .stat-label { font-size: 1rem;  color: #4b5563;   font-weight: 800; margin-top: 6px; }
+
+.stats-row .stat-box:nth-child(1) .stat-icon,
+.stats-row .stat-box:nth-child(1) .stat-num,
+.stats-row .stat-box:nth-child(1) .stat-label { color: #3C5099; }
+
+.stats-row .stat-box:nth-child(2) .stat-icon,
+.stats-row .stat-box:nth-child(2) .stat-num,
+.stats-row .stat-box:nth-child(2) .stat-label { color: #597D57; }
+
+.stats-row .stat-box:nth-child(3) .stat-icon,
+.stats-row .stat-box:nth-child(3) .stat-num,
+.stats-row .stat-box:nth-child(3) .stat-label { color: #CE573F; }
+
+.stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    margin-bottom: 8px;
+    font-size: 34px;
+    background: transparent;
+    line-height: 1;
+}
+
+/* foundation contact info */
+.foundation-full-info { width: 100%; margin-top: 16px; margin-bottom: 12px; text-align: left; }
+.foundation-full-info h4 { margin: 0 0 8px; font-size: 1.02rem; font-weight: 800; color: #1f2937; }
+.foundation-full-info p  { margin: 0 0 5px; font-size: 0.94rem; color: #27364b; font-weight: 600; line-height: 1.4; }
+
+/* profile card (donor view) */
+.custom-profile-card {
+    background-color: #F8CE32;
+    border-radius: 40px;
+    padding: 50px;
+    position: relative;
+    max-width: 1000px;
+    margin: auto;
+}
+
+.profile-label {
+    position: absolute;
+    top: -44px;
+    left: 50px;
+    background-color: #F8CE32;
+    padding: 10px 28px;
+    border-radius: 18px 18px 0 0;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #333;
+}
+
+.profile-inner { display: flex; flex-direction: row; gap: 40px; align-items: flex-start; }
+
+.col-left { flex: 0 0 300px; min-width: 260px; }
+
+.child-img-container {
+    background-color: #E56B51;
+    border-radius: 24px;
+    width: 100%;
+    height: 310px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.child-img-container img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+
+.child-details { margin-top: 18px; color: #333; font-size: 0.95rem; line-height: 2; }
+.child-details p { margin: 0; }
+
+.col-right { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+.brand-header { font-size: 3.5rem; font-weight: 900; color: #222; margin-bottom: 10px; letter-spacing: -1px; line-height: 1.1; }
+.donate-text  { font-size: 1rem; color: #333; margin-bottom: 28px; line-height: 1.7; }
+
+.money-row { display: flex; gap: 14px; width: 100%; margin-bottom: 14px; }
+
+.btn-money-choice {
+    background-color: #fff;
+    border: none;
+    border-radius: 18px;
+    padding: 18px 10px;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #222;
+    flex: 1;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-money-choice.active { background-color: #3f4f9a; color: #fff; }
+
+.amount-box {
+    background-color: #fff;
+    border-radius: 18px;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 75px;
+}
+
+.amount-box input {
+    border: none;
+    background: transparent;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #222;
+    width: 80%;
+    outline: none;
+    pointer-events: none;
+}
+
+.currency-label { font-size: 1.2rem; font-weight: 600; color: #aaa; }
+
+.btn-submit-donation {
+    background-color: #4A5CB5;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 20px;
+    font-size: 1.8rem;
+    font-weight: 800;
+    width: 100%;
+    margin-top: 18px;
+    box-shadow: 0 7px 0 #2d3a8c;
+    cursor: pointer;
+}
+
+/* Responsive — children_donate */
+@media (max-width: 768px) {
+    .data-grid { grid-template-columns: 1fr; }
+    .profile-inner { flex-direction: column; }
+    .col-left { width: 100%; }
+    .admin-review-header { flex-direction: column; align-items: center; padding-top: 56px; }
+    .admin-details-col { width: 100%; }
+}
+
+
+/* =====================================================
+   3. foundation_add_children.php — สร้างโปรไฟล์เด็ก
+   ===================================================== */
+
+.form-container { display: flex; gap: 42px; padding: 42px 40px; max-width: 1280px; margin: auto; }
+.left-box { width: 32%; flex-shrink: 0; }
+
+.left-panel-title {
+    color: #24314a;
+    margin-bottom: 8px;
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.left-foundation-name {
+    color: #000;
+    font-size: 1.2rem;
+    margin-bottom: 18px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.upload-preview {
+    width: 100%;
+    aspect-ratio: 1;
+    background: #de8168;
+    border: 4px dashed #597D57;
+    border-radius: 18px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.upload-preview img  { width: 100%; height: 100%; object-fit: cover; }
+.upload-preview span { color: #fff; font-size: 16px; font-weight: 600; }
+
+.left-info-card {
+    margin-top: 14px;
+    background: #fff;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 14px;
+    padding: 14px 14px 10px;
+    box-shadow: 0 4px 12px rgba(16,53,90,0.05);
+    text-align: center;
+}
+
+.left-info-card.has-error {
+    border-color: #CE573F;
+    box-shadow: 0 0 0 3px rgba(206,87,63,0.15);
+}
+
+.left-info-card h3 { margin: 0 0 9px; font-size: 1.35rem; color: #17406a; font-weight: 800; }
+
+/* consent */
+.consent-check {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 6px 0 10px;
+    font-size: 1.18rem;
+    font-weight: 700;
+}
+
+.consent-check input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2c7be5; cursor: pointer; }
+.consent-link { color: #3C5099; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
+.consent-link:hover { color: #304083; }
+.consent-note { margin-top: 8px; font-size: 1rem; color: #CE573F; line-height: 1.45; font-weight: 700; }
+
+/* toast alert */
+.top-alert {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translate(-50%, -16px);
+    background: #CE573F;
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 12px;
+    box-shadow: 0 10px 20px rgba(206,87,63,0.34);
+    font-size: 1rem;
+    font-weight: 700;
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    transition: all .25s ease;
+    max-width: min(92vw, 720px);
+}
+
+.top-alert.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* right form box */
+.right-box {
+    flex: 1;
+    background: var(--theme-card);
+    padding: 34px;
+    border-radius: 22px;
+    border: 1.5px solid var(--theme-border);
+    box-shadow: 0 10px 26px rgba(25,48,77,0.08);
+}
+
+.right-box h2 { margin: 0 0 22px; font-size: 1.45rem; color: var(--theme-ink); }
+
+.grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.field-group { display: flex; flex-direction: column; }
+.field-group label { font-weight: 700; font-size: 1rem; margin-bottom: 6px; color: #1f3654; }
+
+.field-group input,
+.field-group textarea,
+.field-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1.5px solid var(--theme-border);
+    font-size: 1.08rem;
+    box-sizing: border-box;
+    background: #fff;
+}
+
+.field-group input::placeholder,
+.field-group textarea::placeholder { font-size: 1.02rem; }
+
+.field-group input:focus,
+.field-group textarea:focus,
+.field-group select:focus {
+    border-color: var(--theme-primary);
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(60,80,153,.14);
+}
+
+.field-group textarea { resize: vertical; }
+.field-group small    { color: #7c8aa0; font-size: 0.85rem; margin-top: 4px; }
+
+.full-width { grid-column: span 2; }
+
+/* date picker */
+.date-input-wrap { position: relative; }
+.date-input-wrap #birth_date_display { padding-right: 54px; }
+
+.date-picker-btn {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #27364b;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.date-picker-btn:hover { background: rgba(60,80,153,0.08); }
+
+.native-date-picker {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+    border: 0;
+}
+
+/* bank dropdown */
+.bank-select-wrapper { position: relative; }
+.bank-select-wrapper select { padding-left: 54px; }
+
+.bank-logo-preview {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    object-fit: contain;
+    pointer-events: none;
+    display: none;
+    background: #fff;
+}
+
+/* category tag pills */
+.cat-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+
+.cat-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 15px;
+    border-radius: 22px;
+    border: 1.8px solid var(--theme-border);
+    background: #fff;
+    font-size: 0.95rem;
+    cursor: pointer;
+    user-select: none;
+    transition: all .16s;
+    color: #324a68;
+    font-weight: 600;
+}
+
+.cat-tag:hover  { border-color: var(--theme-primary); background: #eef2ff; }
+.cat-tag.active { border-color: var(--theme-primary); background: var(--theme-soft); color: var(--theme-primary); }
+.cat-tag .cat-icon { font-size: 1.07rem; }
+
+.item-select-wrap  { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.wish-custom-wrap  { display: none; }
+.item-hint         { color: #5f6f87; font-size: 0.9rem; }
+select.dream-sel   { width: 100%; }
+.dream-other-wrap  { display: none; margin-top: 8px; }
+
+/* submit button */
+.btn-submit {
+    background: var(--theme-primary);
+    color: #fff;
+    padding: 14px;
+    border: none;
+    border-radius: 13px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    font-weight: 800;
+    width: 100%;
+    margin-top: 12px;
+    transition: transform .15s ease, box-shadow .15s ease;
+    box-shadow: 0 7px 14px rgba(60,80,153,0.28);
+}
+
+.btn-submit:hover    { transform: translateY(-1px); background: var(--theme-primary-dark); box-shadow: 0 10px 18px rgba(60,80,153,0.32); }
+.btn-submit:disabled { background: #F1CF54; color: #000; cursor: not-allowed; box-shadow: none; transform: none; opacity: .78; }
+
+/* error highlighting */
+.has-error input,
+.has-error select,
+.has-error textarea { border-color: #CE573F !important; box-shadow: 0 0 0 3px rgba(206,87,63,.15) !important; }
+.has-error label    { color: #CE573F; }
+.has-error .cat-tags { outline: 2.5px solid #CE573F; border-radius: 10px; }
+
+/* size picker */
+.size-pick-wrap {
+    margin-top: 8px;
+    background: #fdf8ee;
+    border: 1.5px solid var(--theme-border);
+    border-radius: 12px;
+    padding: 10px 13px;
+}
+
+.size-pick-wrap.has-error            { border-color: #CE573F; }
+.size-pick-wrap.has-error .size-pick-label { color: #CE573F; }
+.size-pick-label { display: block; font-weight: 700; font-size: .95rem; color: #1f3654; margin-bottom: 7px; }
+.size-btn-group  { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.size-btn {
+    min-width: 42px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1.8px solid var(--theme-border);
+    background: #fff;
+    font-size: .95rem;
+    font-weight: 700;
+    cursor: pointer;
+    color: #324a68;
+    transition: all .14s;
+    line-height: 1;
+}
+
+.size-btn:hover  { border-color: var(--theme-primary); background: #eef2ff; }
+.size-btn.active { border-color: var(--theme-primary); background: var(--theme-soft); color: var(--theme-primary); }
+
+/* Responsive — add children form */
+@media (max-width: 860px) {
+    .form-container { flex-direction: column; padding: 20px; }
+    .left-box { width: 100%; }
+    .grid-inputs { grid-template-columns: 1fr; }
+    .full-width  { grid-column: span 1; }
+}
+
+
+/* =====================================================
+   4. foundation_edit_child.php — แก้ไขโปรไฟล์เด็ก
+   ===================================================== */
+
+/* scoped ไว้ใน .wrap เพื่อไม่ให้ input/label ทับ global */
+.wrap {
+    max-width: 900px;
+    margin: 26px auto;
+    background: #fff;
+    border: 1px solid #f1cf54;
+    border-radius: 16px;
+    padding: 22px;
+}
+
+.wrap .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.wrap .group { display: flex; flex-direction: column; }
+.wrap .group.full { grid-column: 1 / -1; }
+.wrap label { font-weight: 700; margin-bottom: 6px; }
+
+.wrap input,
+.wrap select,
+.wrap textarea { border: 1.5px solid #f1cf54; border-radius: 10px; padding: 10px 12px; font-size: 1rem; }
+
+.wrap textarea { min-height: 90px; resize: vertical; }
+.wrap .actions { display: flex; gap: 10px; margin-top: 16px; }
+
+.btn-save { background: #3C5099; color: #fff; }
+.btn-back { background: #CE573F; color: #fff; }
+
+.wrap .alert     { border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-weight: 700; }
+.wrap .alert.err { background: #fde8e8; color: #b32525; }
+
+.note { color: #6b7280; font-size: .9rem; margin-top: 5px; }
+
+@media (max-width: 780px) { .wrap .grid { grid-template-columns: 1fr; } }
+
+
+/* =====================================================
+   5. admin_children.php — เพิ่มโปรไฟล์เด็ก (foundation)
+   ===================================================== */
+
+body.admin-children-page .form-container {
+    display: flex;
+    gap: 60px;
+    padding: 40px;
+    max-width: 1200px;
+    margin: auto;
+}
+
+body.admin-children-page .left-box { width: 35%; }
+
+body.admin-children-page .admin-title { color: #333; }
+
+body.admin-children-page .admin-foundation { color: #777; }
+
+body.admin-children-page .upload-preview {
+    width: 100%;
+    height: 350px;
+    background: #f0f0f0;
+    border: 2px dashed #bbb;
+    border-radius: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+body.admin-children-page .upload-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+body.admin-children-page .right-box {
+    width: 65%;
+    background: #fff;
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+body.admin-children-page .grid-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+body.admin-children-page label {
+    font-weight: 700;
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+}
+
+body.admin-children-page input,
+body.admin-children-page textarea,
+body.admin-children-page select {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+}
+
+body.admin-children-page .full-width { grid-column: span 2; }
+
+body.admin-children-page .edu-help { color: #777; }
+
+body.admin-children-page button {
+    background: #e5c24c;
+    padding: 15px 50px;
+    border: none;
+    border-radius: 15px;
+    font-size: 18px;
+    cursor: pointer;
+    font-weight: 700;
+    width: 100%;
+    margin-top: 10px;
+}
+
+body.admin-children-page button:hover { background: #d4b13a; }
+
+@media (max-width: 860px) {
+    body.admin-children-page .form-container {
+        flex-direction: column;
+        gap: 18px;
+        padding: 20px;
+    }
+
+    body.admin-children-page .left-box,
+    body.admin-children-page .right-box {
+        width: 100%;
+    }
+
+    body.admin-children-page .grid-inputs { grid-template-columns: 1fr; }
+    body.admin-children-page .full-width { grid-column: span 1; }
+}

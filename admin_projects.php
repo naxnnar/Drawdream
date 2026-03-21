@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: admin_projects.php
+// หน้าที่: หน้าจัดการและตรวจสอบโครงการฝั่งแอดมิน
 session_start();
 include 'db.php';
 
@@ -47,22 +49,10 @@ $result = mysqli_query($conn, "SELECT * FROM project WHERE project_status='pendi
 <head>
   <meta charset="UTF-8">
   <title>อนุมัติโครงการ | Admin</title>
-  <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <style>
-    .wrap{ max-width:1100px; margin:30px auto; padding:0 15px; }
-    table{ width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; }
-    th,td{ padding:12px; border-bottom:1px solid #eee; vertical-align:top; }
-    th{ background:#f7f7f7; text-align:left; }
-    .thumb{ width:120px; height:80px; object-fit:cover; border-radius:10px; background:#ddd; }
-    .btn{ padding:8px 12px; border:none; border-radius:10px; cursor:pointer; margin:2px; }
-    .approve{ background:#1e2f97; color:#fff; }
-    .reject{ background:#c0392b; color:#fff; }
-    .msg{ margin:10px 0 15px; padding:10px 12px; background:#e8f5e9; border:1px solid #c8e6c9; border-radius:10px; }
-    textarea{ width:100%; min-height:60px; padding:8px; border:1px solid #ddd; border-radius:5px; }
-  </style>
+  <link rel="stylesheet" href="css/project.css">
 </head>
-<body>
+<body class="admin-projects-page">
 
 <?php include 'navbar.php'; ?>
 

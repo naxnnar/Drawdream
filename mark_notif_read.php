@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: mark_notif_read.php
+// หน้าที่: ไฟล์อัปเดตสถานะแจ้งเตือนว่าอ่านแล้ว
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 

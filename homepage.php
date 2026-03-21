@@ -1,3 +1,10 @@
+﻿<?php
+// ไฟล์นี้: homepage.php
+// หน้าที่: หน้าแรกของเว็บไซต์และเล่าเรื่องโครงการ
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,146 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/style.css">
-
-  <style>
-    body { overflow-x: hidden; }
-
-    .home-hero {
-      background: #fff;
-    }
-
-    .home-hero .container {
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-    }
-
-    .home-hero .row {
-      min-height: 628px;
-    }
-
-    .home-hero .hero-image-col {
-      justify-content: flex-start;
-      align-items: flex-end;
-      padding-left: 0;
-      padding-right: 56px;
-      overflow: hidden;
-    }
-
-    .home-hero .portrait-wrapper {
-      margin-left: 0 !important;
-    }
-
-    .home-hero .hero-text-col {
-      padding-top: 24px;
-      padding-bottom: 24px;
-    }
-
-    .home-contact-section {
-      background-color: #F3EFE7;
-      min-height: 441px;
-      display: flex;
-      align-items: center;
-    }
-
-    .home-about-yellow {
-      background-color: #f4c948;
-      min-height: 600px;
-      display: flex;
-      align-items: center;
-    }
-
-    @media (max-width: 991.98px) {
-      .home-contact-section,
-      .home-about-yellow {
-        min-height: auto;
-      }
-    }
-
-    .home-section .row {
-      display: flex;
-      flex-wrap: wrap;
-      margin-right: calc(-0.5 * var(--bs-gutter-x));
-      margin-left:  calc(-0.5 * var(--bs-gutter-x));
-      gap: 0 !important;
-    }
-
-    .home-section .container {
-      background: transparent !important;
-      max-width: 1400px !important;
-      padding-left: 24px !important;
-      padding-right: 24px !important;
-      margin-left: auto !important;
-      margin-right: auto !important;
-    }
-
-    .home-section .rights-box {
-      max-width: 1400px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    .stories h3,
-    .stories p {
-      color: #ffffff !important;
-    }
-
-    .stories .btn-home {
-      background-color: #e06a4a !important;
-      border-color: #e06a4a !important;
-      color: #ffffff !important;
-      border-radius: 999px;
-      padding: 10px 26px;
-      font-size: 1.15rem;
-      font-weight: 700;
-      line-height: 1;
-    }
-
-    .stories .btn-home:hover {
-      background-color: #cf5a3a !important;
-      border-color: #cf5a3a !important;
-      color: #ffffff !important;
-    }
-
-    .home-section.stories {
-      min-height: auto !important;
-      padding-top: 52px !important;
-      padding-bottom: 20px !important;
-    }
-
-    .home-section.stories .container {
-      padding-bottom: 6px !important;
-    }
-
-    .footer-logo {
-      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
-    }
-
-    .footer-address {
-      text-align: center;
-      max-width: 640px;
-      margin: 0 auto;
-    }
-
-    .social-links {
-      display: flex;
-      justify-content: center;
-      gap: 18px;
-    }
-
-    .social-link {
-      color: #ffffff;
-      font-size: 1.85rem;
-      line-height: 1;
-      text-decoration: none;
-      transition: transform 0.15s ease, opacity 0.15s ease;
-    }
-
-    .social-link:hover {
-      opacity: 0.85;
-      transform: translateY(-1px);
-    }
-  </style>
+  <link rel="stylesheet" href="css/homepage.css">
 </head>
 <body>
 
@@ -231,7 +99,7 @@
           วันนี้น้องอลินไม่ได้มีเพียงหนังสืออ่านนอกจากการอ่านแล้วน้องอลินมักชอบเล่าเรื่องที่เธออ่านให้เพื่อนๆฟัง
           เธอกลายเป็นตัวแทนโรงเรียนไปแข่งขันทักษะทางภาษาไทยจนได้รับรางวัล
         </p>
-        <a href="detail_alin.php" class="btn btn-light btn-home">อ่านต่อ</a>
+        <span class="btn btn-light btn-home disabled" aria-disabled="true">อ่านต่อ</span>
       </div>
     </div>
 
@@ -245,7 +113,7 @@
           ผู้บริจาครายหนึ่งได้เห็นโปรไฟล์ของน้องและตัดสินใจสนับสนุนผ่านฟีเจอร์ "บริจาครายบุคคล"
           ปัจจุบันเสียงเพลงของน้องพิณเพลงไม่ได้ก้องกังวานแค่ในมูลนิธิอีกต่อไป เธอได้รับโอกาสขึ้นแสดงในงานโรงเรียน
         </p>
-        <a href="detail_pin.php" class="btn btn-light btn-home">อ่านต่อ</a>
+        <span class="btn btn-light btn-home disabled" aria-disabled="true">อ่านต่อ</span>
       </div>
       <div class="col-md-6 text-center text-light">
         <img src="img/san.png" alt="น้องแซน" class="img-fluid rounded shadow mb-3">
@@ -255,7 +123,7 @@
           รูปที่เขาชอบวาดที่สุดคือ "บ้านที่มีความสุข" น้องได้รับรางวัลชนะเลิศการประกวดวาดภาพระดับท้องถิ่น
           อุปกรณ์ศิลปะเหล่านั้นไม่ได้แค่ใช้ระบายสีลงบนกระดาษ แต่กำลังช่วยระบายความหวังและอนาคตที่สวยงาม
         </p>
-        <a href="detail_san.php" class="btn btn-light btn-home">อ่านต่อ</a>
+        <span class="btn btn-light btn-home disabled" aria-disabled="true">อ่านต่อ</span>
       </div>
     </div>
 

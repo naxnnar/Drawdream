@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: payment\check_payment.php
+// หน้าที่: ไฟล์ตรวจสอบสถานะการชำระเงินโครงการ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';

@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: admin_escrow.php
+// หน้าที่: หน้าจัดการยอดเงินพัก/เอสโครว์ของระบบ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 

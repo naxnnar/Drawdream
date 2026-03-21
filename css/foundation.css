@@ -4,7 +4,7 @@
 
 
 .foundation-page {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: #ffffff;
     min-height: 100vh;
     margin: 0;
 }
@@ -26,8 +26,118 @@
     margin-bottom: 30px;
 }
 
-.btn-propose {
-    background: #4A5BA8;
+/* ===== โหมดมูลนิธิที่ล็อกอิน ===== */
+.foundation-owner-head {
+    margin-bottom: 24px;
+}
+
+.foundation-owner-head h1 {
+    margin: 0;
+    font-size: 38px;
+    font-weight: 700;
+    line-height: 1.2;
+    font-family: 'Prompt', sans-serif;
+    color: #2e3f7f;
+}
+
+.foundation-owner-head p {
+    margin: 6px 0 14px;
+    color: #5b6470;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 1rem;
+}
+
+.foundation-owner-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.foundation-owner-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 16px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: inherit;
+    text-align: center;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-sizing: border-box;
+    width: auto;
+}
+
+.foundation-owner-btn-primary {
+    background: #3C5099;
+    color: #fff;
+}
+
+.foundation-owner-btn-primary:hover {
+    background: #334584;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(60, 80, 153, 0.3);
+}
+
+.foundation-owner-btn-edit {
+    background: #F1CF54;
+    color: #1f2937;
+}
+
+.foundation-owner-btn-edit:hover {
+    background: #e0be40;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(241, 207, 84, 0.4);
+}
+
+.foundation-owner-btn-update {
+    background: #597D57;
+    color: #fff;
+}
+
+.foundation-owner-btn-update:hover {
+    background: #4f704d;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(89, 125, 87, 0.3);
+}
+
+.foundation-owner-btn-profile {
+    background: #6b7280;
+    color: #fff;
+}
+
+.foundation-owner-btn-profile:hover {
+    background: #4b5563;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(75, 85, 99, 0.28);
+}
+
+.foundation-owner-btn-need {
+    background: #3C5099;
+    color: #fff;
+}
+
+.foundation-owner-btn-need:hover {
+    background: #b84a34;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(206, 87, 63, 0.28);
+}
+
+.foundation-owner-warn {
+    color: #b7791f;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.btn-propose,
+.admin-btn {
     color: white;
     padding: 12px 30px;
     border-radius: 25px;
@@ -35,6 +145,10 @@
     font-weight: 600;
     display: inline-block;
     transition: all 0.3s;
+}
+
+.btn-propose {
+    background: #4A5BA8;
     box-shadow: 0 4px 15px rgba(74, 91, 168, 0.3);
 }
 
@@ -45,13 +159,6 @@
 
 .admin-btn {
     background: #4CAF50;
-    color: white;
-    padding: 12px 30px;
-    border-radius: 25px;
-    text-decoration: none;
-    font-weight: 600;
-    display: inline-block;
-    transition: all 0.3s;
 }
 
 .admin-btn:hover {
@@ -96,10 +203,14 @@
     width: 100%;
 }
 
+.foundation-card,
+.fc-left,
+.fc-right {
+    background: #F7ECDE;
+}
+
 .foundation-card {
-    background: white;
     border-radius: 20px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     overflow: hidden;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
@@ -110,13 +221,11 @@
 }
 
 .fc-left {
-    background: #F5E6D3;
     padding: 32px;
     min-width: 0;
 }
 
 .fc-right {
-    background: white;
     padding: 32px;
     display: flex;
     flex-direction: column;
@@ -147,7 +256,7 @@
 }
 
 .bar > div {
-    background: linear-gradient(90deg, #E57373 0%, #EF5350 100%);
+    background: #CC583F;
     height: 100%;
     transition: width 0.5s ease;
     border-radius: 20px;
@@ -157,6 +266,7 @@
     font-weight: 600;
     color: #333;
     margin-bottom: 25px;
+    text-align: right;
 }
 
 .items {
@@ -181,12 +291,12 @@
 
 .urgent-tag {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    background: #E57373;
+    top: 0;
+    left: 0;
+    background: #CC583F;
     color: white;
     padding: 5px 12px;
-    border-radius: 12px;
+    border-radius: 15px 0 15px 0;
     font-size: 11px;
     font-weight: bold;
     z-index: 1;
@@ -228,21 +338,21 @@
 }
 
 .btn-donate {
-    background: #2196F3;
+    background: #3C5099;
     color: white;
-    padding: 18px 0;
+    padding: 14px 48px;
     border-radius: 15px;
-    font-size: 18px;
+    font-size: 22px;
     font-weight: bold;
     text-align: center;
     text-decoration: none;
-    display: block;
+    display: inline-block;
     transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+    box-shadow: 0 4px 15px rgba(60, 80, 153, 0.3);
 }
 
 .btn-donate:hover {
-    background: #1976D2;
+    background: #2e3d78;
     transform: translateY(-2px);
 }
 
@@ -286,4 +396,704 @@
     .items {
         grid-template-columns: 1fr;
     }
+}
+
+/* ========================================
+   foundation donate page (merged from foundation_donate.css)
+   used by: payment/foundation_donate.php
+   ======================================== */
+
+body.foundation-donate-page {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+}
+
+body.foundation-donate-page .donate-container {
+    max-width: 1100px;
+    margin: 40px auto;
+    padding: 0 20px;
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 30px;
+    align-items: start;
+}
+
+body.foundation-donate-page .foundation-panel {
+    background: white;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+body.foundation-donate-page .foundation-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 15px;
+}
+
+body.foundation-donate-page .foundation-cover {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    border-radius: 12px;
+    margin-bottom: 15px;
+}
+
+body.foundation-donate-page .progress-wrap {
+    margin-bottom: 20px;
+}
+
+body.foundation-donate-page .bar {
+    background: #E5D4C1;
+    border-radius: 20px;
+    height: 20px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+body.foundation-donate-page .bar > div {
+    background: linear-gradient(90deg, #E57373 0%, #EF5350 100%);
+    height: 100%;
+    border-radius: 20px;
+    transition: width 0.5s ease;
+}
+
+body.foundation-donate-page .progress-text {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+}
+
+body.foundation-donate-page .items-list h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+body.foundation-donate-page .item-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    background: #f9f9f9;
+    transition: all 0.3s;
+}
+
+body.foundation-donate-page .item-row.urgent {
+    background: #fff5f5;
+    border-left: 3px solid #E57373;
+}
+
+body.foundation-donate-page .item-row:hover {
+    transform: translateX(4px);
+}
+
+body.foundation-donate-page .item-thumb {
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: white;
+    border: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+body.foundation-donate-page .item-detail {
+    flex: 1;
+}
+
+body.foundation-donate-page .item-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+body.foundation-donate-page .urgent-tag {
+    background: #E57373;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+body.foundation-donate-page .item-meta {
+    font-size: 12px;
+    color: #888;
+    line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+    body.foundation-donate-page .donate-container {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ========================================
+   foundation add need page
+   used by: foundation_add_need.php
+   ======================================== */
+
+body.foundation-add-need-page {
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    background: #F7ECDE;
+    min-height: 100vh;
+    margin: 0;
+}
+
+body.foundation-add-need-page .add-need-container {
+    width: min(1100px, calc(100% - 48px));
+    margin: 36px auto 48px;
+    padding: 28px;
+    background: white;
+    border-radius: 20px;
+    border: 1.5px solid #F1CF54;
+    box-shadow: 0 10px 26px rgba(25, 48, 77, 0.08);
+}
+
+body.foundation-add-need-page h2 {
+    color: #24314a;
+    margin: 0 0 18px;
+    font-size: 34px;
+    font-weight: 800;
+}
+
+body.foundation-add-need-page .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 14px;
+}
+
+body.foundation-add-need-page .form-col { flex: 1; }
+
+body.foundation-add-need-page .form-group { margin-bottom: 16px; }
+
+body.foundation-add-need-page .form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 700;
+    color: #1f3654;
+}
+
+body.foundation-add-need-page .form-group input[type="text"],
+body.foundation-add-need-page .form-group input[type="number"],
+body.foundation-add-need-page .form-group select,
+body.foundation-add-need-page .form-group textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #F1CF54;
+    border-radius: 12px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    font-family: inherit;
+    background: #fff;
+}
+
+body.foundation-add-need-page .category-check-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+body.foundation-add-need-page .category-check-item,
+body.foundation-add-need-page .item-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid #d9dee7;
+    border-radius: 10px;
+    background: #fff;
+}
+
+body.foundation-add-need-page .item-check-groups {
+    display: grid;
+    gap: 10px;
+}
+
+body.foundation-add-need-page .item-check-group {
+    border: 1px solid #e4e7ed;
+    border-radius: 12px;
+    padding: 10px;
+    background: #fbfcff;
+}
+
+body.foundation-add-need-page .item-check-group-title {
+    font-weight: 700;
+    color: #2f3f7f;
+    margin-bottom: 8px;
+    font-size: 0.95rem;
+}
+
+body.foundation-add-need-page .item-check-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+body.foundation-add-need-page textarea {
+    resize: vertical;
+    min-height: 96px;
+}
+
+body.foundation-add-need-page .form-group input:focus,
+body.foundation-add-need-page .form-group textarea:focus,
+body.foundation-add-need-page .form-group select:focus {
+    outline: none;
+    border-color: #3C5099;
+    box-shadow: 0 0 0 4px rgba(60, 80, 153, 0.14);
+}
+
+body.foundation-add-need-page .checkbox-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+body.foundation-add-need-page .checkbox-group input {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+}
+
+body.foundation-add-need-page .checkbox-group label {
+    margin: 0;
+    font-weight: 500;
+}
+
+body.foundation-add-need-page .image-upload-box {
+    border: 2px dashed #cfd5dd;
+    border-radius: 14px;
+    padding: 32px 18px;
+    text-align: center;
+    background: #f9f9f9;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+body.foundation-add-need-page .image-upload-box:hover {
+    border-color: #3C5099;
+    background: #fff;
+}
+
+body.foundation-add-need-page .image-upload-box input[type="file"] { display: none; }
+body.foundation-add-need-page .upload-label { display: block; cursor: pointer; }
+
+body.foundation-add-need-page .upload-preview-list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+body.foundation-add-need-page .upload-preview-item {
+    position: relative;
+    border: 1px solid #d8dde6;
+    border-radius: 10px;
+    background: #fff;
+    padding: 6px;
+}
+
+body.foundation-add-need-page .upload-preview-img {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+}
+
+body.foundation-add-need-page .upload-preview-urgent {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #e74c3c;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+}
+
+body.foundation-add-need-page .upload-preview-cap {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #4b5563;
+    text-align: center;
+}
+
+body.foundation-add-need-page .upload-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+body.foundation-add-need-page .upload-hint {
+    font-size: 12px;
+    color: #999;
+    margin-top: 5px;
+}
+
+body.foundation-add-need-page .total-box {
+    background: linear-gradient(135deg, #4e62cd 0%, #6f4bb1 100%);
+    color: white;
+    padding: 14px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 1.9rem;
+    font-weight: 800;
+    margin-bottom: 16px;
+}
+
+body.foundation-add-need-page .btn-submit {
+    background: #F1CF54;
+    color: #1f2937;
+    padding: 14px 48px;
+    border: none;
+    border-radius: 13px;
+    font-size: 1.25rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: block;
+    margin: 8px auto 0;
+    font-family: 'Prompt', sans-serif;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    box-shadow: 0 7px 14px rgba(241, 207, 84, 0.34);
+}
+
+body.foundation-add-need-page .btn-submit:hover {
+    background: #e6c44f;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(241, 207, 84, 0.4);
+}
+
+body.foundation-add-need-page .alert {
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+body.foundation-add-need-page .alert-error {
+    background: #ffebee;
+    color: #c62828;
+    border-left: 4px solid #c62828;
+}
+
+body.foundation-add-need-page .alert-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border-left: 4px solid #2e7d32;
+}
+
+@media (max-width: 768px) {
+    body.foundation-add-need-page .form-row {
+        grid-template-columns: 1fr;
+    }
+    body.foundation-add-need-page .add-need-container {
+        width: calc(100% - 24px);
+        margin: 14px auto 26px;
+        padding: 18px;
+    }
+}
+
+/* ========================================
+   foundation post update page
+   used by: foundation_post_update.php
+   ======================================== */
+
+body.foundation-post-update-page {
+    background: #f4f6f9;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    margin: 0;
+}
+
+body.foundation-post-update-page .wrap {
+    max-width: 800px;
+    margin: 30px auto;
+    padding: 0 20px;
+}
+
+body.foundation-post-update-page .page-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 24px;
+}
+
+body.foundation-post-update-page .back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #4A5BA8;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+body.foundation-post-update-page .back-link:hover { text-decoration: underline; }
+
+/* ========== My Needlist Section (foundation page) ========== */
+body.foundation-page .my-needlist-section {
+    margin: 28px 0 10px;
+    padding: 0 4px;
+}
+
+body.foundation-page .my-needlist-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #3C5099;
+    margin-bottom: 16px;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+}
+
+body.foundation-page .my-needlist-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+body.foundation-page .need-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(60,80,153,0.10);
+    border: 1.5px solid #e5e7eb;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-family: 'Sarabun', sans-serif;
+}
+
+body.foundation-page .need-card-img-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #f3f4f6;
+    overflow: hidden;
+}
+
+body.foundation-page .need-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+body.foundation-page .need-card-noimg {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 13px;
+}
+
+body.foundation-page .need-urgent-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: #CE573F;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+}
+
+body.foundation-page .need-card-body {
+    padding: 14px 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+body.foundation-page .need-status-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    width: fit-content;
+}
+
+body.foundation-page .status-pending  { background: #FEF3C7; color: #92400E; }
+body.foundation-page .status-approved { background: #D1FAE5; color: #065F46; }
+body.foundation-page .status-rejected { background: #FEE2E2; color: #991B1B; }
+
+body.foundation-page .need-card-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.4;
+}
+
+body.foundation-page .need-card-cat {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.4;
+}
+
+body.foundation-page .need-card-goal {
+    font-size: 14px;
+    font-weight: 700;
+    color: #3C5099;
+}
+
+body.foundation-page .need-period {
+    font-size: 12px;
+    font-weight: 400;
+    color: #6b7280;
+}
+
+body.foundation-page .need-card-desc {
+    font-size: 12px;
+    color: #6b7280;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+body.foundation-post-update-page .alert {
+    padding: 14px 18px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+body.foundation-post-update-page .alert-success { background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7; }
+body.foundation-post-update-page .alert-error { background: #fdecea; color: #c62828; border: 1px solid #ef9a9a; }
+
+body.foundation-post-update-page .form-box {
+    background: white;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    margin-bottom: 30px;
+}
+
+body.foundation-post-update-page .form-box h2 {
+    font-size: 17px;
+    font-weight: 700;
+    margin: 0 0 20px;
+    color: #333;
+}
+
+body.foundation-post-update-page .form-group { margin-bottom: 18px; }
+
+body.foundation-post-update-page .form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 6px;
+}
+
+body.foundation-post-update-page .form-group select,
+body.foundation-post-update-page .form-group input[type="text"],
+body.foundation-post-update-page .form-group textarea {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border 0.2s;
+}
+
+body.foundation-post-update-page .form-group select:focus,
+body.foundation-post-update-page .form-group input:focus,
+body.foundation-post-update-page .form-group textarea:focus {
+    border-color: #4A5BA8;
+    outline: none;
+}
+
+body.foundation-post-update-page .form-group textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+body.foundation-post-update-page .btn-submit {
+    width: 100%;
+    padding: 13px;
+    background: #4A5BA8;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+}
+
+body.foundation-post-update-page .btn-submit:hover { background: #3a4a98; }
+
+body.foundation-post-update-page .no-project {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    line-height: 1.8;
+}
+
+body.foundation-post-update-page .updates-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 16px;
+}
+
+body.foundation-post-update-page .update-card {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    margin-bottom: 16px;
+    border-left: 4px solid #4A5BA8;
+}
+
+body.foundation-post-update-page .update-proj {
+    font-size: 12px;
+    color: #4A5BA8;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+body.foundation-post-update-page .update-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #222;
+    margin-bottom: 8px;
+}
+
+body.foundation-post-update-page .update-desc {
+    font-size: 14px;
+    color: #555;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+body.foundation-post-update-page .update-img {
+    width: 100%;
+    max-height: 300px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+body.foundation-post-update-page .update-date {
+    font-size: 12px;
+    color: #aaa;
 }

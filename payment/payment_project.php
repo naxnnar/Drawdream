@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: payment\payment_project.php
+// หน้าที่: หน้าชำระเงินสำหรับโครงการ
 // ------------------------------
 // Backend: สร้างรายการชำระเงินโครงการผ่าน Omise
 // ------------------------------
@@ -19,7 +21,7 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("SELECT * FROM project WHERE project_id = ? AND project_status = 'approved' LIMIT 1");
+$stmt = $conn->prepare("\n    SELECT p.*,\n           pd.category, pd.target_group, pd.project_quote,\n           pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,\n           pd.urgent_info, pd.need_info, pd.update_info,\n           fp.contact_person, fp.phone, fp.phone_secondary, u.email AS email, fp.website, fp.facebook_url, fp.line_id, fp.address\n    FROM project p\n    LEFT JOIN project_detail pd ON pd.project_id = p.project_id\n    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name\n    LEFT JOIN users u ON u.user_id = fp.user_id\n    WHERE p.project_id = ? AND p.project_status = 'approved'\n    LIMIT 1\n");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
@@ -27,6 +29,51 @@ $project = $stmt->get_result()->fetch_assoc();
 if (!$project) {
     header("Location: ../project.php");
     exit();
+}
+
+function formatThaiDate($dateStr) {
+    if (empty($dateStr)) return '-';
+    $ts = strtotime($dateStr);
+    if ($ts === false) return '-';
+    $thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    $day = (int)date('j', $ts);
+    $monthIdx = (int)date('n', $ts) - 1;
+    $year = (int)date('Y', $ts) + 543;
+    return $day . ' ' . $thaiMonths[$monthIdx] . ' ' . $year;
+}
+
+function mapCategoryToSdgs($category) {
+    $map = [
+        'การศึกษา' => 'SDG 4: การศึกษาที่มีคุณภาพ',
+        'สุขภาพและอนามัย' => 'SDG 3: สุขภาพและความเป็นอยู่ที่ดี',
+        'อาหารและโภชนาการ' => 'SDG 2: ขจัดความหิวโหย',
+        'สิ่งอำนวยความสะดวก' => 'SDG 10: ลดความเหลื่อมล้ำ',
+    ];
+    return $map[$category] ?? 'SDG 1: ขจัดความยากจน';
+}
+
+$fundraisingPeriod = formatThaiDate($project['start_date'] ?? null) . ' - ' . formatThaiDate($project['end_date'] ?? null);
+$projectArea = trim((string)($project['address'] ?? '')) !== '' ? (string)$project['address'] : '-';
+$sdgGoal = mapCategoryToSdgs((string)($project['category'] ?? ''));
+$beneficiaryGroup = trim((string)($project['target_group'] ?? '')) !== '' ? (string)$project['target_group'] : '-';
+
+$donationOptions = [];
+foreach (['donation_option_1', 'donation_option_2', 'donation_option_3'] as $optKey) {
+    $optVal = (int)($project[$optKey] ?? 0);
+    if ($optVal > 0 && !in_array($optVal, $donationOptions, true)) {
+        $donationOptions[] = $optVal;
+    }
+}
+if (empty($donationOptions)) {
+    $donationOptions = [50, 100, 500, 1000];
+} elseif (count($donationOptions) < 4) {
+    $fallbacks = [50, 100, 500, 1000, 2000];
+    foreach ($fallbacks as $fb) {
+        if (!in_array($fb, $donationOptions, true)) {
+            $donationOptions[] = $fb;
+        }
+        if (count($donationOptions) >= 4) break;
+    }
 }
 
 // ดึงข้อมูล donor
@@ -124,6 +171,7 @@ function omise_request($method, $path, $data = []) {
 <?php include '../navbar.php'; ?>
 
 <div class="payment-container">
+<div class="payment-card">
 
     <div class="project-info">
         <h2>บริจาคให้โครงการ</h2>
@@ -134,6 +182,18 @@ function omise_request($method, $path, $data = []) {
         <p class="project-desc"><?= htmlspecialchars($project['project_desc']) ?></p>
         <div class="goal-info">
             เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท
+        </div>
+
+        <div class="contact-card">
+            <h4>ข้อมูลติดต่อมูลนิธิ</h4>
+            <p>👤 ผู้ติดต่อ: <?= htmlspecialchars($project['contact_person'] ?? '-') ?></p>
+            <p>📞 เบอร์หลัก: <?= htmlspecialchars($project['phone'] ?? '-') ?></p>
+            <p>📱 เบอร์รอง: <?= htmlspecialchars($project['phone_secondary'] ?? '-') ?></p>
+            <p>✉️ อีเมล: <?= htmlspecialchars($project['email'] ?? '-') ?></p>
+            <p>🌐 เว็บไซต์: <?= htmlspecialchars($project['website'] ?? '-') ?></p>
+            <p>📘 Facebook: <?= htmlspecialchars($project['facebook_url'] ?? '-') ?></p>
+            <p>💬 Line: <?= htmlspecialchars($project['line_id'] ?? '-') ?></p>
+            <p>📍 ที่อยู่: <?= htmlspecialchars($project['address'] ?? '-') ?></p>
         </div>
     </div>
 
@@ -159,13 +219,32 @@ function omise_request($method, $path, $data = []) {
 
         <?php else: ?>
             <!-- ฟอร์มกรอกจำนวนเงิน -->
+            <div class="project-detail-summary">
+                <h4>รายละเอียดโครงการ</h4>
+                <div class="detail-row"><strong>ระยะเวลาระดมทุน:</strong> <?= htmlspecialchars($fundraisingPeriod) ?></div>
+                <div class="detail-row"><strong>พื้นที่ดำเนินโครงการ:</strong> <?= htmlspecialchars($projectArea) ?></div>
+                <div class="detail-row"><strong>เป้าหมาย SDGs:</strong> <?= htmlspecialchars($sdgGoal) ?></div>
+                <div class="detail-row"><strong>กลุ่มเป้าหมายที่ได้รับประโยชน์จากโครงการ:</strong> <?= htmlspecialchars($beneficiaryGroup) ?></div>
+                <?php if (!empty($project['project_quote'])): ?>
+                    <div class="detail-row"><strong>คำโปรย:</strong> <?= htmlspecialchars($project['project_quote']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($project['urgent_info'])): ?>
+                    <div class="detail-row"><strong>ความจำเป็น:</strong> <?= htmlspecialchars($project['urgent_info']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($project['need_info'])): ?>
+                    <div class="detail-row"><strong>กิจกรรมมูลนิธิ:</strong> <?= htmlspecialchars($project['need_info']) ?></div>
+                <?php endif; ?>
+                <?php if (!empty($project['update_info'])): ?>
+                    <div class="detail-row"><strong>อัปเดต:</strong> <?= htmlspecialchars($project['update_info']) ?></div>
+                <?php endif; ?>
+            </div>
+
             <h3>เลือกจำนวนเงินที่ต้องการบริจาค</h3>
 
             <div class="amount-presets">
-                <button type="button" class="preset-btn" onclick="setAmount(50)">50 บาท</button>
-                <button type="button" class="preset-btn" onclick="setAmount(100)">100 บาท</button>
-                <button type="button" class="preset-btn" onclick="setAmount(500)">500 บาท</button>
-                <button type="button" class="preset-btn" onclick="setAmount(1000)">1,000 บาท</button>
+                <?php foreach ($donationOptions as $optAmount): ?>
+                    <button type="button" class="preset-btn" onclick="setAmount(this, <?= (int)$optAmount ?>)"><?= number_format((int)$optAmount) ?> บาท</button>
+                <?php endforeach; ?>
             </div>
 
             <form method="POST">
@@ -187,12 +266,13 @@ function omise_request($method, $path, $data = []) {
 
     </div>
 </div>
+</div>
 
 <script>
-function setAmount(val) {
+function setAmount(el, val) {
     document.getElementById('amountInput').value = val;
     document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
+    el.classList.add('active');
 }
 </script>
 

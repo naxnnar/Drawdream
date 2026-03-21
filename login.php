@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: login.php
+// หน้าที่: หน้าเข้าสู่ระบบของผู้ใช้
 session_start();
 include 'db.php';
 

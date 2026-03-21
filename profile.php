@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: profile.php
+// หน้าที่: หน้าโปรไฟล์ผู้ใช้และข้อมูลบัญชี
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
@@ -148,84 +150,6 @@ function statusLabel($status) {
     <title>โปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/profile.css">
-    <style>
-    .donation-summary {
-        background: #f0f4ff;
-        border-radius: 10px;
-        padding: 15px 20px;
-        margin-bottom: 20px;
-        color: #4A5BA8;
-        font-size: 15px;
-    }
-    .project-list {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-        margin-top: 15px;
-    }
-    .project-item {
-        background: #f9f9f9;
-        border-radius: 12px;
-        padding: 20px;
-        display: flex;
-        gap: 20px;
-        align-items: center;
-        border-left: 4px solid #ddd;
-        transition: all 0.3s;
-    }
-    .project-item.completed { border-left-color: #4A5BA8; background: #f0f4ff; }
-    .project-item.approved  { border-left-color: #4CAF50; background: #f1f8f4; }
-    .project-item.pending   { border-left-color: #FFC107; background: #fffdf0; }
-    .project-item.rejected  { border-left-color: #E57373; background: #fff5f5; }
-    .project-thumb {
-        width: 80px;
-        height: 80px;
-        object-fit: cover;
-        border-radius: 10px;
-        flex-shrink: 0;
-    }
-    .project-thumb-empty {
-        width: 80px;
-        height: 80px;
-        background: #e0e0e0;
-        border-radius: 10px;
-        flex-shrink: 0;
-    }
-    .project-detail { flex: 1; }
-    .project-name {
-        font-size: 16px;
-        font-weight: 700;
-        color: #333;
-        margin-bottom: 5px;
-    }
-    .project-status {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 10px;
-        font-size: 12px;
-        font-weight: 600;
-        color: white;
-        margin-bottom: 8px;
-    }
-    .project-bar-wrap {
-        background: #e0e0e0;
-        border-radius: 10px;
-        height: 10px;
-        overflow: hidden;
-        margin-bottom: 5px;
-    }
-    .project-bar-fill {
-        height: 100%;
-        border-radius: 10px;
-        background: linear-gradient(90deg, #4A5BA8, #667eea);
-        transition: width 0.5s ease;
-    }
-    .project-amount {
-        font-size: 13px;
-        color: #666;
-    }
-    .project-amount strong { color: #4A5BA8; }
-    </style>
 </head>
 <body>
 
@@ -429,7 +353,8 @@ function showModal(data) {
     const body  = document.getElementById('modalBody');
     let html = '';
     if (data.item_name) {
-        if (data.item_image) html += `<img class="modal-image" src="uploads/needs/${data.item_image}" alt="">`;
+        const firstNeedImage = (data.item_image || '').split('|').filter(Boolean)[0] || '';
+        if (firstNeedImage) html += `<img class="modal-image" src="uploads/needs/${firstNeedImage}" alt="">`;
         html += `<div class="modal-title">${data.item_name}</div>`;
         html += `<div class="modal-section"><div class="modal-label">มูลนิธิ:</div><div class="modal-value">${data.foundation_name || '-'}</div></div>`;
         html += `<div class="modal-section"><div class="modal-label">รายละเอียด:</div><div class="modal-value">${data.item_desc || '-'}</div></div>`;

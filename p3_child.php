@@ -1,5 +1,6 @@
-
-<?php
+﻿<?php
+// ไฟล์นี้: p3_child.php
+// หน้าที่: หน้ารายการอนุมัติสิ่งของตาม needlist
 session_start();
 include 'db.php';
 
@@ -51,9 +52,9 @@ if (!$result) {
   <meta charset="UTF-8">
   <title>อนุมัติรายการสิ่งของ | Admin</title>
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/style.css?v=2">
+  <link rel="stylesheet" href="css/admin.css">
 </head>
-<body>
+<body class="admin-approve-needlist-page">
 
 <?php include 'navbar.php'; ?>
 
@@ -79,11 +80,13 @@ if (!$result) {
       <?php while($row = mysqli_fetch_assoc($result)): ?>
         <?php
           $total = (float)$row['qty_needed'] * (float)$row['price_estimate'];
+          $itemImages = array_values(array_filter(explode('|', (string)($row['item_image'] ?? ''))));
+          $mainItemImage = $itemImages[0] ?? '';
         ?>
         <tr>
           <td>
-            <?php if (!empty($row['item_image'])): ?>
-              <img class="admin-thumb" src="uploads/needs/<?= htmlspecialchars($row['item_image']) ?>" alt="">
+            <?php if ($mainItemImage !== ''): ?>
+              <img class="admin-thumb" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="">
             <?php else: ?>
               <div class="admin-noimg">ไม่มีรูป</div>
             <?php endif; ?>

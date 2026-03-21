@@ -1,4 +1,6 @@
-<?php
+﻿<?php
+// ไฟล์นี้: detail_alin.php
+// หน้าที่: หน้ารายละเอียดเรื่องราวน้องอลิน
 // เตรียมข้อมูลเรื่องราว
 $stories = [
   'alin' => [
@@ -38,7 +40,6 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <!-- link css -->
-  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
