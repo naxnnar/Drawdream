@@ -7,13 +7,13 @@ $is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' &
 $foundations = mysqli_query($conn, "SELECT * FROM foundation_profile ORDER BY foundation_id DESC");
 if (!$foundations) die("Query foundations failed: " . mysqli_error($conn));
 
+// ✅ แก้แล้ว — ดึงยอด current_donate จาก foundation_needlist แยกตาม foundation_id
 $donationTotals = [];
 $q = mysqli_query($conn, "
-    SELECT fp.foundation_id, COALESCE(SUM(d.amount),0) AS total
-    FROM foundation_profile fp
-    LEFT JOIN donate_category dc ON dc.needitem_donate IS NOT NULL
-    LEFT JOIN donation d ON d.category_id = dc.category_id AND d.payment_status = 'completed'
-    GROUP BY fp.foundation_id
+    SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
+    FROM foundation_needlist
+    WHERE approve_item = 'approved'
+    GROUP BY foundation_id
 ");
 if ($q) while ($r = mysqli_fetch_assoc($q)) $donationTotals[(int)$r['foundation_id']] = (float)$r['total'];
 
@@ -23,11 +23,9 @@ if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id
 
 $stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
-
 ?>
 <!DOCTYPE html>
 <html lang="th">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -35,7 +33,6 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
   <link rel="stylesheet" href="css/navbar.css">
   <link rel="stylesheet" href="css/foundation.css?v=3">
 </head>
-
 <body class="foundation-page">
 
   <?php include 'navbar.php'; ?>
@@ -105,7 +102,7 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
             </div>
             <div class="fc-right">
               <?php if (!empty($foundationImage)): ?>
-                <img class="cover" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ"> 
+                <img class="cover" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
               <?php else: ?>
                 <div class="cover-empty">ยังไม่มีรูปมูลนิธิ</div>
               <?php endif; ?>
@@ -123,5 +120,4 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
   </div>
 
 </body>
-
 </html>

@@ -89,7 +89,7 @@ if (isset($_POST['submit'])) {
 
         $sql  = "INSERT INTO foundation_needlist 
                  (foundation_id, item_name, item_desc, brand, allow_other_brand,
-                  qty_needed, price_estimate, urgent, item_image, created_by_user_id, note, total_price, status)
+                  qty_needed, price_estimate, urgent, item_image, created_by_user_id, note, total_price, approve_item)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
         $stmt = $conn->prepare($sql);
 
@@ -97,7 +97,7 @@ if (isset($_POST['submit'])) {
             $error = "Prepare failed: " . $conn->error;
         } else {
             $stmt->bind_param(
-                "issssiidisdd",
+                "isssiidisisd",
                 $foundation_id, $item_name, $item_desc, $brand,
                 $allow_other, $qty, $price, $urgent, $newImage, $uid, $note, $total_price
             );

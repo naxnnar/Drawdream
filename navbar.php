@@ -23,13 +23,30 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
 
 $total_pending = $pending_count + $pending_projects + $pending_needs;
 
+// ===== แจ้งเตือนสำหรับ foundation และ donor =====
+$user_notif_count = 0;
+$user_notifs      = [];
+if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])) {
+  include_once 'db.php';
+  $uid = (int)$_SESSION['user_id'];
+  $nq = mysqli_query($conn, "
+    SELECT notif_id, title, message, link, is_read, created_at 
+    FROM notifications 
+    WHERE user_id = $uid 
+    ORDER BY created_at DESC 
+    LIMIT 10
+  ");
+  if ($nq) {
+    while ($n = mysqli_fetch_assoc($nq)) $user_notifs[] = $n;
+    $user_notif_count = count(array_filter($user_notifs, fn($n) => !$n['is_read']));
+  }
+}
+
 $_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
 $_nav_base  = str_repeat('../', max(0, $_nav_depth));
 
-// สลับโหมด admin/ปกติ
 if (isset($_GET['admin_mode'])) {
   $_SESSION['admin_mode'] = $_GET['admin_mode'] === '1';
-  // redirect ออก param
   $redirect = strtok($_SERVER['REQUEST_URI'], '?');
   header("Location: $redirect");
   exit();
@@ -38,11 +55,11 @@ if (isset($_GET['admin_mode'])) {
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode'] ?? true);
 ?>
 <link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css">
 <nav class="navbar">
 
   <div class="nav-left">
     <?php if ($is_admin_mode): ?>
-      <!-- เมนู Admin -->
       <a href="<?= $_nav_base ?>admin_dashboard.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? 'class="active"' : '' ?>>Dashboard</a>
       <a href="<?= $_nav_base ?>admin_approve_foundation.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_foundation.php' ? 'class="active"' : '' ?>>
         อนุมัติมูลนิธิ<?php if ($pending_count > 0): ?> <span class="menu-badge"><?= $pending_count ?></span><?php endif; ?>
@@ -55,7 +72,6 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
       </a>
       <a href="<?= $_nav_base ?>admin_escrow.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_escrow.php' ? 'class="active"' : '' ?>>Escrow</a>
     <?php else: ?>
-      <!-- เมนูปกติ -->
       <a href="<?= $_nav_base ?>homepage.php" <?= basename($_SERVER['PHP_SELF']) == 'homepage.php' ? 'class="active"' : '' ?>>หน้าแรก</a>
       <a href="<?= $_nav_base ?>children_.php" <?= basename($_SERVER['PHP_SELF']) == 'children_.php' ? 'class="active"' : '' ?>>บริจาค</a>
       <a href="<?= $_nav_base ?>project.php" <?= basename($_SERVER['PHP_SELF']) == 'project.php' ? 'class="active"' : '' ?>>โครงการ</a>
@@ -74,20 +90,49 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
     <?php if (isset($_SESSION['email'])): ?>
 
       <?php if ($_SESSION['role'] === 'admin'): ?>
-        <!-- ปุ่มสลับโหมด -->
         <?php if ($is_admin_mode): ?>
           <a href="?admin_mode=0" class="mode-toggle-btn">โหมดปกติ</a>
         <?php else: ?>
           <a href="?admin_mode=1" class="mode-toggle-btn mode-admin">โหมดแอดมิน</a>
         <?php endif; ?>
-
-        <!-- ไอคอนแจ้งเตือนรวม -->
         <?php if ($total_pending > 0): ?>
           <a href="<?= $_nav_base ?>admin_dashboard.php" class="notif-btn" title="มีรายการรออนุมัติ">
             <img src="<?= $_nav_base ?>img/bell.png" alt="แจ้งเตือน" class="nav-icon">
             <span class="notif-badge"><?= $total_pending ?></span>
           </a>
         <?php endif; ?>
+
+      <?php elseif (in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])): ?>
+        <!-- ระฆังแจ้งเตือน -->
+        <div class="notif-wrap" id="notifWrap">
+          <button class="notif-btn" onclick="toggleNotif(event)" style="background:none;border:none;cursor:pointer;position:relative;padding:0;">
+            <img src="<?= $_nav_base ?>img/bell.png" alt="แจ้งเตือน" class="nav-icon">
+            <?php if ($user_notif_count > 0): ?>
+              <span class="notif-badge"><?= $user_notif_count ?></span>
+            <?php endif; ?>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown">
+            <div class="notif-header">
+              การแจ้งเตือน
+              <?php if ($user_notif_count > 0): ?>
+                <a href="<?= $_nav_base ?>mark_notif_read.php?all=1" class="notif-mark-all">อ่านทั้งหมด</a>
+              <?php endif; ?>
+            </div>
+            <?php if (empty($user_notifs)): ?>
+              <div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>
+            <?php else: ?>
+              <?php foreach ($user_notifs as $n): ?>
+                <a href="<?= $_nav_base . htmlspecialchars($n['link'] ?? 'profile.php') ?>"
+                   class="notif-item <?= $n['is_read'] ? '' : 'unread' ?>"
+                   onclick="markRead(<?= $n['notif_id'] ?>)">
+                  <div class="notif-item-title"><?= htmlspecialchars($n['title']) ?></div>
+                  <div class="notif-item-msg"><?= htmlspecialchars($n['message']) ?></div>
+                  <div class="notif-item-time"><?= date('d/m/Y H:i', strtotime($n['created_at'])) ?></div>
+                </a>
+              <?php endforeach; ?>
+            <?php endif; ?>
+          </div>
+        </div>
       <?php endif; ?>
 
       <a href="<?= $_nav_base ?>profile.php" class="profile-btn">
@@ -101,3 +146,18 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
   </div>
 
 </nav>
+
+<script>
+function toggleNotif(e) {
+  e.stopPropagation();
+  const w = document.getElementById('notifWrap');
+  if (w) w.classList.toggle('open');
+}
+document.addEventListener('click', function() {
+  const w = document.getElementById('notifWrap');
+  if (w) w.classList.remove('open');
+});
+function markRead(id) {
+  fetch('<?= $_nav_base ?>mark_notif_read.php?id=' + id);
+}
+</script>

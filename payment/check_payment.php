@@ -79,6 +79,43 @@ if ($is_success) {
     $stmt->bind_param("di", $net_amount, $project_id);
     $stmt->execute();
 
+    // ✅ เช็คว่าครบเป้าหรือหมดเวลา แล้วเปลี่ยน status เป็น completed
+    $check = $conn->prepare("
+        SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
+        FROM project p
+        JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
+        WHERE p.project_id = ? 
+          AND p.project_status = 'approved'
+          AND (
+              p.current_donate >= p.goal_amount
+              OR (p.end_date IS NOT NULL AND p.end_date <= CURDATE())
+          )
+    ");
+    $check->bind_param("i", $project_id);
+    $check->execute();
+    $completed_proj = $check->get_result()->fetch_assoc();
+    if ($completed_proj) {
+        // เปลี่ยน status พร้อมบันทึกวันที่ครบ
+        $upd = $conn->prepare("UPDATE project SET project_status = 'completed', completed_at = NOW() WHERE project_id = ?");
+        $upd->bind_param("i", $project_id);
+        $upd->execute();
+
+        // ✅ แจ้งเตือนมูลนิธิเจ้าของโครงการ
+        $foundation_user_id = (int)$completed_proj['foundation_user_id'];
+        $proj_name          = $completed_proj['project_name'];
+        $total              = number_format((float)$completed_proj['current_donate'], 2);
+
+        $notif = $conn->prepare("
+            INSERT INTO notifications (user_id, type, title, message, link)
+            VALUES (?, 'project_completed', ?, ?, ?)
+        ");
+        $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
+        $notif_msg   = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
+        $notif_link  = "foundation_post_update.php?project_id=" . $project_id;
+        $notif->bind_param("isss", $foundation_user_id, $notif_title, $notif_msg, $notif_link);
+        $notif->execute();
+    }
+
     // ล้าง session
     unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project']);
 }

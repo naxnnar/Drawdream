@@ -38,13 +38,17 @@ $goal_row = $stmt2->get_result()->fetch_assoc();
 $goal = (float)($goal_row['goal'] ?? 0);
 
 // ดึงยอดบริจาคปัจจุบัน
+// ✅ ถูก — นับเฉพาะมูลนิธินี้
 $stmt3 = $conn->prepare("
-    SELECT COALESCE(SUM(d.amount), 0) AS current
-    FROM donation d
-    JOIN donate_category dc ON d.category_id = dc.category_id
-    WHERE dc.needitem_donate IS NOT NULL
-    AND d.payment_status = 'completed'
+    SELECT COALESCE(SUM(current_donate), 0) AS current
+    FROM foundation_needlist
+    WHERE foundation_id = ?
+    AND approve_item = 'approved'
 ");
+$stmt3->bind_param("i", $fid);
+$stmt3->execute();
+$current_row = $stmt3->get_result()->fetch_assoc();
+$current = (float)($current_row['current'] ?? 0);
 $stmt3->execute();
 $current_row = $stmt3->get_result()->fetch_assoc();
 $current = (float)($current_row['current'] ?? 0);

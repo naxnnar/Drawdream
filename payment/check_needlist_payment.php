@@ -16,7 +16,6 @@ if (empty($charge_id)) {
     exit();
 }
 
-// เช็คสถานะจาก Omise
 $ch = curl_init(OMISE_API_URL . '/charges/' . $charge_id);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
@@ -36,7 +35,6 @@ $is_test_mode    = strpos(OMISE_SECRET_KEY, 'skey_test_') === 0;
 if ($is_success) {
     $amount = ($charge['amount'] ?? 0) / 100;
 
-    // ดึง tax_id
     $tax_id = '';
     $stmt = $conn->prepare("SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1");
     $stmt->bind_param("i", $_SESSION['user_id']);
@@ -44,7 +42,6 @@ if ($is_success) {
     $donor  = $stmt->get_result()->fetch_assoc();
     $tax_id = $donor['tax_id'] ?? '';
 
-    // หา category_id สำหรับ needlist
     $stmt = $conn->prepare("SELECT category_id FROM donate_category WHERE needitem_donate IS NOT NULL LIMIT 1");
     $stmt->execute();
     $cat = $stmt->get_result()->fetch_assoc();
@@ -56,7 +53,6 @@ if ($is_success) {
         $category_id = $cat['category_id'];
     }
 
-    // บันทึกลง donation
     $stmt = $conn->prepare("
         INSERT INTO donation (category_id, amount, service_fee, payment_status, transfer_datetime)
         VALUES (?, ?, 0, 'completed', NOW())
@@ -65,13 +61,46 @@ if ($is_success) {
     $stmt->execute();
     $donate_id = $conn->insert_id;
 
-    // บันทึกลง payment_transaction
     $stmt = $conn->prepare("
         INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
         VALUES (?, ?, ?, 'completed')
     ");
     $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
     $stmt->execute();
+
+    $res = $conn->prepare("
+        SELECT SUM(total_price) AS grand_total
+        FROM foundation_needlist
+        WHERE foundation_id = ? AND approve_item = 'approved'
+    ");
+    $res->bind_param("i", $fid);
+    $res->execute();
+    $grand = $res->get_result()->fetch_assoc();
+    $grand_total = (float)($grand['grand_total'] ?? 0);
+
+    if ($grand_total > 0) {
+        $items = $conn->prepare("
+            SELECT item_id, total_price
+            FROM foundation_needlist
+            WHERE foundation_id = ? AND approve_item = 'approved'
+        ");
+        $items->bind_param("i", $fid);
+        $items->execute();
+        $item_rows = $items->get_result();
+
+        while ($item = $item_rows->fetch_assoc()) {
+            $ratio       = (float)$item['total_price'] / $grand_total;
+            $item_amount = round($amount * $ratio, 2);
+
+            $upd = $conn->prepare("
+                UPDATE foundation_needlist
+                SET current_donate = current_donate + ?
+                WHERE item_id = ?
+            ");
+            $upd->bind_param("di", $item_amount, $item['item_id']);
+            $upd->execute();
+        }
+    }
 
     unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id']);
 }
