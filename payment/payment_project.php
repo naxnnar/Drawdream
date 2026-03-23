@@ -21,7 +21,7 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("\n    SELECT p.*,\n           pd.category, pd.target_group, pd.project_quote,\n           pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,\n           pd.urgent_info, pd.need_info, pd.update_info,\n           fp.contact_person, fp.phone, fp.phone_secondary, u.email AS email, fp.website, fp.facebook_url, fp.line_id, fp.address\n    FROM project p\n    LEFT JOIN project_detail pd ON pd.project_id = p.project_id\n    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name\n    LEFT JOIN users u ON u.user_id = fp.user_id\n    WHERE p.project_id = ? AND p.project_status = 'approved'\n    LIMIT 1\n");
+$stmt = $conn->prepare("\n    SELECT p.*,\n           COALESCE(pd.category, p.category) AS category,\n           COALESCE(pd.target_group, p.target_group) AS target_group,\n           pd.project_quote,\n           pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,\n           pd.urgent_info, pd.need_info, pd.update_info,\n           fp.contact_person, fp.phone, fp.phone_secondary, u.email AS email, fp.website, fp.facebook_url, fp.line_id, fp.address\n    FROM project p\n    LEFT JOIN project_detail pd ON pd.project_id = p.project_id\n    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name\n    LEFT JOIN users u ON u.user_id = fp.user_id\n    WHERE p.project_id = ? AND p.project_status = 'approved'\n    LIMIT 1\n");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();

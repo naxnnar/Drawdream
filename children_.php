@@ -220,6 +220,7 @@ if ($result && $result->num_rows > 0) {
     <?php foreach ($unadopted as $child): ?>
     <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
       <?php
+        // --- กำหนดสถานะโปรไฟล์เด็ก ---
         $rawStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
         if ($rawStatus === 'กำลังดำเนินการ') $rawStatus = 'รอดำเนินการ';
         $statusClass = 'status-pending';
@@ -229,8 +230,8 @@ if ($result && $result->num_rows > 0) {
           $statusText = 'อนุมัติแล้ว';
         } elseif ($rawStatus === 'ไม่อนุมัติ') {
           $statusClass = 'status-rejected';
+          $statusText = 'ไม่อนุมัติ';
         }
-        $canEdit = ($role === 'foundation' && $rawStatus === 'อนุมัติ');
       ?>
       <div class="child-card-wrap">
         <a href="children_donate.php?id=<?php echo $child['child_id']; ?>" class="child-card">
@@ -246,20 +247,20 @@ if ($result && $result->num_rows > 0) {
               <p class="meta-row"><span class="meta-icon dream"><i class="bi bi-stars"></i></span> <?php echo htmlspecialchars($child['dream']); ?></p>
               <p class="meta-row"><span class="meta-icon foundation"><i class="bi bi-house-heart-fill"></i></span> <?php echo htmlspecialchars($child['foundation_name'] ?? '-'); ?></p>
               <?php if ($role === 'foundation' || $role === 'admin'): ?>
-                  <div class="child-status-pill <?php echo $statusClass; ?>">
-                    <?php echo $statusText; ?>
+                <div class="child-status-pill <?php echo $statusClass; ?>">
+                  <?php echo $statusText; ?>
+                </div>
+                <?php if ($role === 'foundation'): ?>
+                  <div class="inline-delete-actions">
+                    <button type="button" class="confirm-inline">ยืนยันลบ</button>
+                    <button type="button" class="cancel-inline">ยกเลิก</button>
                   </div>
-                  <?php if ($role === 'foundation'): ?>
-                    <div class="inline-delete-actions">
-                      <button type="button" class="confirm-inline">ยืนยันลบ</button>
-                      <button type="button" class="cancel-inline">ยกเลิก</button>
-                    </div>
-                  <?php endif; ?>
+                <?php endif; ?>
               <?php endif; ?>
               <?php if ($role === 'foundation' && $rawStatus === 'ไม่อนุมัติ' && !empty($child['reject_reason'] ?? '')): ?>
-                  <p class="reject-reason">เหตุผลไม่อนุมัติ: <?php echo htmlspecialchars($child['reject_reason']); ?></p>
+                <p class="reject-reason">เหตุผลไม่อนุมัติ: <?php echo htmlspecialchars($child['reject_reason']); ?></p>
               <?php endif; ?>
-              <?php if ($role === 'foundation' && $canEdit): ?>
+              <?php if ($role === 'foundation'): ?>
                 <div class="edit-pill-wrap">
                   <button type="button" class="btn-edit-pill"
                     onclick="event.stopPropagation(); window.location.href='foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>'">

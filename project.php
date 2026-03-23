@@ -148,7 +148,7 @@ if ($role !== 'admin') {
 }
 
 if ($cat !== 'all') {
-    $where[] = "pd.category = ?";
+    $where[] = "COALESCE(pd.category, p.category, '') = ?";
     $params[] = $cat;
     $types .= "s";
 }
@@ -181,7 +181,7 @@ $latestProjects = [];
 
 if ($isFoundationOwnView) {
     $foundationSql = "
-        SELECT p.*, pd.category, fp.address AS foundation_address
+        SELECT p.*, COALESCE(pd.category, p.category) AS category, fp.address AS foundation_address
         FROM project p
         LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
@@ -199,7 +199,7 @@ if ($isFoundationOwnView) {
     }
 } else {
     $sql  = "
-        SELECT p.*, pd.category, fp.address AS foundation_address
+        SELECT p.*, COALESCE(pd.category, p.category) AS category, fp.address AS foundation_address
         FROM project p
         LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
@@ -224,7 +224,7 @@ if ($isFoundationOwnView) {
         $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
     }
     $latestSql = "
-        SELECT p.*, pd.category, fp.address AS foundation_address
+        SELECT p.*, COALESCE(pd.category, p.category) AS category, fp.address AS foundation_address
         FROM project p
         LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
@@ -276,7 +276,6 @@ if ($isFoundationOwnView) {
                 <button type="button" id="toggleEditProjectBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขโครงการ</button>
                 <button type="button" id="toggleDeleteProjectBtn" class="foundation-manage-btn foundation-manage-btn-danger">ลบโครงการ</button>
             </div>
-            <a class="foundation-manage-btn foundation-manage-btn-donor" href="project.php?view=donor">มุมมองผู้บริจาค</a>
         </div>
     </div>
 
@@ -437,7 +436,7 @@ if ($isFoundationOwnView) {
                         <span class="latest-badge"><?= htmlspecialchars(formatTimeAgoThai($latest['start_date'] ?? null)) ?></span>
                         <h3><?= htmlspecialchars($latest['project_name']) ?></h3>
                         <div class="project-content">
-                            <div class="category-tag"><?= htmlspecialchars(detectProjectCategory($latest['project_name'] ?? '', $latest['project_desc'] ?? '')) ?></div>
+                            <div class="category-tag"><?= htmlspecialchars(($latest['category'] ?? '') !== '' ? (string)$latest['category'] : detectProjectCategory($latest['project_name'] ?? '', $latest['project_desc'] ?? '')) ?></div>
                             <p><?= htmlspecialchars($latest['project_desc']) ?></p>
                             <div class="progress-section">
                                 <div class="progress-label">
@@ -477,7 +476,7 @@ if ($isFoundationOwnView) {
                     <h3><?= htmlspecialchars($row['project_name']) ?></h3>
 
                     <div class="project-content">
-                        <div class="category-tag"><?= htmlspecialchars(detectProjectCategory($row['project_name'] ?? '', $row['project_desc'] ?? '')) ?></div>
+                        <div class="category-tag"><?= htmlspecialchars(($row['category'] ?? '') !== '' ? (string)$row['category'] : detectProjectCategory($row['project_name'] ?? '', $row['project_desc'] ?? '')) ?></div>
 
                         <?php if (!empty($row['foundation_address'])): ?>
                             <div class="location-tag">ที่ตั้ง: <?= htmlspecialchars($row['foundation_address']) ?></div>

@@ -1,3 +1,14 @@
+.center-section {
+        text-align: center;
+        margin: 40px 0 0 0;
+        padding-left: 120px;
+}
+
+@media (max-width: 1200px) {
+    .center-section {
+        padding-left: 0;
+    }
+}
 /* =====================================================
    home.css
    ใช้กับ: homepage.php
@@ -15,16 +26,47 @@
 .home-section.home-hero {
     background: #fff;
 }
+    .home-section.home-hero {
+        position: relative;
+    }
 
 .portrait-wrapper {
     position: relative;
-    width: 628px;
-    height: 628px;
+    width: 400px; /* ลดขนาดความกว้าง */
+    height: 400px; /* ลดขนาดความสูง */
     overflow: hidden;
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    margin-left: 10%;
+    margin-left: 5%; /* ลด margin ซ้าย */
+}
+.portrait-wrapper {
+    position: absolute;
+    left: -40px;
+    bottom: 0;
+    width: 700px;
+    height: 900px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    margin: 0;
+    padding: 0;
+    z-index: 2;
+}
+
+@media (max-width: 991.98px) {
+    .portrait-wrapper {
+        position: static;
+        width: 100%;
+        height: auto;
+        margin-bottom: 2rem;
+    }
+}
+
+.home-hero .container .row {
+        min-height: 650px;
+        position: relative;
 }
 
 .portrait-img {
@@ -48,7 +90,7 @@
 
 .center-section h3 {
     color: #222;
-    font-size: 2.2rem;
+    font-size: 1.7rem;
     font-weight: 700;
     margin-bottom: 0.8em;
 }
@@ -184,6 +226,7 @@
     box-shadow: 0 6px 18px rgba(244, 201, 72, 0.25);
     margin: 0 auto;
     display: block;
+    border: none;
 }
 
 .btn-donate:hover { box-shadow: 0 8px 22px rgba(244, 201, 72, 0.35); }

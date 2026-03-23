@@ -28,7 +28,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
       <div class="col-md-5 d-flex hero-image-col">
         <div class="portrait-wrapper">
-          <img src="img/home1.png" alt="DrawDream" class="portrait-img">
+          <img src="img/childd.png" alt="DrawDream" class="portrait-img">
         </div>
       </div>
 
@@ -36,6 +36,13 @@ if (session_status() === PHP_SESSION_NONE) {
         <div class="center-section">
           <h2>ให้ในแบบที่ใช่ สนับสนุนในสิ่งที่เขาต้องการ...</h2>
           <h3>เพราะความต้องการของเด็กแต่ละคนนั้นแตกต่างกัน</h3>
+          <style>
+            @media (min-width: 768px) {
+              .center-section h3 {
+                white-space: nowrap;
+              }
+            }
+          </style>
           <p>DrawDream ช่วยให้คุณ เลือกส่งต่อ ได้ตรงจุดที่สุด</p>
           <p>สามารถเข้าร่วมโครงการอุปการะรายบุคคล เพื่อส่งน้องๆ ให้ถึงฝั่งฝัน</p>
           <div class="hero-actions mt-4">
@@ -64,18 +71,51 @@ if (session_status() === PHP_SESSION_NONE) {
         <h2 class="mb-2"><b>บริจาคให้เด็กกับ <span class="highlight">Drawdream</span></b></h2>
         <p class="mb-4">เพื่อช่วยคนเด็กเข้าถึงศิลปะการศึกษา</p>
 
-        <div class="donation-amounts mb-3">
-          <button class="amount-btn" data-amount="500">฿500</button>
-          <button class="amount-btn" data-amount="600">฿600</button>
-          <button class="amount-btn" data-amount="900">฿900</button>
-        </div>
-
-        <div class="selected-amount">
-          <span id="selectedAmountDisplay">฿ 500</span>
-          <button class="clear-btn" id="clearBtn">&times;</button>
-        </div>
-
-        <button class="btn-donate mt-2">บริจาค</button>
+        <form id="donateForm" class="mb-3" onsubmit="return false;">
+          <div class="donation-amounts mb-3">
+            <button type="button" class="amount-btn" data-amount="500">฿500</button>
+            <button type="button" class="amount-btn" data-amount="600">฿600</button>
+            <button type="button" class="amount-btn" data-amount="900">฿900</button>
+          </div>
+          <div class="mb-3 d-flex justify-content-center" style="gap:0;">
+            <div style="width:515px;max-width:100%;position:relative;">
+              <input type="number" min="20" step="1" id="donateAmount" name="donateAmount" placeholder="ระบุจำนวนเงิน (ขั้นต่ำ 20)" required style="width:100%;padding:12px 44px 12px 48px;border-radius:12px;border:1.5px solid #d8cfc7;font-size:1.15rem;">
+              <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#888;font-size:1.2rem;">฿</span>
+              <button type="button" id="clearBtn" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.3rem;color:#888;">&times;</button>
+            </div>
+          </div>
+          <div class="d-flex justify-content-center">
+            <button type="submit" class="btn-donate mt-2" style="width:515px;max-width:100%;margin:auto;display:block;">บริจาค</button>
+          </div>
+        </form>
+        <script>
+        // ปุ่ม preset
+        const amountBtns = document.querySelectorAll('.amount-btn');
+        const donateAmount = document.getElementById('donateAmount');
+        amountBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            amountBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            donateAmount.value = btn.dataset.amount;
+          });
+        });
+        // ปุ่มล้าง
+        document.getElementById('clearBtn').onclick = () => {
+          donateAmount.value = '';
+          amountBtns.forEach(b => b.classList.remove('active'));
+        };
+        // ส่งฟอร์ม
+        document.getElementById('donateForm').onsubmit = function(e) {
+          e.preventDefault();
+          const val = parseInt(donateAmount.value, 10);
+          if (isNaN(val) || val < 20) {
+            alert('กรุณากรอกจำนวนเงินขั้นต่ำ 20 บาท');
+            donateAmount.focus();
+            return false;
+          }
+          window.location.assign('payment/donate_qr.php');
+        };
+        </script>
       </div>
 
     </div>
@@ -99,23 +139,23 @@ if (session_status() === PHP_SESSION_NONE) {
           วันนี้น้องอลินไม่ได้มีเพียงหนังสืออ่านนอกจากการอ่านแล้วน้องอลินมักชอบเล่าเรื่องที่เธออ่านให้เพื่อนๆฟัง
           เธอกลายเป็นตัวแทนโรงเรียนไปแข่งขันทักษะทางภาษาไทยจนได้รับรางวัล
         </p>
-        <span class="btn btn-light btn-home disabled" aria-disabled="true">อ่านต่อ</span>
+        <a href="detail_alin.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
     </div>
 
     <!-- น้องพิณเพลง + น้องแซน — แถวล่าง: 2 คอลัมน์ -->
     <div class="row g-4">
-      <div class="col-md-6 text-center text-light">
-        <img src="img/pin.png" alt="น้องพิณเพลง" class="img-fluid rounded shadow mb-3">
+      <div class="col-md-6 d-flex flex-column align-items-center text-light" style="justify-content:flex-start;">
+        <img src="img/pin.png" alt="น้องพิณเพลง" class="img-fluid rounded shadow mb-3" style="object-fit:cover; object-position:top; align-self:flex-start;">
         <h3>น้องพิณเพลง</h3>
         <p class="card-text">
           น้องพิณเพลงเป็นเด็กขี้อายที่มีพรสวรรค์ด้านเสียงร้อง แต่เธอไม่เคยมีโอกาสได้เรียนรู้ทักษะดนตรีอย่างจริงจัง
           ผู้บริจาครายหนึ่งได้เห็นโปรไฟล์ของน้องและตัดสินใจสนับสนุนผ่านฟีเจอร์ "บริจาครายบุคคล"
           ปัจจุบันเสียงเพลงของน้องพิณเพลงไม่ได้ก้องกังวานแค่ในมูลนิธิอีกต่อไป เธอได้รับโอกาสขึ้นแสดงในงานโรงเรียน
         </p>
-        <span class="btn btn-light btn-home disabled" aria-disabled="true">อ่านต่อ</span>
+        <a href="detail_pin.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
-      <div class="col-md-6 text-center text-light">
+      <div class="col-md-6 d-flex flex-column align-items-center text-light">
         <img src="img/san.png" alt="น้องแซน" class="img-fluid rounded shadow mb-3">
         <h3>น้องแซน</h3>
         <p class="card-text">
@@ -123,7 +163,7 @@ if (session_status() === PHP_SESSION_NONE) {
           รูปที่เขาชอบวาดที่สุดคือ "บ้านที่มีความสุข" น้องได้รับรางวัลชนะเลิศการประกวดวาดภาพระดับท้องถิ่น
           อุปกรณ์ศิลปะเหล่านั้นไม่ได้แค่ใช้ระบายสีลงบนกระดาษ แต่กำลังช่วยระบายความหวังและอนาคตที่สวยงาม
         </p>
-        <span class="btn btn-light btn-home disabled" aria-disabled="true">อ่านต่อ</span>
+        <a href="detail_san.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
     </div>
 
@@ -137,11 +177,11 @@ if (session_status() === PHP_SESSION_NONE) {
       <div class="col-lg-12">
         <div class="rights-box">
           <div class="rights-content">
-            <h4>หากคุณเป็นผู้มีสิทธิรักษา</h4>
-            <p>เรายินดีช่วยแนะนำขั้นตอนการใช้สิทธิและการประสานงานกับมูลนิธิที่เหมาะสมกับเด็กแต่ละคน</p>
+            <h4>ร่วมสนับสนุนค่าบริหารจัดการระบบ </h4>
+            <p>เพื่อเปลี่ยนระบบการช่วยเหลือให้เข้าถึงง่ายสำหรับทุกคน</p>
             <div class="rights-actions">
-              <a href="#" class="btn btn-success btn-lg btn-radis">ติดต่อเรา</a>
-              <a href="#" class="btn btn-success btn-lg btn-radis">มูลนิธิ</a>
+              <a href="#" class="btn btn-success btn-lg btn-radis">บริจาค</a>
+              <!-- <a href="#" class="btn btn-success btn-lg btn-radis">มูลนิธิ</a> -->
             </div>
           </div>
           <div class="rights-image text-center text-md-end">

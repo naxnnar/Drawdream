@@ -23,6 +23,56 @@ if ($foundationName === '') {
 
 $categories = ['การศึกษา', 'สุขภาพและอนามัย', 'อาหารและโภชนาการ', 'สิ่งอำนวยความสะดวก'];
 
+// ─── Auto-migrate: ให้ schema ของ project ตรงกับโค้ดที่บันทึกประเภทโครงการ ─────
+$projectNeededColumns = [
+    'category' => "ALTER TABLE project ADD COLUMN category VARCHAR(100) NULL",
+    'target_group' => "ALTER TABLE project ADD COLUMN target_group VARCHAR(255) NULL",
+];
+foreach ($projectNeededColumns as $col => $ddl) {
+    $chk = $conn->query("SHOW COLUMNS FROM project LIKE '$col'");
+    if ($chk && $chk->num_rows === 0) {
+        $conn->query($ddl);
+    }
+}
+
+// ─── Auto-migrate: ให้ schema ของ project_detail ตรงกับโค้ด ─────────────────
+$tblCheck = $conn->query("SHOW TABLES LIKE 'project_detail'");
+if ($tblCheck && $tblCheck->num_rows === 0) {
+    $conn->query(
+        "CREATE TABLE project_detail (
+            project_id INT NOT NULL,
+            category VARCHAR(100) NULL,
+            target_group VARCHAR(255) NULL,
+            project_quote TEXT NULL,
+            donation_option_1 INT NULL,
+            donation_option_2 INT NULL,
+            donation_option_3 INT NULL,
+            urgent_info TEXT NULL,
+            need_info TEXT NULL,
+            update_info TEXT NULL,
+            PRIMARY KEY (project_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+}
+
+$projectDetailNeededColumns = [
+    'category' => "ALTER TABLE project_detail ADD COLUMN category VARCHAR(100) NULL",
+    'target_group' => "ALTER TABLE project_detail ADD COLUMN target_group VARCHAR(255) NULL",
+    'project_quote' => "ALTER TABLE project_detail ADD COLUMN project_quote TEXT NULL",
+    'donation_option_1' => "ALTER TABLE project_detail ADD COLUMN donation_option_1 INT NULL",
+    'donation_option_2' => "ALTER TABLE project_detail ADD COLUMN donation_option_2 INT NULL",
+    'donation_option_3' => "ALTER TABLE project_detail ADD COLUMN donation_option_3 INT NULL",
+    'urgent_info' => "ALTER TABLE project_detail ADD COLUMN urgent_info TEXT NULL",
+    'need_info' => "ALTER TABLE project_detail ADD COLUMN need_info TEXT NULL",
+    'update_info' => "ALTER TABLE project_detail ADD COLUMN update_info TEXT NULL",
+];
+foreach ($projectDetailNeededColumns as $col => $ddl) {
+    $chk = $conn->query("SHOW COLUMNS FROM project_detail LIKE '$col'");
+    if ($chk && $chk->num_rows === 0) {
+        $conn->query($ddl);
+    }
+}
+
 $editProjectId = (int)($_GET['edit'] ?? 0);
 $isEditMode = false;
 $editingProject = [
@@ -45,7 +95,9 @@ $editingProject = [
 
 if ($editProjectId > 0) {
     $stmtEdit = $conn->prepare(
-        "SELECT p.*, pd.category, pd.target_group, pd.project_quote,
+    "SELECT p.*, COALESCE(pd.category, p.category) AS category,
+        COALESCE(pd.target_group, p.target_group) AS target_group,
+        pd.project_quote,
                 pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,
                 pd.urgent_info, pd.need_info, pd.update_info
          FROM project p
@@ -156,10 +208,10 @@ if (isset($_POST['submit'])) {
         if ($isEditSubmit) {
             $stmtProject = $conn->prepare(
                 "UPDATE project
-                 SET project_name = ?, project_desc = ?, project_image = ?, goal_amount = ?, end_date = ?
+                 SET project_name = ?, project_desc = ?, project_image = ?, goal_amount = ?, end_date = ?, category = ?, target_group = ?
                  WHERE project_id = ? AND foundation_name = ?"
             );
-            $stmtProject->bind_param("sssdsis", $name, $desc, $newName, $goalDec, $enddate, $editingId, $foundationName);
+            $stmtProject->bind_param("sssdsssis", $name, $desc, $newName, $goalDec, $enddate, $category, $targetGroup, $editingId, $foundationName);
             if (!$stmtProject->execute()) {
                 throw new Exception($stmtProject->error ?: 'แก้ไขโครงการไม่สำเร็จ');
             }
@@ -215,10 +267,10 @@ if (isset($_POST['submit'])) {
             }
         } else {
             $stmtProject = $conn->prepare(
-                "INSERT INTO project (project_name, project_desc, project_image, goal_amount, end_date, project_status, current_donate, start_date, foundation_name, approve_project)
-                 VALUES (?, ?, ?, ?, ?, 'pending', 0, CURDATE(), ?, NULL)"
+                "INSERT INTO project (project_name, project_desc, project_image, goal_amount, end_date, project_status, current_donate, start_date, foundation_name, approve_project, category, target_group)
+                 VALUES (?, ?, ?, ?, ?, 'pending', 0, CURDATE(), ?, NULL, ?, ?)"
             );
-            $stmtProject->bind_param("sssdss", $name, $desc, $newName, $goalDec, $enddate, $foundationName);
+            $stmtProject->bind_param("sssdssss", $name, $desc, $newName, $goalDec, $enddate, $foundationName, $category, $targetGroup);
             if (!$stmtProject->execute()) {
                 throw new Exception($stmtProject->error ?: 'บันทึกโครงการไม่สำเร็จ');
             }

@@ -144,6 +144,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
       </div>
     <?php endif; ?>
 
+    <?php if (($_SESSION['role'] ?? '') !== 'foundation'): ?>
     <div class="foundation-list">
       <?php
       $hasAny = false;
@@ -167,6 +168,19 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
             <div class="fc-left">
               <h2 class="fc-title"><?= htmlspecialchars($f['foundation_name'] ?? 'มูลนิธิ') ?></h2>
               <p class="fc-desc"><?= htmlspecialchars($f['foundation_desc'] ?? '') ?></p>
+              <?php
+                $urgentItems = array_filter($items, function($it) { return (int)($it['urgent'] ?? 0) === 1; });
+                if (count($urgentItems) > 0):
+              ?>
+                <div class="urgent-list mb-3" style="color:#b84a34;font-weight:600;">
+                  <span style="font-size:1.1em;">สิ่งของที่ต้องการด่วน:</span>
+                  <ul style="margin:8px 0 0 18px;padding:0;">
+                  <?php foreach ($urgentItems as $u): ?>
+                    <li><?= htmlspecialchars($u['item_name']) ?></li>
+                  <?php endforeach; ?>
+                  </ul>
+                </div>
+              <?php endif; ?>
               <div class="bar">
                 <div style="width:<?= (int)$percent ?>%"></div>
               </div>
@@ -178,19 +192,11 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
                     $mainItemImage = $itemImages[0] ?? '';
                   ?>
                   <div class="item">
-                    <?php if ((int)$it['urgent'] === 1): ?>
-                      <div class="urgent-tag">ต้องการด่วน</div>
-                    <?php endif; ?>
                     <?php if ($mainItemImage !== ''): ?>
-                      <img class="item-img" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="">
+                      <img class="item-img" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="" style="width: 80px; height: 80px; object-fit: cover; display:block; margin:auto;">
                     <?php else: ?>
-                      <div class="noimg">ไม่มีรูปภาพ</div>
+                      <div class="noimg" style="width:80px;height:80px;display:flex;align-items:center;justify-content:center;background:#f3f3f3;color:#aaa;">ไม่มีรูปภาพ</div>
                     <?php endif; ?>
-                    <div class="item-name"><?= htmlspecialchars($it['item_name']) ?></div>
-                    <div class="item-meta">
-                      ต้องการ: <?= (int)$it['qty_needed'] ?> ชิ้น<br>
-                      ราคา/หน่วย: <?= number_format((float)$it['price_estimate'], 0) ?> บาท
-                    </div>
                   </div>
                 <?php endforeach; ?>
               </div>
@@ -209,10 +215,8 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
           </div>
         <?php endwhile; ?>
       <?php endif; ?>
-      <?php if (!$hasAny): ?>
-        <p style="text-align:center; color:#666;">ยังไม่มีมูลนิธิที่มีรายการสิ่งของในระบบ</p>
-      <?php endif; ?>
     </div>
+    <?php endif; ?>
   </div>
 
 </body>

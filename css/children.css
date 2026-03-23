@@ -237,14 +237,15 @@ body.mode-edit .edit-pill-wrap { display: block; }
     color: #3b2f09;
     border: 0;
     border-radius: 999px;
-    padding: 6px 16px;
-    min-height: 34px;
-    min-width: 136px;
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
+    padding: 8px 18px;
+    min-height: 42px;
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
     cursor: pointer;
-    box-shadow: 0 6px 14px rgba(15,23,42,0.08);
+    box-shadow: 0 6px 14px rgba(15,23,42,0.10);
     width: 100%;
     text-align: center;
 }
@@ -252,22 +253,33 @@ body.mode-edit .edit-pill-wrap { display: block; }
 /* ── inline delete actions ─── */
 .inline-delete-actions {
     display: none;
-    margin-top: 8px;
-    align-items: center;
+    margin-top: 10px;
     gap: 8px;
-    flex-wrap: wrap;
+    width: 100%;
 }
 
-body.mode-delete .inline-delete-actions { display: inline-flex; }
+/* ใช้ 2 คอลัมน์เพื่อให้ปุ่มยืนยันลบ/ยกเลิกอยู่ข้างกันเสมอ */
+body.mode-delete .inline-delete-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+}
 
 .inline-delete-actions .confirm-inline {
     background: #CE573F;
     color: #fff;
     border: 0;
     border-radius: 999px;
-    padding: 7px 14px;
-    font-size: .88rem;
+    padding: 8px 10px;
+    min-height: 42px;
+    min-width: 0;
+    width: 100%;
+    font-size: 1rem;
     font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    box-shadow: 0 6px 14px rgba(15,23,42,0.10);
+    text-align: center;
 }
 
 .inline-delete-actions .cancel-inline {
@@ -275,9 +287,16 @@ body.mode-delete .inline-delete-actions { display: inline-flex; }
     color: #24324a;
     border: 1.5px solid #c7cdd7;
     border-radius: 999px;
-    padding: 7px 14px;
-    font-size: .88rem;
+    padding: 8px 10px;
+    min-height: 42px;
+    min-width: 0;
+    width: 100%;
+    font-size: 1rem;
     font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    box-shadow: 0 6px 14px rgba(15,23,42,0.10);
+    text-align: center;
 }
 
 .btn-edit-profile {
@@ -387,17 +406,17 @@ body.mode-delete .inline-delete-actions { display: inline-flex; }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 34px;
-    padding: 6px 16px;
-    margin-top: 8px;
+    min-height: 42px;
+    padding: 8px 18px;
+    margin-top: 10px;
     border-radius: 999px;
-    font-size: 15px;
-    font-weight: 700;
-    line-height: 1;
-    letter-spacing: 0.2px;
-    width: auto;
-    min-width: 136px;
-    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    width: 100%;
+    min-width: 0;
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.10);
 }
 
 .child-status-pill.status-approved { background: linear-gradient(135deg, #799677, #597D57); color: #fff; }

@@ -26,16 +26,28 @@ if ($fetchArr = $result->fetch_assoc()) {
     $f_name = "ไม่พบชื่อมูลนิธิ";
 }
 
-// รองรับคอลัมน์วันเกิด (กรณียังไม่มีในฐานข้อมูล ให้เพิ่มอัตโนมัติ)
-$has_birth_date_column = false;
-$colCheck = $conn->query("SHOW COLUMNS FROM Children LIKE 'birth_date'");
-if ($colCheck && $colCheck->num_rows > 0) {
-    $has_birth_date_column = true;
-} else {
-    $conn->query("ALTER TABLE Children ADD COLUMN birth_date DATE NULL AFTER child_name");
-    $colCheck = $conn->query("SHOW COLUMNS FROM Children LIKE 'birth_date'");
-    $has_birth_date_column = ($colCheck && $colCheck->num_rows > 0);
+// รองรับ schema เดิม/ใหม่: เพิ่มคอลัมน์ที่โค้ดใช้งานจริงแบบอัตโนมัติ
+$needed_columns = [
+    'foundation_name' => "ALTER TABLE Children ADD COLUMN foundation_name VARCHAR(255) NULL",
+    'child_name' => "ALTER TABLE Children ADD COLUMN child_name VARCHAR(255) NULL",
+    'birth_date' => "ALTER TABLE Children ADD COLUMN birth_date DATE NULL",
+    'age' => "ALTER TABLE Children ADD COLUMN age INT NULL",
+    'education' => "ALTER TABLE Children ADD COLUMN education VARCHAR(255) NULL",
+    'dream' => "ALTER TABLE Children ADD COLUMN dream VARCHAR(255) NULL",
+    'wish' => "ALTER TABLE Children ADD COLUMN wish VARCHAR(255) NULL",
+    'bank_name' => "ALTER TABLE Children ADD COLUMN bank_name VARCHAR(100) NULL",
+    'child_bank' => "ALTER TABLE Children ADD COLUMN child_bank VARCHAR(100) NULL",
+    'status' => "ALTER TABLE Children ADD COLUMN status VARCHAR(100) NULL",
+    'photo_child' => "ALTER TABLE Children ADD COLUMN photo_child VARCHAR(255) NULL",
+    'approve_profile' => "ALTER TABLE Children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
+];
+foreach ($needed_columns as $col => $ddl) {
+    $chk = $conn->query("SHOW COLUMNS FROM Children LIKE '$col'");
+    if ($chk && $chk->num_rows === 0) {
+        $conn->query($ddl);
+    }
 }
+$has_birth_date_column = true;
 
 if (isset($_POST['submit'])) {
 

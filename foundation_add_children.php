@@ -26,12 +26,27 @@ if ($fetchArr = $result->fetch_assoc()) {
     $f_name = "ไม่พบชื่อมูลนิธิ";
 }
 
-// ─── Auto-migrate: เพิ่มคอลัมน์ที่ยังไม่มีในตาราง Children ───────────────
+// ─── Auto-migrate: เพิ่มคอลัมน์ที่โค้ดใช้งานจริงในตาราง Children ───────────────
+// หมายเหตุ: ไม่ใช้ AFTER เพื่อลดปัญหาเมื่อ schema เดิมไม่ตรงกัน
 $needed_columns = [
-    'birth_date' => "ALTER TABLE Children ADD COLUMN birth_date DATE         NULL AFTER child_name",
-    'likes'      => "ALTER TABLE Children ADD COLUMN likes      VARCHAR(100)  NULL AFTER dream",
-    'wish_cat'   => "ALTER TABLE Children ADD COLUMN wish_cat   VARCHAR(100)  NULL AFTER wish",
-    'qr_account_image' => "ALTER TABLE Children ADD COLUMN qr_account_image VARCHAR(255) NULL AFTER child_bank",
+    'foundation_name' => "ALTER TABLE Children ADD COLUMN foundation_name VARCHAR(255) NULL",
+    'child_name' => "ALTER TABLE Children ADD COLUMN child_name VARCHAR(255) NULL",
+    'birth_date' => "ALTER TABLE Children ADD COLUMN birth_date DATE NULL",
+    'age' => "ALTER TABLE Children ADD COLUMN age INT NULL",
+    'education' => "ALTER TABLE Children ADD COLUMN education VARCHAR(255) NULL",
+    'dream' => "ALTER TABLE Children ADD COLUMN dream VARCHAR(255) NULL",
+    'likes' => "ALTER TABLE Children ADD COLUMN likes VARCHAR(100) NULL",
+    'wish' => "ALTER TABLE Children ADD COLUMN wish VARCHAR(255) NULL",
+    'wish_cat' => "ALTER TABLE Children ADD COLUMN wish_cat VARCHAR(100) NULL",
+    'bank_name' => "ALTER TABLE Children ADD COLUMN bank_name VARCHAR(100) NULL",
+    'child_bank' => "ALTER TABLE Children ADD COLUMN child_bank VARCHAR(100) NULL",
+    'qr_account_image' => "ALTER TABLE Children ADD COLUMN qr_account_image VARCHAR(255) NULL",
+    'status' => "ALTER TABLE Children ADD COLUMN status VARCHAR(100) NULL",
+    'photo_child' => "ALTER TABLE Children ADD COLUMN photo_child VARCHAR(255) NULL",
+    'approve_profile' => "ALTER TABLE Children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
+    'is_hidden' => "ALTER TABLE Children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0",
+    'reject_reason' => "ALTER TABLE Children ADD COLUMN reject_reason TEXT NULL",
+    'reviewed_at' => "ALTER TABLE Children ADD COLUMN reviewed_at DATETIME NULL",
 ];
 foreach ($needed_columns as $col => $ddl) {
     $chk = $conn->query("SHOW COLUMNS FROM Children LIKE '$col'");
