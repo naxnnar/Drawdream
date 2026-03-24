@@ -153,11 +153,12 @@ if ($cat !== 'all') {
     $types .= "s";
 }
 
+// เมื่อคลิก fundraising หรือ completed ให้กรองด้วย status
 $statusWhere = [
     'fundraising' => "p.project_status = 'approved'",
     'completed' => "p.project_status IN ('completed', 'done')",
 ];
-if (isset($statusWhere[$status])) {
+if ($status !== 'all' && isset($statusWhere[$status])) {
     $where[] = $statusWhere[$status];
 }
 
@@ -412,11 +413,12 @@ if ($isFoundationOwnView) {
     </div>
 </div>
 
-<?php if ($role === 'admin'): ?>
+<?php 
+// แสดง top-actions เฉพาะ admin
+if ($role === 'admin'): 
+?>
 <div class="top-actions">
-    <?php if ($role === 'admin'): ?>
-        <a href="admin_approve_projects.php" class="btn-mini btn-admin">อนุมัติโครงการ</a>
-    <?php endif; ?>
+    <a href="admin_approve_projects.php" class="btn-mini btn-admin">อนุมัติโครงการ</a>
 </div>
 <?php endif; ?>
 
@@ -556,7 +558,11 @@ if ($isFoundationOwnView) {
 (function() {
     document.querySelectorAll('.clickable-card').forEach(function(card) {
         card.addEventListener('click', function(e) {
+            // ถ้าคลิกปุ่ม "บริจาค" ให้ผ่าน link ปกติ
+            if (e.target.closest('a.donate-btn')) return;
+            // ถ้าคลิก link หรือ button อื่นให้ผ่าน
             if (e.target.closest('a, button, input, textarea, select, form')) return;
+            // มิฉะนั้น redirect ไปหน้า detail
             const href = this.dataset.href;
             if (href) window.location.href = href;
         });

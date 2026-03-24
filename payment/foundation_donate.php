@@ -67,7 +67,6 @@ $error     = "";
 $qr_image  = "";
 $charge_id = "";
 
-// ======== ประมวลผลการชำระเงิน ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     $amount = (int)($_POST['amount'] ?? 0);
 
@@ -82,7 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
             'currency' => 'THB',
         ]);
 
-        if (isset($source_response['object']) && $source_response['object'] === 'source') {
+        // ตรวจสอบ error จาก curl หรือ API
+        if (isset($source_response['error'])) {
+            $error = "เกิดข้อผิดพลาด: " . $source_response['message'];
+        } elseif (isset($source_response['object']) && $source_response['object'] === 'source') {
             $source_id = $source_response['id'];
 
             $charge_response = omise_request('POST', '/charges', [
@@ -97,7 +99,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 ],
             ]);
 
-            if (isset($charge_response['id'])) {
+            // ตรวจสอบ error จาก charge response
+            if (isset($charge_response['error'])) {
+                $error = "เกิดข้อผิดพลาดในการสร้าง QR Code: " . $charge_response['message'];
+            } elseif (isset($charge_response['id'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
 
@@ -106,10 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 $_SESSION['pending_foundation']     = $foundation['foundation_name'];
                 $_SESSION['pending_foundation_id']  = $fid;
             } else {
-                $error = "เกิดข้อผิดพลาดในการสร้าง QR Code: " . ($charge_response['message'] ?? 'unknown error');
+                $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
             }
         } else {
-            $error = "เกิดข้อผิดพลาด: " . ($source_response['message'] ?? 'unknown error');
+            $error = "ไม่สามารถสร้าง PromptPay Source ได้: " . ($source_response['message'] ?? 'unknown error');
         }
     }
 }
@@ -119,13 +124,28 @@ function omise_request($method, $path, $data = []) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
     if ($method === 'POST') {
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     }
     $response = curl_exec($ch);
+    $curl_error = curl_error($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    return json_decode($response, true);
+    
+    if ($response === false) {
+        return ['error' => 'curl_error', 'message' => $curl_error];
+    }
+    
+    $decoded = json_decode($response, true);
+    if ($decoded === null) {
+        return ['error' => 'json_error', 'message' => 'Invalid JSON response', 'raw' => substr($response, 0, 200)];
+    }
+    
+    return $decoded;
 }
 ?>
 <!DOCTYPE html>

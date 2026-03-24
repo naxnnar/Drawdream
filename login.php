@@ -6,7 +6,14 @@ include 'db.php';
 
 // ถ้า login แล้ว ไป homepage
 if (isset($_SESSION['user_id'])) {
-    header("Location: homepage.php");
+    // แยกเส้นทางตาม role สำหรับผู้ที่ login ค้างอยู่
+    if (!empty($_SESSION['show_welcome'])) {
+        header("Location: welcome.php");
+    } elseif (($_SESSION['role'] ?? '') === 'admin') {
+        header("Location: admin_dashboard.php");
+    } else {
+        header("Location: homepage.php");
+    }
     exit();
 }
 
@@ -52,7 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'donor';
-                    header("refresh:2;url=homepage.php");
+                    $_SESSION['show_welcome'] = true;
+                    header("refresh:2;url=welcome.php");
                 } else {
                     $error = "เกิดข้อผิดพลาด: " . $stmt->error;
                 }
@@ -92,7 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'foundation';
-                    header("refresh:2;url=homepage.php");
+                    $_SESSION['show_welcome'] = true;
+                    header("refresh:2;url=welcome.php");
                 } else {
                     $error = "เกิดข้อผิดพลาด: " . $stmt->error;
                 }
@@ -128,7 +137,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $fp = $stmt2->get_result()->fetch_assoc();
                 $_SESSION['account_verified'] = $fp['account_verified'];
             }
-            header("Location: homepage.php");
+
+            // ทั้ง admin, donor, foundation: แสดงหน้า Welcome ก่อน
+            $_SESSION['show_welcome'] = true;
+            header("Location: welcome.php");
             exit();
         } elseif ($row) {
             $error = "รหัสผ่านไม่ถูกต้อง";

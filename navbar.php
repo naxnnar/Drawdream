@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // นับรายการรออนุมัติ (เฉพาะ admin)
 $pending_count    = 0;
+$pending_children = 0;
 $pending_projects = 0;
 $pending_needs    = 0;
 
@@ -21,9 +22,12 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
 
   $r3 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE approve_item = 'pending'");
   if ($r3) $pending_needs = mysqli_fetch_assoc($r3)['cnt'];
+
+  $r4 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM Children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')");
+  if ($r4) $pending_children = mysqli_fetch_assoc($r4)['cnt'];
 }
 
-$total_pending = $pending_count + $pending_projects + $pending_needs;
+$total_pending = $pending_count + $pending_children + $pending_projects + $pending_needs;
 
 // ===== แจ้งเตือนสำหรับ foundation และ donor =====
 $user_notif_count = 0;
@@ -64,13 +68,6 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
 $_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
 $_nav_base  = str_repeat('../', max(0, $_nav_depth));
 
-if (isset($_GET['admin_mode'])) {
-  $_SESSION['admin_mode'] = $_GET['admin_mode'] === '1';
-  $redirect = strtok($_SERVER['REQUEST_URI'], '?');
-  header("Location: $redirect");
-  exit();
-}
-
 // โหมดดูตัวอย่างผู้บริจาค (foundation เท่านั้น)
 if (isset($_GET['preview_mode'])) {
   if ($_GET['preview_mode'] === 'donor' && ($_SESSION['real_role'] ?? $_SESSION['role'] ?? '') === 'foundation') {
@@ -86,10 +83,99 @@ if (isset($_GET['preview_mode'])) {
 }
 
 $is_donor_preview = isset($_SESSION['real_role']) && $_SESSION['real_role'] === 'foundation';
-$is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode'] ?? true);
+$is_admin_mode = ($_SESSION['role'] ?? '') === 'admin';
+$current_page = basename($_SERVER['PHP_SELF']);
+$adminDashboardActive = in_array($current_page, ['admin_dashboard.php'], true);
+$adminFoundationActive = in_array($current_page, ['admin_approve_foundation.php'], true);
+$adminChildrenActive = in_array($current_page, ['children_.php', 'children_donate.php', 'admin_approve_children.php', 'admin_children.php'], true);
+$adminProjectActive = in_array($current_page, ['admin_approve_projects.php', 'admin_projects.php'], true);
+$adminNeedlistActive = in_array($current_page, ['admin_approve_needlist.php', 'foundation.php', 'foundation_add_need.php'], true);
+$adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
 <link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
 <link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css">
+<?php if ($is_admin_mode): ?>
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+<button type="button" class="admin-sidebar-show-btn" id="adminSidebarShowBtn" aria-label="แสดงเมนูแอดมิน">☰</button>
+<aside class="admin-sidebar-nav">
+  <div class="admin-sidebar-head-actions">
+    <button type="button" class="admin-sidebar-toggle" id="adminSidebarToggle" aria-label="ซ่อนเมนูแอดมิน">✕</button>
+    <a href="<?= $_nav_base ?>admin_notifications.php" class="admin-sidebar-notif" title="รายการแจ้งเตือนแอดมิน">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:bell-bold-duotone"></iconify-icon></span>
+      <?php if ($total_pending > 0): ?><span class="admin-nav-badge"><?= $total_pending ?></span><?php endif; ?>
+    </a>
+  </div>
+
+  <a href="<?= $_nav_base ?>admin_dashboard.php" class="admin-brand-card">
+    <img src="<?= $_nav_base ?>img/logobig.png" class="admin-brand-logo" alt="DrawDream Admin">
+    <div class="admin-brand-text">
+      <strong>DrawDream</strong>
+      <span>Admin Panel</span>
+    </div>
+  </a>
+
+  <div class="admin-nav-links">
+    <a href="<?= $_nav_base ?>admin_dashboard.php" class="admin-nav-link<?= $adminDashboardActive ? ' active' : '' ?>">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:home-2-bold-duotone"></iconify-icon></span>
+      <span class="admin-nav-label">Dashboard</span>
+    </a>
+    <a href="<?= $_nav_base ?>admin_approve_foundation.php" class="admin-nav-link<?= $adminFoundationActive ? ' active' : '' ?>">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:buildings-2-bold-duotone"></iconify-icon></span>
+      <span class="admin-nav-label">Foundation</span>
+    </a>
+    <a href="<?= $_nav_base ?>children_.php" class="admin-nav-link<?= $adminChildrenActive ? ' active' : '' ?>">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:users-group-two-rounded-bold-duotone"></iconify-icon></span>
+      <span class="admin-nav-label">Profilechildren</span>
+    </a>
+    <a href="<?= $_nav_base ?>admin_approve_projects.php" class="admin-nav-link<?= $adminProjectActive ? ' active' : '' ?>">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:book-bookmark-bold-duotone"></iconify-icon></span>
+      <span class="admin-nav-label">Project</span>
+    </a>
+    <a href="<?= $_nav_base ?>admin_approve_needlist.php" class="admin-nav-link<?= $adminNeedlistActive ? ' active' : '' ?>">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:gift-bold-duotone"></iconify-icon></span>
+      <span class="admin-nav-label">Needlist</span>
+    </a>
+    <a href="<?= $_nav_base ?>admin_escrow.php" class="admin-nav-link<?= $adminEscrowActive ? ' active' : '' ?>">
+      <span class="admin-nav-emoji"><iconify-icon icon="solar:wallet-money-bold-duotone"></iconify-icon></span>
+      <span class="admin-nav-label">Escrow</span>
+    </a>
+  </div>
+
+  <div class="admin-sidebar-footer">
+    <a href="<?= $_nav_base ?>profile.php" class="admin-side-utility">โปรไฟล์</a>
+    <a href="<?= $_nav_base ?>logout.php" class="admin-side-utility admin-side-logout">ออกจากระบบ</a>
+  </div>
+</aside>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.classList.add('admin-sidebar-page');
+    const sidebar = document.querySelector('.admin-sidebar-nav');
+    const toggleBtn = document.getElementById('adminSidebarToggle');
+    const showBtn = document.getElementById('adminSidebarShowBtn');
+    const storageKey = 'drawdream-admin-sidebar-collapsed';
+
+    function setCollapsed(collapsed) {
+      document.body.classList.toggle('admin-sidebar-collapsed', collapsed);
+      if (showBtn) showBtn.style.display = collapsed ? 'inline-flex' : 'none';
+      localStorage.setItem(storageKey, collapsed ? '1' : '0');
+    }
+
+    const saved = localStorage.getItem(storageKey) === '1';
+    setCollapsed(saved);
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function () {
+        setCollapsed(true);
+      });
+    }
+    if (showBtn) {
+      showBtn.addEventListener('click', function () {
+        setCollapsed(false);
+      });
+    }
+  });
+</script>
+<?php else: ?>
 <nav class="navbar">
 
   <div class="nav-left">
@@ -123,20 +209,7 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
   <div class="nav-right">
     <?php if ($is_logged_in): ?>
 
-      <?php if ($_SESSION['role'] === 'admin'): ?>
-        <?php if ($is_admin_mode): ?>
-          <a href="?admin_mode=0" class="mode-toggle-btn">โหมดปกติ</a>
-        <?php else: ?>
-          <a href="?admin_mode=1" class="mode-toggle-btn mode-admin">โหมดแอดมิน</a>
-        <?php endif; ?>
-        <?php if ($total_pending > 0): ?>
-          <a href="<?= $_nav_base ?>admin_dashboard.php" class="notif-btn" title="มีรายการรออนุมัติ">
-            <img src="<?= $_nav_base ?>img/bell.png" alt="แจ้งเตือน" class="nav-icon">
-            <span class="notif-badge"><?= $total_pending ?></span>
-          </a>
-        <?php endif; ?>
-
-      <?php elseif (in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])): ?>
+      <?php if (in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])): ?>
         <?php if (($_SESSION['real_role'] ?? '') === 'foundation'): ?>
           <!-- กำลังอยู่ในโหมดดูตัวอย่างผู้บริจาค -->
         <?php elseif (($_SESSION['role'] ?? '') === 'foundation'): ?>
@@ -187,6 +260,7 @@ $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin' && ($_SESSION['admin_mode
   </div>
 
 </nav>
+<?php endif; ?>
 
 <?php if ($is_donor_preview): ?>
 <div class="donor-preview-banner">

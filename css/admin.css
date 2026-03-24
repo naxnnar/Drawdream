@@ -7,6 +7,12 @@
    ===================================================== */
 
 /* ===== admin_projects.php + admin_approve_projects.php ===== */
+body.admin-projects-page,
+body.admin-approve-projects-page,
+body.admin-approve-needlist-page {
+    background: #F7ECDE;
+}
+
 body.admin-projects-page .wrap,
 body.admin-approve-projects-page .wrap {
     max-width: 1100px;

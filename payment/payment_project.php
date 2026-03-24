@@ -21,7 +21,7 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("\n    SELECT p.*,\n           COALESCE(pd.category, p.category) AS category,\n           COALESCE(pd.target_group, p.target_group) AS target_group,\n           pd.project_quote,\n           pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,\n           pd.urgent_info, pd.need_info, pd.update_info,\n           fp.contact_person, fp.phone, fp.phone_secondary, u.email AS email, fp.website, fp.facebook_url, fp.line_id, fp.address\n    FROM project p\n    LEFT JOIN project_detail pd ON pd.project_id = p.project_id\n    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name\n    LEFT JOIN users u ON u.user_id = fp.user_id\n    WHERE p.project_id = ? AND p.project_status = 'approved'\n    LIMIT 1\n");
+$stmt = $conn->prepare("\n    SELECT p.*,\n           COALESCE(pd.category, p.category) AS category,\n           COALESCE(pd.target_group, p.target_group) AS target_group,\n           pd.project_quote,\n           pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,\n           pd.urgent_info, pd.need_info, pd.update_info,\n           fp.phone, u.email AS email, fp.address\n    FROM project p\n    LEFT JOIN project_detail pd ON pd.project_id = p.project_id\n    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name\n    LEFT JOIN users u ON u.user_id = fp.user_id\n    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done')\n    LIMIT 1\n");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
@@ -106,7 +106,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
             'currency' => 'THB',
         ]);
 
-        if (isset($source_response['object']) && $source_response['object'] === 'source') {
+        // ตรวจสอบ error จาก curl หรือ API
+        if (isset($source_response['error'])) {
+            $error = "เกิดข้อผิดพลาด: " . $source_response['message'];
+        } elseif (isset($source_response['object']) && $source_response['object'] === 'source') {
             $source_id = $source_response['id'];
 
             // สร้าง Charge
@@ -121,7 +124,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 ],
             ]);
 
-            if (isset($charge_response['id'])) {
+            // ตรวจสอบ error จาก charge response
+            if (isset($charge_response['error'])) {
+                $error = "เกิดข้อผิดพลาดในการสร้าง QR Code: " . $charge_response['message'];
+            } elseif (isset($charge_response['id'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
 
@@ -133,10 +139,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 $_SESSION['pending_project']   = $project['project_name'];
 
             } else {
-                $error = "เกิดข้อผิดพลาดในการสร้าง QR Code: " . ($charge_response['message'] ?? 'unknown error');
+                $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
             }
         } else {
-            $error = "เกิดข้อผิดพลาด: " . ($source_response['message'] ?? 'unknown error');
+            $error = "ไม่สามารถสร้าง PromptPay Source ได้: " . ($source_response['message'] ?? 'unknown error');
         }
     }
 }
@@ -147,15 +153,29 @@ function omise_request($method, $path, $data = []) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    
     if ($method === 'POST') {
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     }
 
     $response = curl_exec($ch);
+    $curl_error = curl_error($ch);
     curl_close($ch);
-    return json_decode($response, true);
+    
+    if ($response === false) {
+        return ['error' => 'curl_error', 'message' => $curl_error];
+    }
+    
+    $decoded = json_decode($response, true);
+    if ($decoded === null) {
+        return ['error' => 'json_error', 'message' => 'Invalid JSON response'];
+    }
+    
+    return $decoded;
 }
 ?>
 <!DOCTYPE html>
@@ -186,13 +206,9 @@ function omise_request($method, $path, $data = []) {
 
         <div class="contact-card">
             <h4>ข้อมูลติดต่อมูลนิธิ</h4>
-            <p>👤 ผู้ติดต่อ: <?= htmlspecialchars($project['contact_person'] ?? '-') ?></p>
-            <p>📞 เบอร์หลัก: <?= htmlspecialchars($project['phone'] ?? '-') ?></p>
-            <p>📱 เบอร์รอง: <?= htmlspecialchars($project['phone_secondary'] ?? '-') ?></p>
+            <p>� เบอร์ติดต่อ: <?= htmlspecialchars($project['phone'] ?? '-') ?></p>
             <p>✉️ อีเมล: <?= htmlspecialchars($project['email'] ?? '-') ?></p>
-            <p>🌐 เว็บไซต์: <?= htmlspecialchars($project['website'] ?? '-') ?></p>
-            <p>📘 Facebook: <?= htmlspecialchars($project['facebook_url'] ?? '-') ?></p>
-            <p>💬 Line: <?= htmlspecialchars($project['line_id'] ?? '-') ?></p>
+
             <p>📍 ที่อยู่: <?= htmlspecialchars($project['address'] ?? '-') ?></p>
         </div>
     </div>

@@ -416,25 +416,40 @@
    ======================================== */
 
 body.foundation-donate-page {
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    background: #F7ECDE;
     min-height: 100vh;
 }
 
 body.foundation-donate-page .donate-container {
-    max-width: 1100px;
+    max-width: 960px;
     margin: 40px auto;
     padding: 0 20px;
     display: grid;
-    grid-template-columns: 1.2fr 1fr;
-    gap: 30px;
-    align-items: start;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+}
+
+body.foundation-donate-page .donate-container > * {
+    display: flex;
+    flex-direction: column;
 }
 
 body.foundation-donate-page .foundation-panel {
     background: white;
+    border: 1.5px solid #f1cf54;
+    border-right: none;
     border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     padding: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+body.foundation-donate-page .payment-box {
+    background: white;
+    border: 1.5px solid #f1cf54;
+    border-left: none;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    padding: 30px;
 }
 
 body.foundation-donate-page .foundation-header h2 {
@@ -547,6 +562,11 @@ body.foundation-donate-page .item-meta {
 
 @media (max-width: 768px) {
     body.foundation-donate-page .donate-container {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    body.foundation-donate-page .foundation-panel {
         grid-template-columns: 1fr;
     }
 }

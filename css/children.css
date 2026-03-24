@@ -31,6 +31,10 @@ body.donation-page {
     overflow-x: hidden;
 }
 
+body.admin-sidebar-page.donation-page {
+    background: #F7ECDE;
+}
+
 .donation-shell {
     max-width: 1400px;
     margin: 0 auto;
