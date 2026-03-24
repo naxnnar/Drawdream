@@ -134,9 +134,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 // บันทึกลง database (status = pending รอยืนยัน
 
                 // เก็บ charge_id ไว้ใน session เพื่อเช็คสถานะ
-                $_SESSION['pending_charge_id'] = $charge_id;
-                $_SESSION['pending_amount']    = $amount;
-                $_SESSION['pending_project']   = $project['project_name'];
+                $_SESSION['pending_charge_id']  = $charge_id;
+                $_SESSION['pending_amount']     = $amount;
+                $_SESSION['pending_project']    = $project['project_name'];
+                $_SESSION['pending_project_id'] = $project_id;
 
             } else {
                 $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
@@ -162,20 +163,58 @@ function omise_request($method, $path, $data = []) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     }
 
-    $response = curl_exec($ch);
+    $response   = curl_exec($ch);
     $curl_error = curl_error($ch);
     curl_close($ch);
-    
-    if ($response === false) {
+
+    // API ไม่สามารถเข้าถึงได้ (เช่น ไม่มีเน็ตใน local) → fallback mock สำหรับ test key
+    if ($response === false || $response === '') {
+        if (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
+            return _omise_local_mock($path, $data);
+        }
         return ['error' => 'curl_error', 'message' => $curl_error];
     }
-    
+
     $decoded = json_decode($response, true);
     if ($decoded === null) {
         return ['error' => 'json_error', 'message' => 'Invalid JSON response'];
     }
-    
+
     return $decoded;
+}
+
+// ฟังก์ชัน mock response สำหรับ local dev ที่ติดต่อ Omise ไม่ได้
+function _omise_local_mock(string $path, array $data): array {
+    if (strpos($path, '/sources') !== false) {
+        return ['object' => 'source', 'id' => 'src_mock_' . bin2hex(random_bytes(6)), 'type' => 'promptpay'];
+    }
+    if (strpos($path, '/charges') !== false) {
+        $cid = 'chrg_mock_' . bin2hex(random_bytes(8));
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">'
+            . '<rect width="200" height="200" fill="#fff"/>'
+            . '<rect x="10" y="10" width="56" height="56" fill="#000"/>'
+            . '<rect x="17" y="17" width="42" height="42" fill="#fff"/>'
+            . '<rect x="24" y="24" width="28" height="28" fill="#000"/>'
+            . '<rect x="134" y="10" width="56" height="56" fill="#000"/>'
+            . '<rect x="141" y="17" width="42" height="42" fill="#fff"/>'
+            . '<rect x="148" y="24" width="28" height="28" fill="#000"/>'
+            . '<rect x="10" y="134" width="56" height="56" fill="#000"/>'
+            . '<rect x="17" y="141" width="42" height="42" fill="#fff"/>'
+            . '<rect x="24" y="148" width="28" height="28" fill="#000"/>'
+            . '<text x="100" y="108" font-size="11" text-anchor="middle" font-family="Arial" fill="#555">TEST MODE</text>'
+            . '<text x="100" y="122" font-size="9" text-anchor="middle" font-family="Arial" fill="#999">Mock PromptPay QR</text>'
+            . '</svg>';
+        return [
+            'object'   => 'charge',
+            'id'       => $cid,
+            'status'   => 'pending',
+            'paid'     => false,
+            'amount'   => $data['amount'] ?? 0,
+            'currency' => 'THB',
+            'source'   => ['scannable_code' => ['image' => ['download_uri' => 'data:image/svg+xml;base64,' . base64_encode($svg)]]],
+        ];
+    }
+    return ['error' => 'mock_unknown', 'message' => 'Mock: unknown API path'];
 }
 ?>
 <!DOCTYPE html>
@@ -229,7 +268,7 @@ function omise_request($method, $path, $data = []) {
                 <p class="qr-charge">Charge ID: <?= htmlspecialchars($charge_id) ?></p>
 
                 <a href="check_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= $project_id ?>" 
-                   class="btn-check">ฉันชำระเงินแล้ว</a>
+                   class="btn-check">ชำระเงินแล้ว</a>
                 <a href="payment_project.php?project_id=<?= $project_id ?>" class="btn-cancel">ยกเลิก</a>
             </div>
 
@@ -274,7 +313,7 @@ function omise_request($method, $path, $data = []) {
                         <span>PromptPay QR</span>
                     </div>
                 </div>
-                <button type="submit" name="pay" class="btn-pay">สร้าง QR Code</button>
+                <button type="submit" name="pay" class="btn-pay" style="background:#F1CF54;color:#222;">บริจาค</button>
             </form>
 
             <a href="../project.php" class="btn-back">ย้อนกลับ</a>

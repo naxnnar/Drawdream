@@ -241,10 +241,10 @@ body.mode-edit .edit-pill-wrap { display: block; }
     color: #3b2f09;
     border: 0;
     border-radius: 999px;
-    padding: 8px 18px;
-    min-height: 42px;
+    padding: 12px 22px;
+    min-height: 52px;
     min-width: 0;
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 800;
     line-height: 1.2;
     letter-spacing: 0.3px;
@@ -855,6 +855,53 @@ main.child-profile-main {
     cursor: pointer;
 }
 
+/* Payment method selector (แสดงใน children_donate.php) */
+.payment-methods-wrap {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    margin: 14px 0 4px;
+}
+
+.payment-method-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    background: #fff;
+    border: 2.5px solid transparent;
+    border-radius: 14px;
+    padding: 13px 16px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #333;
+    transition: border-color .15s, background .15s;
+    position: relative;
+    user-select: none;
+}
+
+.payment-method-option.active {
+    border-color: #4A5CB5;
+    background: #eef0fb;
+}
+
+.pm-icon {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.pm-check {
+    margin-left: auto;
+    color: #4A5CB5;
+    font-size: 1.1rem;
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.payment-method-option.active .pm-check { opacity: 1; }
+
 /* Responsive — children_donate */
 @media (max-width: 768px) {
     .data-grid { grid-template-columns: 1fr; }
@@ -1179,6 +1226,17 @@ select.dream-sel   { width: 100%; }
 
 .wrap textarea { min-height: 90px; resize: vertical; }
 .wrap .actions { display: flex; gap: 10px; margin-top: 16px; }
+
+.wrap .actions .btn {
+    padding: 12px 20px;
+    min-height: 50px;
+    font-size: 1.08rem;
+    font-weight: 800;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 
 .btn-save { background: #3C5099; color: #fff; }
 .btn-back { background: #CE573F; color: #fff; }

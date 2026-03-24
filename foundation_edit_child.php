@@ -38,9 +38,7 @@ if (!$child) {
     die('ไม่พบข้อมูลโปรไฟล์นี้ หรือไม่มีสิทธิ์แก้ไข');
 }
 
-if (($child['approve_profile'] ?? '') !== 'อนุมัติ') {
-    die('แก้ไขได้เฉพาะโปรไฟล์ที่อนุมัติแล้วเท่านั้น');
-}
+// อนุญาตให้มูลนิธิแก้ไขโปรไฟล์เด็กได้ทุกสถานะ
 
 $error = '';
 $success = '';
@@ -123,8 +121,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($error === '') {
+        // reset approve_profile กลับเป็นรอดำเนินการเมื่อมีการแก้ไข เพื่อให้ admin ตรวจสอบใหม่
         $sqlUpd = "UPDATE Children
-                   SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?
+                   SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?,
+                       approve_profile='รอดำเนินการ', reject_reason=NULL
                    WHERE child_id=? AND foundation_id=?";
         $stmtUpd = $conn->prepare($sqlUpd);
         $stmtUpd->bind_param(

@@ -234,7 +234,9 @@ if ($result && $result->num_rows > 0) {
         }
       ?>
       <div class="child-card-wrap">
-        <a href="children_donate.php?id=<?php echo $child['child_id']; ?>" class="child-card">
+        <div class="child-card"
+             data-view-url="children_donate.php?id=<?php echo (int)$child['child_id']; ?>"
+             data-edit-url="foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>">
           <label class="delete-corner">
             <input type="checkbox" class="delete-check" name="child_ids[]" value="<?php echo (int)$child['child_id']; ?>" form="bulkDeleteForm" aria-label="เลือกลบโปรไฟล์นี้">
           </label>
@@ -262,14 +264,13 @@ if ($result && $result->num_rows > 0) {
               <?php endif; ?>
               <?php if ($role === 'foundation'): ?>
                 <div class="edit-pill-wrap">
-                  <button type="button" class="btn-edit-pill"
-                    onclick="event.stopPropagation(); window.location.href='foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>'">
+                  <button type="button" class="btn-edit-pill" onclick="event.stopPropagation(); window.location.href='foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>'">
                     แก้ไขโปรไฟล์
                   </button>
                 </div>
               <?php endif; ?>
           </div>
-        </a>
+        </div>
       </div>
     </div>
     <?php endforeach; ?>
@@ -290,8 +291,33 @@ if ($result && $result->num_rows > 0) {
     const deleteReasonInput = document.getElementById('deleteReasonInput');
     const bulkActionInput   = document.getElementById('bulkActionInput');
     const reasonSheetOverlay = document.getElementById('reasonSheetOverlay');
+    const isFoundationManageContext = !!(toggleDeleteBtn && toggleEditBtn && bulkForm);
 
-    if (!checks.length || !toggleDeleteBtn || !toggleEditBtn || !bulkForm) return;
+    // ผูกการ์ดให้คลิกได้ทุก role (donor/admin/foundation)
+    document.querySelectorAll('.child-card').forEach(card => {
+      card.addEventListener('click', function(e) {
+        const viewUrl = this.dataset.viewUrl;
+        const editUrl = this.dataset.editUrl;
+
+        if (document.body.classList.contains('mode-delete')) {
+          e.preventDefault();
+          return;
+        }
+
+        if (document.body.classList.contains('mode-edit')) {
+          e.preventDefault();
+          if (editUrl) window.location.href = editUrl;
+          return;
+        }
+
+        if (viewUrl) {
+          window.location.href = viewUrl;
+        }
+      });
+    });
+
+    // ถ้าไม่ใช่บริบทจัดการของมูลนิธิ ให้หยุดแค่ส่วนจัดการ แต่ยังคลิกการ์ดได้ตามปกติ
+    if (!isFoundationManageContext) return;
 
     // --- Sheet elements (foundation role only) ---
     const reasonSheetCount = reasonSheetOverlay ? document.getElementById('reasonSheetCount') : null;
@@ -402,14 +428,6 @@ if ($result && $result->num_rows > 0) {
     checks.forEach(c => {
       c.addEventListener('click', function(e) { e.stopPropagation(); });
       c.addEventListener('change', refreshDeleteState);
-    });
-
-    document.querySelectorAll('.child-card').forEach(card => {
-      card.addEventListener('click', function(e) {
-        if (document.body.classList.contains('mode-delete')) {
-          e.preventDefault();
-        }
-      });
     });
 
     refreshDeleteState();

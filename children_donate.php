@@ -259,6 +259,15 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                     <span class="currency-label">บาท</span>
                 </div>
 
+                <!-- เลือกวิธีชำระเงิน -->
+                <div class="payment-methods-wrap">
+                    <div class="payment-method-option active" id="pm-promptpay" onclick="selectPayMethod('promptpay', this)">
+                        <img src="img/qr-code.png" alt="PromptPay" class="pm-icon">
+                        <span>PromptPay QR</span>
+                        <span class="pm-check"><i class="bi bi-check-circle-fill"></i></span>
+                    </div>
+                </div>
+
                 <button class="btn-submit-donation" onclick="processDonation(<?php echo $child['child_id']; ?>)">
                     บริจาค
                 </button>
@@ -296,13 +305,33 @@ function selectAmount(amount, btn) {
     btn.classList.add('active');
 }
 
+function selectPayMethod(method, el) {
+    document.querySelectorAll('.payment-method-option').forEach(o => o.classList.remove('active'));
+    el.classList.add('active');
+}
+
 function processDonation(id) {
     const amountInput = document.getElementById('display-amount');
     if (!amountInput || !amountInput.value) {
         alert("กรุณาเลือกจำนวนเงินก่อนบริจาค");
         return;
     }
-    window.location.href = `payment.php?amount=${amountInput.value}&child_id=${id}`;
+    // POST ตรงไปยัง child_donate.php พร้อม pay เพื่อข้ามหน้าฟอร์มซ้ำ
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'payment/child_donate.php';
+
+    const fields = { child_id: id, amount: amountInput.value, pay: '1' };
+    Object.entries(fields).forEach(([name, value]) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 

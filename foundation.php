@@ -29,7 +29,7 @@ $goalTotals = [];
 $q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE approve_item='approved' GROUP BY foundation_id");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
-$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
+$stmtAll = $conn->prepare("SELECT item_id, item_name, quantity_required, item_price, urgent, photo_item FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
@@ -41,7 +41,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, item_desc, brand, price_estimate, total_price, urgent, item_image, approve_item, note
+            SELECT item_id, item_name, item_desc, brand, item_price, total_price, urgent, photo_item, approve_item, note
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -95,7 +95,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
           <?php foreach ($myNeedlist as $nl): ?>
             <?php
               $status = $nl['approve_item'] ?? 'pending';
-              $nlImages = array_values(array_filter(explode('|', (string)($nl['item_image'] ?? ''))));
+              $nlImages = array_values(array_filter(explode('|', (string)($nl['photo_item'] ?? ''))));
               $nlImg = $nlImages[0] ?? '';
               // ดึงระยะเวลาจาก note
               $nlNote = $nl['note'] ?? '';
@@ -124,7 +124,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
                   <div class="need-card-cat"><?= htmlspecialchars($nl['brand']) ?></div>
                 <?php endif; ?>
                 <div class="need-card-goal">
-                  เป้าหมาย: <?= number_format((float)($nl['total_price'] ?: $nl['price_estimate']), 0) ?> บาท
+                  เป้าหมาย: <?= number_format((float)($nl['total_price'] ?: $nl['item_price']), 0) ?> บาท
                   <?php if ($nlPeriod): ?><span class="need-period">/<?= htmlspecialchars($nlPeriod) ?></span><?php endif; ?>
                 </div>
                 <?php if ($nl['item_desc']): ?>
@@ -188,7 +188,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
               <div class="items">
                 <?php foreach ($items as $it): ?>
                   <?php
-                    $itemImages = array_values(array_filter(explode('|', (string)($it['item_image'] ?? ''))));
+                    $itemImages = array_values(array_filter(explode('|', (string)($it['photo_item'] ?? ''))));
                     $mainItemImage = $itemImages[0] ?? '';
                   ?>
                   <div class="item">

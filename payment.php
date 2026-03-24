@@ -99,7 +99,7 @@ if ($child_id > 0) {
     <form method="post" class="mb-3">
       <input type="hidden" name="child_id" value="<?php echo (int)$child_id; ?>">
       <input type="hidden" name="amount" value="<?php echo htmlspecialchars((string)$amount); ?>">
-      <button type="submit" name="confirm_paid" class="btn-attach-slip">ฉันชำระเงินแล้ว</button>
+      <button type="submit" name="confirm_paid" class="btn-attach-slip">ชำระเงินแล้ว</button>
     </form>
 
     <a href="children_donate.php?id=<?php echo (int)$child_id; ?>" class="btn btn-outline-light w-100 btn-back-child">กลับหน้าโปรไฟล์เด็ก</a>

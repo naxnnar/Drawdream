@@ -100,7 +100,7 @@ if ($role === 'foundation') {
     ];
     $stmt3 = $conn->prepare("
         SELECT a.*, 
-               nl.item_name, nl.item_desc, nl.qty_needed, nl.price_estimate, nl.item_image, nl.foundation_id,
+               nl.item_name, nl.item_desc, nl.quantity_required, nl.item_price, nl.photo_item, nl.foundation_id,
                p.project_name, p.project_desc,
                fp.foundation_name
         FROM admin a
@@ -353,14 +353,14 @@ function showModal(data) {
     const body  = document.getElementById('modalBody');
     let html = '';
     if (data.item_name) {
-        const firstNeedImage = (data.item_image || '').split('|').filter(Boolean)[0] || '';
+        const firstNeedImage = (data.photo_item || '').split('|').filter(Boolean)[0] || '';
         if (firstNeedImage) html += `<img class="modal-image" src="uploads/needs/${firstNeedImage}" alt="">`;
         html += `<div class="modal-title">${data.item_name}</div>`;
         html += `<div class="modal-section"><div class="modal-label">มูลนิธิ:</div><div class="modal-value">${data.foundation_name || '-'}</div></div>`;
         html += `<div class="modal-section"><div class="modal-label">รายละเอียด:</div><div class="modal-value">${data.item_desc || '-'}</div></div>`;
-        html += `<div class="modal-section"><div class="modal-label">จำนวน:</div><div class="modal-value">${data.qty_needed} ชิ้น</div></div>`;
-        html += `<div class="modal-section"><div class="modal-label">ราคา/หน่วย:</div><div class="modal-value">${Number(data.price_estimate).toLocaleString('th-TH', {minimumFractionDigits: 2})} บาท</div></div>`;
-        html += `<div class="modal-section"><div class="modal-label">รวม:</div><div class="modal-value"><strong>${(data.qty_needed * data.price_estimate).toLocaleString('th-TH', {minimumFractionDigits: 2})} บาท</strong></div></div>`;
+        html += `<div class="modal-section"><div class="modal-label">จำนวน:</div><div class="modal-value">${data.quantity_required} ชิ้น</div></div>`;
+        html += `<div class="modal-section"><div class="modal-label">ราคา/หน่วย:</div><div class="modal-value">${Number(data.item_price).toLocaleString('th-TH', {minimumFractionDigits: 2})} บาท</div></div>`;
+        html += `<div class="modal-section"><div class="modal-label">รวม:</div><div class="modal-value"><strong>${(data.quantity_required * data.item_price).toLocaleString('th-TH', {minimumFractionDigits: 2})} บาท</strong></div></div>`;
     }
     if (data.project_name) {
         html += `<div class="modal-title">${data.project_name}</div>`;

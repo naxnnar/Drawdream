@@ -79,8 +79,8 @@ if (!$result) {
     <tbody>
       <?php while($row = mysqli_fetch_assoc($result)): ?>
         <?php
-          $total = (float)$row['qty_needed'] * (float)$row['price_estimate'];
-          $itemImages = array_values(array_filter(explode('|', (string)($row['item_image'] ?? ''))));
+          $total = (float)$row['quantity_required'] * (float)$row['item_price'];
+          $itemImages = array_values(array_filter(explode('|', (string)($row['photo_item'] ?? ''))));
           $mainItemImage = $itemImages[0] ?? '';
         ?>
         <tr>
@@ -94,8 +94,8 @@ if (!$result) {
           <td><?= htmlspecialchars($row['foundation_name']) ?></td>
           <td><?= htmlspecialchars($row['category']) ?></td>
           <td><?= htmlspecialchars($row['item_name']) ?></td>
-          <td><?= (int)$row['qty_needed'] ?></td>
-          <td><?= number_format((float)$row['price_estimate'], 2) ?></td>
+          <td><?= (int)$row['quantity_required'] ?></td>
+          <td><?= number_format((float)$row['item_price'], 2) ?></td>
           <td><b><?= number_format($total, 2) ?></b></td>
           <td>
             <textarea class="admin-note" name="note" form="f<?= $row['item_id'] ?>" placeholder="กรุณากรอกเหตุผลเมื่อปฏิเสธ"></textarea>

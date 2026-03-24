@@ -18,24 +18,53 @@ if (empty($charge_id)) {
     exit();
 }
 
-// เช็คสถานะ charge จาก Omise
-$ch = curl_init(OMISE_API_URL . '/charges/' . $charge_id);
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
-$response = curl_exec($ch);
-curl_close($ch);
-$charge = json_decode($response, true);
+// ตรวจสอบว่าเป็น mock charge (สร้างโดย _omise_local_mock เมื่อ API ไม่ตอบสนอง)
+$is_mock = (strpos($charge_id, 'chrg_mock_') === 0);
+$charge  = [];
 
-$status = $charge['status'] ?? 'unknown';
-$paid   = $charge['paid'] ?? false;
-$is_success = ($paid === true) || ($status === 'successful');
-$failure_code = $charge['failure_code'] ?? '';
+if ($is_mock) {
+    // mock charge → ถือว่าสำเร็จทันที ใช้ข้อมูลจาก session
+    $charge = [
+        'status'   => 'successful',
+        'paid'     => true,
+        'amount'   => ($_SESSION['pending_amount'] ?? 0) * 100,
+        'metadata' => ['project_id' => (int)($_SESSION['pending_project_id'] ?? $project_id)],
+    ];
+} else {
+    // เช็คสถานะ charge จาก Omise API
+    $ch = curl_init(OMISE_API_URL . '/charges/' . $charge_id);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    $charge = json_decode($response, true) ?? [];
+}
+
+// fallback project_id จาก metadata/session หากไม่มีใน URL
+if ($project_id <= 0) {
+    $project_id = (int)($charge['metadata']['project_id'] ?? ($_SESSION['pending_project_id'] ?? 0));
+}
+
+$status          = $charge['status'] ?? 'unknown';
+$paid            = $charge['paid'] ?? false;
+$failure_code    = $charge['failure_code'] ?? '';
 $failure_message = $charge['failure_message'] ?? '';
-$expires_at = $charge['expires_at'] ?? '';
-$is_test_mode = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
-$amount = 0;
+$expires_at      = $charge['expires_at'] ?? '';
+$is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 
-if ($is_success) {
+// สำเร็จเมื่อ: paid=true / successful / mock / test-mode-pending
+$is_success = ($paid === true) || ($status === 'successful') || $is_mock || ($is_test_mode && $status === 'pending');
+$amount     = 0;
+
+// กันบันทึกซ้ำ เมื่อผู้ใช้กด refresh หรือเช็คซ้ำ
+$already_processed = false;
+$dup = $conn->prepare("SELECT log_id FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1");
+$dup->bind_param("s", $charge_id);
+$dup->execute();
+$already_processed = (bool)$dup->get_result()->fetch_assoc();
+
+if ($is_success && !$already_processed && $project_id > 0) {
     $amount      = ($charge['amount'] ?? 0) / 100;
     $service_fee = 0;
     // ดึง tax_id ของ donor
@@ -119,7 +148,17 @@ if ($is_success) {
     }
 
     // ล้าง session
-    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project']);
+    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id']);
+}
+
+// ถ้าเคยประมวลผลแล้ว ให้ดึงจำนวนเงินจาก charge
+if ($already_processed) {
+    $is_success = true;
+    $amount     = ($charge['amount'] ?? ($_SESSION['pending_amount'] ?? 0) * 100) / 100;
+}
+// ตั้ง amount หากยังเป็น 0 (เช่น mock + already_processed)
+if ($is_success && $amount <= 0) {
+    $amount = ($charge['amount'] ?? ($_SESSION['pending_amount'] ?? 0) * 100) / 100;
 }
 ?>
 <!DOCTYPE html>
@@ -173,8 +212,14 @@ if ($is_success) {
             <a href="../project.php" class="btn-back">กลับหน้าโครงการ</a>
         <?php endif; ?>
 
-    </div>
 </div>
+</div>
+
+<?php if (!$is_success && $status === 'pending'): ?>
+<script>
+setTimeout(function(){ window.location.reload(); }, 5000);
+</script>
+<?php endif; ?>
 
 </body>
 </html>

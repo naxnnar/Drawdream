@@ -253,11 +253,12 @@ body {
 }
 
 .btn-check {
-    background: #4CAF50;
-    color: white;
+    background: #F1CF54;
+    color: #222;
+    font-weight: 700;
 }
 
-.btn-check:hover { background: #45a049; }
+.btn-check:hover { background: #e5bb2e; color: #222; }
 
 .btn-back,
 .btn-cancel {
