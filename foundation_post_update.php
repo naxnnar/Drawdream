@@ -4,62 +4,94 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
-if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'foundation') {
-    header("Location: login.php");
-    exit();
+
+// ถ้าเป็น readonly (ผู้บริจาคดูผลลัพธ์) ไม่ต้องเช็ค session/role
+if (!$readonly) {
+    if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'foundation') {
+        header("Location: login.php");
+        exit();
+    }
 }
 
-$user_id = (int)$_SESSION['user_id'];
 
-// ดึง foundation_id
-$stmt = $conn->prepare("SELECT foundation_id, foundation_name FROM foundation_profile WHERE user_id = ? LIMIT 1");
-$stmt->bind_param("i", $user_id);
-$stmt->execute();
-$foundation = $stmt->get_result()->fetch_assoc();
-if (!$foundation) { header("Location: profile.php"); exit(); }
-$fid = (int)$foundation['foundation_id'];
+$user_id = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
+
+
+// ดึง foundation_id เฉพาะถ้าไม่ใช่ readonly
+if (!$readonly) {
+    $stmt = $conn->prepare("SELECT foundation_id, foundation_name FROM foundation_profile WHERE user_id = ? LIMIT 1");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $foundation = $stmt->get_result()->fetch_assoc();
+    if (!$foundation) { header("Location: profile.php"); exit(); }
+    $fid = (int)$foundation['foundation_id'];
+} else {
+    // readonly: ดึง foundation_name จาก project
+    $foundation = null;
+    $fid = 0;
+}
 
 // ✅ รับ project_id จาก URL (มาจากแจ้งเตือน)
 $locked_project_id = (int)($_GET['project_id'] ?? 0);
+$readonly = isset($_GET['readonly']) && $_GET['readonly'] == '1';
 $locked_project    = null;
 
 if ($locked_project_id > 0) {
-    // ดึงเฉพาะโครงการนั้น และตรวจสอบว่าเป็นของมูลนิธินี้จริง
-    $lk = $conn->prepare("
-        SELECT project_id, project_name, current_donate, goal_amount, project_status
-        FROM project 
-        WHERE project_id = ? AND foundation_id = ? AND project_status IN ('completed','done')
-        LIMIT 1
-    ");
-    $lk->bind_param("ii", $locked_project_id, $fid);
-    $lk->execute();
-    $locked_project = $lk->get_result()->fetch_assoc();
+    if (!$readonly) {
+        // เฉพาะ foundation: ตรวจสอบว่าเป็นของตัวเอง
+        $lk = $conn->prepare("
+            SELECT project_id, project_name, current_donate, goal_amount, project_status
+            FROM project 
+            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('completed','done')
+            LIMIT 1
+        ");
+        $lk->bind_param("is", $locked_project_id, $foundation['foundation_name']);
+        $lk->execute();
+        $locked_project = $lk->get_result()->fetch_assoc();
+    } else {
+        // readonly: ดึง project เฉย ๆ
+        $lk = $conn->prepare("
+            SELECT project_id, project_name, current_donate, goal_amount, project_status
+            FROM project 
+            WHERE project_id = ? AND project_status IN ('completed','done')
+            LIMIT 1
+        ");
+        $lk->bind_param("i", $locked_project_id);
+        $lk->execute();
+        $locked_project = $lk->get_result()->fetch_assoc();
+    }
 }
 
+
 // ดึงโครงการทั้งหมด (กรณีไม่ได้มาจาก notification)
-$stmt2 = $conn->prepare("
-    SELECT project_id, project_name, current_donate, goal_amount, project_status
-    FROM project 
-    WHERE foundation_id = ? AND project_status IN ('completed', 'done')
-    ORDER BY project_id DESC
-");
-$stmt2->bind_param("i", $fid);
-$stmt2->execute();
-$projects = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
+$projects = [];
+if ($locked_project_id > 0 && $locked_project) {
+    $projects[] = $locked_project;
+} else {
+    $stmt2 = $conn->prepare("
+        SELECT project_id, project_name, current_donate, goal_amount, project_status
+        FROM project 
+        WHERE foundation_id = ? AND project_status IN ('completed', 'done')
+        ORDER BY project_id DESC
+    ");
+    $stmt2->bind_param("i", $fid);
+    $stmt2->execute();
+    $projects = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
+}
 
 $success = "";
 $error   = "";
 
 // ======== POST: บันทึก update ========
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
     $project_id  = (int)($_POST['project_id'] ?? 0);
     $title       = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $image_name  = '';
 
-    // ตรวจสอบว่าโครงการนี้เป็นของมูลนิธินี้จริง
-    $chk = $conn->prepare("SELECT project_id, project_name FROM project WHERE project_id = ? AND foundation_id = ?");
-    $chk->bind_param("ii", $project_id, $fid);
+    // ตรวจสอบว่าโครงการนี้เป็นของมูลนิธินี้จริง (ใช้ foundation_name แทน foundation_id)
+    $chk = $conn->prepare("SELECT project_id, project_name FROM project WHERE project_id = ? AND foundation_name = ?");
+    $chk->bind_param("is", $project_id, $foundation['foundation_name']);
     $chk->execute();
     $proj_row = $chk->get_result()->fetch_assoc();
 
@@ -115,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     VALUES (?, 'project_update', ?, ?, ?)
                 ");
                 $notif_title = "อัปเดตโครงการ: " . $proj_row['project_name'];
-                $notif_msg   = $foundation['foundation_name'] . " โพสต์ความคืบหน้า: " . $title;
+                $notif_msg   = $foundation['foundation_name'] . " อัปเดตผลลัพธ์: " . $title;
                 $notif_link  = "project.php";
                 $notif_stmt->bind_param("isss", $du['user_id'], $notif_title, $notif_msg, $notif_link);
                 $notif_stmt->execute();
@@ -126,29 +158,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 INSERT INTO notifications (user_id, type, title, message, link)
                 VALUES (?, 'post_success', ?, ?, ?)
             ");
-            $self_title = "โพสต์ความคืบหน้าสำเร็จ";
-            $self_msg   = "คุณได้โพสต์ความคืบหน้าโครงการ \"" . $proj_row['project_name'] . "\" เรียบร้อยแล้ว";
+            $self_title = "โพสต์ผลลัพธ์สำเร็จ";
+            $self_msg   = "คุณได้โพสต์ผลลัพธ์โครงการ \"" . $proj_row['project_name'] . "\" เรียบร้อยแล้ว";
             $self_link  = "profile.php";
             $self_notif->bind_param("isss", $user_id, $self_title, $self_msg, $self_link);
             $self_notif->execute();
 
-            $success = "โพสต์ความคืบหน้าสำเร็จแล้วค่ะ!";
+            $success = "โพสต์ผลลัพธ์สำเร็จแล้วค่ะ!";
         }
     }
 }
 
-// ดึง updates ที่เคยโพสต์ไปแล้ว
-$prev_updates = $conn->prepare("
-    SELECT pu.*, p.project_name 
-    FROM project_updates pu
-    JOIN project p ON p.project_id = pu.project_id
-    WHERE p.foundation_id = ?
-    ORDER BY pu.update_id DESC
-    LIMIT 20
-");
-$prev_updates->bind_param("i", $fid);
-$prev_updates->execute();
-$updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
+
+// ดึง updates เฉพาะของโครงการนี้ (ถ้าเลือก project_id)
+$updates_list = [];
+if ($locked_project_id > 0 && $locked_project) {
+    $prev_updates = $conn->prepare("
+        SELECT pu.*, p.project_name 
+        FROM project_updates pu
+        JOIN project p ON p.project_id = pu.project_id
+        WHERE pu.project_id = ?
+        ORDER BY pu.update_id DESC
+        LIMIT 20
+    ");
+    $prev_updates->bind_param("i", $locked_project_id);
+    $prev_updates->execute();
+    $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
+} else if (!$readonly) {
+    $prev_updates = $conn->prepare("
+        SELECT pu.*, p.project_name 
+        FROM project_updates pu
+        JOIN project p ON p.project_id = pu.project_id
+        WHERE p.foundation_id = ?
+        ORDER BY pu.update_id DESC
+        LIMIT 20
+    ");
+    $prev_updates->bind_param("i", $fid);
+    $prev_updates->execute();
+    $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -164,7 +212,7 @@ $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
 
 <div class="wrap">
     <a href="profile.php" class="back-link">← กลับหน้าโปรไฟล์</a>
-    <div class="page-title">📢 อัปเดตความคืบหน้าโครงการ</div>
+    <div class="page-title">📢 อัปเดตผลลัพธ์โครงการ</div>
 
     <?php if ($success): ?>
         <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
@@ -179,9 +227,9 @@ $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
             <small style="color:#bbb;">โครงการจะปรากฏที่นี่เมื่อได้รับเงินครบหรือหมดระยะเวลาระดมทุน</small>
         </div>
     <?php else: ?>
+        <?php if (!$readonly): ?>
         <div class="form-box">
-            <h2>โพสต์ความคืบหน้าใหม่</h2>
-
+            <h2>โพสต์ผลลัพธ์ใหม่</h2>
             <?php if ($locked_project): ?>
                 <!-- มาจากการแจ้งเตือน: แสดงชื่อโครงการ lock ไว้เลย -->
                 <div style="background:#f0f4ff; border-radius:10px; padding:14px 18px; margin-bottom:20px; border-left:4px solid #4A5BA8;">
@@ -192,7 +240,6 @@ $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
                     </div>
                 </div>
             <?php endif; ?>
-
             <form method="POST" enctype="multipart/form-data">
                 <?php if ($locked_project): ?>
                     <!-- hidden field ส่ง project_id ไปเลย ไม่ต้องเลือก -->
@@ -216,21 +263,22 @@ $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
                     <input type="text" name="title" placeholder="เช่น: ได้รับเงินและเริ่มดำเนินการแล้ว" value="<?= htmlspecialchars($_POST['title'] ?? '') ?>" required>
                 </div>
                 <div class="form-group">
-                    <label>คำอธิบายความคืบหน้า *</label>
+                    <label>คำอธิบายผลลัพธ์ *</label>
                     <textarea name="description" placeholder="อธิบายสิ่งที่ดำเนินการไปแล้ว เงินถูกนำไปใช้ยังไง ฯลฯ" required><?= htmlspecialchars($_POST['description'] ?? '') ?></textarea>
                 </div>
                 <div class="form-group">
                     <label>รูปภาพ (ถ้ามี)</label>
                     <input type="file" name="update_image" accept="image/*">
                 </div>
-                <button type="submit" class="btn-submit">โพสต์ความคืบหน้า</button>
+                <button type="submit" class="btn-submit">โพสต์ผลลัพธ์</button>
             </form>
         </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <!-- updates ที่เคยโพสต์แล้ว -->
     <?php if (!empty($updates_list)): ?>
-        <div class="updates-title">ความคืบหน้าที่โพสต์ไปแล้ว</div>
+        <div class="updates-title">ผลลัพธ์ที่โพสต์ไปแล้ว</div>
         <?php foreach ($updates_list as $u): ?>
             <div class="update-card">
                 <div class="update-proj"><?= htmlspecialchars($u['project_name']) ?></div>

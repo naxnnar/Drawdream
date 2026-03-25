@@ -35,13 +35,7 @@ if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
     if ($deleteProjectId > 0 && $foundationName !== '') {
         mysqli_begin_transaction($conn);
         try {
-            $deleteDetailStmt = $conn->prepare("DELETE FROM project_detail WHERE project_id = ?");
-            $deleteDetailStmt->bind_param("i", $deleteProjectId);
-            if (!$deleteDetailStmt->execute()) {
-                throw new Exception($deleteDetailStmt->error ?: 'ลบรายละเอียดโครงการไม่สำเร็จ');
-            }
-
-            $deleteProjectStmt = $conn->prepare("DELETE FROM project WHERE project_id = ? AND foundation_name = ?");
+            $deleteProjectStmt = $conn->prepare("DELETE FROM project WHERE project_id = ? AND foundation_name = ?");;
             $deleteProjectStmt->bind_param("is", $deleteProjectId, $foundationName);
             if (!$deleteProjectStmt->execute()) {
                 throw new Exception($deleteProjectStmt->error ?: 'ลบโครงการไม่สำเร็จ');
@@ -131,24 +125,35 @@ function projectStatusThai($status) {
 }
 
 // สร้าง SQL
+
 $params = [];
 $types  = "";
 $where  = [];
 
+// เฉพาะผู้บริจาค (donor) และหน้าแรก (ไม่ค้นหา ไม่เลือกสถานะ ไม่เลือกหมวดหมู่)
+if ($role === 'donor' && $status === 'all' && $keyword === '' && $cat === 'all' && $location === 'all') {
+    // ไม่แสดงโครงการที่เสร็จสิ้น
+    $where[] = "p.project_status = 'approved'";
+}
+
+
+// ปรับให้ค้นหาเฉพาะชื่อโครงการ (project_name) เท่านั้น
 $kwLike = "%{$keyword}%";
-$where[]  = "(p.project_name LIKE ? OR p.project_desc LIKE ? OR p.foundation_name LIKE ? OR COALESCE(fp.address, '') LIKE ?)";
-$params[] = $kwLike;
-$params[] = $kwLike;
-$params[] = $kwLike;
-$params[] = $kwLike;
-$types   .= "ssss";
+if ($keyword !== '') {
+    $where[]  = "p.project_name LIKE ?";
+    $params[] = $kwLike;
+    $types   .= "s";
+}
 
 if ($role !== 'admin') {
-    $where[] = "p.project_status IN ('approved', 'completed', 'done')";
+    // เงื่อนไขนี้จะไม่ซ้อนกับด้านบน เพราะถ้าเข้าเงื่อนไข donor หน้าแรกจะไม่เข้า else นี้
+    if (!($role === 'donor' && $status === 'all' && $keyword === '' && $cat === 'all' && $location === 'all')) {
+        $where[] = "p.project_status IN ('approved', 'completed', 'done')";
+    }
 }
 
 if ($cat !== 'all') {
-    $where[] = "COALESCE(pd.category, p.category, '') = ?";
+    $where[] = "p.category = ?";
     $params[] = $cat;
     $types .= "s";
 }
@@ -182,9 +187,8 @@ $latestProjects = [];
 
 if ($isFoundationOwnView) {
     $foundationSql = "
-        SELECT p.*, COALESCE(pd.category, p.category) AS category, fp.address AS foundation_address
+        SELECT p.*, fp.address AS foundation_address
         FROM project p
-        LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
         WHERE p.foundation_name = ?
         ORDER BY p.project_id DESC
@@ -200,9 +204,8 @@ if ($isFoundationOwnView) {
     }
 } else {
     $sql  = "
-        SELECT p.*, COALESCE(pd.category, p.category) AS category, fp.address AS foundation_address
+        SELECT p.*, fp.address AS foundation_address
         FROM project p
-        LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
         WHERE " . implode(" AND ", $where) . "
         ORDER BY {$orderBy}
@@ -222,12 +225,16 @@ if ($isFoundationOwnView) {
     $latestTypes = '';
     $latestParams = [];
     if ($role !== 'admin') {
-        $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
+        // สำหรับ latestProjects (แถบบน) ซ่อนโครงการเสร็จสิ้นจาก donor หน้าแรกด้วย
+        if ($role === 'donor' && $status === 'all' && $keyword === '' && $cat === 'all' && $location === 'all') {
+            $latestWhere[] = "p.project_status = 'approved'";
+        } else {
+            $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
+        }
     }
     $latestSql = "
-        SELECT p.*, COALESCE(pd.category, p.category) AS category, fp.address AS foundation_address
+        SELECT p.*, fp.address AS foundation_address
         FROM project p
-        LEFT JOIN project_detail pd ON pd.project_id = p.project_id
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
     ";
     if (!empty($latestWhere)) {
@@ -288,6 +295,16 @@ if ($isFoundationOwnView) {
                     $raised = (float)($row['current_donate'] ?? 0);
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                     $statusMeta = projectStatusThai($row['project_status'] ?? 'pending');
+                    // ดึง remark กรณีถูกปฏิเสธ (ถ้ามี)
+                    $remark = '';
+                    if (($row['project_status'] ?? '') === 'rejected') {
+                        $stmtR = $conn->prepare("SELECT remark FROM admin WHERE action_type='Reject_Project' AND target_id=? ORDER BY id DESC LIMIT 1");
+                        $pid = (int)$row['project_id'];
+                        $stmtR->bind_param("i", $pid);
+                        $stmtR->execute();
+                        $remarkRow = $stmtR->get_result()->fetch_assoc();
+                        $remark = $remarkRow['remark'] ?? '';
+                    }
                 ?>
                 <article class="foundation-project-item <?= htmlspecialchars($statusMeta['class']) ?>">
                     <?php if (!empty($row['project_image'])): ?>
@@ -299,6 +316,22 @@ if ($isFoundationOwnView) {
                     <div class="foundation-project-body">
                         <h3><?= htmlspecialchars($row['project_name']) ?></h3>
                         <span class="foundation-status-pill <?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span>
+                        <?php
+                        $isCompleted = in_array($row['project_status'], ['completed', 'done']);
+                        $isOwner = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && $row['foundation_name'] === $foundationName);
+                        ?>
+                        <?php if ($isCompleted): ?>
+                            <?php if ($isOwner): ?>
+                                <a href="foundation_post_update.php?project_id=<?= (int)$row['project_id'] ?>" class="foundation-manage-btn" style="background:#597D57;color:#fff;margin-left:8px;">อัปเดตผลลัพธ์โครงการ</a>
+                            <?php else: ?>
+                                <a href="foundation_post_update.php?project_id=<?= (int)$row['project_id'] ?>" class="foundation-manage-btn" style="background:#597D57;color:#fff;margin-left:8px;">ดูผลลัพธ์โครงการ</a>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        <?php if (($row['project_status'] ?? '') === 'pending'): ?>
+                            <div class="foundation-status-alert st-pending">โครงการนี้รอแอดมินอนุมัติ</div>
+                        <?php elseif (($row['project_status'] ?? '') === 'rejected'): ?>
+                            <div class="foundation-status-alert st-rejected">โครงการนี้ไม่ผ่านการอนุมัติ<?= $remark ? ': '.htmlspecialchars($remark) : '' ?></div>
+                        <?php endif; ?>
                         <p class="foundation-project-desc"><?= htmlspecialchars($row['project_desc'] ?? '') ?></p>
 
                         <div class="foundation-progress-meta">
@@ -429,6 +462,8 @@ if ($role === 'admin'):
             <div class="latest-track" id="latest-track">
                 <?php foreach ($latestProjects as $latest): ?>
                     <?php
+                        // แสดงเฉพาะโครงการที่ยังเปิดระดมทุน (approved)
+                        if (($latest['project_status'] ?? '') !== 'approved') continue;
                         $latestGoal = !empty($latest['goal_amount']) ? floatval($latest['goal_amount']) : 100000;
                         $latestRaised = (float)($latest['current_donate'] ?? 0);
                         $latestProgress = ($latestGoal > 0) ? min(100, ($latestRaised / $latestGoal) * 100) : 0;
@@ -471,7 +506,14 @@ if ($role === 'admin'):
                     $raised = (float)($row['current_donate'] ?? 0); // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                 ?>
-                <div class="project-card clickable-card" data-href="payment/payment_project.php?project_id=<?= (int)$row['project_id'] ?>">
+                <?php
+                    $isCompleted = in_array($row['project_status'], ['completed', 'done']);
+                    // ถ้าเสร็จสิ้น ให้ลิงก์ไปหน้า project_result.php (donor เห็นผลลัพธ์)
+                    $cardLink = $isCompleted
+                        ? "project_result.php?project_id=" . (int)$row['project_id']
+                        : "payment/payment_project.php?project_id=" . (int)$row['project_id'];
+                ?>
+                <div class="project-card clickable-card" data-href="<?= $cardLink ?>">
                     <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>"
                          alt="<?= htmlspecialchars($row['project_name']) ?>">
 
@@ -506,7 +548,14 @@ if ($role === 'admin'):
                             </div>
                         </div>
 
-                        <a href="payment/payment_project.php?project_id=<?= $row['project_id'] ?>" class="donate-btn">บริจาค</a>
+                        <?php
+                            $isCompleted = in_array($row['project_status'], ['completed', 'done']);
+                        ?>
+                        <?php if (!$isCompleted): ?>
+                            <a href="payment/payment_project.php?project_id=<?= $row['project_id'] ?>" class="donate-btn">บริจาค</a>
+                        <?php else: ?>
+                            <a href="project_result.php?project_id=<?= $row['project_id'] ?>" class="donate-btn" style="background:#597D57;color:#fff;">ดูผลลัพธ์โครงการ</a>
+                        <?php endif; ?>
                     </div>
                 </div>
             <?php endforeach; ?>

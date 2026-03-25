@@ -184,9 +184,9 @@ if (isset($_POST['submit'])) {
         $newImage = implode('|', $uploadedImages);
 
         $sql  = "INSERT INTO foundation_needlist 
-                 (foundation_id, item_name, item_desc, brand, allow_other_brand,
-                  quantity_required, item_price, urgent, photo_item, created_by_user_id, note, total_price, approve_item)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+             (foundation_id, item_name, item_desc, brand, allow_other_brand,
+              qty_needed, price_estimate, urgent, item_image, created_by_user_id, note, total_price, approve_item)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
         $stmt = $conn->prepare($sql);
 
         if (!$stmt) {

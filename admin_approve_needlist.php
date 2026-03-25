@@ -136,8 +136,8 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                             <div class="urgent-tag">ต้องการด่วน</div>
                         <?php endif; ?>
                     </td>
-                    <td><?= (int)$row['quantity_required'] ?></td>
-                    <td><?= number_format((float)$row['item_price'], 2) ?></td>
+                    <td><?= (int)$row['qty_needed'] ?></td>
+                    <td><?= number_format((float)$row['price_estimate'], 2) ?></td>
                     <td><b><?= number_format($total, 2) ?></b></td>
                     <td>
                         <form id="f<?= (int)$row['item_id'] ?>" method="post">

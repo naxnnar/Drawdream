@@ -65,12 +65,15 @@ $dup->execute();
 $already_processed = (bool)$dup->get_result()->fetch_assoc();
 
 if ($is_success && !$already_processed && $project_id > 0) {
+
     $amount      = ($charge['amount'] ?? 0) / 100;
     $service_fee = 0;
+    $donor_id    = $_SESSION['user_id'];
+    $target_id   = $project_id;
     // ดึง tax_id ของ donor
     $tax_id = '';
     $stmt = $conn->prepare("SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1");
-    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt->bind_param("i", $donor_id);
     $stmt->execute();
     $donor  = $stmt->get_result()->fetch_assoc();
     $tax_id = $donor['tax_id'] ?? '';
@@ -87,14 +90,14 @@ if ($is_success && !$already_processed && $project_id > 0) {
         $category_id = $cat['category_id'];
     }
 
-    // บันทึกลง donation
+    // บันทึกลง donation (เพิ่ม donor_id, target_id)
     $stmt = $conn->prepare("
-        INSERT INTO donation (category_id, amount, service_fee, payment_status, transfer_datetime)
-        VALUES (?, ?, ?, 'completed', NOW())
+        INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
+        VALUES (?, ?, ?, ?, ?, 'completed', NOW())
     ");
-    $stmt->bind_param("idd", $category_id, $amount, $service_fee);
+    $stmt->bind_param("iiidd", $category_id, $target_id, $donor_id, $amount, $service_fee);
     $stmt->execute();
-    $donate_id = $conn->insert_id;
+    $donate_id = $stmt->insert_id;
 
     // บันทึกลง payment_transaction
     $stmt = $conn->prepare("
@@ -114,7 +117,7 @@ if ($is_success && !$already_processed && $project_id > 0) {
     $check = $conn->prepare("
         SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
         FROM project p
-        JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
+        JOIN foundation_profile fp ON p.foundation_name = fp.foundation_name
         WHERE p.project_id = ? 
           AND p.project_status = 'approved'
           AND (

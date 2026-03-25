@@ -21,7 +21,15 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("\n    SELECT p.*,\n           COALESCE(pd.category, p.category) AS category,\n           COALESCE(pd.target_group, p.target_group) AS target_group,\n           pd.project_quote,\n           pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,\n           pd.urgent_info, pd.need_info, pd.update_info,\n           fp.phone, u.email AS email, fp.address\n    FROM project p\n    LEFT JOIN project_detail pd ON pd.project_id = p.project_id\n    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name\n    LEFT JOIN users u ON u.user_id = fp.user_id\n    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done')\n    LIMIT 1\n");
+$stmt = $conn->prepare("
+    SELECT p.*,
+           fp.phone, u.email AS email, fp.address
+    FROM project p
+    LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
+    LEFT JOIN users u ON u.user_id = fp.user_id
+    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done')
+    LIMIT 1
+");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
@@ -58,23 +66,6 @@ $sdgGoal = mapCategoryToSdgs((string)($project['category'] ?? ''));
 $beneficiaryGroup = trim((string)($project['target_group'] ?? '')) !== '' ? (string)$project['target_group'] : '-';
 
 $donationOptions = [];
-foreach (['donation_option_1', 'donation_option_2', 'donation_option_3'] as $optKey) {
-    $optVal = (int)($project[$optKey] ?? 0);
-    if ($optVal > 0 && !in_array($optVal, $donationOptions, true)) {
-        $donationOptions[] = $optVal;
-    }
-}
-if (empty($donationOptions)) {
-    $donationOptions = [50, 100, 500, 1000];
-} elseif (count($donationOptions) < 4) {
-    $fallbacks = [50, 100, 500, 1000, 2000];
-    foreach ($fallbacks as $fb) {
-        if (!in_array($fb, $donationOptions, true)) {
-            $donationOptions[] = $fb;
-        }
-        if (count($donationOptions) >= 4) break;
-    }
-}
 
 // ดึงข้อมูล donor
 $donor = null;
@@ -283,9 +274,7 @@ function _omise_local_mock(string $path, array $data): array {
                 <?php if (!empty($project['project_quote'])): ?>
                     <div class="detail-row"><strong>คำโปรย:</strong> <?= htmlspecialchars($project['project_quote']) ?></div>
                 <?php endif; ?>
-                <?php if (!empty($project['urgent_info'])): ?>
-                    <div class="detail-row"><strong>ความจำเป็น:</strong> <?= htmlspecialchars($project['urgent_info']) ?></div>
-                <?php endif; ?>
+                <div class="detail-row"><strong>รายละเอียดโครงการ:</strong> <?= htmlspecialchars($project['project_desc']) ?></div>
                 <?php if (!empty($project['need_info'])): ?>
                     <div class="detail-row"><strong>กิจกรรมมูลนิธิ:</strong> <?= htmlspecialchars($project['need_info']) ?></div>
                 <?php endif; ?>

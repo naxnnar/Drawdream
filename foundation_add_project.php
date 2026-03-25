@@ -23,55 +23,7 @@ if ($foundationName === '') {
 
 $categories = ['การศึกษา', 'สุขภาพและอนามัย', 'อาหารและโภชนาการ', 'สิ่งอำนวยความสะดวก'];
 
-// ─── Auto-migrate: ให้ schema ของ project ตรงกับโค้ดที่บันทึกประเภทโครงการ ─────
-$projectNeededColumns = [
-    'category' => "ALTER TABLE project ADD COLUMN category VARCHAR(100) NULL",
-    'target_group' => "ALTER TABLE project ADD COLUMN target_group VARCHAR(255) NULL",
-];
-foreach ($projectNeededColumns as $col => $ddl) {
-    $chk = $conn->query("SHOW COLUMNS FROM project LIKE '$col'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query($ddl);
-    }
-}
-
-// ─── Auto-migrate: ให้ schema ของ project_detail ตรงกับโค้ด ─────────────────
-$tblCheck = $conn->query("SHOW TABLES LIKE 'project_detail'");
-if ($tblCheck && $tblCheck->num_rows === 0) {
-    $conn->query(
-        "CREATE TABLE project_detail (
-            project_id INT NOT NULL,
-            category VARCHAR(100) NULL,
-            target_group VARCHAR(255) NULL,
-            project_quote TEXT NULL,
-            donation_option_1 INT NULL,
-            donation_option_2 INT NULL,
-            donation_option_3 INT NULL,
-            urgent_info TEXT NULL,
-            need_info TEXT NULL,
-            update_info TEXT NULL,
-            PRIMARY KEY (project_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    );
-}
-
-$projectDetailNeededColumns = [
-    'category' => "ALTER TABLE project_detail ADD COLUMN category VARCHAR(100) NULL",
-    'target_group' => "ALTER TABLE project_detail ADD COLUMN target_group VARCHAR(255) NULL",
-    'project_quote' => "ALTER TABLE project_detail ADD COLUMN project_quote TEXT NULL",
-    'donation_option_1' => "ALTER TABLE project_detail ADD COLUMN donation_option_1 INT NULL",
-    'donation_option_2' => "ALTER TABLE project_detail ADD COLUMN donation_option_2 INT NULL",
-    'donation_option_3' => "ALTER TABLE project_detail ADD COLUMN donation_option_3 INT NULL",
-    'urgent_info' => "ALTER TABLE project_detail ADD COLUMN urgent_info TEXT NULL",
-    'need_info' => "ALTER TABLE project_detail ADD COLUMN need_info TEXT NULL",
-    'update_info' => "ALTER TABLE project_detail ADD COLUMN update_info TEXT NULL",
-];
-foreach ($projectDetailNeededColumns as $col => $ddl) {
-    $chk = $conn->query("SHOW COLUMNS FROM project_detail LIKE '$col'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query($ddl);
-    }
-}
+// (ไม่มี auto-migrate — ทุก column อยู่ในตาราง project แล้ว)
 
 $editProjectId = (int)($_GET['edit'] ?? 0);
 $isEditMode = false;
@@ -85,24 +37,15 @@ $editingProject = [
     'category' => '',
     'target_group' => '',
     'project_quote' => '',
-    'donation_option_1' => '',
-    'donation_option_2' => '',
-    'donation_option_3' => '',
-    'urgent_info' => '',
     'need_info' => '',
     'update_info' => '',
 ];
 
 if ($editProjectId > 0) {
     $stmtEdit = $conn->prepare(
-    "SELECT p.*, COALESCE(pd.category, p.category) AS category,
-        COALESCE(pd.target_group, p.target_group) AS target_group,
-        pd.project_quote,
-                pd.donation_option_1, pd.donation_option_2, pd.donation_option_3,
-                pd.urgent_info, pd.need_info, pd.update_info
-         FROM project p
-         LEFT JOIN project_detail pd ON pd.project_id = p.project_id
-         WHERE p.project_id = ? AND p.foundation_name = ?
+    "SELECT *
+         FROM project
+         WHERE project_id = ? AND foundation_name = ?
          LIMIT 1"
     );
     $stmtEdit->bind_param("is", $editProjectId, $foundationName);
@@ -131,20 +74,11 @@ if (isset($_POST['submit'])) {
     $goal = (int)($_POST['goal_amount'] ?? 0);
     $enddate = $_POST['end_date'] ?? '';
 
-    // ตัวเลือกยอดบริจาค
-    $opt1 = (int)($_POST['donation_option_1'] ?? 0);
-    $opt2 = (int)($_POST['donation_option_2'] ?? 0);
-    $opt3 = (int)($_POST['donation_option_3'] ?? 0);
 
     // ข้อมูลกล่องรายละเอียดหน้าโครงการ
-    $urgentInfo = trim($_POST['urgent_info'] ?? '');
     $needInfo = trim($_POST['need_info'] ?? '');
     $updateInfo = trim($_POST['update_info'] ?? '');
 
-    // ฟอร์มปัจจุบันซ่อนช่อง urgent_info ไว้ จึง fallback จากรายละเอียดโครงการ
-    if ($urgentInfo === '') {
-        $urgentInfo = $desc;
-    }
 
     if (!in_array($category, $categories, true)) {
         echo "<script>alert('กรุณาเลือกประเภทโครงการ'); history.back();</script>";
@@ -156,10 +90,6 @@ if (isset($_POST['submit'])) {
         exit();
     }
 
-    if ($opt1 <= 0 || $opt2 <= 0 || $opt3 <= 0) {
-        echo "<script>alert('กรุณากรอกตัวเลือกยอดบริจาคให้ครบ (มากกว่า 0)'); history.back();</script>";
-        exit();
-    }
 
     if ($needInfo === '') {
         echo "<script>alert('กรุณากรอกกิจกรรมและการดำเนินงานของมูลนิธิ'); history.back();</script>";
@@ -206,99 +136,50 @@ if (isset($_POST['submit'])) {
     try {
         $goalDec = (float)$goal;
         if ($isEditSubmit) {
+            // แก้ไขโครงการ — บันทึกทุก field ลงตาราง project เดียว (ไม่มี donation_option_1,2,3)
             $stmtProject = $conn->prepare(
                 "UPDATE project
-                 SET project_name = ?, project_desc = ?, project_image = ?, goal_amount = ?, end_date = ?, category = ?, target_group = ?
+                 SET project_name = ?, project_desc = ?, project_image = ?,
+                     goal_amount = ?, end_date = ?,
+                     category = ?, target_group = ?,
+                     project_quote = ?,
+                     need_info = ?, update_info = ?
                  WHERE project_id = ? AND foundation_name = ?"
             );
-            $stmtProject->bind_param("sssdsssis", $name, $desc, $newName, $goalDec, $enddate, $category, $targetGroup, $editingId, $foundationName);
+            $stmtProject->bind_param(
+                "sssdssssssis",
+                $name, $desc, $newName,
+                $goalDec, $enddate,
+                $category, $targetGroup,
+                $quote,
+                $needInfo, $updateInfo,
+                $editingId, $foundationName
+            );
             if (!$stmtProject->execute()) {
                 throw new Exception($stmtProject->error ?: 'แก้ไขโครงการไม่สำเร็จ');
             }
-
             $projectId = $editingId;
-
-            $stmtCheckDetail = $conn->prepare("SELECT project_id FROM project_detail WHERE project_id = ? LIMIT 1");
-            $stmtCheckDetail->bind_param("i", $projectId);
-            $stmtCheckDetail->execute();
-            $detailExists = (bool)$stmtCheckDetail->get_result()->fetch_assoc();
-
-            if ($detailExists) {
-                $stmtDetail = $conn->prepare(
-                    "UPDATE project_detail
-                     SET category = ?, target_group = ?, project_quote = ?,
-                         donation_option_1 = ?, donation_option_2 = ?, donation_option_3 = ?,
-                         urgent_info = ?, need_info = ?, update_info = ?
-                     WHERE project_id = ?"
-                );
-                $stmtDetail->bind_param(
-                    "sssiiisssi",
-                    $category,
-                    $targetGroup,
-                    $quote,
-                    $opt1,
-                    $opt2,
-                    $opt3,
-                    $urgentInfo,
-                    $needInfo,
-                    $updateInfo,
-                    $projectId
-                );
-            } else {
-                $stmtDetail = $conn->prepare(
-                    "INSERT INTO project_detail
-                        (project_id, category, target_group, project_quote, donation_option_1, donation_option_2, donation_option_3, urgent_info, need_info, update_info)
-                     VALUES
-                        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                );
-                $stmtDetail->bind_param(
-                    "isssiiisss",
-                    $projectId,
-                    $category,
-                    $targetGroup,
-                    $quote,
-                    $opt1,
-                    $opt2,
-                    $opt3,
-                    $urgentInfo,
-                    $needInfo,
-                    $updateInfo
-                );
-            }
         } else {
+            // สร้างโครงการใหม่ — บันทึกทุก field ลงตาราง project เดียว (ไม่มี donation_option_1,2,3)
             $stmtProject = $conn->prepare(
-                "INSERT INTO project (project_name, project_desc, project_image, goal_amount, end_date, project_status, current_donate, start_date, foundation_name, approve_project, category, target_group)
-                 VALUES (?, ?, ?, ?, ?, 'pending', 0, CURDATE(), ?, NULL, ?, ?)"
+                "INSERT INTO project
+                    (project_name, project_desc, project_image, goal_amount, end_date,
+                     project_status, current_donate, start_date, foundation_name,
+                     category, target_group, project_quote,
+                     need_info, update_info)
+                 VALUES (?, ?, ?, ?, ?, 'pending', 0, CURDATE(), ?, ?, ?, ?, ?, ?)"
             );
-            $stmtProject->bind_param("sssdssss", $name, $desc, $newName, $goalDec, $enddate, $foundationName, $category, $targetGroup);
+            $stmtProject->bind_param(
+                "sssdsssssss",
+                $name, $desc, $newName, $goalDec, $enddate,
+                $foundationName,
+                $category, $targetGroup, $quote,
+                $needInfo, $updateInfo
+            );
             if (!$stmtProject->execute()) {
                 throw new Exception($stmtProject->error ?: 'บันทึกโครงการไม่สำเร็จ');
             }
-
             $projectId = (int)$conn->insert_id;
-            $stmtDetail = $conn->prepare(
-                "INSERT INTO project_detail
-                    (project_id, category, target_group, project_quote, donation_option_1, donation_option_2, donation_option_3, urgent_info, need_info, update_info)
-                 VALUES
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-            );
-            $stmtDetail->bind_param(
-                "isssiiisss",
-                $projectId,
-                $category,
-                $targetGroup,
-                $quote,
-                $opt1,
-                $opt2,
-                $opt3,
-                $urgentInfo,
-                $needInfo,
-                $updateInfo
-            );
-        }
-
-        if (!$stmtDetail->execute()) {
-            throw new Exception($stmtDetail->error ?: 'บันทึกรายละเอียดโครงการไม่สำเร็จ');
         }
 
         mysqli_commit($conn);
@@ -410,24 +291,12 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
                 <input type="number" name="goal_amount" min="1" placeholder="จำนวนเงินที่ต้องการระดมทุน" value="<?= htmlspecialchars((string)($editingProject['goal_amount'] ?? '')) ?>" required>
             </div>
 
-            <div class="form-group">
-                <label>ตัวเลือกปุ่มบริจาค (บาท) *</label>
-                <div class="donation-opts-grid">
-                    <input type="number" name="donation_option_1" min="20" placeholder="ตัวเลือก 1" value="<?= htmlspecialchars((string)($editingProject['donation_option_1'] ?? '')) ?>" required>
-                    <input type="number" name="donation_option_2" min="20" placeholder="ตัวเลือก 2" value="<?= htmlspecialchars((string)($editingProject['donation_option_2'] ?? '')) ?>" required>
-                    <input type="number" name="donation_option_3" min="20" placeholder="ตัวเลือก 3" value="<?= htmlspecialchars((string)($editingProject['donation_option_3'] ?? '')) ?>" required>
-                </div>
-            </div>
 
             <div class="form-group">
                 <label>วันที่ปิดรับบริจาค </label>
                 <input type="date" name="end_date" value="<?= htmlspecialchars($editingProject['end_date'] ?? '') ?>" required>
             </div>
 
-            <!-- <div class="form-group">
-                <label>ข้อความขาดแคลน / ความจำเป็นเร่งด่วน </label>
-                <textarea name="urgent_info" rows="3" placeholder="อธิบายสถานการณ์ที่ขาดแคลนและทำไมต้องการความช่วยเหลือ" required><?= htmlspecialchars($editingProject['urgent_info'] ?? '') ?></textarea>
-            </div> -->
 
             <div class="form-group">
                 <label>กิจกรรมและการดำเนินงานของมูลนิธิ </label>
