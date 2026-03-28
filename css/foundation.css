@@ -1,3 +1,57 @@
+.urgent-item-card {
+    background: transparent !important;
+    border-radius: 18px;
+    box-shadow: none !important;
+    padding: 0;
+    margin: 0 10px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    border: none;
+}
+.urgent-tag-abs {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: #CC583F;
+    color: #fff;
+    padding: 18px 38px;
+    border-radius: 40px;
+    font-size: 28px;
+    font-weight: bold;
+    z-index: 2;
+    box-shadow: 0 4px 16px #0002;
+    letter-spacing: 1.5px;
+    border: none;
+    text-shadow: 0 2px 8px #0003;
+}
+.urgent-img-big {
+    width: 180px !important;
+    height: 180px !important;
+    object-fit: contain !important;
+    border-radius: 16px;
+    margin: 0 auto 0 auto;
+    display: block;
+    background: transparent !important;
+    padding: 0 !important;
+    box-sizing: border-box;
+    border: 2px solid #111 !important; /* ขอบดำบางลง */
+}
+.bar-short {
+    max-width: 420px;
+    margin-left: 0;
+}
+.foundation-cover-large {
+    width: 595px !important;
+    height: 419px !important;
+    object-fit: cover !important;
+    border-radius: 18px;
+    box-shadow: 0 2px 12px #0001;
+    margin-bottom: 12px;
+    max-width: 100%;
+}
 /* ========================================
    foundation.css — สำหรับหน้า foundation.php โดยเฉพาะ
    ======================================== */
@@ -88,6 +142,16 @@
 .foundation-owner-btn-edit {
     background: #F1CF54;
     color: #1f2937;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+    min-width: 220px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
 .foundation-owner-btn-edit:hover {
@@ -99,6 +163,16 @@
 .foundation-owner-btn-update {
     background: #597D57;
     color: #fff;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+    min-width: 220px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
 .foundation-owner-btn-update:hover {
@@ -121,6 +195,16 @@
 .foundation-owner-btn-need {
     background: #3C5099;
     color: #fff;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+    min-width: 220px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 
 .foundation-owner-btn-need:hover {
@@ -136,25 +220,21 @@
     font-weight: 600;
 }
 
-.btn-propose,
-.admin-btn {
-    color: white;
-    padding: 12px 30px;
-    border-radius: 25px;
-    text-decoration: none;
-    font-weight: 600;
-    display: inline-block;
-    transition: all 0.3s;
-}
-
 .btn-propose {
     background: #4A5BA8;
     box-shadow: 0 4px 15px rgba(74, 91, 168, 0.3);
-}
-
-.btn-propose:hover {
-    background: #3d4d8f;
-    transform: translateY(-2px);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    text-decoration: none;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    min-width: 220px;
+    gap: 6px;
+    transition: all 0.3s;
 }
 
 .admin-btn {
@@ -206,18 +286,22 @@
 .foundation-card,
 .fc-left,
 .fc-right {
-    background: #F7ECDE;
+    background: transparent;
 }
 
 .foundation-card {
     border-radius: 20px;
     overflow: hidden;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    grid-template-columns: 1.2fr 1fr;
     min-height: 400px;
     width: 100%;
     max-width: 1400px;
     margin: 0 auto;
+    align-items: flex-start;
+    border: 2.5px solid #d1d5db; /* เพิ่มเส้นขอบเทาอ่อน */
+    box-shadow: 0 2px 12px #0001;
+    background: transparent;
 }
 
 .fc-left {
@@ -385,14 +469,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #999;
-}
-
-.fb {
-    margin-top: 20px;
-    color: #666;
-    font-size: 14px;
-    text-align: center;
+    .fc-right .cover {
+        width: 595px !important;
+        height: 419px !important;
+        object-fit: cover !important;
+        border-radius: 18px;
+        box-shadow: 0 2px 12px #0001;
+        margin-bottom: 12px;
+        max-width: 100%;
+        margin-left: 0;
+    }
 }
 
 @media (max-width: 1024px) {
@@ -426,17 +512,17 @@ body.foundation-donate-page .donate-container {
     padding: 0 20px;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0;
-}
-
-body.foundation-donate-page .donate-container > * {
-    display: flex;
-    flex-direction: column;
-}
-
-body.foundation-donate-page .foundation-panel {
-    background: white;
-    border: 1.5px solid #f1cf54;
+    .item {
+        background: white;
+        border-radius: 15px;
+        padding: 12px 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        position: relative;
+        transition: transform 0.3s;
+        min-width: 0;
+        max-width: 170px;
+        margin: 0 auto;
+    }
     border-right: none;
     border-radius: 20px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.08);
@@ -488,14 +574,14 @@ body.foundation-donate-page .bar > div {
 
 body.foundation-donate-page .progress-text {
     font-size: 14px;
-    color: #666;
-    font-weight: 500;
-}
-
-body.foundation-donate-page .items-list h3 {
-    font-size: 16px;
-    font-weight: 700;
-    color: #333;
+    .item-img {
+        width: 100%;
+        height: 140px;
+        object-fit: contain;
+        background: #f9f9f9;
+        border-radius: 10px;
+        margin-bottom: 12px;
+    }
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 2px solid #f0f0f0;
@@ -662,18 +748,18 @@ body.foundation-add-need-page .item-check-group {
 }
 
 body.foundation-add-need-page .item-check-group-title {
-    font-weight: 700;
-    color: #2f3f7f;
-    margin-bottom: 8px;
-    font-size: 0.95rem;
-}
-
-body.foundation-add-need-page .item-check-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-}
-
+    .noimg {
+        width: 100%;
+        height: 140px;
+        background: #f0f0f0;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        margin-bottom: 12px;
+        font-size: 15px;
+    }
 body.foundation-add-need-page textarea {
     resize: vertical;
     min-height: 96px;
@@ -715,19 +801,21 @@ body.foundation-add-need-page .image-upload-box {
 }
 
 body.foundation-add-need-page .image-upload-box:hover {
-    border-color: #3C5099;
-    background: #fff;
-}
-
-body.foundation-add-need-page .image-upload-box input[type="file"] { display: none; }
-body.foundation-add-need-page .upload-label { display: block; cursor: pointer; }
-
-body.foundation-add-need-page .upload-preview-list {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 10px;
-}
+    .bar {
+        background: #E5D4C1;
+        border-radius: 20px;
+        height: 32px;
+        overflow: hidden;
+        margin-bottom: 10px;
+        position: relative;
+    }
+    .bar > div {
+        background: #CC583F;
+        height: 100%;
+        transition: width 0.5s ease;
+        border-radius: 20px;
+        min-width: 6px;
+    }
 
 body.foundation-add-need-page .upload-preview-item {
     position: relative;

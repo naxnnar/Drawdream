@@ -52,8 +52,7 @@ $failure_message = $charge['failure_message'] ?? '';
 $expires_at      = $charge['expires_at'] ?? '';
 $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 
-// สำเร็จเมื่อ: paid=true / successful / mock / test-mode-pending
-$is_success = ($paid === true) || ($status === 'successful') || $is_mock || ($is_test_mode && $status === 'pending');
+$is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 
 // กันบันทึกซ้ำ
 $already_processed = false;
@@ -166,7 +165,7 @@ if ($is_success && $amount <= 0) {
             <p>ขอบคุณที่ร่วมบริจาครายการสิ่งของ</p>
             <p>จำนวน <strong><?= number_format($amount, 2) ?> บาท</strong></p>
             <p class="charge-ref">อ้างอิง: <?= htmlspecialchars($charge_id) ?></p>
-            <a href="../foundation.php" class="btn-pay">กลับหน้ามูลนิธิ</a>
+            <a href="../foundation.php" class="btn-pay" style="background:#CC583F; border:none; width:100%; max-width:400px; margin:32px auto 0 auto; display:block; font-size:1.3rem;">กลับหน้ามูลนิธิ</a>
 
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
@@ -191,7 +190,7 @@ if ($is_success && $amount <= 0) {
                 <p>รหัสข้อผิดพลาด: <?= htmlspecialchars($failure_code) ?></p>
                 <p>รายละเอียด: <?= htmlspecialchars($failure_message) ?></p>
             <?php endif; ?>
-            <a href="foundation_donate.php?fid=<?= $fid ?>" class="btn-pay">ลองใหม่</a>
+            <button type="button" class="btn-pay" onclick="window.location.reload()">ลองใหม่</button>
             <a href="../foundation.php" class="btn-back">กลับหน้ามูลนิธิ</a>
         <?php endif; ?>
 

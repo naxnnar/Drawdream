@@ -164,49 +164,44 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
           $foundationImage = $f['foundation_image'] ?? '';
           $facebookUrl = $f['facebook_url'] ?? '';
       ?>
-          <div class="foundation-card" id="f<?= $fid ?>">
-            <div class="fc-left">
+          <div class="foundation-card" id="f<?= $fid ?>" style="background:transparent;box-shadow:none;align-items:flex-start;grid-template-columns: 1.2fr 1fr;">
+            <div class="fc-left" style="background:transparent;">
               <h2 class="fc-title"><?= htmlspecialchars($f['foundation_name'] ?? 'มูลนิธิ') ?></h2>
               <p class="fc-desc"><?= htmlspecialchars($f['foundation_desc'] ?? '') ?></p>
               <?php
                 $urgentItems = array_filter($items, function($it) { return (int)($it['urgent'] ?? 0) === 1; });
-                if (count($urgentItems) > 0):
               ?>
-                <div class="urgent-list mb-3" style="color:#b84a34;font-weight:600;">
-                  <span style="font-size:1.1em;">สิ่งของที่ต้องการด่วน:</span>
-                  <ul style="margin:8px 0 0 18px;padding:0;">
-                  <?php foreach ($urgentItems as $u): ?>
-                    <li><?= htmlspecialchars($u['item_name']) ?></li>
-                  <?php endforeach; ?>
-                  </ul>
+              <div class="bar-barwrap" style="display:block;width:100%;max-width:420px;">
+                <div class="bar bar-short" style="margin:0;">
+                  <div style="width:<?= (int)$percent ?>%"></div>
                 </div>
-              <?php endif; ?>
-              <div class="bar">
-                <div style="width:<?= (int)$percent ?>%"></div>
+                <div class="amount" style="margin:0 0 18px 0;">ยอดปัจจุบัน <?= number_format($current, 0) ?> / <?= number_format($goal, 0) ?> บาท</div>
               </div>
-              <div class="amount">ยอดปัจจุบัน <?= number_format($current, 0) ?> / <?= number_format($goal, 0) ?> บาท</div>
-              <div class="items">
-                <?php foreach ($items as $it): ?>
-                  <?php
+
+              <?php if (count($urgentItems) > 0): ?>
+                <div class="items urgent-items" style="margin-bottom: 18px;">
+                  <?php foreach ($urgentItems as $it):
                     $itemImages = array_values(array_filter(explode('|', (string)($it['item_image'] ?? ''))));
                     $mainItemImage = $itemImages[0] ?? '';
                   ?>
-                  <div class="item">
+                  <div class="item urgent-item-card" style="max-width:200px;min-width:140px;position:relative;">
+                    <span class="urgent-tag urgent-tag-abs">ต้องการด่วน</span>
                     <?php if ($mainItemImage !== ''): ?>
-                      <img class="item-img" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="" style="width: 80px; height: 80px; object-fit: cover; display:block; margin:auto;">
+                      <img class="item-img urgent-img-big" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="">
                     <?php else: ?>
-                      <div class="noimg" style="width:80px;height:80px;display:flex;align-items:center;justify-content:center;background:#f3f3f3;color:#aaa;">ไม่มีรูปภาพ</div>
+                      <div class="noimg urgent-img-big">ไม่มีรูปภาพ</div>
                     <?php endif; ?>
                   </div>
-                <?php endforeach; ?>
-              </div>
+                  <?php endforeach; ?>
+                </div>
+              <?php endif; ?>
               <a class="btn-donate" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
             </div>
-            <div class="fc-right">
+            <div class="fc-right" style="background:transparent;">
               <?php if (!empty($foundationImage)): ?>
-                <img class="cover" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
+                <img class="cover foundation-cover-large" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
               <?php else: ?>
-                <div class="cover-empty">ยังไม่มีรูปมูลนิธิ</div>
+                <div class="cover-empty" style="width:595px;height:419px;">ยังไม่มีรูปมูลนิธิ</div>
               <?php endif; ?>
               <?php if (!empty($facebookUrl)): ?>
                 <div class="fb">Facebook: <?= htmlspecialchars($facebookUrl) ?></div>

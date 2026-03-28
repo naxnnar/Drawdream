@@ -53,8 +53,7 @@ $failure_message = $charge['failure_message'] ?? '';
 $expires_at      = $charge['expires_at'] ?? '';
 $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 
-// สำเร็จเมื่อ: paid=true / successful / mock / test-mode-pending
-$is_success = ($paid === true) || ($status === 'successful') || $is_mock || ($is_test_mode && $status === 'pending');
+$is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
 
 // กันบันทึกซ้ำ เมื่อผู้ใช้กด refresh หรือเช็คซ้ำ
@@ -199,7 +198,7 @@ if ($is_success && $amount <= 0) {
                 <p>QR หมดอายุ: <?= htmlspecialchars($expires_at) ?></p>
             <?php endif; ?>
             <p class="charge-ref">Charge: <?= htmlspecialchars($charge_id) ?> | Status: <?= htmlspecialchars($status) ?> | Paid: <?= $paid ? 'true' : 'false' ?></p>
-            <a href="check_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= $project_id ?>" 
+            <a href="check_project_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= $project_id ?>"
                class="btn-pay">เช็คอีกครั้ง</a>
             <a href="../project.php" class="btn-back">กลับหน้าโครงการ</a>
 
@@ -211,7 +210,7 @@ if ($is_success && $amount <= 0) {
                 <p>รหัสข้อผิดพลาด: <?= htmlspecialchars($failure_code) ?></p>
                 <p>รายละเอียด: <?= htmlspecialchars($failure_message) ?></p>
             <?php endif; ?>
-            <a href="payment_project.php?project_id=<?= $project_id ?>" class="btn-pay">ลองใหม่</a>
+            <button type="button" class="btn-pay" onclick="window.location.reload()">ลองใหม่</button>
             <a href="../project.php" class="btn-back">กลับหน้าโครงการ</a>
         <?php endif; ?>
 

@@ -122,13 +122,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
 
-                // บันทึกลง database (status = pending รอยืนยัน
-
-                // เก็บ charge_id ไว้ใน session เพื่อเช็คสถานะ
+                // เก็บ charge_id, qr_image, amount, project info ใน session
                 $_SESSION['pending_charge_id']  = $charge_id;
                 $_SESSION['pending_amount']     = $amount;
                 $_SESSION['pending_project']    = $project['project_name'];
                 $_SESSION['pending_project_id'] = $project_id;
+                $_SESSION['qr_image']           = $qr_image;
+
+                // redirect ไปหน้า scan_qr.php
+                header('Location: scan_qr.php?charge_id=' . urlencode($charge_id));
+                exit();
 
             } else {
                 $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
@@ -221,104 +224,134 @@ function _omise_local_mock(string $path, array $data): array {
 <?php include '../navbar.php'; ?>
 
 <div class="payment-container">
+
 <div class="payment-card">
-
+    <!-- ซ้าย: ภาพ ชื่อโครงการ โปรไฟล์ เป้าหมาย -->
     <div class="project-info">
-        <h2>บริจาคให้โครงการ</h2>
-        <h3><?= htmlspecialchars($project['project_name']) ?></h3>
-        <?php if (!empty($project['project_image'])): ?>
-            <img src="../uploads/<?= htmlspecialchars($project['project_image']) ?>" class="project-img" alt="">
-        <?php endif; ?>
-        <p class="project-desc"><?= htmlspecialchars($project['project_desc']) ?></p>
-        <div class="goal-info">
-            เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท
+        <div style="position:relative;">
+            <a href="javascript:history.back()" style="position:absolute;top:18px;left:18px;z-index:2;background:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px 0 rgba(0,0,0,0.07);border:none;text-decoration:none;">
+                <span style="font-size:1.5em;color:#ff8800;">←</span>
+            </a>
+            <?php if (!empty($project['project_image'])): ?>
+                <img src="../uploads/<?= htmlspecialchars($project['project_image']) ?>" class="project-img" alt="" style="margin-top:0;padding-top:0;display:block;border-top-left-radius:24px;border-top-right-radius:0;">
+            <?php endif; ?>
         </div>
-
-        <div class="contact-card">
-            <h4>ข้อมูลติดต่อมูลนิธิ</h4>
-            <p>� เบอร์ติดต่อ: <?= htmlspecialchars($project['phone'] ?? '-') ?></p>
-            <p>✉️ อีเมล: <?= htmlspecialchars($project['email'] ?? '-') ?></p>
-
-            <p>📍 ที่อยู่: <?= htmlspecialchars($project['address'] ?? '-') ?></p>
-        </div>
-    </div>
-
-    <div class="payment-box">
-
-        <?php if ($error): ?>
-            <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-
-        <?php if (!empty($qr_image)): ?>
-            <!-- แสดง QR Code -->
-            <div class="qr-section">
-                <h3>สแกน QR Code เพื่อชำระเงิน</h3>
-                <p class="qr-amount">จำนวน <strong><?= number_format($_SESSION['pending_amount'], 0) ?> บาท</strong></p>
-                <img src="<?= htmlspecialchars($qr_image) ?>" class="qr-image" alt="QR Code PromptPay">
-                <p class="qr-hint">QR Code มีอายุ 10 นาที</p>
-                <p class="qr-charge">Charge ID: <?= htmlspecialchars($charge_id) ?></p>
-
-                <a href="check_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= $project_id ?>" 
-                   class="btn-check">ชำระเงินแล้ว</a>
-                <a href="payment_project.php?project_id=<?= $project_id ?>" class="btn-cancel">ยกเลิก</a>
+        <div class="project-info-inner">
+            <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+                <h2 style="margin:0;display:flex;align-items:center;gap:10px;">
+                    บริจาคให้โครงการ
+                    <?php if (!empty($project['category'])): ?>
+                        <span style="background:#ffe0b2;color:#e67e22;padding:3px 14px 3px 10px;border-radius:16px;font-size:0.95em;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                            <span style="font-size:1.2em;">🏷️</span> <?= htmlspecialchars($project['category']) ?>
+                        </span>
+                    <?php endif; ?>
+                </h2>
+                <button onclick="navigator.share ? navigator.share({title:document.title,url:window.location.href}) : window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(window.location.href),'_blank')" title="แชร์โครงการ" style="border:none;background:transparent;cursor:pointer;font-size:1.5em;line-height:1;">
+                    <span title="แชร์">🔗</span>
+                </button>
             </div>
-
-        <?php else: ?>
-            <!-- ฟอร์มกรอกจำนวนเงิน -->
-            <div class="project-detail-summary">
-                <h4>รายละเอียดโครงการ</h4>
-                <div class="detail-row"><strong>ระยะเวลาระดมทุน:</strong> <?= htmlspecialchars($fundraisingPeriod) ?></div>
-                <div class="detail-row"><strong>พื้นที่ดำเนินโครงการ:</strong> <?= htmlspecialchars($projectArea) ?></div>
-                <div class="detail-row"><strong>เป้าหมาย SDGs:</strong> <?= htmlspecialchars($sdgGoal) ?></div>
-                <div class="detail-row"><strong>กลุ่มเป้าหมายที่ได้รับประโยชน์จากโครงการ:</strong> <?= htmlspecialchars($beneficiaryGroup) ?></div>
-                <?php if (!empty($project['project_quote'])): ?>
-                    <div class="detail-row"><strong>คำโปรย:</strong> <?= htmlspecialchars($project['project_quote']) ?></div>
-                <?php endif; ?>
-                <div class="detail-row"><strong>รายละเอียดโครงการ:</strong> <?= htmlspecialchars($project['project_desc']) ?></div>
-                <?php if (!empty($project['need_info'])): ?>
-                    <div class="detail-row"><strong>กิจกรรมมูลนิธิ:</strong> <?= htmlspecialchars($project['need_info']) ?></div>
-                <?php endif; ?>
-                <?php if (!empty($project['update_info'])): ?>
-                    <div class="detail-row"><strong>อัปเดต:</strong> <?= htmlspecialchars($project['update_info']) ?></div>
-                <?php endif; ?>
-            </div>
-
-            <h3>เลือกจำนวนเงินที่ต้องการบริจาค</h3>
-
-            <div class="amount-presets">
-                <?php foreach ($donationOptions as $optAmount): ?>
-                    <button type="button" class="preset-btn" onclick="setAmount(this, <?= (int)$optAmount ?>)"><?= number_format((int)$optAmount) ?> บาท</button>
-                <?php endforeach; ?>
-            </div>
-
-            <form method="POST">
-                <div class="form-group">
-                    <label>จำนวนเงิน (บาท) *</label>
-                    <input type="number" name="amount" id="amountInput" min="20" placeholder="ขั้นต่ำ 20 บาท" required>
-                </div>
-                <div class="payment-method">
-                    <div class="method-card active">
-                        <img src="../img/qr-code.png" alt="PromptPay" class="method-icon">
-                        <span>PromptPay QR</span>
+            <h3 style="margin-top:0;"><?= htmlspecialchars($project['project_name']) ?></h3>
+            <!-- โปรไฟล์มูลนิธิ -->
+            <div class="contact-card">
+                <?php
+                $foundationImg = '';
+                $foundationId = 0;
+                $stmtF = $conn->prepare("SELECT foundation_id, foundation_image FROM foundation_profile WHERE foundation_name = ? LIMIT 1");
+                $stmtF->bind_param("s", $project['foundation_name']);
+                $stmtF->execute();
+                $fpRow = $stmtF->get_result()->fetch_assoc();
+                if ($fpRow) {
+                    $foundationImg = $fpRow['foundation_image'] ?? '';
+                    $foundationId = (int)($fpRow['foundation_id'] ?? 0);
+                }
+                ?>
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <?php if ($foundationImg): ?>
+                        <img src="../uploads/profiles/<?= htmlspecialchars($foundationImg) ?>" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:50%;border:1.5px solid #eee;">
+                    <?php else: ?>
+                        <div style="width:48px;height:48px;background:#f3f3f3;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:22px;">?</div>
+                    <?php endif; ?>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:1.1em;line-height:1.2;">
+                            <?= htmlspecialchars($project['foundation_name']) ?>
+                        </div>
+                        <?php if ($foundationId): ?>
+                            <a href="../foundation.php#f<?= $foundationId ?>" target="_blank" style="color:#1a73e8;font-size:0.97em;">ดูโปรไฟล์มูลนิธิ</a>
+                        <?php endif; ?>
                     </div>
                 </div>
-                <button type="submit" name="pay" class="btn-pay" style="background:#F1CF54;color:#222;">บริจาค</button>
-            </form>
-
-            <a href="../project.php" class="btn-back">ย้อนกลับ</a>
-        <?php endif; ?>
-
+            </div>
+            <div class="goal-info">🎯 เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท</div>
+        </div>
+    </div>
+    <!-- ขวา: รายละเอียด ฟอร์ม ปุ่ม -->
+    <div class="payment-box">
+        <div class="project-detail-summary" style="font-size:1.18em;background:none;border:none;box-shadow:none;padding:0;margin-bottom:28px;">
+            <div class="detail-row" style="font-size:1.13em;font-weight:400;margin-bottom:18px;">
+                <?= nl2br(htmlspecialchars($project['project_desc'])) ?>
+            </div>
+            <?php if (!empty($project['project_quote'])): ?>
+                <div class="detail-row"><strong>คำโปรย</strong> <?= htmlspecialchars($project['project_quote']) ?></div>
+            <?php endif; ?>
+            <div class="detail-row"><strong>ระยะเวลาระดมทุน</strong> <?= htmlspecialchars($fundraisingPeriod) ?></div>
+            <div class="detail-row"><strong>พื้นที่ดำเนินโครงการ</strong> <?= htmlspecialchars($projectArea) ?></div>
+            <div class="detail-row"><strong>เป้าหมาย SDGs</strong> <?= htmlspecialchars($sdgGoal) ?></div>
+            <div class="detail-row"><strong>กลุ่มเป้าหมาย</strong> <?= htmlspecialchars($beneficiaryGroup) ?></div>
+            <?php if (!empty($project['need_info'])): ?>
+                <div class="detail-row"><strong>กิจกรรมมูลนิธิ</strong> <?= htmlspecialchars($project['need_info']) ?></div>
+            <?php endif; ?>
+            <?php if (!empty($project['update_info'])): ?>
+                <div class="detail-row"><strong>อัปเดต</strong> <?= htmlspecialchars($project['update_info']) ?></div>
+            <?php endif; ?>
+        </div>
+        <h3 style="margin-top:18px;">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
+        <form method="POST">
+            <div class="amount-presets-grid">
+                <button type="button" class="preset-btn" onclick="selectPreset(2000)">2,000 บาท</button>
+                <button type="button" class="preset-btn" onclick="selectPreset(1000)">1,000 บาท</button>
+                <button type="button" class="preset-btn" onclick="selectPreset(500)">500 บาท</button>
+                <div class="preset-btn preset-input-btn">
+                    <label for="amountInput" style="display:block;font-size:1em;font-weight:700;color:#222;margin-bottom:2px;cursor:pointer;">ระบุจำนวน</label>
+                    <input type="number" name="amount" id="amountInput" min="20" placeholder="ขั้นต่ำ 20 บาท" required style="font-size:1.2em;text-align:center;width:90%;border:none;border-bottom:2px solid #aaa;background:transparent;outline:none;margin:0 auto;display:block;" oninput="clearPresetBtns()">
+                </div>
+            </div>
+            <div class="payment-method">
+                <div class="method-card active">
+                    <img src="../img/qr-code.png" alt="PromptPay" class="method-icon">
+                    <span>PromptPay QR</span>
+                </div>
+            </div>
+            <button type="submit" name="pay" class="btn-pay" id="donateBtn">บริจาค</button>
+        </form>
+        <script>
+        function selectPreset(val) {
+            document.getElementById('amountInput').value = val;
+            document.getElementById('amountInput').focus();
+            clearPresetBtns();
+            event.target.classList.add('active');
+        }
+        function clearPresetBtns() {
+            document.querySelectorAll('.amount-presets-grid .preset-btn').forEach(b => b.classList.remove('active'));
+        }
+        document.getElementById('donateForm').addEventListener('submit', function(e) {
+            var amount = document.getElementById('amountInput').value;
+            if (!amount || amount < 20) {
+                alert('กรุณากรอกจำนวนเงินขั้นต่ำ 20 บาท');
+                e.preventDefault();
+            }
+        });
+        </script>
     </div>
 </div>
-</div>
 
-<script>
-function setAmount(el, val) {
-    document.getElementById('amountInput').value = val;
-    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-    el.classList.add('active');
-}
-</script>
-
+<?php if ($qr_image): ?>
+            <div class="qr-section" style="text-align:center;margin:32px 0 24px 0;">
+                <h3 style="font-size:1.3em;font-weight:700;">สแกน QR เพื่อชำระเงิน</h3>
+                <img src="<?= htmlspecialchars($qr_image) ?>" alt="PromptPay QR" style="max-width:260px;width:100%;background:#fff;padding:16px;border-radius:16px;box-shadow:0 2px 12px 0 rgba(0,0,0,0.08);">
+                <div style="margin-top:16px;font-size:1.15em;color:#222;">จำนวนเงิน <?= number_format((int)$_SESSION['pending_amount'] ?? 0) ?> บาท</div>
+                <div style="margin-top:10px;color:#888;">โปรดสแกนด้วยแอปธนาคาร</div>
+                <a href="?project_id=<?= $project_id ?>" style="display:inline-block;margin-top:22px;color:#ff8800;font-weight:600;text-decoration:underline;">กลับไปเลือกจำนวนเงินใหม่</a>
+            </div>
+        <?php endif; ?>
 </body>
 </html>

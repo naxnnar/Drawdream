@@ -45,11 +45,13 @@ if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
             }
 
             mysqli_commit($conn);
-            echo "<script>alert('ลบโครงการเรียบร้อยแล้ว'); window.location='project.php?view=foundation';</script>";
+            echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>";
+            echo "<script>Swal.fire({icon:'success',title:'ลบโครงการสำเร็จ',showConfirmButton:false,timer:1500}).then(()=>{window.location='project.php?view=foundation';});</script>";
             exit();
         } catch (Throwable $e) {
             mysqli_rollback($conn);
-            echo "<script>alert('ลบโครงการไม่สำเร็จ: " . addslashes($e->getMessage()) . "'); window.location='project.php?view=foundation';</script>";
+            echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>";
+            echo "<script>Swal.fire({icon:'error',title:'ลบโครงการไม่สำเร็จ',text:'" . addslashes($e->getMessage()) . "',showConfirmButton:true}).then(()=>{window.location='project.php?view=foundation';});</script>";
             exit();
         }
     }
@@ -106,8 +108,8 @@ function formatTimeAgoThai($datetime) {
     if ($timestamp === false) return 'โครงการใหม่';
 
     $diff = time() - $timestamp;
-    if ($diff < 60) return 'เมื่อสักครู่';
-    if ($diff < 3600) return floor($diff / 60) . ' นาทีที่แล้ว';
+    // ถ้าน้อยกว่า 1 ชั่วโมง ให้แสดงว่าโครงการใหม่
+    if ($diff < 3600) return 'โครงการใหม่';
     if ($diff < 86400) return floor($diff / 3600) . ' ชั่วโมงที่แล้ว';
     if ($diff < 2592000) return floor($diff / 86400) . ' วันที่แล้ว';
     return 'มากกว่า 30 วันที่แล้ว';

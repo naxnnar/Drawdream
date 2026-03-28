@@ -52,8 +52,7 @@ $failure_message = $charge['failure_message'] ?? '';
 $expires_at      = $charge['expires_at'] ?? '';
 $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 
-// สำเร็จเมื่อ: paid=true / successful / mock / test-mode-pending
-$is_success = ($paid === true) || ($status === 'successful') || $is_mock || ($is_test_mode && $status === 'pending');
+$is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
 
 // กันบันทึกซ้ำเมื่อ refresh หรือเช็คซ้ำ
@@ -187,11 +186,9 @@ if (empty($child_name) && $child_id > 0) {
             <?php endif; ?>
             <p>จำนวน <strong><?php echo number_format($amount, 2); ?> บาท</strong></p>
             <p class="charge-ref">อ้างอิง: <?php echo htmlspecialchars($charge_id); ?></p>
-            <?php if ($child_id > 0): ?>
-                <a href="../children_donate.php?id=<?php echo $child_id; ?>" class="btn-pay">กลับหน้าโปรไฟล์เด็ก</a>
-            <?php else: ?>
-                <a href="../children_.php" class="btn-pay">กลับหน้ารายชื่อเด็ก</a>
-            <?php endif; ?>
+
+            <!-- ปุ่มเดียว: กลับหน้าโปรไฟล์เด็ก (สี #CC583F) -->
+            <a href="../children_.php" class="btn-pay" style="background:#CC583F; border:none; width:100%; max-width:400px; margin:32px auto 0 auto; display:block; font-size:1.3rem;">กลับหน้าโปรไฟล์เด็ก</a>
 
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
@@ -218,7 +215,7 @@ if (empty($child_name) && $child_id > 0) {
             <?php elseif (!empty($failure_message)): ?>
                 <p><?php echo htmlspecialchars($failure_message); ?></p>
             <?php endif; ?>
-            <a href="child_donate.php?child_id=<?php echo $child_id; ?>" class="btn-pay">ลองใหม่</a>
+            <button type="button" class="btn-pay" onclick="window.location.reload()">ลองใหม่</button>
             <a href="../children_.php" class="btn-back">กลับหน้ารายชื่อเด็ก</a>
         <?php endif; ?>
 

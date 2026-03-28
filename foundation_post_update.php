@@ -1,9 +1,12 @@
 ﻿<?php
 // ไฟล์นี้: foundation_post_update.php
 // หน้าที่: หน้ามูลนิธิสำหรับโพสต์อัปเดตสถานะ/โครงการ
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
+// กำหนดค่า default ให้ $readonly ก่อนใช้งาน
+$readonly = isset($_GET['readonly']) && $_GET['readonly'] == '1';
 
 // ถ้าเป็น readonly (ผู้บริจาคดูผลลัพธ์) ไม่ต้องเช็ค session/role
 if (!$readonly) {
@@ -33,7 +36,6 @@ if (!$readonly) {
 
 // ✅ รับ project_id จาก URL (มาจากแจ้งเตือน)
 $locked_project_id = (int)($_GET['project_id'] ?? 0);
-$readonly = isset($_GET['readonly']) && $_GET['readonly'] == '1';
 $locked_project    = null;
 
 if ($locked_project_id > 0) {

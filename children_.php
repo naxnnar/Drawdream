@@ -155,7 +155,17 @@ if ($result && $result->num_rows > 0) {
   <?php endif; ?>
   <div>
     <?php if (!empty($_GET['msg'] ?? '')): ?>
-      <span style="font-weight:700;color:#2b4b80;"><?php echo htmlspecialchars($_GET['msg']); ?></span>
+        <?php if (!empty($_GET['msg'])): ?>
+          <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+          <script>
+          Swal.fire({
+            icon: 'success',
+            title: <?php echo json_encode($_GET['msg']); ?>,
+            showConfirmButton: false,
+            timer: 1600
+          });
+          </script>
+        <?php endif; ?>
     <?php endif; ?>
   </div>
 </div>
