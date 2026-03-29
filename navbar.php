@@ -245,6 +245,10 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
                 </a>
               <?php endforeach; ?>
             <?php endif; ?>
+            <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
+              <a href="<?= $_nav_base ?>foundation_notifications.php" 
+                 class="notif-see-all">ดูการแจ้งเตือนทั้งหมด →</a>
+            <?php endif; ?>
           </div>
         </div>
       <?php endif; ?>

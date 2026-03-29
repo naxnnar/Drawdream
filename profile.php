@@ -46,18 +46,16 @@ if ($role === 'foundation') {
     $stmt->execute();
     $profile = $stmt->get_result()->fetch_assoc();
 
-    // ดึงโครงการทั้งหมดของมูลนิธินี้
-    $fid = (int)($profile['foundation_id'] ?? 0);
-        // ดึงเฉพาะโครงการของมูลนิธิที่ล็อกอินอยู่ (ยึดตาม foundation_name ในตาราง project)
-        $foundationName = trim((string)($profile['foundation_name'] ?? ''));
-        $stmt_proj = $conn->prepare("
-             SELECT project_id, project_name, goal_amount, current_donate,
-                 project_status, end_date, project_image
-        FROM project 
-            WHERE foundation_name = ?
+    // ดึงเฉพาะโครงการของมูลนิธิที่ล็อกอินอยู่ (ยึดตาม foundation_name ในตาราง project)
+    $foundationName = trim((string)($profile['foundation_name'] ?? ''));
+    $stmt_proj = $conn->prepare("
+         SELECT project_id, project_name, goal_amount, current_donate,
+             project_status, end_date, project_image
+         FROM project 
+         WHERE foundation_name = ?
          ORDER BY project_status DESC, project_id DESC
     ");
-        $stmt_proj->bind_param("s", $foundationName);
+    $stmt_proj->bind_param("s", $foundationName);
     $stmt_proj->execute();
     $foundation_projects = $stmt_proj->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -98,9 +96,14 @@ if ($role === 'foundation') {
         'first_name' => 'Admin',
         'last_name'  => 'System'
     ];
+
     $stmt3 = $conn->prepare("
         SELECT a.*, 
-               nl.item_name, nl.item_desc, nl.quantity_required, nl.item_price, nl.photo_item, nl.foundation_id,
+               nl.item_name, nl.item_desc,
+               nl.qty_needed AS quantity_required,
+               nl.price_estimate AS item_price,
+               nl.item_image AS photo_item,
+               nl.foundation_id,
                p.project_name, p.project_desc,
                fp.foundation_name
         FROM admin a

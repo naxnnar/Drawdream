@@ -119,29 +119,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     if (empty($email) || empty($password)) {
         $error = "กรุณากรอกอีเมลและรหัสผ่าน";
     } else {
+        // ดึงข้อมูล user จาก email ก่อน ไม่ filter role
         $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
-        $result = $stmt->get_result();
+        $row = $stmt->get_result()->fetch_assoc();
 
-
-        $row = $result->fetch_assoc();
         if ($row && password_verify($password, $row['password'])) {
-            $_SESSION['user_id'] = $row['user_id'];
-            $_SESSION['email'] = $row['email'];
-            $_SESSION['role'] = $row['role'];
-            if ($row['role'] === 'foundation') {
-                $stmt2 = $conn->prepare("SELECT account_verified FROM foundation_profile WHERE user_id = ?");
-                $stmt2->bind_param("i", $row['user_id']);
-                $stmt2->execute();
-                $fp = $stmt2->get_result()->fetch_assoc();
-                $_SESSION['account_verified'] = $fp['account_verified'];
+            $actual_role    = $row['role'];       // role จริงใน DB
+            $selected_role  = $role;              // role ที่ user เลือกในหน้า login
+
+            // ✅ กฎ: admin เข้าได้ทุกช่อง, donor/foundation ต้องตรงกับ role จริงเท่านั้น
+            $allowed = false;
+            if ($actual_role === 'admin') {
+                $allowed = true; // admin เข้าช่องไหนก็ได้
+            } elseif ($actual_role === $selected_role) {
+                $allowed = true; // donor เข้าช่อง donor, foundation เข้าช่อง foundation
             }
 
-            // ทั้ง admin, donor, foundation: แสดงหน้า Welcome ก่อน
-            $_SESSION['show_welcome'] = true;
-            header("Location: welcome.php");
-            exit();
+            if ($allowed) {
+                $_SESSION['user_id'] = $row['user_id'];
+                $_SESSION['email']   = $row['email'];
+                $_SESSION['role']    = $row['role'];
+
+                if ($row['role'] === 'foundation') {
+                    $stmt2 = $conn->prepare("SELECT account_verified FROM foundation_profile WHERE user_id = ?");
+                    $stmt2->bind_param("i", $row['user_id']);
+                    $stmt2->execute();
+                    $fp = $stmt2->get_result()->fetch_assoc();
+                    $_SESSION['account_verified'] = $fp['account_verified'];
+                }
+
+                $_SESSION['show_welcome'] = true;
+                header("Location: welcome.php");
+                exit();
+            } else {
+                $error = "บัญชีนี้ไม่ใช่ประเภท " . ($selected_role === 'donor' ? 'ผู้บริจาค' : 'มูลนิธิ') . " กรุณาเลือกประเภทบัญชีให้ถูกต้อง";
+            }
         } elseif ($row) {
             $error = "รหัสผ่านไม่ถูกต้อง";
         } else {

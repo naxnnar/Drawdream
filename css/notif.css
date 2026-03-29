@@ -76,3 +76,15 @@
     color: #bbb;
     font-size: 13px;
 }
+.notif-see-all {
+    display: block;
+    text-align: center;
+    padding: 10px;
+    font-size: 13px;
+    color: #4A5BA8;
+    font-weight: 600;
+    text-decoration: none;
+    border-top: 1px solid #f0f0f0;
+    font-family: 'Prompt', sans-serif;
+}
+.notif-see-all:hover { background: #f5f5f5; }
