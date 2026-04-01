@@ -1,3 +1,30 @@
+/* SDG Row Alignment */
+.sdg-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0 0 0;
+    max-width: 340px;
+}
+
+.sdg-title {
+    display: flex;
+    align-items: center;
+    height: 56px;
+    font-size: 1.08em;
+}
+img.sdg-img {
+    width: 56px !important;
+    height: 56px !important;
+    max-width: 56px !important;
+    max-height: 56px !important;
+    object-fit: contain !important;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 1px 4px #0001;
+    padding: 1px;
+    display: inline-block;
+}
 /* ========================================
    payment.css — สำหรับหน้าชำระเงิน
    ======================================== */
@@ -11,9 +38,9 @@ body {
 }
 
 .payment-container {
-    max-width: 1440px;
-    margin: 40px auto 0 auto;
-    padding: 0 32px;
+    max-width: 1320px; /* ขยาย container หลัก */
+    margin: 24px auto 0 auto;
+    padding: 0 4vw; /* ลด padding ข้าง ให้พื้นที่แนวนอนมากขึ้น */
     display: flex;
     justify-content: center;
 }
@@ -23,11 +50,12 @@ body {
     display: flex;
     flex-direction: row;
     width: 100%;
-    max-width: 1200px;
-    min-height: 520px;
+    max-width: 1100px;
+    min-height: 420px;
+    height: 100%;
     background: #fff;
-    border-radius: 24px;
-    box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+    border-radius: 18px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.08);
     overflow: hidden;
 }
 
@@ -44,9 +72,9 @@ body {
     overflow: hidden;
 }
 
- .project-img {
+.project-img {
     width: 100%;
-    height: 420px;
+    height: 260px; /* ลดความสูงภาพ */
     object-fit: cover;
     border-radius: 0 !important;
     margin: 0 !important;
@@ -62,78 +90,79 @@ body {
 }
 
 .project-info-inner {
-    padding: 38px 38px 18px 38px;
+    padding: 28px 28px 16px 28px; /* เพิ่ม padding ให้สมดุลกับการ์ดที่กว้างขึ้น */
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
 }
 
 .project-info h2 {
-    font-size: 1.45em;
+    font-size: 1.1em;
     color: #ff8800;
     font-weight: 700;
     margin-bottom: 0;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
 .project-info h3 {
-    font-size: 2.3em;
+    font-size: 1.35em;
     font-weight: 800;
     color: #222;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     margin-top: 0;
-    letter-spacing: -1px;
+    letter-spacing: -0.5px;
 }
 
 .project-desc {
-    font-size: 1.13em;
+    font-size: 1em;
     color: #444;
-    margin-bottom: 10px;
-    line-height: 1.6;
+    margin-bottom: 8px;
+    line-height: 1.5;
     font-weight: 400;
 }
 
 .goal-info {
     background: #f0f4ff;
     color: #1a73e8;
-    padding: 12px 22px;
-    border-radius: 12px;
+    padding: 7px 14px;
+    border-radius: 8px;
     font-weight: 700;
-    font-size: 1.22em;
-    margin-bottom: 14px;
+    font-size: 1em;
+    margin-bottom: 10px;
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 5px;
 }
 
 .contact-card {
-    margin-top: 18px;
+    margin-top: 10px;
     background: #fff;
     border: 1px solid #e7e2d8;
-    border-radius: 12px;
-    padding: 14px 18px;
-    max-width: 340px;
+    border-radius: 8px;
+    padding: 8px 12px;
+    max-width: 240px;
 }
 
 /* ===== ฝั่งขวา ===== */
 .payment-box {
     flex: 1 1 46%;
     min-width: 0;
-    padding: 48px 48px 38px 48px;
+    padding: 28px 28px 18px 28px;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
+    justify-content: center;
     background: #fff;
     border-left: 1.5px solid #f1cf54;
+    height: 100%;
 }
 
 .payment-box h3 {
-    font-size: 1.35em;
+    font-size: 1.1em;
     font-weight: 700;
     color: #222;
-    margin-bottom: 18px;
+    margin-bottom: 10px;
 }
 
 .project-detail-summary {
@@ -141,11 +170,11 @@ body {
     border: none;
     border-radius: 0;
     padding: 0;
-    margin-bottom: 28px;
+    margin-bottom: 14px;
     color: #222;
-    font-size: 1.28em;
+    font-size: 1em;
     box-shadow: none;
-    line-height: 1.7;
+    line-height: 1.5;
 }
 /* ปุ่มย้อนกลับบนภาพ */
 .project-info a[href*="history.back"] {
@@ -170,13 +199,13 @@ body {
 }
 
 .detail-row {
-    margin-bottom: 16px;
-    font-size: 1.08em;
+    margin-bottom: 8px;
+    font-size: 0.98em;
     color: #333;
-    line-height: 1.55;
+    line-height: 1.4;
     display: flex;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
 }
 /* ปุ่มแชร์และแท็กหมวดหมู่ */
 .project-info-inner h2 span[style*="background:#ffe0b2"] {
@@ -204,19 +233,19 @@ body {
 .amount-presets-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 18px 18px;
-    margin-bottom: 18px;
-    margin-top: 8px;
+    gap: 10px 10px;
+    margin-bottom: 10px;
+    margin-top: 4px;
 }
 
 
 .preset-btn {
     width: 100%;
-    padding: 28px 0 18px 0;
+    padding: 12px 0 8px 0;
     border: 2px solid #e0e0e0;
-    border-radius: 14px;
+    border-radius: 10px;
     background: #fff;
-    font-size: 2em;
+    font-size: 1.1em;
     font-weight: 700;
     font-family: 'Prompt', sans-serif;
     color: #222;
@@ -256,10 +285,10 @@ body {
 
 .form-group input {
     width: 100%;
-    padding: 12px 15px;
+    padding: 7px 10px;
     border: 1px solid #ddd;
-    border-radius: 10px;
-    font-size: 1.1em;
+    border-radius: 7px;
+    font-size: 1em;
     font-family: 'Prompt', sans-serif;
     box-sizing: border-box;
 }
@@ -293,19 +322,19 @@ body {
 .btn-pay {
     display: block;
     width: 100%;
-    padding: 18px;
+    padding: 10px;
     background: #ff6f2c !important;
     color: #fff !important;
     border: none;
-    border-radius: 12px;
-    font-size: 1.25em;
+    border-radius: 8px;
+    font-size: 1em;
     font-weight: 700;
     font-family: 'Prompt', sans-serif;
     cursor: pointer;
     text-align: center;
     text-decoration: none;
     transition: all 0.3s;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     box-sizing: border-box;
     box-shadow: 0 2px 8px rgba(255,111,44,0.08);
     letter-spacing: 0.5px;

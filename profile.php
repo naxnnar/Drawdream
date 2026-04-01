@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: profile.php
 // หน้าที่: หน้าโปรไฟล์ผู้ใช้และข้อมูลบัญชี
 ini_set('display_errors', 1);
@@ -79,10 +79,10 @@ if ($role === 'foundation') {
         FROM donation d
         JOIN donate_category dc ON d.category_id = dc.category_id
         LEFT JOIN payment_transaction pt ON pt.donate_id = d.donate_id
-        WHERE d.payment_status = 'completed'
+        WHERE d.donor_id = ? AND d.payment_status = 'completed'
         ORDER BY d.transfer_datetime DESC
-        LIMIT 20
     ");
+    $stmt_don->bind_param('i', $user_id);
     $stmt_don->execute();
     $donation_history = $stmt_don->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -151,15 +151,16 @@ function statusLabel($status) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>โปรไฟล์ | DrawDream</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/profile.css">
+    <link rel="stylesheet" href="css/profile.css?v=5">
 </head>
 <body>
 
 <?php include 'navbar.php'; ?>
 
 <div class="profile-container">
-    <div class="profile-header">
+    <div class="profile-header <?= $role === 'donor' ? 'profile-header--donor' : '' ?>">
 
         <?php if ($role === 'foundation'): ?>
             <div class="profile-image-placeholder">
@@ -178,23 +179,29 @@ function statusLabel($status) {
             <div class="profile-image-placeholder">
                 <img src="img/user.png" alt="รูปโปรไฟล์แอดมิน">
             </div>
-            <div class="profile-info">
+            <div class="profile-info profile-info--donor">
                 <h1><?= htmlspecialchars($profile['first_name'] . ' ' . $profile['last_name']) ?></h1>
                 <p><?= htmlspecialchars($profile['email']) ?></p>
                 <p class="badge-admin">ผู้ดูแลระบบ</p>
             </div>
 
         <?php else: ?>
-            <div class="profile-image-placeholder">
+            <div class="profile-image-placeholder profile-image-placeholder--donor">
                 <?php if (!empty($profile['profile_image'])): ?>
                     <img src="uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" alt="รูปโปรไฟล์">
                 <?php else: ?>
-                    <img src="img/user.png" alt="รูปโปรไฟล์ผู้บริจาค">
+                    <img src="img/icoprofile.png" alt="รูปโปรไฟล์ผู้บริจาคเริ่มต้น" class="profile-image-default">
                 <?php endif; ?>
             </div>
             <div class="profile-info">
                 <h1><?= htmlspecialchars($profile['first_name'] . ' ' . $profile['last_name']) ?></h1>
                 <p><?= htmlspecialchars($profile['email']) ?></p>
+                <?php if (!empty($profile['phone'])): ?>
+                    <div class="info-row">
+                        <span class="info-label">โทรศัพท์:</span>
+                        <?= htmlspecialchars($profile['phone']) ?>
+                    </div>
+                <?php endif; ?>
                 <?php if (!empty($profile['tax_id'])): ?>
                     <div class="info-row">
                         <span class="info-label">เลขประจำตัวผู้เสียภาษี:</span>
@@ -268,18 +275,48 @@ function statusLabel($status) {
         </div>
 
     <?php elseif ($role === 'donor'): ?>
-        <a href="donor_update_profile.php" class="btn-edit">แก้ไขโปรไฟล์</a>
+        <?php
+            $total_donated = array_sum(array_column($donation_history, 'amount'));
+            $don_count = count($donation_history);
+            $years = [];
+            foreach ($donation_history as $d) {
+                $years[date('Y', strtotime((string)$d['transfer_datetime']))] = true;
+            }
+            $year_options = array_keys($years);
+            rsort($year_options);
+        ?>
+        <div class="donor-menu">
+            <a href="donor_update_profile.php" class="profile-menu-btn profile-menu-btn--edit">
+                <span class="profile-menu-icon"><i class="bi bi-person-fill"></i></span>
+                <span class="profile-menu-label">แก้ไขโปรไฟล์</span>
+                <span class="profile-menu-arrow">›</span>
+            </a>
+            <button type="button" class="profile-menu-btn profile-menu-btn--history" id="openDonationHistory">
+                <span class="profile-menu-icon"><i class="bi bi-receipt-cutoff"></i></span>
+                <span class="profile-menu-label">ประวัติการบริจาค</span>
+                <span class="profile-menu-arrow">›</span>
+            </button>
+        </div>
 
-        <div class="logs-section">
+        <div class="logs-section donor-history-panel" id="donationHistoryPanel" hidden>
             <h2>ประวัติการบริจาค</h2>
             <?php if (!empty($donation_history)): ?>
-                <?php $total_donated = array_sum(array_column($donation_history, 'amount')); ?>
-                <div class="donation-summary">
-                    บริจาคทั้งหมด <strong><?= number_format($total_donated, 2) ?> บาท</strong>
-                    จาก <?= count($donation_history) ?> รายการ
+                <div class="donor-summary-head">
+                    <label class="donor-year-filter-wrap" for="donation-year-filter">
+                        <select id="donation-year-filter" class="donor-year-filter">
+                            <option value="all">ทุกปี</option>
+                            <?php foreach ($year_options as $yr): ?>
+                                <option value="<?= htmlspecialchars($yr) ?>"><?= htmlspecialchars($yr) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </label>
                 </div>
-                <?php foreach ($donation_history as $don): ?>
-                    <div class="log-item">
+                <div class="donation-summary">
+                    บริจาคทั้งหมด <strong><?= number_format($total_donated, 2) ?> บาท</strong> จาก <?= $don_count ?> รายการ
+                </div>
+                <?php foreach ($donation_history as $idx => $don): ?>
+                    <?php $is_extra = $idx >= 3; $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
+                    <div class="log-item log-item--donation<?= $is_extra ? ' log-item--extra' : '' ?>" data-year="<?= htmlspecialchars($yr) ?>"<?= $is_extra ? ' hidden' : '' ?>>
                         <div class="log-action">
                             <?php if (!empty($don['project_donate'])): ?>
                                 บริจาคให้โครงการ
@@ -291,12 +328,12 @@ function statusLabel($status) {
                         </div>
                         <div class="log-details">
                             <strong>จำนวน:</strong>
-                            <span style="color:#E74C3C; font-weight:700;">
+                            <span class="donation-amount-num">
                                 <?= number_format((float)$don['amount'], 2) ?> บาท
                             </span>
                         </div>
                         <?php if (!empty($don['omise_charge_id'])): ?>
-                            <div class="log-details" style="font-size:12px; color:#999;">
+                            <div class="log-details log-ref">
                                 อ้างอิง: <?= htmlspecialchars($don['omise_charge_id']) ?>
                             </div>
                         <?php endif; ?>
@@ -305,6 +342,11 @@ function statusLabel($status) {
                         </div>
                     </div>
                 <?php endforeach; ?>
+                <?php if ($don_count > 3): ?>
+                <div class="donation-more-wrap">
+                    <button type="button" class="btn-donation-more" id="btn-donation-more">ดูเพิ่มเติม</button>
+                </div>
+                <?php endif; ?>
             <?php else: ?>
                 <div style="text-align:center; color:#999; padding:30px;">
                     ยังไม่มีประวัติการบริจาค
@@ -378,6 +420,56 @@ function closeModal() {
 document.getElementById('detailModal').addEventListener('click', function(e) {
     if (e.target === this) closeModal();
 });
+
+(function() {
+    var openBtn = document.getElementById('openDonationHistory');
+    var panel = document.getElementById('donationHistoryPanel');
+    if (openBtn && panel) {
+        openBtn.addEventListener('click', function() {
+            panel.hidden = false;
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    var btn = document.getElementById('btn-donation-more');
+    var yearFilter = document.getElementById('donation-year-filter');
+    var items = [].slice.call(document.querySelectorAll('.log-item--donation'));
+    var wrap = btn ? btn.closest('.donation-more-wrap') : null;
+    function applyFilter() {
+        var year = yearFilter ? yearFilter.value : 'all';
+        var shown = 0;
+        var hiddenCount = 0;
+        items.forEach(function(el) {
+            var ok = (year === 'all') || (el.getAttribute('data-year') === year);
+            if (!ok) {
+                el.hidden = true;
+                return;
+            }
+            if (shown < 3) {
+                el.hidden = false;
+            } else {
+                el.hidden = true;
+                hiddenCount++;
+            }
+            shown++;
+        });
+        if (wrap) wrap.style.display = hiddenCount > 0 ? '' : 'none';
+    }
+    if (btn) {
+        btn.addEventListener('click', function() {
+            var year = yearFilter ? yearFilter.value : 'all';
+            items.forEach(function(el) {
+                var ok = (year === 'all') || (el.getAttribute('data-year') === year);
+                if (ok) el.hidden = false;
+            });
+            if (wrap) wrap.style.display = 'none';
+        });
+    }
+    if (yearFilter) {
+        yearFilter.addEventListener('change', applyFilter);
+    }
+    applyFilter();
+})();
 </script>
 
 </body>

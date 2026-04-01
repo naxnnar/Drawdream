@@ -238,6 +238,39 @@ body.mode-edit .edit-pill-wrap { display: block; }
 
 .btn-edit-pill {
     background: linear-gradient(135deg, #F1CF54, #e8b923);
+
+/* =============================
+     Responsive สำหรับ Mobile
+     ============================= */
+@media (max-width: 600px) {
+    .donation-shell {
+        padding: 16px 2vw 24px;
+    }
+    .page-header h1 {
+        font-size: 1.2rem;
+    }
+    .section-title {
+        font-size: 1rem;
+        padding: 10px;
+    }
+    .donation-top-actions, .foundation-action-buttons {
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+    }
+    .btn-create-profile, .btn-delete-selected, .btn-toggle-edit {
+        font-size: 1rem;
+        padding: 8px 0;
+        width: 100%;
+    }
+    .donation-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 6px;
+    }
+    .child-card {
+        font-size: 0.95rem;
+    }
+}
     color: #3b2f09;
     border: 0;
     border-radius: 999px;

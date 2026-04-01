@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" aria-hidden="true">
+  <!-- ไอคอนโปรไฟล์เริ่มต้นแบบเรียบ (อ้างอิงสไตล์ภาพตัวอย่าง) -->
+  <rect width="120" height="120" fill="#e8eaed" rx="60"/>
+  <path fill="#9aa0a6" d="M24 78c4-18 18-30 36-30s32 12 36 30v8H24v-8z"/>
+  <ellipse cx="60" cy="44" rx="22" ry="20" fill="#bdc1c6"/>
+  <path fill="#9aa0a6" d="M48 40c0-2 2-4 4-3s2 3 0 4-4 1-4-1zm20 0c0-2-2-4-4-3s-2 3 0 4 4 1 4-1z"/>
+  <path fill="#9aa0a6" d="M52 52c4 3 12 3 16 0" stroke="#9aa0a6" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>

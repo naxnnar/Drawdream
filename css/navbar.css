@@ -15,6 +15,14 @@ body {
 body {
     overflow-x: hidden;
     padding-top: 82px !important;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+}
+
+input,
+textarea,
+select,
+button {
+    font-family: 'Prompt', 'Sarabun', sans-serif;
 }
 
 .navbar {
@@ -238,6 +246,46 @@ body {
 /* ========================================
    Admin Sidebar Navigation
    ======================================== */
+
+/* =============================
+     Responsive สำหรับ Mobile
+     ============================= */
+@media (max-width: 600px) {
+    .navbar {
+        flex-direction: column;
+        min-height: unset;
+        padding: 8px 2vw;
+        gap: 0;
+        font-size: 15px;
+    }
+    .nav-left, .nav-right {
+        flex-direction: column;
+        gap: 8px;
+        align-items: stretch;
+        width: 100%;
+        justify-content: center;
+    }
+    .nav-center {
+        position: static;
+        transform: none;
+        margin-bottom: 6px;
+    }
+    .nav-logo {
+        height: 38px;
+        margin: 0 auto;
+    }
+    .nav-left a, .logout-btn, .donor-view-btn {
+        font-size: 1rem !important;
+        padding: 8px 0;
+        width: 100%;
+        text-align: left;
+    }
+    .notif-btn, .profile-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
+}
 :root {
     --admin-sidebar-width: 220px;
     --admin-layout-gutter: 24px;

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: project.php
 // หน้าที่: หน้ารวมโครงการพร้อมระบบค้นหาและกรอง
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -16,7 +16,6 @@ $viewMode = $_GET['view'] ?? (($role === 'foundation') ? 'foundation' : 'donor')
 if ($role !== 'foundation') $viewMode = 'donor';
 $isFoundationOwnView = ($role === 'foundation' && $viewMode === 'foundation');
 $keyword = trim($_GET['q'] ?? '');
-$cat     = $_GET['cat'] ?? 'all';
 $location = trim($_GET['loc'] ?? 'all');
 $status = $_GET['status'] ?? 'all';
 $sort = $_GET['sort'] ?? 'latest';
@@ -58,9 +57,39 @@ if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
 }
 
 $categories = ['การศึกษา', 'สุขภาพและอนามัย', 'อาหารและโภชนาการ', 'สิ่งอำนวยความสะดวก'];
+
+/** @var list<string> */
+$selectedCats = [];
+if (isset($_GET['cat'])) {
+    $rawCat = $_GET['cat'];
+    if (is_array($rawCat)) {
+        foreach ($rawCat as $c) {
+            $c = trim((string)$c);
+            if ($c !== '' && in_array($c, $categories, true)) {
+                $selectedCats[] = $c;
+            }
+        }
+        $selectedCats = array_values(array_unique($selectedCats));
+    } else {
+        $s = trim((string)$rawCat);
+        if ($s !== '' && $s !== 'all') {
+            if (strpos($s, ',') !== false) {
+                foreach (explode(',', $s) as $part) {
+                    $part = trim($part);
+                    if ($part !== '' && in_array($part, $categories, true)) {
+                        $selectedCats[] = $part;
+                    }
+                }
+                $selectedCats = array_values(array_unique($selectedCats));
+            } elseif (in_array($s, $categories, true)) {
+                $selectedCats = [$s];
+            }
+        }
+    }
+}
+
 $statusOptions = ['all', 'fundraising', 'completed'];
 $sortOptions = ['latest', 'popular_desc', 'popular_asc', 'no_donation_latest'];
-if (!in_array($cat, $categories, true)) $cat = 'all';
 if (!in_array($status, $statusOptions, true)) $status = 'all';
 if (!in_array($sort, $sortOptions, true)) $sort = 'latest';
 
@@ -126,18 +155,83 @@ function projectStatusThai($status) {
     return $map[$status] ?? ['label' => (string)$status, 'class' => 'st-pending'];
 }
 
+/**
+ * สถานะที่ผู้บริจาคเห็น: fundraising | completed | closed (ซ่อนจาก donor ทั้งหมด)
+ */
+function donorProjectEffectiveState(array $row): string {
+    $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
+    $raised = (float)($row['current_donate'] ?? 0);
+    $dbSt = (string)($row['project_status'] ?? '');
+
+    $half = ($goal > 0) ? ($goal * 0.5) : 0.0;
+    $pct = ($goal > 0) ? min(100.0, ($raised / $goal) * 100.0) : 0.0;
+
+    $endRaw = $row['end_date'] ?? null;
+    $ended = false;
+    if (!empty($endRaw)) {
+        $endTs = strtotime((string)$endRaw . ' 23:59:59');
+        $ended = ($endTs !== false && $endTs < time());
+    }
+
+    if (in_array($dbSt, ['completed', 'done'], true)) {
+        return 'completed';
+    }
+
+    if ($raised >= $goal && $goal > 0) {
+        return 'completed';
+    }
+
+    if ($ended) {
+        if ($raised >= $half) {
+            return 'completed';
+        }
+        return 'closed';
+    }
+
+    return 'fundraising';
+}
+
+function donorProjectProgressPct(array $row): float {
+    $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
+    $raised = (float)($row['current_donate'] ?? 0);
+    if ($goal <= 0) {
+        return 0.0;
+    }
+    return min(100.0, ($raised / $goal) * 100.0);
+}
+
+/** @param list<array<string,mixed>> $rows */
+function donorFilterProjectRows(array $rows, string $status): array {
+    $out = [];
+    foreach ($rows as $row) {
+        if (donorProjectEffectiveState($row) === 'closed') {
+            continue;
+        }
+        $eff = donorProjectEffectiveState($row);
+        $dbDone = in_array((string)($row['project_status'] ?? ''), ['completed', 'done'], true);
+
+        if ($status === 'completed') {
+            if ($dbDone || $eff === 'completed') {
+                $out[] = $row;
+            }
+            continue;
+        }
+
+        if ($eff !== 'fundraising') {
+            continue;
+        }
+        $out[] = $row;
+    }
+    return $out;
+}
+
 // สร้าง SQL
 
 $params = [];
 $types  = "";
 $where  = [];
 
-// เฉพาะผู้บริจาค (donor) และหน้าแรก (ไม่ค้นหา ไม่เลือกสถานะ ไม่เลือกหมวดหมู่)
-if ($role === 'donor' && $status === 'all' && $keyword === '' && $cat === 'all' && $location === 'all') {
-    // ไม่แสดงโครงการที่เสร็จสิ้น
-    $where[] = "p.project_status = 'approved'";
-}
-
+$publicDonorStyle = (!$isFoundationOwnView && in_array($role, ['donor', 'foundation'], true));
 
 // ปรับให้ค้นหาเฉพาะชื่อโครงการ (project_name) เท่านั้น
 $kwLike = "%{$keyword}%";
@@ -147,26 +241,23 @@ if ($keyword !== '') {
     $types   .= "s";
 }
 
-if ($role !== 'admin') {
-    // เงื่อนไขนี้จะไม่ซ้อนกับด้านบน เพราะถ้าเข้าเงื่อนไข donor หน้าแรกจะไม่เข้า else นี้
-    if (!($role === 'donor' && $status === 'all' && $keyword === '' && $cat === 'all' && $location === 'all')) {
+if ($publicDonorStyle) {
+    if ($status === 'completed') {
         $where[] = "p.project_status IN ('approved', 'completed', 'done')";
+    } else {
+        $where[] = "p.project_status = 'approved'";
     }
+} elseif ($role !== 'admin') {
+    $where[] = "p.project_status IN ('approved', 'completed', 'done')";
 }
 
-if ($cat !== 'all') {
-    $where[] = "p.category = ?";
-    $params[] = $cat;
-    $types .= "s";
-}
-
-// เมื่อคลิก fundraising หรือ completed ให้กรองด้วย status
-$statusWhere = [
-    'fundraising' => "p.project_status = 'approved'",
-    'completed' => "p.project_status IN ('completed', 'done')",
-];
-if ($status !== 'all' && isset($statusWhere[$status])) {
-    $where[] = $statusWhere[$status];
+if (!empty($selectedCats)) {
+    $placeholders = implode(', ', array_fill(0, count($selectedCats), '?'));
+    $where[] = "p.category IN ($placeholders)";
+    foreach ($selectedCats as $c) {
+        $params[] = $c;
+        $types .= "s";
+    }
 }
 
 if ($location !== 'all') {
@@ -223,16 +314,17 @@ if ($isFoundationOwnView) {
         }
     }
 
+    if ($publicDonorStyle) {
+        $projects = donorFilterProjectRows($projects, $status);
+    }
+
     $latestWhere = [];
     $latestTypes = '';
     $latestParams = [];
-    if ($role !== 'admin') {
-        // สำหรับ latestProjects (แถบบน) ซ่อนโครงการเสร็จสิ้นจาก donor หน้าแรกด้วย
-        if ($role === 'donor' && $status === 'all' && $keyword === '' && $cat === 'all' && $location === 'all') {
-            $latestWhere[] = "p.project_status = 'approved'";
-        } else {
-            $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
-        }
+    if ($publicDonorStyle) {
+        $latestWhere[] = "p.project_status = 'approved'";
+    } elseif ($role !== 'admin') {
+        $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
     }
     $latestSql = "
         SELECT p.*, fp.address AS foundation_address
@@ -263,7 +355,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=10">
+    <link rel="stylesheet" href="css/project.css?v=16">
 
 </head>
 <body class="projects-page">
@@ -368,7 +460,7 @@ if ($isFoundationOwnView) {
     <div class="hero-content">
         <h1 class="hero-title">โครงการที่ใช่ <span class="highlight">ในวันที่คุณอยากให้</span></h1>
         <p class="hero-subtitle">บริจาคให้โครงการที่ใช่</p>
-        <form method="get" class="search-box">
+        <form method="get" class="search-box" id="project-filter-form">
             <div class="search-container">
                 <input class="search-input" type="text" name="q" placeholder="พิมพ์คำค้นหา" value="<?= htmlspecialchars($keyword) ?>">
                 <button type="submit" class="search-button" aria-label="ค้นหา">
@@ -382,17 +474,29 @@ if ($isFoundationOwnView) {
                     $sortLabels   = ['latest' => 'เรียงตาม', 'popular_desc' => 'บริจาค มากไปน้อย', 'popular_asc' => 'บริจาค น้อยไปมาก'];
                 ?>
 
-                <!-- หมวดหมู่ custom dropdown -->
-                <div class="cust-dropdown" id="cat-dropdown">
-                    <button type="button" class="pill-btn cust-trigger<?= $cat !== 'all' ? ' pill-active' : '' ?>" id="cat-trigger">
-                        <span id="cat-label"><?= $cat !== 'all' ? htmlspecialchars($cat) : 'หมวดหมู่' ?></span>
+                <!-- หมวดหมู่: เลือกได้หลายหมวด ส่งฟอร์มทันทีเมื่อคลิก (ไม่มีปุ่มนำไปใช้) -->
+                <div class="cust-dropdown cat-multi-dropdown" id="cat-dropdown">
+                    <button type="button" class="pill-btn cust-trigger<?= !empty($selectedCats) ? ' pill-active' : '' ?>" id="cat-trigger">
+                        <span id="cat-label"><?php
+                            if (empty($selectedCats)) {
+                                echo 'หมวดหมู่';
+                            } elseif (count($selectedCats) === 1) {
+                                echo htmlspecialchars($selectedCats[0]);
+                            } else {
+                                echo htmlspecialchars($selectedCats[0]) . ' +' . (count($selectedCats) - 1);
+                            }
+                        ?></span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                     </button>
-                    <input type="hidden" name="cat" id="cat-value" value="<?= htmlspecialchars($cat) ?>">
-                    <div class="cust-panel" id="cat-panel">
-                        <div class="cust-option<?= $cat === 'all' ? ' selected' : '' ?>" data-val="all" data-label="หมวดหมู่" data-default="1">ทั้งหมด</div>
+                    <div class="cust-panel cat-multi-panel" id="cat-panel">
+                        <div class="cust-option cat-all-opt<?= empty($selectedCats) ? ' cat-picked' : '' ?>" data-cat-action="all" data-default="1">ทั้งหมด</div>
                         <?php foreach ($categories as $c): ?>
-                            <div class="cust-option<?= $cat === $c ? ' selected' : '' ?>" data-val="<?= htmlspecialchars($c) ?>" data-label="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></div>
+                            <div class="cust-option cat-opt<?= in_array($c, $selectedCats, true) ? ' cat-picked' : '' ?>" data-cat-val="<?= htmlspecialchars($c) ?>"><?= htmlspecialchars($c) ?></div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div id="cat-hidden-group" aria-hidden="true">
+                        <?php foreach ($selectedCats as $c): ?>
+                            <input type="hidden" name="cat[]" value="<?= htmlspecialchars($c) ?>">
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -458,38 +562,91 @@ if ($role === 'admin'):
 <?php endif; ?>
 
 <div class="container">
+    <?php
+    $projectDonationCategoryId = 2;
+    $resPC = $conn->query("SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1");
+    if ($resPC && ($rpc = $resPC->fetch_assoc())) {
+        $projectDonationCategoryId = (int)$rpc['category_id'];
+    }
+    ?>
     <?php if (!empty($latestProjects)): ?>
         <section class="latest-projects-wrap">
             <button type="button" class="latest-nav latest-prev" id="latest-prev" aria-label="เลื่อนไปซ้าย">&#10094;</button>
+            <div class="latest-track-outer">
             <div class="latest-track" id="latest-track">
                 <?php foreach ($latestProjects as $latest): ?>
                     <?php
-                        // แสดงเฉพาะโครงการที่ยังเปิดระดมทุน (approved)
-                        if (($latest['project_status'] ?? '') !== 'approved') continue;
+                        if (donorProjectEffectiveState($latest) !== 'fundraising') {
+                            continue;
+                        }
                         $latestGoal = !empty($latest['goal_amount']) ? floatval($latest['goal_amount']) : 100000;
                         $latestRaised = (float)($latest['current_donate'] ?? 0);
-                        $latestProgress = ($latestGoal > 0) ? min(100, ($latestRaised / $latestGoal) * 100) : 0;
+                        $latestProgress = donorProjectProgressPct($latest);
+                        $latestBlurb = trim((string)($latest['project_quote'] ?? ''));
+                        if ($latestBlurb === '') {
+                            $latestBlurb = trim((string)($latest['project_desc'] ?? ''));
+                        }
+                        $latestDonorCount = 0;
+                        $latestDaysLeft = null;
+                        $stmtLatestDonor = $conn->prepare("SELECT COUNT(DISTINCT donor_id) AS cnt FROM donation WHERE category_id=? AND target_id=? AND payment_status='completed'");
+                        $latestPid = (int)$latest['project_id'];
+                        $stmtLatestDonor->bind_param("ii", $projectDonationCategoryId, $latestPid);
+                        $stmtLatestDonor->execute();
+                        $latestDonorRow = $stmtLatestDonor->get_result()->fetch_assoc();
+                        if ($latestDonorRow) {
+                            $latestDonorCount = (int)$latestDonorRow['cnt'];
+                        }
+                        $latestEnd = !empty($latest['end_date']) ? new DateTime($latest['end_date']) : null;
+                        if ($latestEnd) {
+                            $todayLatest = new DateTime('today');
+                            $intervalLatest = $todayLatest->diff($latestEnd);
+                            $latestDaysLeft = (int)$intervalLatest->format('%r%a');
+                        }
                     ?>
                     <article class="project-card latest-card clickable-card" data-href="payment/payment_project.php?project_id=<?= (int)$latest['project_id'] ?>">
-                        <img src="uploads/<?= htmlspecialchars($latest['project_image']) ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
+                        <div class="project-card-media">
+                            <img src="uploads/<?= htmlspecialchars($latest['project_image']) ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
+                        </div>
                         <span class="latest-badge"><?= htmlspecialchars(formatTimeAgoThai($latest['start_date'] ?? null)) ?></span>
-                        <h3><?= htmlspecialchars($latest['project_name']) ?></h3>
+                        <div class="project-card-title-row project-card-title-row--latest">
+                            <div class="project-title-meta">
+                                <span class="project-stat project-stat-donors">
+                                    <svg class="icon-person-outline" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                    <?= $latestDonorCount ?> คน
+                                </span>
+                                <span class="project-stat project-stat-deadline">
+                                    <?php if ($latestDaysLeft !== null): ?>
+                                        <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                        <?= $latestDaysLeft >= 0 ? 'อีก ' . $latestDaysLeft . ' วัน' : 'ปิดโครงการ' ?>
+                                    <?php else: ?>
+                                        <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                        —
+                                    <?php endif; ?>
+                                </span>
+                            </div>
+                            <h3><?= htmlspecialchars($latest['project_name']) ?></h3>
+                        </div>
                         <div class="project-content">
                             <div class="category-tag"><?= htmlspecialchars(($latest['category'] ?? '') !== '' ? (string)$latest['category'] : detectProjectCategory($latest['project_name'] ?? '', $latest['project_desc'] ?? '')) ?></div>
-                            <p><?= htmlspecialchars($latest['project_desc']) ?></p>
-                            <div class="progress-section">
-                                <div class="progress-label">
-                                    <span class="progress-amount"><?= number_format($latestRaised, 0) ?> THB</span>
-                                    <span class="progress-goal">เป้าหมาย <?= number_format($latestGoal, 0) ?> THB</span>
+                            <p class="project-blurb"><?= htmlspecialchars($latestBlurb) ?></p>
+                            <div class="progress-section latest-progress-section">
+                                <div class="latest-progress-amounts">
+                                    <span class="latest-progress-current"><?= number_format($latestRaised, 0) ?> <span class="latest-progress-unit">THB</span></span>
+                                    <span class="latest-progress-slash" aria-hidden="true">/</span>
+                                    <span class="latest-progress-target-line">
+                                        <svg class="goal-icon goal-icon--compact" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                                        <?= number_format($latestGoal, 0) ?> <span class="latest-progress-unit latest-progress-unit--goal">THB</span>
+                                    </span>
                                 </div>
-                                <div class="progress-bar-bg">
-                                    <div class="progress-bar-fill" style="width: <?= $latestProgress ?>%"><?= round($latestProgress) ?>%</div>
+                                <div class="progress-bar-bg latest-progress-bar-bg">
+                                    <div class="progress-bar-fill" style="width: <?= $latestProgress ?>%"></div>
                                 </div>
                             </div>
                             <a href="payment/payment_project.php?project_id=<?= $latest['project_id'] ?>" class="donate-btn">บริจาค</a>
                         </div>
                     </article>
                 <?php endforeach; ?>
+            </div>
             </div>
             <button type="button" class="latest-nav latest-next" id="latest-next" aria-label="เลื่อนไปขวา">&#10095;</button>
         </section>
@@ -504,59 +661,102 @@ if ($role === 'admin'):
         <?php if (!empty($projects)): ?>
             <?php foreach ($projects as $row): ?>
                 <?php
-                    $goal     = !empty($row['goal_amount']) ? floatval($row['goal_amount']) : 100000;
-                    $raised = (float)($row['current_donate'] ?? 0); // TODO: ดึงจากตารางบริจาคจริงตอนเชื่อม Omise
-                    $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
+                    $goal = !empty($row['goal_amount']) ? floatval($row['goal_amount']) : 100000;
+                    $raised = (float)($row['current_donate'] ?? 0);
+                    $progress = donorProjectProgressPct($row);
+                    $effState = donorProjectEffectiveState($row);
+                    $showResults = ($effState === 'completed');
+                    $cardLink = $showResults
+                        ? 'project_result.php?project_id=' . (int)$row['project_id']
+                        : 'payment/payment_project.php?project_id=' . (int)$row['project_id'];
+                    $blurb = trim((string)($row['project_quote'] ?? ''));
+                    if ($blurb === '') {
+                        $blurb = trim((string)($row['project_desc'] ?? ''));
+                    }
+                    $donorCount = 0;
+                    $daysLeft = null;
+                    $stmtDonor = $conn->prepare("SELECT COUNT(DISTINCT donor_id) AS cnt FROM donation WHERE category_id=? AND target_id=? AND payment_status='completed'");
+                    $pid = (int)$row['project_id'];
+                    $stmtDonor->bind_param("ii", $projectDonationCategoryId, $pid);
+                    $stmtDonor->execute();
+                    $donorRow = $stmtDonor->get_result()->fetch_assoc();
+                    if ($donorRow) {
+                        $donorCount = (int)$donorRow['cnt'];
+                    }
+                    $endDate = !empty($row['end_date']) ? new DateTime($row['end_date']) : null;
+                    if ($endDate) {
+                        $today = new DateTime('today');
+                        $interval = $today->diff($endDate);
+                        $daysLeft = (int)$interval->format('%r%a');
+                    }
                 ?>
-                <?php
-                    $isCompleted = in_array($row['project_status'], ['completed', 'done']);
-                    // ถ้าเสร็จสิ้น ให้ลิงก์ไปหน้า project_result.php (donor เห็นผลลัพธ์)
-                    $cardLink = $isCompleted
-                        ? "project_result.php?project_id=" . (int)$row['project_id']
-                        : "payment/payment_project.php?project_id=" . (int)$row['project_id'];
-                ?>
-                <div class="project-card clickable-card" data-href="<?= $cardLink ?>">
-                    <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>"
-                         alt="<?= htmlspecialchars($row['project_name']) ?>">
+                <div class="project-card clickable-card<?= $showResults ? ' project-card--completed' : '' ?>" data-href="<?= htmlspecialchars($cardLink) ?>">
+                    <div class="project-card-media">
+                        <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>"
+                             alt="<?= htmlspecialchars($row['project_name']) ?>">
+                    </div>
 
-                    <h3><?= htmlspecialchars($row['project_name']) ?></h3>
+                    <div class="project-card-title-row">
+                        <div class="project-title-meta">
+                            <span class="project-stat project-stat-donors">
+                                <svg class="icon-person-outline" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                <?= $donorCount ?> คน
+                            </span>
+                            <span class="project-stat project-stat-deadline <?= $showResults ? 'is-done' : '' ?>">
+                                <?php if ($showResults): ?>
+                                    <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                    เสร็จสิ้น
+                                <?php elseif ($daysLeft !== null): ?>
+                                    <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                    <?= $daysLeft >= 0 ? 'อีก ' . $daysLeft . ' วัน' : 'ปิดโครงการ' ?>
+                                <?php else: ?>
+                                    <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                    —
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                        <h3><?= htmlspecialchars($row['project_name']) ?></h3>
+                    </div>
 
                     <div class="project-content">
                         <div class="category-tag"><?= htmlspecialchars(($row['category'] ?? '') !== '' ? (string)$row['category'] : detectProjectCategory($row['project_name'] ?? '', $row['project_desc'] ?? '')) ?></div>
 
-                        <?php if (!empty($row['foundation_address'])): ?>
-                            <div class="location-tag">ที่ตั้ง: <?= htmlspecialchars($row['foundation_address']) ?></div>
-                        <?php endif; ?>
-
                         <?php if ($role === 'admin'): ?>
                             <?php
-                                $st  = $row['project_status'] ?? 'pending';
+                                $st = $row['project_status'] ?? 'pending';
                                 $cls = ($st === 'approved') ? 'approved' : (($st === 'rejected') ? 'rejected' : 'pending');
                             ?>
                             <div class="badge <?= $cls ?>"><?= htmlspecialchars($st) ?></div>
                         <?php endif; ?>
 
-                        <p><?= htmlspecialchars($row['project_desc']) ?></p>
+                        <p class="project-blurb"><?= htmlspecialchars($blurb) ?></p>
 
                         <div class="progress-section">
-                            <div class="progress-label">
-                                <span class="progress-amount"><?= number_format($raised, 0) ?> THB</span>
-                                <span class="progress-goal">เป้าหมาย <?= number_format($goal, 0) ?> THB</span>
+                            <div class="progress-label progress-label-rows">
+                                <div class="progress-col progress-col-left">
+                                    <span class="progress-sublabel">ยอดบริจาคปัจจุบัน</span>
+                                    <span class="progress-amount"><?= number_format($raised, 0) ?> THB</span>
+                                </div>
+                                <div class="progress-col progress-col-right">
+                                    <span class="progress-sublabel progress-sublabel-dim">&nbsp;</span>
+                                    <span class="progress-goal">
+                                        <svg class="goal-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                                        <?= number_format($goal, 0) ?> THB
+                                    </span>
+                                </div>
                             </div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar-fill" style="width: <?= $progress ?>%">
-                                    <?= round($progress) ?>%
+                            <div class="progress-bar-wrap">
+                                <!-- ลบ % ออก ไม่ต้องแสดง -->
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill" style="width: <?= $progress ?>%"></div>
                                 </div>
                             </div>
                         </div>
 
-                        <?php
-                            $isCompleted = in_array($row['project_status'], ['completed', 'done']);
-                        ?>
-                        <?php if (!$isCompleted): ?>
-                            <a href="payment/payment_project.php?project_id=<?= $row['project_id'] ?>" class="donate-btn">บริจาค</a>
+                        <?php if (!$showResults): ?>
+                            <a href="payment/payment_project.php?project_id=<?= (int)$row['project_id'] ?>" class="donate-btn">บริจาค</a>
                         <?php else: ?>
-                            <a href="project_result.php?project_id=<?= $row['project_id'] ?>" class="donate-btn" style="background:#597D57;color:#fff;">ดูผลลัพธ์โครงการ</a>
+                            <a href="project_result.php?project_id=<?= (int)$row['project_id'] ?>" class="donate-btn donate-btn--results">ผลลัพธ์ของโครงการ</a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -564,7 +764,7 @@ if ($role === 'admin'):
         <?php else: ?>
             <div class="no-projects">
                 <div class="no-projects-icon"></div>
-                <p>ไม่พบโครงการ<?= $cat !== 'all' ? "ในหมวด \"$cat\"" : '' ?></p>
+                <p>ไม่พบโครงการ<?= !empty($selectedCats) ? ' ในหมวดที่เลือก' : '' ?></p>
             </div>
         <?php endif; ?>
     </div>
@@ -665,7 +865,90 @@ function initSimpleDropdown(id, defaultVal) {
     });
 }
 
-initSimpleDropdown('cat', 'all');
+// หมวดหมู่หลายค่า: คลิกแล้วส่งฟอร์มทันที (ไม่มีปุ่มนำไปใช้)
+(function() {
+    const wrap = document.getElementById('cat-dropdown');
+    const trigger = document.getElementById('cat-trigger');
+    const panel = document.getElementById('cat-panel');
+    const hiddenGroup = document.getElementById('cat-hidden-group');
+    const label = document.getElementById('cat-label');
+    const form = document.getElementById('project-filter-form');
+    const allRow = panel ? panel.querySelector('.cat-all-opt') : null;
+    if (!wrap || !trigger || !panel || !hiddenGroup || !form || !allRow) return;
+
+    function rebuildHidden() {
+        hiddenGroup.innerHTML = '';
+        panel.querySelectorAll('.cat-opt.cat-picked').forEach(function(row) {
+            const v = row.getAttribute('data-cat-val');
+            if (!v) return;
+            const inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'cat[]';
+            inp.value = v;
+            hiddenGroup.appendChild(inp);
+        });
+    }
+
+    function syncLabel() {
+        const picked = Array.from(panel.querySelectorAll('.cat-opt.cat-picked')).map(function(r) {
+            return r.getAttribute('data-cat-val');
+        }).filter(Boolean);
+        if (picked.length === 0) {
+            label.textContent = 'หมวดหมู่';
+            trigger.classList.remove('pill-active');
+        } else if (picked.length === 1) {
+            label.textContent = picked[0];
+            trigger.classList.add('pill-active');
+        } else {
+            label.textContent = picked[0] + ' +' + (picked.length - 1);
+            trigger.classList.add('pill-active');
+        }
+    }
+
+    function submitCategoryFilter() {
+        if (allRow.classList.contains('cat-picked')) {
+            hiddenGroup.innerHTML = '';
+        } else {
+            rebuildHidden();
+        }
+        syncLabel();
+        panel.classList.remove('open');
+        form.submit();
+    }
+
+    trigger.addEventListener('click', function(e) {
+        e.stopPropagation();
+        document.querySelectorAll('.cust-panel.open, .loc-panel.open').forEach(function(p) {
+            if (p !== panel) p.classList.remove('open');
+        });
+        panel.classList.toggle('open');
+    });
+
+    allRow.addEventListener('click', function(e) {
+        e.stopPropagation();
+        panel.querySelectorAll('.cat-opt').forEach(function(r) { r.classList.remove('cat-picked'); });
+        allRow.classList.add('cat-picked');
+        hiddenGroup.innerHTML = '';
+        label.textContent = 'หมวดหมู่';
+        trigger.classList.remove('pill-active');
+        panel.classList.remove('open');
+        form.submit();
+    });
+
+    panel.querySelectorAll('.cat-opt').forEach(function(row) {
+        row.addEventListener('click', function(e) {
+            e.stopPropagation();
+            allRow.classList.remove('cat-picked');
+            row.classList.toggle('cat-picked');
+            var any = panel.querySelector('.cat-opt.cat-picked');
+            if (!any) {
+                allRow.classList.add('cat-picked');
+            }
+            submitCategoryFilter();
+        });
+    });
+})();
+
 initSimpleDropdown('status', 'all');
 initSimpleDropdown('sort', 'latest');
 

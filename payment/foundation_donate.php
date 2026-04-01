@@ -1,184 +1,92 @@
 ﻿<?php
 // ไฟล์นี้: payment\foundation_donate.php
-// หน้าที่: หน้าบริจาคให้มูลนิธิ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../login.php");
-    exit();
-}
-
-if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'])) {
-    header("Location: ../foundation.php");
-    exit();
-}
+if (!isset($_SESSION['user_id'])) { header("Location: ../login.php"); exit(); }
+if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'])) { header("Location: ../foundation.php"); exit(); }
 
 $fid = (int)($_GET['fid'] ?? 0);
-if ($fid <= 0) {
-    header("Location: ../foundation.php");
-    exit();
-}
+if ($fid <= 0) { header("Location: ../foundation.php"); exit(); }
 
-// ดึงข้อมูลมูลนิธิ
 $stmt = $conn->prepare("SELECT * FROM foundation_profile WHERE foundation_id = ? LIMIT 1");
 $stmt->bind_param("i", $fid);
 $stmt->execute();
 $foundation = $stmt->get_result()->fetch_assoc();
+if (!$foundation) { header("Location: ../foundation.php"); exit(); }
 
-if (!$foundation) {
-    header("Location: ../foundation.php");
-    exit();
-}
-
-// ดึงยอดรวมราคาสิ่งของทั้งหมดที่อนุมัติแล้ว
 $stmt2 = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved'");
 $stmt2->bind_param("i", $fid);
 $stmt2->execute();
-$goal_row = $stmt2->get_result()->fetch_assoc();
-$goal = (float)($goal_row['goal'] ?? 0);
+$goal = (float)($stmt2->get_result()->fetch_assoc()['goal'] ?? 0);
 
-// ดึงยอดบริจาคปัจจุบัน
-// ✅ ถูก — นับเฉพาะมูลนิธินี้
-$stmt3 = $conn->prepare("
-    SELECT COALESCE(SUM(current_donate), 0) AS current
-    FROM foundation_needlist
-    WHERE foundation_id = ?
-    AND approve_item = 'approved'
-");
+$stmt3 = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved'");
 $stmt3->bind_param("i", $fid);
 $stmt3->execute();
-$current_row = $stmt3->get_result()->fetch_assoc();
-$current = (float)($current_row['current'] ?? 0);
+$current = (float)($stmt3->get_result()->fetch_assoc()['current'] ?? 0);
 
 $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
 
-// ดึงรายการสิ่งของ
 $items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved' ORDER BY urgent DESC, item_id DESC");
 $items_stmt->bind_param("i", $fid);
 $items_stmt->execute();
 $items = $items_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-$error     = "";
-$qr_image  = "";
-$charge_id = "";
+$error = ""; $qr_image = ""; $charge_id = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     $amount = (int)($_POST['amount'] ?? 0);
-
     if ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
         $amount_satang = $amount * 100;
-
-        $source_response = omise_request('POST', '/sources', [
-            'type'     => 'promptpay',
-            'amount'   => $amount_satang,
-            'currency' => 'THB',
-        ]);
-
-        // ตรวจสอบ error จาก curl หรือ API
+        $source_response = omise_request('POST', '/sources', ['type' => 'promptpay', 'amount' => $amount_satang, 'currency' => 'THB']);
         if (isset($source_response['error'])) {
             $error = "เกิดข้อผิดพลาด: " . $source_response['message'];
         } elseif (isset($source_response['object']) && $source_response['object'] === 'source') {
-            $source_id = $source_response['id'];
-
             $charge_response = omise_request('POST', '/charges', [
-                'amount'      => $amount_satang,
-                'currency'    => 'THB',
-                'source'      => $source_id,
+                'amount' => $amount_satang, 'currency' => 'THB',
+                'source' => $source_response['id'],
                 'description' => 'บริจาครายการสิ่งของ: ' . $foundation['foundation_name'],
-                'metadata'    => [
-                    'foundation_id' => $fid,
-                    'donor_id'      => $_SESSION['user_id'],
-                    'type'          => 'needlist',
-                ],
+                'metadata' => ['foundation_id' => $fid, 'donor_id' => $_SESSION['user_id'], 'type' => 'needlist'],
             ]);
-
-            // ตรวจสอบ error จาก charge response
             if (isset($charge_response['error'])) {
                 $error = "เกิดข้อผิดพลาดในการสร้าง QR Code: " . $charge_response['message'];
             } elseif (isset($charge_response['id'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
-
-                $_SESSION['pending_charge_id']     = $charge_id;
-                $_SESSION['pending_amount']         = $amount;
-                $_SESSION['pending_foundation']     = $foundation['foundation_name'];
-                $_SESSION['pending_foundation_id']  = $fid;
-            } else {
-                $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
-            }
-        } else {
-            $error = "ไม่สามารถสร้าง PromptPay Source ได้: " . ($source_response['message'] ?? 'unknown error');
-        }
+                $_SESSION['pending_charge_id']    = $charge_id;
+                $_SESSION['pending_amount']        = $amount;
+                $_SESSION['pending_foundation']    = $foundation['foundation_name'];
+                $_SESSION['pending_foundation_id'] = $fid;
+            } else { $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด"; }
+        } else { $error = "ไม่สามารถสร้าง PromptPay Source ได้: " . ($source_response['message'] ?? 'unknown error'); }
     }
 }
 
 function omise_request($method, $path, $data = []) {
     $ch = curl_init(OMISE_API_URL . $path);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    }
-    $response   = curl_exec($ch);
-    $curl_error = curl_error($ch);
-    $http_code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    // API ไม่สามารถเข้าถึงได้ (เช่น ไม่มีเน็ตใน local) → fallback mock สำหรับ test key
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true, CURLOPT_USERPWD => OMISE_SECRET_KEY . ':',
+        CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+        CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_TIMEOUT => 30,
+    ]);
+    if ($method === 'POST') { curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data)); }
+    $response = curl_exec($ch); $curl_error = curl_error($ch); curl_close($ch);
     if ($response === false || $response === '') {
-        if (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
-            return _omise_local_mock($path, $data);
-        }
+        if (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) return _omise_local_mock($path, $data);
         return ['error' => 'curl_error', 'message' => $curl_error];
     }
-
     $decoded = json_decode($response, true);
-    if ($decoded === null) {
-        return ['error' => 'json_error', 'message' => 'Invalid JSON response', 'raw' => substr($response, 0, 200)];
-    }
-
-    return $decoded;
+    return $decoded ?? ['error' => 'json_error', 'message' => 'Invalid JSON'];
 }
 
-// ฟังก์ชัน mock response สำหรับ local dev ที่ติดต่อ Omise ไม่ได้
 function _omise_local_mock(string $path, array $data): array {
-    if (strpos($path, '/sources') !== false) {
-        return ['object' => 'source', 'id' => 'src_mock_' . bin2hex(random_bytes(6)), 'type' => 'promptpay'];
-    }
+    if (strpos($path, '/sources') !== false) return ['object' => 'source', 'id' => 'src_mock_' . bin2hex(random_bytes(6)), 'type' => 'promptpay'];
     if (strpos($path, '/charges') !== false) {
-        $cid = 'chrg_mock_' . bin2hex(random_bytes(8));
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">'
-            . '<rect width="200" height="200" fill="#fff"/>'
-            . '<rect x="10" y="10" width="56" height="56" fill="#000"/>'
-            . '<rect x="17" y="17" width="42" height="42" fill="#fff"/>'
-            . '<rect x="24" y="24" width="28" height="28" fill="#000"/>'
-            . '<rect x="134" y="10" width="56" height="56" fill="#000"/>'
-            . '<rect x="141" y="17" width="42" height="42" fill="#fff"/>'
-            . '<rect x="148" y="24" width="28" height="28" fill="#000"/>'
-            . '<rect x="10" y="134" width="56" height="56" fill="#000"/>'
-            . '<rect x="17" y="141" width="42" height="42" fill="#fff"/>'
-            . '<rect x="24" y="148" width="28" height="28" fill="#000"/>'
-            . '<text x="100" y="108" font-size="11" text-anchor="middle" font-family="Arial" fill="#555">TEST MODE</text>'
-            . '<text x="100" y="122" font-size="9" text-anchor="middle" font-family="Arial" fill="#999">Mock PromptPay QR</text>'
-            . '</svg>';
-        return [
-            'object'   => 'charge',
-            'id'       => $cid,
-            'status'   => 'pending',
-            'paid'     => false,
-            'amount'   => $data['amount'] ?? 0,
-            'currency' => 'THB',
-            'source'   => ['scannable_code' => ['image' => ['download_uri' => 'data:image/svg+xml;base64,' . base64_encode($svg)]]],
-        ];
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#fff"/><rect x="10" y="10" width="56" height="56" fill="#000"/><rect x="17" y="17" width="42" height="42" fill="#fff"/><rect x="24" y="24" width="28" height="28" fill="#000"/><rect x="134" y="10" width="56" height="56" fill="#000"/><rect x="141" y="17" width="42" height="42" fill="#fff"/><rect x="148" y="24" width="28" height="28" fill="#000"/><rect x="10" y="134" width="56" height="56" fill="#000"/><rect x="17" y="141" width="42" height="42" fill="#fff"/><rect x="24" y="148" width="28" height="28" fill="#000"/><text x="100" y="108" font-size="11" text-anchor="middle" font-family="Arial" fill="#555">TEST MODE</text><text x="100" y="122" font-size="9" text-anchor="middle" font-family="Arial" fill="#999">Mock PromptPay QR</text></svg>';
+        return ['object'=>'charge','id'=>'chrg_mock_'.bin2hex(random_bytes(8)),'status'=>'pending','paid'=>false,'amount'=>$data['amount']??0,'currency'=>'THB','source'=>['type'=>'promptpay','scannable_code'=>['image'=>['download_uri'=>'data:image/svg+xml;base64,'.base64_encode($svg)]]]];
     }
     return ['error' => 'mock_unknown', 'message' => 'Mock: unknown API path'];
 }
@@ -197,114 +105,116 @@ function _omise_local_mock(string $path, array $data): array {
 
 <?php include '../navbar.php'; ?>
 
-<div class="donate-container">
+<div class="fd-wrapper">
+    <div class="fd-layout">
 
-    <!-- ซ้าย: ข้อมูลมูลนิธิ + รายการสิ่งของ -->
-    <div class="foundation-panel">
-        <div class="foundation-header">
+        <!-- ==================== ฝั่งซ้าย ==================== -->
+        <div class="fd-left">
             <?php if (!empty($foundation['foundation_image'])): ?>
-                <img src="../uploads/profiles/<?= htmlspecialchars($foundation['foundation_image']) ?>" class="foundation-cover" alt="">
+                <img src="../uploads/profiles/<?= htmlspecialchars($foundation['foundation_image']) ?>"
+                     class="fd-cover" alt="">
             <?php endif; ?>
-            <h2><?= htmlspecialchars($foundation['foundation_name']) ?></h2>
-        </div>
 
-        <!-- Progress -->
-        <div class="progress-wrap">
-            <div class="bar"><div style="width:<?= (int)$percent ?>%"></div></div>
-            <div class="progress-text">
-                ยอดบริจาค <?= number_format($current, 0) ?> / <?= number_format($goal, 0) ?> บาท
+            <h2 class="fd-name"><?= htmlspecialchars($foundation['foundation_name']) ?></h2>
+
+            <div class="fd-progress">
+                <div class="fd-bar">
+                    <div style="width:<?= (int)$percent ?>%;min-width:<?= $percent > 0 ? '6px' : '0' ?>;"></div>
+                </div>
+                <div class="fd-progress-text">
+                    ยอดบริจาค <strong><?= number_format($current, 0) ?></strong> / <?= number_format($goal, 0) ?> บาท
+                </div>
             </div>
-        </div>
 
-        <!-- รายการสิ่งของ -->
-        <?php if (!empty($items)): ?>
-        <div class="items-list">
-            <h3>รายการสิ่งของที่ต้องการ</h3>
-            <?php foreach ($items as $item): ?>
-                <?php
-                    $itemImages = array_values(array_filter(explode('|', (string)($item['photo_item'] ?? ''))));
-                    $mainItemImage = $itemImages[0] ?? '';
+            <?php if (!empty($items)): ?>
+            <div class="fd-items-wrap">
+                <h3 class="fd-items-title">รายการสิ่งของที่ต้องการ</h3>
+                <?php foreach ($items as $item):
+                    if (!is_array($item)) continue;
+                    $imgs = array_values(array_filter(explode('|', (string)($item['photo_item'] ?? ''))));
+                    $img0 = $imgs[0] ?? '';
+                    $qty   = (int)($item['quantity_required'] ?? 0);
+                    $price = number_format((float)($item['item_price'] ?? 0), 0);
+                    $total = number_format((float)($item['total_price'] ?? 0), 0);
+                    $urgent = !empty($item['urgent']);
                 ?>
-                <div class="item-row <?= $item['urgent'] ? 'urgent' : '' ?>">
-                    <?php if ($mainItemImage !== ''): ?>
-                        <img src="../uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" class="item-thumb" alt="">
+                <div class="fd-item-row<?= $urgent ? ' fd-item-urgent' : '' ?>">
+                    <?php if ($img0): ?>
+                        <img src="../uploads/needs/<?= htmlspecialchars($img0) ?>" class="fd-item-thumb" alt="">
+                    <?php else: ?>
+                        <div class="fd-item-noimg">📦</div>
                     <?php endif; ?>
-                    <div class="item-detail">
-                        <div class="item-name">
-                            <?= htmlspecialchars($item['item_name']) ?>
-                            <?php if ($item['urgent']): ?>
-                                <span class="urgent-tag">ด่วน</span>
-                            <?php endif; ?>
+                    <div class="fd-item-detail">
+                        <div class="fd-item-name">
+                            <?= htmlspecialchars($item['item_name'] ?? '') ?>
+                            <?php if ($urgent): ?><span class="fd-urgent-badge">ด่วน</span><?php endif; ?>
                         </div>
-                        <div class="item-meta">
-                            ต้องการ <?= (int)$item['quantity_required'] ?> ชิ้น |
-                            ราคา/หน่วย <?= number_format((float)$item['item_price'], 0) ?> บาท |
-                            รวม <?= number_format((float)$item['total_price'], 0) ?> บาท
+                        <div class="fd-item-meta">
+                            ต้องการ <?= $qty ?> ชิ้น &nbsp;·&nbsp; ราคา/หน่วย <?= $price ?> บาท &nbsp;·&nbsp; รวม <?= $total ?> บาท
                         </div>
                     </div>
                 </div>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-    </div>
-
-    <!-- ขวา: ชำระเงิน -->
-    <div class="payment-box">
-
-        <?php if ($error): ?>
-            <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-
-        <?php if (!empty($qr_image)): ?>
-            <div class="qr-section">
-                <h3>สแกน QR Code เพื่อชำระเงิน</h3>
-                <p class="qr-amount">จำนวน <strong><?= number_format($_SESSION['pending_amount'], 0) ?> บาท</strong></p>
-                <img src="<?= htmlspecialchars($qr_image) ?>" class="qr-image" alt="QR Code PromptPay">
-                <p class="qr-hint">QR Code มีอายุ 10 นาที</p>
-                <p class="qr-charge">Charge ID: <?= htmlspecialchars($charge_id) ?></p>
-                <a href="check_needlist_payment.php?charge_id=<?= urlencode($charge_id) ?>&fid=<?= $fid ?>"
-                   class="btn-check">ชำระเงินแล้ว</a>
-                <a href="foundation_donate.php?fid=<?= $fid ?>" class="btn-cancel">ยกเลิก</a>
+                <?php endforeach; ?>
             </div>
+            <?php endif; ?>
+        </div><!-- /.fd-left -->
 
-        <?php else: ?>
-            <h3>เลือกจำนวนเงินที่ต้องการบริจาค</h3>
-            <p style="color:#666; font-size:13px; margin-bottom:15px;">เงินจะรวมเป็นกองทุนเพื่อซื้อสิ่งของให้มูลนิธิ</p>
+        <!-- ==================== ฝั่งขวา ==================== -->
+        <div class="fd-right">
+            <?php if ($error): ?>
+                <div class="fd-alert fd-alert-error"><?= htmlspecialchars($error) ?></div>
+            <?php endif; ?>
 
-            <div class="amount-presets">
-                <button type="button" class="preset-btn" onclick="setAmount(50)">50 บาท</button>
-                <button type="button" class="preset-btn" onclick="setAmount(100)">100 บาท</button>
-                <button type="button" class="preset-btn" onclick="setAmount(500)">500 บาท</button>
-                <button type="button" class="preset-btn" onclick="setAmount(1000)">1,000 บาท</button>
-            </div>
-
-            <form method="POST">
-                <div class="form-group">
-                    <label>จำนวนเงิน (บาท) *</label>
-                    <input type="number" name="amount" id="amountInput" min="20" placeholder="ขั้นต่ำ 20 บาท" required>
+            <?php if (!empty($qr_image)): ?>
+                <div class="fd-qr-section">
+                    <h3>สแกน QR Code เพื่อชำระเงิน</h3>
+                    <p class="fd-qr-amount">จำนวน <strong><?= number_format($_SESSION['pending_amount'], 0) ?> บาท</strong></p>
+                    <img src="<?= htmlspecialchars($qr_image) ?>" class="fd-qr-img" alt="QR Code PromptPay">
+                    <p class="fd-qr-hint">QR Code มีอายุ 10 นาที</p>
+                    <p class="fd-qr-charge">Charge ID: <?= htmlspecialchars($charge_id) ?></p>
+                    <a href="check_needlist_payment.php?charge_id=<?= urlencode($charge_id) ?>&fid=<?= urlencode($fid) ?>" class="fd-btn-paid">
+                        ✓ ชำระเงินแล้ว
+                    </a>
+                    <a href="foundation_donate.php?fid=<?= $fid ?>" class="fd-btn-cancel">ยกเลิก</a>
                 </div>
-                <div class="payment-method">
-                    <div class="method-card active">
-                        <img src="../img/qr-code.png" alt="PromptPay" class="method-icon">
+
+            <?php else: ?>
+                <h3 class="fd-form-title">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
+                <p class="fd-form-sub">เงินจะรวมเป็นกองทุนเพื่อซื้อสิ่งของให้มูลนิธิ</p>
+
+                <div class="fd-presets">
+                    <button type="button" class="fd-preset-btn" onclick="setAmount(50,this)"><span class="fd-preset-num">50</span><span class="fd-preset-unit">บาท</span></button>
+                    <button type="button" class="fd-preset-btn" onclick="setAmount(100,this)"><span class="fd-preset-num">100</span><span class="fd-preset-unit">บาท</span></button>
+                    <button type="button" class="fd-preset-btn" onclick="setAmount(500,this)"><span class="fd-preset-num">500</span><span class="fd-preset-unit">บาท</span></button>
+                    <button type="button" class="fd-preset-btn" onclick="setAmount(1000,this)"><span class="fd-preset-num">1,000</span><span class="fd-preset-unit">บาท</span></button>
+                </div>
+
+                <form method="POST" class="fd-form">
+                    <div class="fd-form-group">
+                        <label class="fd-label">จำนวนเงิน (บาท) *</label>
+                        <input type="number" name="amount" id="amountInput" min="20"
+                               placeholder="ขั้นต่ำ 20 บาท" required class="fd-input">
+                    </div>
+                    <div class="fd-method-card">
+                        <img src="../img/qr-code.png" alt="PromptPay" class="fd-method-icon">
                         <span>PromptPay QR</span>
                     </div>
-                </div>
-                <button type="submit" name="pay" class="btn-pay" style="background:#F1CF54;color:#222;">บริจาค</button>
-            </form>
+                    <button type="submit" name="pay" class="fd-btn-pay">❤ บริจาค</button>
+                </form>
 
-            <a href="../foundation.php" class="btn-back">ย้อนกลับ</a>
-        <?php endif; ?>
+                <a href="../foundation.php" class="fd-btn-back">← ย้อนกลับ</a>
+            <?php endif; ?>
+        </div><!-- /.fd-right -->
 
-    </div>
-</div>
+    </div><!-- /.fd-layout -->
+</div><!-- /.fd-wrapper -->
 
 <script>
-function setAmount(val) {
+function setAmount(val, btn) {
     document.getElementById('amountInput').value = val;
-    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
+    document.querySelectorAll('.fd-preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
 }
 </script>
-
 </body>
 </html>

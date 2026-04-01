@@ -213,7 +213,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         <input type="email" name="email" placeholder="อีเมล" required autofocus>
                     </div>
                     <div class="form-group">
-                        <input type="password" name="password" placeholder="รหัสผ่าน" required>
+                        <div style="position:relative;">
+                            <input type="password" name="password" placeholder="รหัสผ่าน" required class="password-input">
+                            <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
+                            <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
+                        </div>
                     </div>
                     <button type="submit" name="login" class="btn-submit">เข้าสู่ระบบ</button>
                 </form>
@@ -248,10 +252,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                             <input type="email" name="email" placeholder="อีเมล" required>
                         </div>
                         <div class="form-group">
-                            <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" required minlength="6">
+                            <div style="position:relative;">
+                                <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" required minlength="6" class="password-input">
+                                <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
+                                <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required minlength="6">
+                            <div style="position:relative;">
+                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required minlength="6" class="password-input">
+                                <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
+                                <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
+                            </div>
                         </div>
                         <button type="submit" name="register" class="btn-submit">สมัครสมาชิก</button>
                     </form>
@@ -276,10 +288,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                             <textarea name="address" placeholder="ที่อยู่มูลนิธิ" rows="3"></textarea>
                         </div>
                         <div class="form-group">
-                            <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" required minlength="6">
+                            <div style="position:relative;">
+                                <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" required minlength="6" class="password-input">
+                                <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
+                                <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required minlength="6">
+                            <div style="position:relative;">
+                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required minlength="6" class="password-input">
+                                <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
+                                <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
+                            </div>
                         </div>
                         <button type="submit" name="register" class="btn-submit">สมัครสมาชิก</button>
                     </form>
@@ -291,6 +311,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <?php endif; ?>
         <?php endif; ?>
     </div>
+
+    <!-- Script: toggle password visibility ทุกช่องรหัสผ่าน -->
+    <script>
+    // ฟังก์ชันสำหรับสลับการแสดง/ซ่อนรหัสผ่าน (ใช้ไอคอนตาเปิด/ปิด)
+    document.querySelectorAll('.toggle-password').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const input = btn.parentElement.querySelector('.password-input');
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '👁'; // (ดูรหัสผ่าน)
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁'; //  (ซ่อนรหัสผ่าน)
+            }
+        });
+       
+    });
+    </script>
 
 </body>
 

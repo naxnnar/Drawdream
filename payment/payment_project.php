@@ -217,7 +217,82 @@ function _omise_local_mock(string $path, array $data): array {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ชำระเงิน | DrawDream</title>
-    <link rel="stylesheet" href="../css/payment.css">
+        <link rel="stylesheet" href="../css/payment.css">
+        <style>
+        .project-sdgs-benefit-wrap {
+            display: flex;
+            gap: 18px;
+            margin: 12px 0 0 0;
+            flex-wrap: wrap;
+        }
+        .sdgs-block, .benefit-block {
+            background: #f7f7f7;
+            border-radius: 12px;
+            padding: 14px 18px 12px 18px;
+            min-width: 180px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            box-shadow: 0 2px 8px #0001;
+            margin-bottom: 0;
+        }
+        .sdgs-label, .benefit-label {
+            font-size: 1.08em;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 7px;
+            font-family: 'Prompt', sans-serif;
+            display: flex;
+            align-items: center;
+        }
+        .sdgs-list, .benefit-list {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .sdg-item, .benefit-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.08em;
+            font-family: 'Prompt', sans-serif;
+            font-weight: 600;
+        }
+        .sdg-emoji {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1.15em;
+            font-weight: 800;
+            margin-right: 4px;
+            box-shadow: 0 1px 4px #0001;
+        }
+        .benefit-emoji {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            color: #222;
+            font-size: 1.25em;
+            font-weight: 800;
+            margin-right: 4px;
+            background: #f9c2d1;
+            box-shadow: 0 1px 4px #0001;
+        }
+        .sdg-text, .benefit-text {
+            font-size: 1.08em;
+            font-family: 'Prompt', sans-serif;
+            font-weight: 600;
+            color: #222;
+        }
+        </style>
 </head>
 <body>
 
@@ -281,7 +356,55 @@ function _omise_local_mock(string $path, array $data): array {
                     </div>
                 </div>
             </div>
-            <div class="goal-info">🎯 เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท</div>
+                        <div class="goal-info">🎯 เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท</div>
+
+                        <!-- SDG Image Row -->
+                        <?php
+                        // แมปหมวดหมู่กับ SDG (ตัวอย่าง)
+                        $sdgMap = [
+                            'การศึกษา' => ['num' => 4, 'title' => 'SDG 4: การศึกษาที่มีคุณภาพ'],
+                            'สุขภาพและอนามัย' => ['num' => 3, 'title' => 'SDG 3: สุขภาพและความเป็นอยู่ที่ดี'],
+                            'อาหารและโภชนาการ' => ['num' => 2, 'title' => 'SDG 2: ขจัดความหิวโหย'],
+                            'สิ่งอำนวยความสะดวก' => ['num' => 10, 'title' => 'SDG 10: ลดความเหลื่อมล้ำ'],
+                        ];
+                        $cat = $project['category'] ?? '';
+                        $sdgNum = $sdgMap[$cat]['num'] ?? 1;
+                        $sdgTitle = $sdgMap[$cat]['title'] ?? 'SDG 1: ขจัดความยากจน';
+                        // กรณี SDG 2 ให้ใช้ path img/sdg2.png โดยตรง
+                        if ($sdgNum == 2) {
+                            $sdgImgPath = "../img/sdg2.png";
+                        } else {
+                            $sdgImgPath = "../img/sdgs/sdg{$sdgNum}.png";
+                        }
+                        ?>
+                                                <div class="sdg-row">
+                                                        <img src="<?= $sdgImgPath ?>" alt="SDG <?= $sdgNum ?>" class="sdg-img" title="<?= htmlspecialchars($sdgTitle) ?>" id="sdg-img-clickable" style="cursor:zoom-in;">
+                                                            <span class="sdg-title">เป้าหมาย SDGs<br>SDG <?= $sdgNum ?> <?= htmlspecialchars(preg_replace('/^SDG ?\d+:? ?/', '', $sdgTitle)) ?></span>
+                                                </div>
+                                                <!-- SDG Image Modal -->
+                                                <div id="sdgModal" style="display:none;position:fixed;z-index:9999;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;">
+                                                    <img id="sdgModalImg" src="" alt="SDG" style="max-width:80vw;max-height:80vh;border-radius:16px;box-shadow:0 4px 32px #0008;">
+                                                </div>
+        <script>
+        // SDG Image Modal Popup
+        document.addEventListener('DOMContentLoaded', function() {
+            const sdgImg = document.getElementById('sdg-img-clickable');
+            const modal = document.getElementById('sdgModal');
+            const modalImg = document.getElementById('sdgModalImg');
+            if(sdgImg && modal && modalImg) {
+                sdgImg.addEventListener('click', function() {
+                    modal.style.display = 'flex';
+                    modalImg.src = sdgImg.src;
+                });
+                modal.addEventListener('click', function(e) {
+                    if(e.target === modal) {
+                        modal.style.display = 'none';
+                        modalImg.src = '';
+                    }
+                });
+            }
+        });
+        </script>
         </div>
     </div>
     <!-- ขวา: รายละเอียด ฟอร์ม ปุ่ม -->
@@ -295,8 +418,8 @@ function _omise_local_mock(string $path, array $data): array {
             <?php endif; ?>
             <div class="detail-row"><strong>ระยะเวลาระดมทุน</strong> <?= htmlspecialchars($fundraisingPeriod) ?></div>
             <div class="detail-row"><strong>พื้นที่ดำเนินโครงการ</strong> <?= htmlspecialchars($projectArea) ?></div>
-            <div class="detail-row"><strong>เป้าหมาย SDGs</strong> <?= htmlspecialchars($sdgGoal) ?></div>
-            <div class="detail-row"><strong>กลุ่มเป้าหมาย</strong> <?= htmlspecialchars($beneficiaryGroup) ?></div>
+            <!-- <div class="detail-row"><strong>เป้าหมาย SDGs</strong> <?= htmlspecialchars($sdgGoal) ?></div> -->
+            <!-- <div class="detail-row"><strong>กลุ่มเป้าหมาย</strong> <?= htmlspecialchars($beneficiaryGroup) ?></div> -->
             <?php if (!empty($project['need_info'])): ?>
                 <div class="detail-row"><strong>กิจกรรมมูลนิธิ</strong> <?= htmlspecialchars($project['need_info']) ?></div>
             <?php endif; ?>
@@ -324,34 +447,56 @@ function _omise_local_mock(string $path, array $data): array {
             <button type="submit" name="pay" class="btn-pay" id="donateBtn">บริจาค</button>
         </form>
         <script>
-        function selectPreset(val) {
-            document.getElementById('amountInput').value = val;
-            document.getElementById('amountInput').focus();
-            clearPresetBtns();
-            event.target.classList.add('active');
+        <style>
+        .sdg-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin: 4px 0 0 0;
+            max-width: 340px;
         }
-        function clearPresetBtns() {
-            document.querySelectorAll('.amount-presets-grid .preset-btn').forEach(b => b.classList.remove('active'));
+        .sdg-row .sdg-img {
+            width: 36px !important;
+            height: 36px !important;
+            max-width: 36px !important;
+            max-height: 36px !important;
+            object-fit: contain !important;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 1px 4px #0001;
+            padding: 1px;
+            display: block;
         }
-        document.getElementById('donateForm').addEventListener('submit', function(e) {
-            var amount = document.getElementById('amountInput').value;
-            if (!amount || amount < 20) {
-                alert('กรุณากรอกจำนวนเงินขั้นต่ำ 20 บาท');
-                e.preventDefault();
-            }
+        .sdg-title {
+            font-size: 1.13em;
+            font-weight: 700;
+            color: #222;
+            font-family: 'Prompt', sans-serif;
+            line-height: 1.2;
+            word-break: break-word;
+        }
+        </style>
+
+        <!-- SDG Image Modal -->
+        <div id="sdgModal" style="display:none;position:fixed;z-index:9999;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;">
+          <img id="sdgModalImg" src="" alt="SDG" style="max-width:80vw;max-height:80vh;border-radius:16px;box-shadow:0 4px 32px #0008;">
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+          const sdgImg = document.getElementById('sdg-img-clickable') || document.querySelector('.sdg-img');
+          const modal = document.getElementById('sdgModal');
+          const modalImg = document.getElementById('sdgModalImg');
+          if(sdgImg && modal && modalImg) {
+            sdgImg.addEventListener('click', function() {
+              modal.style.display = 'flex';
+              modalImg.src = sdgImg.src;
+            });
+            modal.addEventListener('click', function(e) {
+              if(e.target === modal) {
+                modal.style.display = 'none';
+                modalImg.src = '';
+              }
+            });
+          }
         });
         </script>
-    </div>
-</div>
-
-<?php if ($qr_image): ?>
-            <div class="qr-section" style="text-align:center;margin:32px 0 24px 0;">
-                <h3 style="font-size:1.3em;font-weight:700;">สแกน QR เพื่อชำระเงิน</h3>
-                <img src="<?= htmlspecialchars($qr_image) ?>" alt="PromptPay QR" style="max-width:260px;width:100%;background:#fff;padding:16px;border-radius:16px;box-shadow:0 2px 12px 0 rgba(0,0,0,0.08);">
-                <div style="margin-top:16px;font-size:1.15em;color:#222;">จำนวนเงิน <?= number_format((int)$_SESSION['pending_amount'] ?? 0) ?> บาท</div>
-                <div style="margin-top:10px;color:#888;">โปรดสแกนด้วยแอปธนาคาร</div>
-                <a href="?project_id=<?= $project_id ?>" style="display:inline-block;margin-top:22px;color:#ff8800;font-weight:600;text-decoration:underline;">กลับไปเลือกจำนวนเงินใหม่</a>
-            </div>
-        <?php endif; ?>
-</body>
-</html>

@@ -238,6 +238,83 @@
 
 .rights-box {
     background: #fcf5ea;
+
+/* =============================
+     Responsive สำหรับ Mobile
+     ============================= */
+@media (max-width: 600px) {
+    /* ส่วนกลางของหน้า */
+    .center-section {
+        padding-left: 0;
+        margin: 20px 0 0 0;
+    }
+    .center-section h2 {
+        font-size: 1.3rem;
+    }
+    .center-section h3 {
+        font-size: 1.1rem;
+    }
+    .center-section p {
+        font-size: 1rem;
+    }
+
+    /* ปรับขนาดรูปภาพและ container หลัก */
+    .portrait-wrapper {
+        width: 90vw;
+        height: 45vw;
+        min-width: 180px;
+        min-height: 180px;
+        max-width: 95vw;
+        max-height: 60vw;
+        left: 0;
+        margin: 0 auto 1rem auto;
+        position: static;
+        justify-content: center;
+        align-items: flex-end;
+    }
+    .donation-image {
+        width: 90vw;
+        height: 45vw;
+        min-width: 180px;
+        min-height: 180px;
+        max-width: 95vw;
+        max-height: 60vw;
+        margin-left: 0;
+    }
+
+    /* ปุ่มและกล่องจำนวนเงิน */
+    .donation-amounts {
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+    }
+    .amount-btn {
+        width: 90vw;
+        font-size: 1rem;
+        padding: 10px 0;
+    }
+    .selected-amount, .btn-donate {
+        width: 90vw;
+        font-size: 1rem;
+        padding: 12px 10px;
+    }
+    .btn-donate {
+        margin: 0 auto 1rem auto;
+    }
+
+    /* ปุ่มทั่วไป */
+    .btn-hero, .btn-home {
+        font-size: 1rem;
+        padding: 0.5rem 1.2rem;
+    }
+
+    /* ปรับ layout ให้แนวตั้ง */
+    .hero-actions {
+        flex-direction: column;
+        gap: 0.7rem;
+        align-items: stretch;
+    }
+}
     border: 2px solid #d9cbb0;
     border-radius: 16px;
     padding: 40px;

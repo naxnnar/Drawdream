@@ -384,3 +384,39 @@ body.admin-sidebar-page .dashboard {
         font-size: 1.75rem;
     }
 }
+
+/* =============================
+     Responsive สำหรับ Mobile
+     ============================= */
+@media (max-width: 600px) {
+    .dashboard {
+        padding: 0 2vw;
+    }
+    .dash-title {
+        font-size: 1.1rem;
+        margin-bottom: 12px;
+    }
+    .card, .section-box, .chart-box, .pending-card {
+        padding: 12px 2vw;
+        font-size: 0.98rem;
+    }
+    .card-label, .card-sub, .pending-label, .pending-sub, .proj-name, .proj-foundation, .proj-amount, .status-badge, .don-type, .don-ref, .don-amount, .don-date {
+        font-size: 0.95rem;
+    }
+    .pending-count {
+        font-size: 1.3rem;
+    }
+    .cards.admin-overview-cards .stat-card .card-label {
+        font-size: 1rem;
+    }
+    .cards.admin-overview-cards .stat-card .card-value {
+        font-size: 1.2rem;
+    }
+    .cards.admin-overview-cards .stat-card .stat-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+        border-radius: 8px;
+    }
+}
+}
