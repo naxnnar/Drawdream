@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: foundation_edit_child.php
 // หน้าที่: หน้ามูลนิธิสำหรับแก้ไขข้อมูลเด็ก
 session_start();
@@ -28,7 +28,7 @@ if ($childId <= 0) {
     die('ไม่พบรหัสโปรไฟล์เด็ก');
 }
 
-$sqlGet = "SELECT * FROM Children WHERE child_id = ? AND foundation_id = ? LIMIT 1";
+$sqlGet = "SELECT * FROM foundation_children WHERE child_id = ? AND foundation_id = ? AND deleted_at IS NULL LIMIT 1";
 $stmtGet = $conn->prepare($sqlGet);
 $stmtGet->bind_param('ii', $childId, $foundationId);
 $stmtGet->execute();
@@ -38,7 +38,30 @@ if (!$child) {
     die('ไม่พบข้อมูลโปรไฟล์นี้ หรือไม่มีสิทธิ์แก้ไข');
 }
 
-// อนุญาตให้มูลนิธิแก้ไขโปรไฟล์เด็กได้ทุกสถานะ
+$chkPend = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'pending_edit_json'");
+if ($chkPend && $chkPend->num_rows === 0) {
+    $conn->query("ALTER TABLE foundation_children ADD COLUMN pending_edit_json LONGTEXT NULL AFTER approve_profile");
+}
+
+if (!empty($child['pending_edit_json'])) {
+    $pj = json_decode((string)$child['pending_edit_json'], true);
+    if (is_array($pj)) {
+        foreach (['child_name', 'birth_date', 'age', 'education', 'dream', 'likes', 'wish', 'wish_cat', 'bank_name', 'child_bank', 'photo_child', 'qr_account_image'] as $k) {
+            if (array_key_exists($k, $pj)) {
+                $child[$k] = $pj[$k];
+            }
+        }
+    }
+}
+
+require_once __DIR__ . '/includes/child_sponsorship.php';
+$lockAp = (string)($child['approve_profile'] ?? '');
+$lockCycle = drawdream_child_cycle_total($conn, $childId, $child);
+if (in_array($lockAp, ['อนุมัติ', 'กำลังดำเนินการ'], true)
+    && $lockCycle >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD) {
+    header('Location: children_.php?msg=' . rawurlencode('เด็กที่ได้รับการอุปการะครบยอดในเดือนนี้ ไม่สามารถแก้ไขโปรไฟล์ได้'));
+    exit;
+}
 
 $error = '';
 $success = '';
@@ -121,35 +144,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($error === '') {
-        // reset approve_profile กลับเป็นรอดำเนินการเมื่อมีการแก้ไข เพื่อให้ admin ตรวจสอบใหม่
-        $sqlUpd = "UPDATE Children
-                   SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?,
-                       approve_profile='รอดำเนินการ', reject_reason=NULL
-                   WHERE child_id=? AND foundation_id=?";
-        $stmtUpd = $conn->prepare($sqlUpd);
-        $stmtUpd->bind_param(
-            'ssisssssssssii',
-            $child_name,
-            $birth_date,
-            $age,
-            $education,
-            $dream,
-            $likes,
-            $wish,
-            $wish_cat,
-            $bank_name,
-            $child_bank,
-            $qrName,
-            $photoName,
-            $childId,
-            $foundationId
-        );
+        $currentAp = (string)($child['approve_profile'] ?? '');
+        $isPublished = in_array($currentAp, ['อนุมัติ', 'กำลังดำเนินการ'], true);
 
-        if ($stmtUpd->execute()) {
-            header('Location: children_.php?msg=' . urlencode('แก้ไขโปรไฟล์เด็กสำเร็จ'));
-            exit();
+        if ($isPublished) {
+            $payload = [
+                'child_name' => $child_name,
+                'birth_date' => $birth_date,
+                'age' => $age,
+                'education' => $education,
+                'dream' => $dream,
+                'likes' => $likes,
+                'wish' => $wish,
+                'wish_cat' => $wish_cat,
+                'bank_name' => $bank_name,
+                'child_bank' => $child_bank,
+                'photo_child' => $photoName,
+                'qr_account_image' => $qrName,
+            ];
+            $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            $sqlUpd = "UPDATE foundation_children SET pending_edit_json=?, approve_profile='กำลังดำเนินการ', reject_reason=NULL WHERE child_id=? AND foundation_id=?";
+            $stmtUpd = $conn->prepare($sqlUpd);
+            $stmtUpd->bind_param('sii', $json, $childId, $foundationId);
+            if ($stmtUpd->execute()) {
+                header('Location: children_.php?msg=' . urlencode('ส่งคำขอแก้ไขให้แอดมินตรวจสอบแล้ว — ข้อมูลที่แสดงต่อสาธารณะยังเป็นชุดเดิมจนกว่าจะได้รับการอนุมัติ'));
+                exit();
+            }
+            $error = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
+        } else {
+            $sqlUpd = "UPDATE foundation_children
+                       SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?,
+                           approve_profile='รอดำเนินการ', reject_reason=NULL, pending_edit_json=NULL
+                       WHERE child_id=? AND foundation_id=?";
+            $stmtUpd = $conn->prepare($sqlUpd);
+            $stmtUpd->bind_param(
+                'ssisssssssssii',
+                $child_name,
+                $birth_date,
+                $age,
+                $education,
+                $dream,
+                $likes,
+                $wish,
+                $wish_cat,
+                $bank_name,
+                $child_bank,
+                $qrName,
+                $photoName,
+                $childId,
+                $foundationId
+            );
+
+            if ($stmtUpd->execute()) {
+                header('Location: children_.php?msg=' . urlencode('แก้ไขโปรไฟล์เด็กสำเร็จ'));
+                exit();
+            }
+            $error = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
         }
-        $error = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
     }
 
     $child['child_name'] = $child_name;
@@ -180,6 +231,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <?php include 'navbar.php'; ?>
 <div class="wrap">
   <h2 style="margin-top:0;color:#24314a;">แก้ไขโปรไฟล์เด็ก</h2>
+  <?php if (!empty($child['pending_edit_json']) && (($child['approve_profile'] ?? '') === 'กำลังดำเนินการ')): ?>
+  <div class="alert" style="background:#fff8e6;border:1px solid #e8d48b;color:#5c4a1a;padding:12px 14px;border-radius:10px;margin-bottom:14px;">
+    คำขอแก้ไขของคุณรอแอดมินตรวจสอบ — ข้อมูลด้านล่างเป็นชุดที่ส่งรออนุมัติ
+  </div>
+  <?php endif; ?>
   <?php if ($error !== ''): ?><div class="alert err"><?php echo htmlspecialchars($error); ?></div><?php endif; ?>
 
   <form method="post" enctype="multipart/form-data">

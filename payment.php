@@ -1,24 +1,67 @@
-﻿<?php
+<?php
 // ไฟล์นี้: payment.php
-// หน้าที่: หน้าชำระเงินด้วย QR สำหรับบริจาคเด็ก
-// ------------------------------
-// Backend: เตรียมข้อมูลหน้า QR สำหรับบริจาคเด็ก
+// หน้าที่: หน้าชำระเงินด้วย QR ธนาคารสำหรับบริจาคเด็ก (การ์ดสีน้ำเงิน)
 // ------------------------------
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/child_sponsorship.php';
+drawdream_child_sponsorship_ensure_columns($conn);
 
-$amount = isset($_GET['amount']) ? (float)$_GET['amount'] : 0;
+$child_id = (int)($_POST['child_id'] ?? $_GET['child_id'] ?? 0);
+$amount = (float)($_POST['amount'] ?? $_GET['amount'] ?? 0);
 $amount = max(0, $amount);
-$child_id = isset($_GET['child_id']) ? (int)$_GET['child_id'] : 0;
+
+/** @return string path รูป img/qr-code.{ext} */
+function payment_page_qr_src(): string
+{
+    $dir = __DIR__ . '/img';
+    foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
+        if (is_file($dir . '/qr-code' . $ext)) {
+            return 'img/qr-code' . $ext;
+        }
+    }
+    return 'img/qr-code.png';
+}
+
+if ($child_id <= 0) {
+    header('Location: children_.php');
+    exit();
+}
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit();
+}
+if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'], true)) {
+    header('Location: children_.php');
+    exit();
+}
+
+$stmt = $conn->prepare(
+    'SELECT c.*, COALESCE(NULLIF(c.foundation_name, \'\'), fp.foundation_name) AS display_foundation_name
+     FROM foundation_children c
+     LEFT JOIN foundation_profile fp ON c.foundation_id = fp.foundation_id
+     WHERE c.child_id = ? AND c.deleted_at IS NULL LIMIT 1'
+);
+$stmt->bind_param('i', $child_id);
+$stmt->execute();
+$childRow = $stmt->get_result()->fetch_assoc();
+if (!$childRow) {
+    header('Location: children_.php');
+    exit();
+}
+if (!drawdream_child_can_receive_donation($conn, $child_id, $childRow)) {
+    header('Location: children_donate.php?id=' . $child_id . '&msg=' . rawurlencode('ไม่สามารถบริจาคให้เด็กคนนี้ได้ในขณะนี้'));
+    exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_paid'])) {
-  $postedChildId = (int)($_POST['child_id'] ?? 0);
-  $postedAmount = (float)($_POST['amount'] ?? 0);
-  $postedAmount = max(0, $postedAmount);
+    $postedChildId = (int)($_POST['child_id'] ?? 0);
+    $postedAmount = (float)($_POST['amount'] ?? 0);
+    $postedAmount = max(0, $postedAmount);
 
-  if ($postedChildId > 0 && $postedAmount > 0) {
-    // Ensure table exists before insert
-    $conn->query("CREATE TABLE IF NOT EXISTS child_donations (
+    if ($postedChildId > 0 && $postedAmount > 0) {
+        $conn->query("CREATE TABLE IF NOT EXISTS child_donations (
       id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
       child_id INT NOT NULL,
       donor_user_id INT NULL,
@@ -27,35 +70,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_paid'])) {
       INDEX(child_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    $donorUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
-    if ($donorUserId > 0) {
-      $stmtIns = $conn->prepare("INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, ?, ?)");
-      $stmtIns->bind_param("iid", $postedChildId, $donorUserId, $postedAmount);
-    } else {
-      $stmtIns = $conn->prepare("INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, NULL, ?)");
-      $stmtIns->bind_param("id", $postedChildId, $postedAmount);
-    }
-    $stmtIns->execute();
+        $donorUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
+        if ($donorUserId > 0) {
+            $stmtIns = $conn->prepare('INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, ?, ?)');
+            $stmtIns->bind_param('iid', $postedChildId, $donorUserId, $postedAmount);
+        } else {
+            $stmtIns = $conn->prepare('INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, NULL, ?)');
+            $stmtIns->bind_param('id', $postedChildId, $postedAmount);
+        }
+        $stmtIns->execute();
 
-    header('Location: children_donate.php?id=' . $postedChildId . '&msg=' . urlencode('บันทึกยอดบริจาคเรียบร้อยแล้ว'));
-    exit();
-  }
-}
-
-$child_name = "น้องๆ";
-$foundation_name = "มูลนิธิ Drawdream";
-
-if ($child_id > 0) {
-    $sql = "SELECT child_name, foundation_name FROM Children WHERE child_id = ?";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $child_id);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    if ($row = $result->fetch_assoc()) {
-        $child_name = $row['child_name'];
-        $foundation_name = $row['foundation_name'];
+        header('Location: children_donate.php?id=' . $postedChildId . '&msg=' . urlencode('บันทึกยอดบริจาคเรียบร้อยแล้ว'));
+        exit();
     }
 }
+
+$qrSrc = payment_page_qr_src();
+$accountDisplay = 'มูลนิธิ DrawDream';
+$amountDisplay = ($amount >= 20)
+    ? number_format($amount, 0) . ' บาท'
+    : 'ตามจำนวนที่โอน';
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -66,45 +100,41 @@ if ($child_id > 0) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <link rel="stylesheet" href="css/payment_qr.css">
+  <link rel="stylesheet" href="css/payment_qr.css?v=4">
 </head>
-<body>
+<body class="payment-qr-page">
+
+<a href="children_donate.php?id=<?php echo (int)$child_id; ?>" class="payment-qr-top-back" aria-label="กลับ"><span aria-hidden="true">←</span></a>
 
 <?php include 'navbar.php'; ?>
 
-<!-- ------------------------------
-  Frontend: แสดง QR และสรุปยอดชำระ
-  ------------------------------ -->
 <main class="container py-3">
   <div class="payment-card">
 
-    <!-- QR Code -->
     <div class="qr-wrapper">
-      <img src="img/qr-code.png" alt="QR Code สำหรับชำระเงิน">
+      <img src="<?php echo htmlspecialchars($qrSrc); ?>" alt="QR Code สำหรับชำระเงิน" width="260" height="260" decoding="async">
     </div>
 
-    <!-- ข้อมูลการชำระเงิน -->
     <div class="payment-info">
       <div class="info-row">
         <span>ชื่อบัญชี</span>
-        <span><?php echo htmlspecialchars($foundation_name); ?></span>
+        <span><?php echo htmlspecialchars($accountDisplay); ?></span>
       </div>
       <hr class="info-divider">
       <div class="info-row">
         <span>จำนวนเงิน</span>
-        <span class="amount-text"><?php echo number_format($amount); ?> บาท</span>
+        <span class="amount-text"><?php echo htmlspecialchars($amountDisplay); ?></span>
       </div>
     </div>
 
     <form method="post" class="mb-3">
       <input type="hidden" name="child_id" value="<?php echo (int)$child_id; ?>">
       <input type="hidden" name="amount" value="<?php echo htmlspecialchars((string)$amount); ?>">
-      <button type="submit" name="confirm_paid" class="btn-attach-slip">ชำระเงินแล้ว</button>
+      <button type="submit" name="confirm_paid" class="btn-attach-slip">ยืนยันการบริจาค</button>
     </form>
 
     <a href="children_donate.php?id=<?php echo (int)$child_id; ?>" class="btn btn-outline-light w-100 btn-back-child">กลับหน้าโปรไฟล์เด็ก</a>
 
-    <!-- ข้อความขอบคุณ -->
     <p class="thank-you-text">
       ขอขอบคุณเป็นอย่างยิ่งสำหรับการสนับสนุนของท่าน<br>
       ความเมตตานี้ได้เติมพลังให้ความฝันของน้อง ๆ ก้าวไปอีกขั้น<br>

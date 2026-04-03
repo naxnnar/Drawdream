@@ -1,19 +1,46 @@
 /* ========================================
-   payment_qr.css — สำหรับหน้า payment.php (QR ชำระเงิน)
+   payment_qr.css — สำหรับหน้า payment.php / payment/donate_qr.php (QR ชำระเงิน)
    ======================================== */
 
-body {
-    background-color: #eeeeee;
+body.payment-qr-page {
+    background-color: #f7ecde;
+    min-height: 100vh;
+}
+
+/* ปุ่มกลับวงกลมมุมขวาบน (donate_qr) */
+.payment-qr-top-back {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 100;
+    width: 44px;
+    height: 44px;
+    background: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    text-decoration: none;
+    color: #3c5099;
+    font-size: 1.45rem;
+    line-height: 1;
+    border: none;
+}
+.payment-qr-top-back:hover {
+    color: #2a3a73;
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.16);
 }
 
 .payment-card {
-    background-color: #3B4CC0;
-    border-radius: 36px;
+    background-color: #3b519b;
+    border-radius: 40px;
     padding: 40px 40px 44px;
     max-width: 520px;
     margin: 50px auto;
     text-align: center;
     color: #fff;
+    box-shadow: 0 8px 32px rgba(59, 81, 155, 0.35);
 }
 
 .qr-wrapper {
@@ -63,18 +90,20 @@ body {
 
 .btn-attach-slip {
     display: block;
-    background-color: #F8CE32;
+    background-color: #f2d059;
     color: #222;
     font-size: 1.2rem;
     font-weight: 800;
     border: none;
-    border-radius: 18px;
+    border-radius: 999px;
     padding: 18px 30px;
     width: 100%;
     margin-bottom: 28px;
     text-decoration: none;
+    box-sizing: border-box;
     box-shadow: 0 6px 0 #c9a20a;
     transition: transform 0.1s, box-shadow 0.1s;
+    cursor: pointer;
 }
 
 .btn-attach-slip:hover {
@@ -95,7 +124,7 @@ body {
 
 .thank-you-text {
     font-size: 0.95rem;
-    color: #c8d0ff;
+    color: rgba(255, 255, 255, 0.92);
     line-height: 1.9;
     margin: 0;
     font-weight: 400;

@@ -70,8 +70,13 @@ body.admin-approve-projects-page .approve {
 
 body.admin-projects-page .reject,
 body.admin-approve-projects-page .reject {
-    background: #c0392b;
+    background: #CC583F;
     color: #fff;
+}
+
+body.admin-projects-page .reject:hover,
+body.admin-approve-projects-page .reject:hover {
+    background: #b04a33;
 }
 
 body.admin-projects-page .msg,
@@ -135,6 +140,14 @@ body.admin-approve-needlist-page .admin-table th {
     text-align: left;
 }
 
+body.admin-approve-needlist-page .admin-need-img-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    vertical-align: top;
+}
+
 body.admin-approve-needlist-page .admin-thumb {
     width: 110px;
     height: 80px;
@@ -142,6 +155,13 @@ body.admin-approve-needlist-page .admin-thumb {
     background: #fafafa;
     border: 1px solid #eee;
     border-radius: 10px;
+}
+
+body.admin-approve-needlist-page .admin-thumb-fdn {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border: 2px solid #e8dc9a;
 }
 
 body.admin-approve-needlist-page .admin-noimg {
@@ -187,8 +207,12 @@ body.admin-approve-needlist-page .admin-btn.approve {
 }
 
 body.admin-approve-needlist-page .admin-btn.reject {
-    background: #c0392b;
+    background: #CC583F;
     color: #fff;
+}
+
+body.admin-approve-needlist-page .admin-btn.reject:hover {
+    background: #b04a33;
 }
 
 body.admin-approve-needlist-page .admin-note {

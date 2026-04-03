@@ -1,8 +1,11 @@
-﻿<?php
+<?php
 // ไฟล์นี้: children_donate.php
 // หน้าที่: หน้ารายละเอียดเด็กและการบริจาครายบุคคล
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/child_sponsorship.php';
+drawdream_child_sponsorship_ensure_columns($conn);
+drawdream_child_outcome_ensure_columns($conn);
 
 $child_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $role = $_SESSION['role'] ?? 'donor';
@@ -10,10 +13,13 @@ $isAdmin = ($role === 'admin');
 
 $sql = "
     SELECT c.*, COALESCE(NULLIF(c.foundation_name, ''), fp.foundation_name) AS display_foundation_name
-    FROM Children c
+    FROM foundation_children c
     LEFT JOIN foundation_profile fp ON c.foundation_id = fp.foundation_id
     WHERE c.child_id = ?
 ";
+if (!$isAdmin) {
+    $sql .= ' AND c.deleted_at IS NULL';
+}
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $child_id);
 $stmt->execute();
@@ -38,12 +44,15 @@ $conn->query("
 ");
 
 // Donation stats for this child
-$donationStats = ['donor_count' => 0, 'total_amount' => 0, 'month_amount' => 0];
-$stmtDs = $conn->prepare("SELECT COUNT(DISTINCT donor_user_id) AS donor_count, COALESCE(SUM(amount),0) AS total_amount, COALESCE(SUM(CASE WHEN MONTH(donated_at)=MONTH(NOW()) AND YEAR(donated_at)=YEAR(NOW()) THEN amount ELSE 0 END),0) AS month_amount FROM child_donations WHERE child_id=?");
+$donationStats = ['donor_count' => 0, 'total_amount' => 0, 'cycle_amount' => 0];
+$stmtDs = $conn->prepare("SELECT COUNT(DISTINCT donor_user_id) AS donor_count, COALESCE(SUM(amount),0) AS total_amount FROM child_donations WHERE child_id=?");
 $stmtDs->bind_param("i", $child_id);
 $stmtDs->execute();
 $dsRow = $stmtDs->get_result()->fetch_assoc();
-if ($dsRow) $donationStats = $dsRow;
+if ($dsRow) {
+    $donationStats = $dsRow;
+}
+$donationStats['cycle_amount'] = drawdream_child_cycle_total($conn, $child_id, $child);
 
 $birthDateText = '-';
 if (!empty($child['birth_date'] ?? '')) {
@@ -51,9 +60,19 @@ if (!empty($child['birth_date'] ?? '')) {
 }
 
 $reviewStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
+$reviewStatusLabel = $reviewStatus;
+if ($reviewStatus === 'กำลังดำเนินการ' && !empty($child['pending_edit_json'])) {
+    $reviewStatusLabel = 'รอตรวจสอบการแก้ไข';
+}
 if ($reviewStatus === 'กำลังดำเนินการ') {
     $reviewStatus = 'รอดำเนินการ';
 }
+
+$canDonate = drawdream_child_can_receive_donation($conn, $child_id, $child);
+$sponsorshipLabel = drawdream_child_is_cycle_sponsored($conn, $child_id, $child) ? 'อุปการะแล้ว' : 'รออุปการะ';
+$foundationMonthlySponsored = ($role === 'foundation') && drawdream_child_is_monthly_fully_sponsored($conn, $child_id, $child);
+$outcomePublic = trim((string)($child['sponsor_outcome_text'] ?? ''));
+$outcomeUpdatedAt = $child['sponsor_outcome_updated_at'] ?? null;
 ?>
 
 <!DOCTYPE html>
@@ -65,11 +84,18 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/children.css?v=4">
+    <link rel="stylesheet" href="css/children.css?v=16">
 </head>
 <body>
 
 <?php include 'navbar.php'; ?>
+
+<?php if (!empty($_GET['msg'] ?? '')): ?>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+    Swal.fire({ icon: 'info', title: <?php echo json_encode((string)$_GET['msg'], JSON_UNESCAPED_UNICODE); ?>, confirmButtonText: 'ตกลง' });
+    </script>
+<?php endif; ?>
 
 <?php if ($isAdmin): ?>
 <main class="container-fluid my-4">
@@ -134,8 +160,16 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                             <span class="value"><?php echo htmlspecialchars($child['child_bank'] ?? '-'); ?></span>
                         </div>
                         <div class="data-item">
-                            <span class="label">สถานะการอุปการะ</span>
-                            <span class="value"><?php echo htmlspecialchars($child['status'] ?? '-'); ?></span>
+                            <span class="label">วันที่อนุมัติครั้งแรก</span>
+                            <span class="value"><?php echo !empty($child['first_approved_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime($child['first_approved_at']))) : '-'; ?></span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">ตรวจสอบล่าสุด</span>
+                            <span class="value"><?php echo !empty($child['reviewed_at']) ? htmlspecialchars(date('d/m/Y H:i', strtotime($child['reviewed_at']))) : '-'; ?></span>
+                        </div>
+                        <div class="data-item">
+                            <span class="label">สถานะการอุปการะ (เดือนปฏิทินปัจจุบัน)</span>
+                            <span class="value"><?php echo htmlspecialchars($sponsorshipLabel); ?></span>
                         </div>
                         <div class="data-item">
                             <span class="label">สถานะการตรวจสอบ</span>
@@ -144,7 +178,7 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                               if ($reviewStatus === 'อนุมัติ') $cls = 'status-approved';
                               if ($reviewStatus === 'ไม่อนุมัติ') $cls = 'status-rejected';
                             ?>
-                            <span class="status-badge <?php echo $cls; ?>"><?php echo htmlspecialchars($reviewStatus); ?></span>
+                            <span class="status-badge <?php echo $cls; ?>"><?php echo htmlspecialchars($reviewStatusLabel); ?></span>
                         </div>
                         <?php if ($reviewStatus === 'ไม่อนุมัติ'): ?>
                         <div class="data-item full">
@@ -162,6 +196,7 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                     </div>
 
                                         <?php if ($reviewStatus !== 'อนุมัติ'): ?>
+                    <p class="text-muted small mb-2">การไม่อนุมัติจะอัปเดตสถานะในระบบเท่านั้น ไม่มีการลบข้อมูลโปรไฟล์ออกจากฐานข้อมูล</p>
                     <form method="post" action="admin_approve_children.php" class="admin-actions" onsubmit="return submitChildReview(this, event)">
                         <input type="hidden" name="id" value="<?php echo (int)$child['child_id']; ?>">
                         <input type="hidden" name="return" value="children_donate.php?id=<?php echo (int)$child['child_id']; ?>">
@@ -221,7 +256,7 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                 <?php endif; ?>
 
                 <?php
-                    $monthAmount = (float)$donationStats['month_amount'];
+                    $cycleAmount = (float)$donationStats['cycle_amount'];
                     $totalAmount = (float)$donationStats['total_amount'];
                     $donorCount  = (int)$donationStats['donor_count'];
                 ?>
@@ -240,22 +275,34 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                         </div>
                         <div class="stat-box">
                             <div class="stat-icon"><i class="bi bi-stars"></i></div>
-                            <div class="stat-num"><?php echo number_format($monthAmount, 0); ?></div>
-                            <div class="stat-label">เดือนนี้ (บาท)</div>
+                            <div class="stat-num"><?php echo number_format($cycleAmount, 0); ?></div>
+                            <div class="stat-label">เดือนนี้ (ปฏิทิน, บาท)</div>
                         </div>
                     </div>
                 </div>
+                <?php if ($foundationMonthlySponsored): ?>
+                <div class="foundation-outcome-cta">
+                    <a href="foundation_child_outcome.php?id=<?php echo (int)$child_id; ?>" class="btn-foundation-outcome">อัปเดตผลลัพธ์</a>
+                    <?php if ($outcomePublic !== ''): ?>
+                    <p class="foundation-outcome-cta__hint">แสดงข้อความนี้ให้ผู้บริจาคบนหน้านี้แล้ว · กดเพื่อแก้ไข</p>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
                 <?php endif; ?>
 
-                <?php if ($role === 'donor'): ?>
+                <?php if ($role === 'donor' && !$canDonate): ?>
+                <p class="text-muted mt-3" style="font-size:1.05rem;line-height:1.5;">
+                    เด็กคนนี้มียอดบริจาคครบ <?php echo (int)DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD; ?> บาทในเดือนปฏิทินปัจจุบันแล้ว (อุปการะแล้ว) จึงไม่เปิดรับบริจาคเพิ่มจนกว่าจะถึงเดือนถัดไป (ยอดนับเฉพาะรายการหลังวันที่อนุมัติโปรไฟล์ครั้งแรก)
+                </p>
+                <?php elseif ($role === 'donor'): ?>
                 <div class="money-row">
-                    <button class="btn-money-choice" onclick="selectAmount(200, this)">200</button>
-                    <button class="btn-money-choice" onclick="selectAmount(500, this)">500</button>
-                    <button class="btn-money-choice" onclick="selectAmount(1000, this)">1000</button>
+                    <button type="button" class="btn-money-choice" onclick="selectAmount(200, this)">200</button>
+                    <button type="button" class="btn-money-choice" onclick="selectAmount(500, this)">500</button>
+                    <button type="button" class="btn-money-choice active" onclick="selectAmount(1000, this)">1000</button>
                 </div>
 
                 <div class="amount-box">
-                    <input type="text" id="display-amount" readonly>
+                    <input type="number" id="display-amount" min="20" step="1" value="1000" inputmode="numeric" autocomplete="off" aria-label="จำนวนเงินบริจาค (บาท)" oninput="clearMoneyPresetHighlight()">
                     <span class="currency-label">บาท</span>
                 </div>
 
@@ -271,6 +318,16 @@ if ($reviewStatus === 'กำลังดำเนินการ') {
                 <button class="btn-submit-donation" onclick="processDonation(<?php echo $child['child_id']; ?>)">
                     บริจาค
                 </button>
+                <?php endif; ?>
+
+                <?php if ($outcomePublic !== ''): ?>
+                <div class="child-outcome-public">
+                    <div class="child-outcome-public__label"><i class="bi bi-megaphone-fill" aria-hidden="true"></i> อัปเดตจากมูลนิธิ</div>
+                    <div class="child-outcome-public__text"><?php echo nl2br(htmlspecialchars($outcomePublic)); ?></div>
+                    <?php if (!empty($outcomeUpdatedAt)): ?>
+                    <p class="child-outcome-public__meta">โพสต์เมื่อ <?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string)$outcomeUpdatedAt))); ?></p>
+                    <?php endif; ?>
+                </div>
                 <?php endif; ?>
             </div>
         </div>
@@ -297,6 +354,10 @@ function submitChildReview(form) {
     return true;
 }
 
+function clearMoneyPresetHighlight() {
+    document.querySelectorAll('.btn-money-choice').forEach(el => el.classList.remove('active'));
+}
+
 function selectAmount(amount, btn) {
     const amountInput = document.getElementById('display-amount');
     if (!amountInput) return;
@@ -312,26 +373,18 @@ function selectPayMethod(method, el) {
 
 function processDonation(id) {
     const amountInput = document.getElementById('display-amount');
-    if (!amountInput || !amountInput.value) {
-        alert("กรุณาเลือกจำนวนเงินก่อนบริจาค");
+    const raw = (amountInput && amountInput.value != null)
+        ? String(amountInput.value).replace(/,/g, '').trim()
+        : '';
+    const amount = parseInt(raw, 10);
+    if (!raw || Number.isNaN(amount) || amount < 20) {
+        alert('กรุณากรอกจำนวนเงินอย่างน้อย 20 บาท');
+        if (amountInput) amountInput.focus();
         return;
     }
-    // POST ตรงไปยัง child_donate.php พร้อม pay เพื่อข้ามหน้าฟอร์มซ้ำ
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = 'payment/child_donate.php';
-
-    const fields = { child_id: id, amount: amountInput.value, pay: '1' };
-    Object.entries(fields).forEach(([name, value]) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
+    // ไปหน้าการ์ด QR ธนาคาร (payment.php) แบบเดียวกับภาพยืนยันการบริจาค
+    window.location.href = 'payment.php?child_id=' + encodeURIComponent(String(id))
+        + '&amount=' + encodeURIComponent(String(amount));
 }
 </script>
 

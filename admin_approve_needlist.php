@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: admin_approve_needlist.php
 // หน้าที่: หน้าแอดมินสำหรับอนุมัติรายการสิ่งของ
 session_start();
@@ -46,13 +46,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $stmt->bind_param("sisi", $newStatus, $uid, $note, $item_id);
             if ($stmt->execute()) {
-                
-                // ✅ บันทึก log ลงตาราง admin
+                require_once __DIR__ . '/includes/notification_audit.php';
+                drawdream_notifications_delete_by_entity_key($conn, 'adm_pending_need:' . $item_id);
                 $action_type = ($newStatus === 'approved') ? 'Approve_Need' : 'Reject_Need';
-                $log_stmt = $conn->prepare("INSERT INTO admin (admin_id, action_type, target_id, remark) VALUES (?, ?, ?, ?)");
-                $log_stmt->bind_param("isis", $uid, $action_type, $item_id, $note);
-                $log_stmt->execute();
-                
+                $stFu = $conn->prepare(
+                    "SELECT fp.user_id, nl.item_name FROM foundation_needlist nl
+                     INNER JOIN foundation_profile fp ON fp.foundation_id = nl.foundation_id
+                     WHERE nl.item_id = ? LIMIT 1"
+                );
+                $stFu->bind_param('i', $item_id);
+                $stFu->execute();
+                $nr = $stFu->get_result()->fetch_assoc();
+                $fu = (int)($nr['user_id'] ?? 0);
+                $iname = (string)($nr['item_name'] ?? '');
+                $notifKind = $newStatus === 'approved' ? 'need_approved' : 'need_rejected';
+                if ($newStatus === 'approved') {
+                    drawdream_send_notification(
+                        $conn,
+                        $fu,
+                        'need_approved',
+                        'รายการสิ่งของได้รับการอนุมัติ',
+                        'รายการ "' . $iname . '" ผ่านการตรวจสอบแล้ว',
+                        'foundation.php',
+                        'fdn_need:' . $item_id
+                    );
+                } else {
+                    $nb = 'รายการ "' . $iname . '" ไม่ผ่านการอนุมัติ';
+                    if ($note !== '') {
+                        $nb .= ' เหตุผล: ' . $note;
+                    }
+                    drawdream_send_notification(
+                        $conn,
+                        $fu,
+                        'need_rejected',
+                        'รายการสิ่งของไม่ผ่านการอนุมัติ',
+                        $nb,
+                        'foundation.php',
+                        'fdn_need:' . $item_id
+                    );
+                }
+                drawdream_log_admin_action($conn, $uid, $action_type, $item_id, $note, $fu > 0 ? $fu : null, $notifKind);
                 $msg = ($newStatus === 'approved') ? "อนุมัติรายการแล้ว" : "ปฏิเสธรายการแล้ว";
                 header("Location: admin_approve_needlist.php?msg=" . urlencode($msg));
                 exit();
@@ -117,15 +150,19 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
             <?php while($row = mysqli_fetch_assoc($result)): ?>
                 <?php $total = (float)$row['qty_needed'] * (float)$row['price_estimate']; ?>
                 <?php
-                    $itemImages = array_values(array_filter(explode('|', (string)($row['item_image'] ?? ''))));
+                    $itemImages = foundation_needlist_item_filenames_from_row($row);
                     $mainItemImage = $itemImages[0] ?? '';
+                    $fdnNeedAdm = trim((string)($row['need_foundation_image'] ?? ''));
                 ?>
                 <tr>
-                    <td>
+                    <td class="admin-need-img-cell">
                         <?php if ($mainItemImage !== ''): ?>
                             <img class="admin-thumb" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="">
                         <?php else: ?>
-                            <div class="admin-noimg">ไม่มีรูป</div>
+                            <div class="admin-noimg">ไม่มีรูปสิ่งของ</div>
+                        <?php endif; ?>
+                        <?php if ($fdnNeedAdm !== ''): ?>
+                            <img class="admin-thumb admin-thumb-fdn" src="uploads/needs/<?= htmlspecialchars($fdnNeedAdm) ?>" alt="มูลนิธิ" title="รูปมูลนิธิ">
                         <?php endif; ?>
                     </td>
                     <td><?= htmlspecialchars($row['foundation_name']) ?></td>

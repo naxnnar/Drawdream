@@ -86,6 +86,10 @@ textarea {
     margin-top: 30px;
 }
 
+.btn-group--save-left {
+    flex-direction: row;
+}
+
 .btn {
     flex: 1;
     padding: 15px 30px;
@@ -94,10 +98,11 @@ textarea {
     font-size: 16px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: background 0.25s ease, color 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease;
     text-align: center;
     text-decoration: none;
     display: inline-block;
+    box-sizing: border-box;
 }
 
 .btn-primary {
@@ -106,9 +111,10 @@ textarea {
 }
 
 .btn-primary:hover {
-    background: #3d4d8f;
+    background: #597D57;
+    color: #fff;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(74, 91, 168, 0.3);
+    box-shadow: 0 4px 14px rgba(89, 125, 87, 0.35);
 }
 
 .btn-secondary {
@@ -117,7 +123,10 @@ textarea {
 }
 
 .btn-secondary:hover {
-    background: #e0e0e0;
+    background: #CC583F;
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(204, 88, 63, 0.3);
 }
 
 .alert {
@@ -238,6 +247,16 @@ textarea {
 
 .edit-header .profile-icon {
     display: none;
+}
+
+/* หัวข้อย่อยในฟอร์มแก้ไขมูลนิธิ (update_profile.php) */
+.update-form-section-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #333;
+    margin: 28px 0 18px;
+    padding-top: 22px;
+    border-top: 2px solid #f0f0f0;
 }
 
 /* ข้อมูลใบเสร็จ */

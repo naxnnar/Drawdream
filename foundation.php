@@ -4,6 +4,23 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 
+/**
+ * หา path รูปในโฟลเดอร์ img/ เมื่อชื่อไฟล์ไม่มีนามสกุล (ลอง .jpg .jpeg .png .webp)
+ */
+function drawdream_community_img(string $baseName): string {
+    static $cache = [];
+    if (isset($cache[$baseName])) {
+        return $cache[$baseName];
+    }
+    $imgDir = __DIR__ . '/img';
+    foreach (['.jpg', '.jpeg', '.png', '.webp'] as $ext) {
+        if (is_file($imgDir . '/' . $baseName . $ext)) {
+            return $cache[$baseName] = 'img/' . $baseName . $ext;
+        }
+    }
+    return $cache[$baseName] = 'img/' . $baseName . '.jpg';
+}
+
 $is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
 
 // ถ้า foundation role ให้ดึงเฉพาะมูลนิธิของตัวเอง ถ้าไม่ใช่ให้ดึงทั้งหมด
@@ -29,7 +46,8 @@ $goalTotals = [];
 $q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE approve_item='approved' GROUP BY foundation_id");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
-$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 3");
+/* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — LIMIT 3 เดิมทำให้แถวที่มีรูปถูกตัดออก */
+$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 120");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
@@ -41,7 +59,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, item_desc, brand, price_estimate, total_price, urgent, item_image, approve_item, note
+            SELECT item_id, item_name, item_desc, brand, price_estimate, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -80,7 +98,7 @@ $foundationSlides = [];
 $interestFoundations = [];
 foreach ($foundationRows as $f) {
     $fid = (int)$f['foundation_id'];
-    if (foundation_profile_complete_public($f) && (int)($f['account_verified'] ?? 0) === 1) {
+    if (trim((string)($f['foundation_name'] ?? '')) !== '') {
         $interestFoundations[] = $f;
     }
 
@@ -120,7 +138,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=9">
+  <link rel="stylesheet" href="css/foundation.css?v=26">
 </head>
 <body class="foundation-page">
 
@@ -136,16 +154,20 @@ $hasAnySlides = !empty($foundationSlides);
           <div class="foundation-view-toolbar">
             <div class="foundation-view-actions">
               <?php if ($is_verified): ?>
-                <a href="foundation_add_need.php" class="foundation-manage-btn foundation-manage-btn-primary">เสนอรายการสิ่งของ</a>
+                <a href="foundation_add_need.php" class="foundation-manage-btn foundation-manage-btn-primary">+ เสนอสิ่งของมูลนิธิ</a>
               <?php else: ?>
-                <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอรายการสิ่งของได้</span>
+                <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอสิ่งของมูลนิธิได้</span>
               <?php endif; ?>
+              <button type="button" id="toggleEditNeedBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขรายการสิ่งของ</button>
             </div>
           </div>
         </div>
 
-        <div class="my-needlist-section">
+        <div class="my-needlist-section" id="my-needlist-section">
           <h3 class="my-needlist-title" style="font-family:'Prompt',sans-serif;font-size:1.4em;color:#2e3f7f;margin-bottom:18px;">รายการสิ่งของที่เสนอทั้งหมด</h3>
+          <?php if (!empty($_GET['need_updated'])): ?>
+            <div class="alert alert-success needlist-flash" role="status">อัปเดตรายการสิ่งของแล้ว</div>
+          <?php endif; ?>
           <?php if (empty($myNeedlist)): ?>
             <p style="color:#888; font-family:'Sarabun',sans-serif;">ยังไม่มีรายการที่เสนอ หรือยังไม่ถูกบันทึก</p>
           <?php endif; ?>
@@ -153,8 +175,11 @@ $hasAnySlides = !empty($foundationSlides);
             <?php foreach ($myNeedlist as $nl): ?>
             <?php
               $status = $nl['approve_item'] ?? 'pending';
-              $nlImages = array_values(array_filter(explode('|', (string)($nl['item_image'] ?? ''))));
-              $nlImg = $nlImages[0] ?? '';
+              $nlImages = foundation_needlist_item_filenames_from_row($nl);
+              $nlImgItem = $nlImages[0] ?? '';
+              $nlFdn = trim((string)($nl['need_foundation_image'] ?? ''));
+              /* หน้ามูลนิธิ: โชว์เฉพาะรูปมูลนิธิถ้ามี ไม่แบ่งคู่กับรูปสิ่งของ */
+              $nlImg = $nlFdn !== '' ? $nlFdn : $nlImgItem;
               // ดึงระยะเวลาจาก note
               $nlNote = $nl['note'] ?? '';
               $nlPeriod = '';
@@ -166,14 +191,16 @@ $hasAnySlides = !empty($foundationSlides);
             ?>
             <div class="need-card">
               <div class="need-card-img-wrap">
-                <?php if ($nlImg): ?>
-                  <img src="uploads/needs/<?= htmlspecialchars($nlImg) ?>" alt="" class="need-card-img">
-                <?php else: ?>
-                  <div class="need-card-noimg">ไม่มีรูป</div>
-                <?php endif; ?>
-                <?php if ((int)$nl['urgent'] === 1): ?>
-                  <span class="need-urgent-badge">ต้องการด่วน</span>
-                <?php endif; ?>
+                <div class="need-card-img-primary">
+                  <?php if ($nlImg): ?>
+                    <img src="uploads/needs/<?= htmlspecialchars($nlImg) ?>" alt="" class="need-card-img">
+                  <?php else: ?>
+                    <div class="need-card-noimg">ไม่มีรูป</div>
+                  <?php endif; ?>
+                  <?php if ((int)$nl['urgent'] === 1): ?>
+                    <span class="need-urgent-badge">ต้องการด่วน</span>
+                  <?php endif; ?>
+                </div>
               </div>
               <div class="need-card-body">
                 <span class="need-status-badge <?= $statusClass ?>"><?= $statusLabel ?></span>
@@ -188,6 +215,9 @@ $hasAnySlides = !empty($foundationSlides);
                 <?php if ($nl['item_desc']): ?>
                   <div class="need-card-desc"><?= htmlspecialchars($nl['item_desc']) ?></div>
                 <?php endif; ?>
+                <div class="need-edit-wrap">
+                  <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>">แก้ไขรายการนี้</a>
+                </div>
               </div>
             </div>
           <?php endforeach; ?>
@@ -218,14 +248,38 @@ $hasAnySlides = !empty($foundationSlides);
           $percent = $slide['percent'];
           $foundationImage = $f['foundation_image'] ?? '';
           $facebookUrl = $f['facebook_url'] ?? '';
-          $urgentItems = array_filter($items, static function ($it) {
-              return (int)($it['urgent'] ?? 0) === 1;
-          });
+          $heroProposalImage = '';
+          foreach ($items as $itHero) {
+            $nfHero = trim((string)($itHero['need_foundation_image'] ?? ''));
+            if ($nfHero !== '') {
+              $heroProposalImage = $nfHero;
+              break;
+            }
+          }
+          $urgentItemsOrdered = array_values(array_filter($items, static function ($it) {
+              $u = $it['urgent'] ?? 0;
+              return (int)$u === 1 || $u === true || $u === '1' || strtolower((string)$u) === 'true';
+          }));
+          $urgentImagePool = [];
+          foreach ($urgentItemsOrdered as $itu) {
+              foreach (foundation_needlist_item_filenames_from_row($itu) as $bn) {
+                  if ($bn === '' || $bn === '.' || $bn === '..') {
+                      continue;
+                  }
+                  $urgentImagePool[] = $bn;
+                  if (count($urgentImagePool) >= 3) {
+                      break 2;
+                  }
+              }
+          }
+          if ($urgentImagePool === []) {
+              $urgentImagePool = [''];
+          }
         ?>
         <article class="foundation-card foundation-slide<?= $idx === 0 ? ' is-active' : '' ?>" id="f<?= $fid ?>" data-slide-index="<?= (int)$idx ?>" aria-hidden="<?= $idx === 0 ? 'false' : 'true' ?>">
           <div class="fc-left">
             <h2 class="fc-title"><?= htmlspecialchars($f['foundation_name'] ?? 'มูลนิธิ') ?></h2>
-            <p class="fc-desc"><?= htmlspecialchars($f['foundation_desc'] ?? '') ?></p>
+            <p class="fc-desc"><?= htmlspecialchars(trim((string)($f['foundation_desc'] ?? '')) !== '' ? $f['foundation_desc'] : 'มูลนิธินี้ยังไม่ได้เพิ่มคำอธิบายเพิ่มเติม') ?></p>
             <div class="fc-progress-block">
               <div class="bar bar-donate" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= (int)round($percent) ?>">
                 <div class="bar-fill" style="width:<?= htmlspecialchars((string)$percent) ?>%"></div>
@@ -239,16 +293,13 @@ $hasAnySlides = !empty($foundationSlides);
             </div>
 
             <div class="fc-urgent-zone">
-              <?php if (count($urgentItems) > 0): ?>
-              <div class="items urgent-items">
-                <?php foreach ($urgentItems as $it):
-                  $itemImages = array_values(array_filter(explode('|', (string)($it['item_image'] ?? ''))));
-                  $mainItemImage = $itemImages[0] ?? '';
-                ?>
+              <?php if (count($urgentItemsOrdered) > 0): ?>
+              <div class="items urgent-items fc-urgent-items-grid">
+                <?php foreach ($urgentImagePool as $oneImg): ?>
                 <div class="item urgent-item-card">
                   <span class="urgent-tag urgent-tag-abs">ต้องการด่วน</span>
-                  <?php if ($mainItemImage !== ''): ?>
-                    <img class="item-img urgent-img-big" src="uploads/needs/<?= htmlspecialchars($mainItemImage) ?>" alt="">
+                  <?php if ($oneImg !== ''): ?>
+                    <img class="item-img urgent-img-big" src="uploads/needs/<?= htmlspecialchars($oneImg) ?>" alt="">
                   <?php else: ?>
                     <div class="noimg urgent-img-big">ไม่มีรูปภาพ</div>
                   <?php endif; ?>
@@ -261,7 +312,9 @@ $hasAnySlides = !empty($foundationSlides);
           </div>
           <div class="fc-right">
             <div class="fc-right-media">
-              <?php if (!empty($foundationImage)): ?>
+              <?php if ($heroProposalImage !== ''): ?>
+                <img class="cover foundation-cover-large" src="uploads/needs/<?= htmlspecialchars($heroProposalImage) ?>" alt="ภาพประกอบรายการสิ่งของ">
+              <?php elseif (!empty($foundationImage)): ?>
                 <img class="cover foundation-cover-large" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
               <?php else: ?>
                 <div class="cover-empty foundation-cover-placeholder">ยังไม่มีข้อมูลรูปให้</div>
@@ -289,9 +342,9 @@ $hasAnySlides = !empty($foundationSlides);
     <?php if (!empty($interestFoundations)): ?>
     <section class="fd-interest-section" aria-labelledby="fd-interest-heading">
       <h2 id="fd-interest-heading" class="fd-interest-title">มูลนิธิที่คุณอาจสนใจ</h2>
-      <p class="fd-interest-sub">มูลนิธิที่กรอกข้อมูลโปรไฟล์ครบและผ่านการยืนยันแล้ว</p>
+      <p class="fd-interest-sub">ข้อมูลจากมูลนิธิที่อยู่ในระบบ</p>
       <div class="fd-interest-grid">
-        <?php foreach ($interestFoundations as $inf):
+        <?php foreach (array_slice($interestFoundations, 0, 3) as $inf):
           $ifid = (int)$inf['foundation_id'];
           $iImg = trim((string)($inf['foundation_image'] ?? ''));
           $iDesc = (string)($inf['foundation_desc'] ?? '');
@@ -321,8 +374,64 @@ $hasAnySlides = !empty($foundationSlides);
     </section>
     <?php endif; ?>
 
+    <section class="fd-community-section" aria-label="เครือข่ายเพื่อสังคม">
+      <div class="fd-community-hero">
+        <div class="fd-community-hero-image">
+          <img src="<?= htmlspecialchars(drawdream_community_img('project_run')) ?>" alt="" class="fd-community-hero-img" width="1200" height="800" decoding="async">
+        </div>
+        <div class="fd-community-hero-text">
+          ด้วยน้ำใจจากคุณ<br>
+          เราสามารถสร้างผลกระทบกับชีวิตเด็กกว่า 1.7 ล้านคน ด้วยการ<br>
+          ดำเนินงานพัฒนาเพื่อแก้ไขปัญหาอันเป็นรากของความยากจน<br>
+          ผ่านการดำเนินงาน<br>
+          พัฒนาชุมชนและงานรณรงค์เพื่อความยุติธรรมในสังคม
+        </div>
+      </div>
+
+      <div class="fd-community-band">
+        <h3>กลุ่มองค์กรเพื่อสังคม<br>ที่ร่วมงานกับเรา</h3>
+        <p>
+          องค์กรที่ได้รับการสนับสนุนงบประมาณเพื่อชุมชน มีความมุ่งมั่นในการเปลี่ยนแปลงทางสังคม<br>
+          ผ่านการสื่อสารและกิจกรรมการศึกษา โดยเน้นให้เกิดการพัฒนาสังคมรุ่นใหม่
+        </p>
+        <div class="fd-community-org-grid">
+          <div class="fd-community-org-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('partner1')) ?>" alt="พันธมิตรเครือข่าย 1" class="fd-community-org-card__img" width="640" height="380" decoding="async" loading="lazy">
+          </div>
+          <div class="fd-community-org-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('partner2')) ?>" alt="พันธมิตรเครือข่าย 2" class="fd-community-org-card__img" width="640" height="380" decoding="async" loading="lazy">
+          </div>
+          <div class="fd-community-org-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('partner3')) ?>" alt="พันธมิตรเครือข่าย 3" class="fd-community-org-card__img" width="640" height="380" decoding="async" loading="lazy">
+          </div>
+        </div>
+      </div>
+
+      <div class="fd-community-logos">
+        <h3>ช่วยเหลือมูลนิธิเด็กเพื่อสังคม</h3>
+        <div class="fd-community-logo-grid">
+          <div class="fd-community-logo-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('logo-santisuk')) ?>" alt="มูลนิธิสันติสุข" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+          </div>
+          <div class="fd-community-logo-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('logo-baannok')) ?>" alt="มูลนิธิบ้านนอก" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+          </div>
+          <div class="fd-community-logo-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('logo-holt')) ?>" alt="มูลนิธิฮอลต์สหทัย" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+          </div>
+          <div class="fd-community-logo-card">
+            <img src="<?= htmlspecialchars(drawdream_community_img('logo-hope')) ?>" alt="มูลนิธิเฮาส์ออฟเบลสซิง" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+          </div>
+        </div>
+      </div>
+    </section>
+
     <?php endif; ?>
   </div>
+
+  <?php if (($_SESSION['role'] ?? '') !== 'foundation'): ?>
+  <?php include __DIR__ . '/includes/site_footer.php'; ?>
+  <?php endif; ?>
 
   <?php if (($_SESSION['role'] ?? '') !== 'foundation' && $hasAnySlides && count($foundationSlides) > 1): ?>
   <script>
@@ -354,6 +463,37 @@ $hasAnySlides = !empty($foundationSlides);
         go(parseInt(d.getAttribute('data-go') || '0', 10));
       });
     });
+
+    // ถ้ามี hash เช่น #f12 ให้เปิดสไลด์ของมูลนิธินั้นทันที
+    var hash = window.location.hash || '';
+    if (hash && hash.indexOf('#f') === 0) {
+      var target = document.querySelector(hash);
+      if (target && target.classList.contains('foundation-slide')) {
+        var idx = parseInt(target.getAttribute('data-slide-index') || '0', 10) || 0;
+        go(idx);
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  })();
+  </script>
+  <?php endif; ?>
+
+  <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
+  <script>
+  (function() {
+    var btn = document.getElementById('toggleEditNeedBtn');
+    var section = document.getElementById('my-needlist-section');
+    function setNeedEditMode(on) {
+      document.body.classList.toggle('mode-edit-need', on);
+      if (btn) btn.classList.toggle('btn-mode-active', on);
+    }
+    if (btn && section) {
+      btn.addEventListener('click', function() {
+        var turnOn = !document.body.classList.contains('mode-edit-need');
+        setNeedEditMode(turnOn);
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
   })();
   </script>
   <?php endif; ?>

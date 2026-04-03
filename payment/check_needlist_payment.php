@@ -1,9 +1,10 @@
-﻿<?php
+<?php
 // ไฟล์นี้: payment\check_needlist_payment.php
 // หน้าที่: ไฟล์ตรวจสอบสถานะการชำระเงินรายการสิ่งของ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
+require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -53,6 +54,10 @@ $expires_at      = $charge['expires_at'] ?? '';
 $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
+
+if (!$is_mock && !$is_success && in_array($status, ['failed', 'expired'], true)) {
+    drawdream_clear_pending_payment_session();
+}
 
 // กันบันทึกซ้ำ
 $already_processed = false;
@@ -169,8 +174,8 @@ if ($is_success && $amount <= 0) {
 
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
-            <h2>รอการชำระเงิน</h2>
-            <p>ยังไม่พบการชำระเงิน กรุณาสแกน QR Code แล้วลองใหม่</p>
+            <h2>ยังไม่พบการโอนจากธนาคาร</h2>
+            <p>ถ้าโอนแล้วให้รอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอน</strong>กด «ยกเลิก» เพื่อล้าง QR และกลับไปหน้าบริจาคได้ใหม่</p>
             <?php if ($is_test_mode): ?>
                 <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ)</p>
             <?php endif; ?>
@@ -180,6 +185,13 @@ if ($is_success && $amount <= 0) {
             <p class="charge-ref">Charge: <?= htmlspecialchars($charge_id) ?> | Status: <?= htmlspecialchars($status) ?></p>
             <a href="check_needlist_payment.php?charge_id=<?= urlencode($charge_id) ?>&fid=<?= $fid ?>"
                class="btn-pay">เช็คอีกครั้ง</a>
+            <form method="post" action="abandon_qr.php" style="margin:16px 0 0 0;">
+                <input type="hidden" name="charge_id" value="">
+                <input type="hidden" name="return_url" value="foundation_donate.php?fid=<?= (int)$fid ?>">
+                <button type="submit" class="btn-back" style="width:100%;max-width:400px;border:1px solid #b91c1c;color:#b91c1c;background:#fff;cursor:pointer;padding:12px;border-radius:8px;font-weight:600;">
+                    ยกเลิก (ยังไม่ได้โอน)
+                </button>
+            </form>
             <a href="../foundation.php" class="btn-back">กลับหน้ามูลนิธิ</a>
 
         <?php else: ?>
@@ -196,12 +208,6 @@ if ($is_success && $amount <= 0) {
 
 </div>
 </div>
-
-<?php if (!$is_success && $status === 'pending'): ?>
-<script>
-setTimeout(function(){ window.location.reload(); }, 5000);
-</script>
-<?php endif; ?>
 
 </body>
 </html>

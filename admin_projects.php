@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: admin_projects.php
 // หน้าที่: หน้าจัดการและตรวจสอบโครงการฝั่งแอดมิน
 session_start();
@@ -27,22 +27,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'reject')  $newStatus = 'rejected';
 
     if ($project_id > 0 && in_array($newStatus, ['approved','rejected'], true)) {
-        $stmt = $conn->prepare("UPDATE project SET project_status=? WHERE project_id=?");
+        require_once __DIR__ . '/includes/drawdream_project_status.php';
+        $pendAp = drawdream_sql_project_is_pending('project_status');
+        $stmt = $conn->prepare("UPDATE foundation_project SET project_status=? WHERE project_id=? AND {$pendAp} AND deleted_at IS NULL");
         $stmt->bind_param("si", $newStatus, $project_id);
         $stmt->execute();
-
-        // ✅ บันทึก log ลงตาราง admin
-        $action_type = ($newStatus === 'approved') ? 'Approve_Project' : 'Reject_Project';
-        $log_stmt = $conn->prepare("INSERT INTO admin (admin_id, action_type, target_id, remark) VALUES (?, ?, ?, ?)");
-        $log_stmt->bind_param("isis", $uid, $action_type, $project_id, $remark);
-        $log_stmt->execute();
-
-        $msg = ($newStatus === 'approved') ? "อนุมัติโครงการแล้ว" : "ปฏิเสธโครงการแล้ว";
+        if ($stmt->affected_rows >= 1) {
+            require_once __DIR__ . '/includes/notification_audit.php';
+            drawdream_notifications_delete_by_entity_key($conn, 'adm_pending_project:' . $project_id);
+            $stP = $conn->prepare("SELECT foundation_name, project_name FROM foundation_project WHERE project_id = ? LIMIT 1");
+            $stP->bind_param("i", $project_id);
+            $stP->execute();
+            $pr = $stP->get_result()->fetch_assoc();
+            $fname = trim((string)($pr['foundation_name'] ?? ''));
+            $pname = (string)($pr['project_name'] ?? '');
+            $fu = drawdream_foundation_user_id_by_name($conn, $fname);
+            $payLink = 'payment/payment_project.php?project_id=' . $project_id;
+            if ($newStatus === 'approved') {
+                drawdream_send_notification(
+                    $conn,
+                    $fu,
+                    'project_approved',
+                    'โครงการได้รับการอนุมัติ',
+                    'โครงการ "' . $pname . '" ผ่านการตรวจสอบแล้ว สามารถแชร์ลิงก์ให้ผู้บริจาคได้',
+                    $payLink
+                );
+                drawdream_log_admin_action($conn, $uid, 'Approve_Project', $project_id, $remark, $fu > 0 ? $fu : null, 'project_approved');
+            } else {
+                $rejBody = 'โครงการ "' . $pname . '" ไม่ผ่านการอนุมัติ';
+                if ($remark !== '') {
+                    $rejBody .= ' เหตุผล: ' . $remark;
+                }
+                drawdream_send_notification(
+                    $conn,
+                    $fu,
+                    'project_rejected',
+                    'โครงการไม่ผ่านการอนุมัติ',
+                    $rejBody,
+                    'project.php?view=foundation',
+                    'fdn_project:' . $project_id
+                );
+                drawdream_log_admin_action($conn, $uid, 'Reject_Project', $project_id, $remark, $fu > 0 ? $fu : null, 'project_rejected');
+            }
+            $msg = ($newStatus === 'approved') ? "อนุมัติโครงการแล้ว" : "ปฏิเสธโครงการแล้ว";
+        } else {
+            $msg = 'ไม่พบโครงการสถานะรอดำเนินการ หรืออัปเดตไม่สำเร็จ';
+        }
     }
 }
 
 // ดึงรายการที่รออนุมัติ
-$result = mysqli_query($conn, "SELECT * FROM project WHERE project_status='pending' ORDER BY project_id DESC");
+require_once __DIR__ . '/includes/drawdream_project_status.php';
+$pendListAp = drawdream_sql_project_is_pending('project_status');
+$result = mysqli_query($conn, "SELECT * FROM foundation_project WHERE {$pendListAp} AND deleted_at IS NULL ORDER BY project_id DESC");
 ?>
 <!DOCTYPE html>
 <html lang="th">

@@ -1,8 +1,9 @@
-﻿<?php
+<?php
 // ไฟล์นี้: admin_escrow.php
 // หน้าที่: จัดการ Escrow — แท็บโครงการ และ แท็บรายการสิ่งของ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/admin_audit_migrate.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -28,17 +29,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'confirm_transfer' && $project_id) {
         $proj = mysqli_fetch_assoc(mysqli_query($conn,
             "SELECT p.project_name, fp.user_id, fp.foundation_name
-             FROM project p
+             FROM foundation_project p
              JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-             WHERE p.project_id = $project_id"
+             WHERE p.project_id = $project_id AND p.deleted_at IS NULL"
         ));
         if ($proj) {
-            $conn->query("UPDATE project SET project_status = 'purchasing' WHERE project_id = $project_id");
+            $conn->query("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = $project_id");
             $title   = "ยอดบริจาคโครงการครบแล้ว!";
             $message = "โครงการ \"{$proj['project_name']}\" ได้รับยอดบริจาคครบแล้ว กรุณาอัปเดตความคืบหน้าของโครงการ";
             $link    = "foundation_notifications.php";
-            $stmt = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, 'project_funded', ?, ?, ?, 0)");
-            $stmt->bind_param("isss", $proj['user_id'], $title, $message, $link);
+            $type_th = drawdream_normalize_notif_type_to_th('project_funded');
+            $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
+            $stmt->bind_param("issss", $proj['user_id'], $type_th, $title, $message, $link);
             $stmt->execute();
             header("Location: admin_escrow.php?success=transferred");
             exit();
@@ -90,8 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $title   = "จัดส่งสิ่งของเรียบร้อยแล้ว!";
                 $message = "รายการ \"{$need['item_name']}\" ถูกจัดซื้อและจัดส่งให้มูลนิธิเรียบร้อยแล้ว";
                 $link    = "foundation_notifications.php";
-                $stmt3 = $conn->prepare("INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, 'needlist_done', ?, ?, ?, 0)");
-                $stmt3->bind_param("isss", $need['user_id'], $title, $message, $link);
+                $type_nd = drawdream_normalize_notif_type_to_th('needlist_done');
+                $stmt3 = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
+                $stmt3->bind_param("issss", $need['user_id'], $type_nd, $title, $message, $link);
                 $stmt3->execute();
             }
             $success = "อัปโหลดหลักฐานสำเร็จ! รายการสิ่งของเสร็จสมบูรณ์แล้ว";
@@ -102,23 +105,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ======== ดึงข้อมูล: โครงการ ========
 $completed_projects = mysqli_query($conn, "
     SELECT p.*, fp.foundation_name, fp.phone, fp.address, fp.bank_name, fp.bank_account_number
-    FROM project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    WHERE p.project_status IN ('completed','purchasing')
+    FROM foundation_project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
+    WHERE p.project_status IN ('completed','purchasing') AND p.deleted_at IS NULL
     ORDER BY p.project_status ASC, p.project_id DESC
 ");
 $active_projects = mysqli_query($conn, "
-    SELECT p.*, fp.foundation_name FROM project p
+    SELECT p.*, fp.foundation_name FROM foundation_project p
     JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    WHERE p.project_status = 'approved' ORDER BY p.project_id DESC
+    WHERE p.project_status = 'approved' AND p.deleted_at IS NULL ORDER BY p.project_id DESC
 ");
 $done_projects = mysqli_query($conn, "
     SELECT p.*, fp.foundation_name, e.evidence_image, e.description AS evidence_desc, e.uploaded_at AS evidence_date
-    FROM project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
+    FROM foundation_project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
     LEFT JOIN evidence e ON e.project_id = p.project_id
-    WHERE p.project_status = 'done' ORDER BY p.project_id DESC LIMIT 10
+    WHERE p.project_status = 'done' AND p.deleted_at IS NULL ORDER BY p.project_id DESC LIMIT 10
 ");
 $escrow_project_total = mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COALESCE(SUM(current_donate),0) AS total FROM project WHERE project_status IN ('completed','purchasing')"
+    "SELECT COALESCE(SUM(current_donate),0) AS total FROM foundation_project WHERE project_status IN ('completed','purchasing') AND deleted_at IS NULL"
 ))['total'];
 
 // ======== ดึงข้อมูล: สิ่งของ ========

@@ -73,18 +73,174 @@ body.admin-approve-projects-page {
     font-size: 1.05rem;
 }
 
+/* เหมือน .btn-toggle-edit หน้าเด็ก (แก้ไขโปรไฟล์) — มุมโค้ง 10px ไม่ใช่เม็ดยา */
 .foundation-manage-btn-edit {
+    border-radius: 10px !important;
     background: #F1CF54;
     color: #1f2937;
     padding: 12px 20px;
     font-size: 1.05rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+    border: none !important;
+    box-shadow: none;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    box-sizing: border-box;
 }
 
 .foundation-manage-btn-danger {
-    background: #CE573F;
+    background: #CC583F;
     color: #fff;
     padding: 12px 20px;
     font-size: 1.05rem;
+    border: none !important;
+    box-shadow: none;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.foundation-manage-btn-edit:hover,
+.foundation-manage-btn-edit:active,
+.foundation-manage-btn-edit:focus {
+    background: #e8c94a !important;
+    color: #1f2937 !important;
+    filter: none !important;
+    box-shadow: none;
+}
+
+.foundation-manage-btn-danger:hover,
+.foundation-manage-btn-danger:active,
+.foundation-manage-btn-danger:focus {
+    background: #CC583F !important;
+    color: #fff !important;
+    filter: none !important;
+    box-shadow: none;
+}
+
+/* แก้ไขโครงการ (การ์ด) — รูปทรงเดียวกับปุ่มแก้ไขโปรไฟล์แถบบน (.btn-toggle-edit) */
+.foundation-project-pill-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #F1CF54;
+    color: #1f2937;
+    font-weight: 800;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: none;
+    text-decoration: none;
+    box-shadow: none;
+    margin-top: 8px;
+    font-size: 1.05rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+    box-sizing: border-box;
+    transition: background 0.15s ease;
+}
+
+.foundation-project-pill-edit:hover,
+.foundation-project-pill-edit:active,
+.foundation-project-pill-edit:focus {
+    background: #e8c94a;
+    color: #1f2937;
+    transform: none;
+    box-shadow: none;
+}
+
+/* ยืนยันลบ / ยกเลิก — การ์ด */
+.foundation-delete-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+}
+
+.foundation-pill-confirm-delete {
+    background: #CC583F;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 11px 26px;
+    font-weight: 800;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(204, 88, 63, 0.35);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: none;
+}
+
+.foundation-pill-confirm-delete:hover,
+.foundation-pill-confirm-delete:active,
+.foundation-pill-confirm-delete:focus {
+    background: #CC583F !important;
+    color: #fff !important;
+    filter: none !important;
+    box-shadow: 0 4px 14px rgba(204, 88, 63, 0.35);
+    transform: none;
+}
+
+.foundation-pill-cancel-delete {
+    background: #CC583F;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 11px 26px;
+    font-weight: 800;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(204, 88, 63, 0.35);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: background 0.15s ease, transform 0.160s ease;
+}
+
+.foundation-pill-cancel-delete:hover,
+.foundation-pill-cancel-delete:active,
+.foundation-pill-cancel-delete:focus {
+    background: #CC583F;
+    transform: none;
+}
+
+.foundation-manage-btn-merge {
+    background: #5b7c9e;
+    color: #fff;
+    padding: 10px 16px;
+    font-size: 0.98rem;
+    border: none;
+    border-radius: 999px;
+    box-shadow: none;
+    text-decoration: none;
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.foundation-merge-hint {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #eef4ff;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: flex-start;
+}
+
+.foundation-merge-note {
+    font-size: 0.88rem;
+    color: #3d4a60;
+    font-family: 'Sarabun', sans-serif;
+    line-height: 1.45;
 }
 
 .foundation-manage-btn-donor {
@@ -202,16 +358,40 @@ body.admin-approve-projects-page {
     margin-top: 14px;
 }
 
-/* per-card edit/delete blocks â€” à¸‹à¹ˆà¸­à¸™à¹„à¸§à¹‰à¸ˆà¸™à¸à¸§à¹ˆà¸²à¸ˆà¸°à¹€à¸›à¸´à¸” mode */
-.project-edit-wrap,
-.project-delete-wrap {
-    display: none;
+/* การ์ดโครงการมูลนิธิ: ซ่อนจนกว่าเปิดโหมด (ควบคุมด้วย class บน body เหมือนหน้าเด็ก) */
+.foundation-project-list .project-edit-wrap,
+.foundation-project-list .project-delete-wrap {
+    display: none !important;
     margin-top: 10px;
 }
 
-/* à¸›à¸¸à¹ˆà¸¡ toolbar à¸—à¸µà¹ˆà¹€à¸›à¸´à¸” mode à¸­à¸¢à¸¹à¹ˆ â€” à¹à¸ªà¸”à¸‡à¸”à¹‰à¸§à¸¢à¹€à¸ªà¹‰à¸™à¸‚à¸­à¸šà¹ƒà¸•à¹‰ */
-.foundation-manage-btn.btn-mode-active {
-    outline: 3px solid #1f2937;
+body.mode-edit-project .foundation-project-list .project-edit-wrap[data-allow-edit="1"],
+body.mode-delete-project .foundation-project-list .project-delete-wrap[data-allow-delete="1"] {
+    display: block !important;
+}
+
+.foundation-view-actions .foundation-manage-btn.btn-mode-active {
+    outline: none;
+    box-shadow: none;
+}
+
+.foundation-view-actions .foundation-manage-btn-edit.btn-mode-active {
+    background: #e8c94a;
+    color: #1f2937;
+    box-shadow: inset 0 0 0 2px rgba(31, 41, 55, 0.22);
+}
+
+.foundation-view-actions .foundation-manage-btn-danger.btn-mode-active {
+    background: #CC583F;
+    filter: none;
+}
+
+.foundation-view-actions .foundation-manage-btn:focus {
+    outline: none;
+}
+
+.foundation-view-actions .foundation-manage-btn:focus-visible {
+    outline: 2px solid rgba(60, 80, 153, 0.45);
     outline-offset: 2px;
 }
 
@@ -1572,25 +1752,27 @@ body.project-form-page .donation-opts-grid input:focus {
 }
 
 body.project-form-page .btn-submit {
-    background: var(--theme-primary);
-    color: #fff;
-    padding: 14px;
+    background: #F5DD86;
+    color: #1a1a1a;
+    padding: 16px 28px;
     border: none;
-    border-radius: 13px;
-    font-size: 1.1rem;
+    border-radius: 999px;
+    font-size: 1.15rem;
     cursor: pointer;
     font-weight: 800;
     width: 100%;
-    margin-top: 14px;
+    max-width: 420px;
+    margin: 18px auto 0;
+    display: block;
     font-family: 'Prompt', sans-serif;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    box-shadow: 0 7px 14px rgba(60, 80, 153, 0.28);
+    transition: transform 0.15s ease, background 0.15s ease;
+    box-shadow: none;
 }
 
 body.project-form-page .btn-submit:hover {
     transform: translateY(-1px);
-    background: var(--theme-primary-dark);
-    box-shadow: 0 10px 18px rgba(60, 80, 153, 0.32);
+    background: #edd66f;
+    box-shadow: none;
 }
 
 @media (max-width: 860px) {
@@ -1670,8 +1852,13 @@ body.admin-approve-projects-page .approve {
 
 body.admin-projects-page .reject,
 body.admin-approve-projects-page .reject {
-    background: #c0392b;
+    background: #CC583F;
     color: #fff;
+}
+
+body.admin-projects-page .reject:hover,
+body.admin-approve-projects-page .reject:hover {
+    background: #b04a33;
 }
 
 body.admin-projects-page .msg,

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: foundation_add_children.php
 // หน้าที่: หน้ามูลนิธิสำหรับเพิ่มโปรไฟล์เด็ก
 session_start();
@@ -26,30 +26,30 @@ if ($fetchArr = $result->fetch_assoc()) {
     $f_name = "ไม่พบชื่อมูลนิธิ";
 }
 
-// ─── Auto-migrate: เพิ่มคอลัมน์ที่โค้ดใช้งานจริงในตาราง Children ───────────────
+// ─── Auto-migrate: เพิ่มคอลัมน์ที่โค้ดใช้งานจริงในตาราง foundation_children ───────────────
 // หมายเหตุ: ไม่ใช้ AFTER เพื่อลดปัญหาเมื่อ schema เดิมไม่ตรงกัน
 $needed_columns = [
-    'foundation_name' => "ALTER TABLE Children ADD COLUMN foundation_name VARCHAR(255) NULL",
-    'child_name' => "ALTER TABLE Children ADD COLUMN child_name VARCHAR(255) NULL",
-    'birth_date' => "ALTER TABLE Children ADD COLUMN birth_date DATE NULL",
-    'age' => "ALTER TABLE Children ADD COLUMN age INT NULL",
-    'education' => "ALTER TABLE Children ADD COLUMN education VARCHAR(255) NULL",
-    'dream' => "ALTER TABLE Children ADD COLUMN dream VARCHAR(255) NULL",
-    'likes' => "ALTER TABLE Children ADD COLUMN likes VARCHAR(100) NULL",
-    'wish' => "ALTER TABLE Children ADD COLUMN wish VARCHAR(255) NULL",
-    'wish_cat' => "ALTER TABLE Children ADD COLUMN wish_cat VARCHAR(100) NULL",
-    'bank_name' => "ALTER TABLE Children ADD COLUMN bank_name VARCHAR(100) NULL",
-    'child_bank' => "ALTER TABLE Children ADD COLUMN child_bank VARCHAR(100) NULL",
-    'qr_account_image' => "ALTER TABLE Children ADD COLUMN qr_account_image VARCHAR(255) NULL",
-    'status' => "ALTER TABLE Children ADD COLUMN status VARCHAR(100) NULL",
-    'photo_child' => "ALTER TABLE Children ADD COLUMN photo_child VARCHAR(255) NULL",
-    'approve_profile' => "ALTER TABLE Children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
-    'is_hidden' => "ALTER TABLE Children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0",
-    'reject_reason' => "ALTER TABLE Children ADD COLUMN reject_reason TEXT NULL",
-    'reviewed_at' => "ALTER TABLE Children ADD COLUMN reviewed_at DATETIME NULL",
+    'foundation_name' => "ALTER TABLE foundation_children ADD COLUMN foundation_name VARCHAR(255) NULL",
+    'child_name' => "ALTER TABLE foundation_children ADD COLUMN child_name VARCHAR(255) NULL",
+    'birth_date' => "ALTER TABLE foundation_children ADD COLUMN birth_date DATE NULL",
+    'age' => "ALTER TABLE foundation_children ADD COLUMN age INT NULL",
+    'education' => "ALTER TABLE foundation_children ADD COLUMN education VARCHAR(255) NULL",
+    'dream' => "ALTER TABLE foundation_children ADD COLUMN dream VARCHAR(255) NULL",
+    'likes' => "ALTER TABLE foundation_children ADD COLUMN likes VARCHAR(100) NULL",
+    'wish' => "ALTER TABLE foundation_children ADD COLUMN wish VARCHAR(255) NULL",
+    'wish_cat' => "ALTER TABLE foundation_children ADD COLUMN wish_cat VARCHAR(100) NULL",
+    'bank_name' => "ALTER TABLE foundation_children ADD COLUMN bank_name VARCHAR(100) NULL",
+    'child_bank' => "ALTER TABLE foundation_children ADD COLUMN child_bank VARCHAR(100) NULL",
+    'qr_account_image' => "ALTER TABLE foundation_children ADD COLUMN qr_account_image VARCHAR(255) NULL",
+    'status' => "ALTER TABLE foundation_children ADD COLUMN status VARCHAR(100) NULL",
+    'photo_child' => "ALTER TABLE foundation_children ADD COLUMN photo_child VARCHAR(255) NULL",
+    'approve_profile' => "ALTER TABLE foundation_children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
+    'is_hidden' => "ALTER TABLE foundation_children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0",
+    'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL",
+    'reviewed_at' => "ALTER TABLE foundation_children ADD COLUMN reviewed_at DATETIME NULL",
 ];
 foreach ($needed_columns as $col => $ddl) {
-    $chk = $conn->query("SHOW COLUMNS FROM Children LIKE '$col'");
+    $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
     if ($chk && $chk->num_rows === 0) {
         $conn->query($ddl);
     }
@@ -69,7 +69,7 @@ if (isset($_POST['submit'])) {
     $wish_cat      = trim($_POST['wish_cat'] ?? '');
     $bank_name     = trim($_POST['bank_name'] ?? '');
     $child_bank    = trim($_POST['child_bank'] ?? '');
-    $status        = "ยังไม่มีผู้อุปการะ";
+    $status        = "รออุปการะ";
     $approve_status = "รอดำเนินการ";
     $policy_consent = isset($_POST['policy_consent']) && $_POST['policy_consent'] === '1';
 
@@ -169,7 +169,7 @@ if (isset($_POST['submit'])) {
 
     if ($has_birth_date_column) {
         // i=foundation_id, s values include child fields + qr image + status/photo/approve
-        $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, qr_account_image, status, photo_child, approve_profile) 
+        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, qr_account_image, status, photo_child, approve_profile) 
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         // foundation_id(i), birth_date before age(i), then string fields
@@ -193,7 +193,7 @@ if (isset($_POST['submit'])) {
             $approve_status
         );
     } else {
-        $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, qr_account_image, status, photo_child, approve_profile) 
+        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, qr_account_image, status, photo_child, approve_profile) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         // i,s,s,i then string fields including qr image
@@ -201,6 +201,12 @@ if (isset($_POST['submit'])) {
     }
 
     if ($stmt->execute()) {
+        $newChildId = (int)$conn->insert_id;
+        if ($newChildId > 0) {
+            require_once __DIR__ . '/includes/notification_audit.php';
+            drawdream_record_foundation_submitted_child($conn, (int)$_SESSION['user_id'], $newChildId, $child_name);
+            drawdream_notify_admins_child_submitted($conn, $newChildId, $child_name, $f_name);
+        }
         echo "<script>alert('เพิ่มข้อมูลเด็กสำเร็จ'); window.location='children_.php';</script>";
         exit();
     } else {
@@ -217,6 +223,7 @@ if (isset($_POST['submit'])) {
 <title>สร้างโปรไฟล์เด็ก - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/children.css">
+<link rel="stylesheet" href="css/policy_consent.css">
 </head>
 <body>
 
@@ -240,7 +247,7 @@ if (isset($_POST['submit'])) {
             <h3>ยินยอมนโยบาย</h3>
             <label class="consent-check">
                 <input type="checkbox" id="policy_consent" name="policy_consent" value="1" form="mainForm">
-                <a class="consent-link" href="policy_consent.php" target="_blank" rel="noopener">นโยบายความเป็นส่วนตัว</a>
+                <button type="button" class="consent-link consent-link--btn" id="openPolicyModal">นโยบายความเป็นส่วนตัว</button>
             </label>
             <div class="consent-note">**ต้องกดยินยอมก่อนจึงจะบันทึกโปรไฟล์ได้**</div>
         </div>
@@ -940,7 +947,51 @@ document.getElementById('bank-logo').addEventListener('error', function() {
 
 toggleDreamOther();
 updateQrRequirement();
+
+document.addEventListener('DOMContentLoaded', function () {
+  var openBtn = document.getElementById('openPolicyModal');
+  var closeBtn = document.getElementById('closePolicyModal');
+  var backdrop = document.getElementById('policyModalBackdrop');
+  function openM() {
+    var m = document.getElementById('policyModal');
+    if (!m) return;
+    m.classList.add('policy-modal--open');
+    m.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeM() {
+    var m = document.getElementById('policyModal');
+    if (!m) return;
+    m.classList.remove('policy-modal--open');
+    m.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+  }
+  if (openBtn) openBtn.addEventListener('click', function (e) { e.preventDefault(); openM(); });
+  if (closeBtn) closeBtn.addEventListener('click', closeM);
+  if (backdrop) backdrop.addEventListener('click', closeM);
+  document.addEventListener('keydown', function (e) {
+    var m = document.getElementById('policyModal');
+    if (e.key === 'Escape' && m && m.classList.contains('policy-modal--open')) closeM();
+  });
+});
 </script>
+
+<div id="policyModal" class="policy-modal" aria-hidden="true">
+  <div class="policy-modal__backdrop" id="policyModalBackdrop"></div>
+  <div class="policy-modal__panel" role="dialog" aria-modal="true" aria-labelledby="policyModalTitle">
+    <div class="policy-modal__head">
+      <h2 id="policyModalTitle" class="policy-modal__title">นโยบายความเป็นส่วนตัว</h2>
+      <button type="button" class="policy-modal__close" id="closePolicyModal" aria-label="ปิด">&times;</button>
+    </div>
+    <div class="policy-modal__body">
+      <div class="paper policy-modal__paper">
+        <div class="policy-consent-prose">
+          <?php include __DIR__ . '/includes/policy_consent_content.php'; ?>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

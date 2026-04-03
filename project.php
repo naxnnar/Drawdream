@@ -3,6 +3,7 @@
 // หน้าที่: หน้ารวมโครงการพร้อมระบบค้นหาและกรอง
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/project_donation_dates.php';
 
 $is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
 
@@ -34,18 +35,21 @@ if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
     if ($deleteProjectId > 0 && $foundationName !== '') {
         mysqli_begin_transaction($conn);
         try {
-            $deleteProjectStmt = $conn->prepare("DELETE FROM project WHERE project_id = ? AND foundation_name = ?");;
+            $deleteProjectStmt = $conn->prepare(
+                "UPDATE foundation_project SET deleted_at = NOW(), project_delete_reason = NULL
+                 WHERE project_id = ? AND foundation_name = ? AND project_status IN ('pending','rejected') AND deleted_at IS NULL"
+            );
             $deleteProjectStmt->bind_param("is", $deleteProjectId, $foundationName);
             if (!$deleteProjectStmt->execute()) {
                 throw new Exception($deleteProjectStmt->error ?: 'ลบโครงการไม่สำเร็จ');
             }
             if ($deleteProjectStmt->affected_rows < 1) {
-                throw new Exception('ไม่พบโครงการที่ต้องการลบ');
+                throw new Exception('ลบได้เฉพาะโครงการสถานะรอดำเนินการหรือไม่ผ่านการอนุมัติเท่านั้น');
             }
 
             mysqli_commit($conn);
             echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>";
-            echo "<script>Swal.fire({icon:'success',title:'ลบโครงการสำเร็จ',showConfirmButton:false,timer:1500}).then(()=>{window.location='project.php?view=foundation';});</script>";
+            echo "<script>Swal.fire({icon:'success',title:'ลบโครงการแล้ว (ข้อมูลยังเก็บในระบบ)',showConfirmButton:false,timer:1800}).then(()=>{window.location='project.php?view=foundation';});</script>";
             exit();
         } catch (Throwable $e) {
             mysqli_rollback($conn);
@@ -146,7 +150,7 @@ function formatTimeAgoThai($datetime) {
 
 function projectStatusThai($status) {
     $map = [
-        'pending' => ['label' => 'รออนุมัติ', 'class' => 'st-pending'],
+        'pending' => ['label' => 'รอดำเนินการ', 'class' => 'st-pending'],
         'approved' => ['label' => 'กำลังระดมทุน', 'class' => 'st-approved'],
         'completed' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
         'done' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
@@ -156,7 +160,7 @@ function projectStatusThai($status) {
 }
 
 /**
- * สถานะที่ผู้บริจาคเห็น: fundraising | completed | closed (ซ่อนจาก donor ทั้งหมด)
+ * สถานะที่ผู้บริจาคเห็น: fundraising | completed | closed (ซ่อนจาก donor ทั้งหมด; อนุมัติแล้วไม่หน่วงรับบริจาค)
  */
 function donorProjectEffectiveState(array $row): string {
     $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
@@ -164,13 +168,17 @@ function donorProjectEffectiveState(array $row): string {
     $dbSt = (string)($row['project_status'] ?? '');
 
     $half = ($goal > 0) ? ($goal * 0.5) : 0.0;
-    $pct = ($goal > 0) ? min(100.0, ($raised / $goal) * 100.0) : 0.0;
 
     $endRaw = $row['end_date'] ?? null;
     $ended = false;
     if (!empty($endRaw)) {
-        $endTs = strtotime((string)$endRaw . ' 23:59:59');
-        $ended = ($endTs !== false && $endTs < time());
+        try {
+            $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
+            $endDay = substr((string)$endRaw, 0, 10);
+            $ended = ($endDay !== '' && $endDay < $today);
+        } catch (Exception $e) {
+            $ended = false;
+        }
     }
 
     if (in_array($dbSt, ['completed', 'done'], true)) {
@@ -189,6 +197,27 @@ function donorProjectEffectiveState(array $row): string {
     }
 
     return 'fundraising';
+}
+
+/** ยังรับบริจาคได้ (วันสิ้นสุดตามเขตเวลาไทย — สอดคล้องหน้าชำระเงิน) */
+function donorProjectStillAcceptingDonations(array $row): bool {
+    $endRaw = $row['end_date'] ?? null;
+    if ($endRaw === null || trim((string)$endRaw) === '') {
+        return true;
+    }
+    try {
+        $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
+        $endDay = substr((string)$endRaw, 0, 10);
+        return $endDay >= $today;
+    } catch (Exception $e) {
+        return true;
+    }
+}
+
+/** แสดงในรายการผู้บริจาค: เฉพาะช่วงระดมทุน (ไม่ซ่อนเพราะวันเริ่มโครงการ) */
+function donorProjectShowInBrowseList(array $row): bool
+{
+    return donorProjectEffectiveState($row) === 'fundraising';
 }
 
 function donorProjectProgressPct(array $row): float {
@@ -217,7 +246,26 @@ function donorFilterProjectRows(array $rows, string $status): array {
             continue;
         }
 
-        if ($eff !== 'fundraising') {
+        if ($status === 'all') {
+            if ($eff === 'fundraising' || $eff === 'completed') {
+                $out[] = $row;
+            }
+            continue;
+        }
+
+        // กำลังระดมทุน: เฉพาะที่สถานะระดมทุนและยังไม่เลยวันปิดรับ — ให้บริจาคได้จริง
+        if ($status === 'fundraising') {
+            if ($eff !== 'fundraising') {
+                continue;
+            }
+            if (!donorProjectStillAcceptingDonations($row)) {
+                continue;
+            }
+            $out[] = $row;
+            continue;
+        }
+
+        if (!donorProjectShowInBrowseList($row)) {
             continue;
         }
         $out[] = $row;
@@ -230,6 +278,7 @@ function donorFilterProjectRows(array $rows, string $status): array {
 $params = [];
 $types  = "";
 $where  = [];
+$where[] = 'p.deleted_at IS NULL';
 
 $publicDonorStyle = (!$isFoundationOwnView && in_array($role, ['donor', 'foundation'], true));
 
@@ -242,10 +291,10 @@ if ($keyword !== '') {
 }
 
 if ($publicDonorStyle) {
-    if ($status === 'completed') {
-        $where[] = "p.project_status IN ('approved', 'completed', 'done')";
-    } else {
+    if ($status === 'fundraising') {
         $where[] = "p.project_status = 'approved'";
+    } else {
+        $where[] = "p.project_status IN ('approved', 'completed', 'done')";
     }
 } elseif ($role !== 'admin') {
     $where[] = "p.project_status IN ('approved', 'completed', 'done')";
@@ -261,9 +310,10 @@ if (!empty($selectedCats)) {
 }
 
 if ($location !== 'all') {
-    $where[] = "COALESCE(fp.address, '') LIKE ?";
+    $where[] = "(COALESCE(p.location, '') LIKE ? OR COALESCE(fp.address, '') LIKE ?)";
     $params[] = "%{$location}%";
-    $types .= "s";
+    $params[] = "%{$location}%";
+    $types .= "ss";
 }
 
 $orderBy = "p.project_id DESC";
@@ -281,9 +331,9 @@ $latestProjects = [];
 if ($isFoundationOwnView) {
     $foundationSql = "
         SELECT p.*, fp.address AS foundation_address
-        FROM project p
+        FROM foundation_project p
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
-        WHERE p.foundation_name = ?
+        WHERE p.foundation_name = ? AND p.deleted_at IS NULL
         ORDER BY p.project_id DESC
     ";
     $foundationProjStmt = $conn->prepare($foundationSql);
@@ -298,7 +348,7 @@ if ($isFoundationOwnView) {
 } else {
     $sql  = "
         SELECT p.*, fp.address AS foundation_address
-        FROM project p
+        FROM foundation_project p
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
         WHERE " . implode(" AND ", $where) . "
         ORDER BY {$orderBy}
@@ -316,6 +366,16 @@ if ($isFoundationOwnView) {
 
     if ($publicDonorStyle) {
         $projects = donorFilterProjectRows($projects, $status);
+        if (in_array($sort, ['popular_desc', 'popular_asc'], true)) {
+            usort($projects, static function (array $a, array $b) use ($sort): int {
+                $ca = (float)($a['current_donate'] ?? 0);
+                $cb = (float)($b['current_donate'] ?? 0);
+                if ($ca === $cb) {
+                    return ((int)($b['project_id'] ?? 0)) <=> ((int)($a['project_id'] ?? 0));
+                }
+                return $sort === 'popular_desc' ? ($cb <=> $ca) : ($ca <=> $cb);
+            });
+        }
     }
 
     $latestWhere = [];
@@ -326,9 +386,10 @@ if ($isFoundationOwnView) {
     } elseif ($role !== 'admin') {
         $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
     }
+    $latestWhere[] = 'p.deleted_at IS NULL';
     $latestSql = "
         SELECT p.*, fp.address AS foundation_address
-        FROM project p
+        FROM foundation_project p
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
     ";
     if (!empty($latestWhere)) {
@@ -355,7 +416,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=16">
+    <link rel="stylesheet" href="css/project.css?v=25">
 
 </head>
 <body class="projects-page">
@@ -392,7 +453,7 @@ if ($isFoundationOwnView) {
                     // ดึง remark กรณีถูกปฏิเสธ (ถ้ามี)
                     $remark = '';
                     if (($row['project_status'] ?? '') === 'rejected') {
-                        $stmtR = $conn->prepare("SELECT remark FROM admin WHERE action_type='Reject_Project' AND target_id=? ORDER BY id DESC LIMIT 1");
+                        $stmtR = $conn->prepare("SELECT remark FROM admin WHERE target_entity = 'project' AND notif_type IN ('ไม่อนุมัติ', 'project_rejected') AND target_id=? ORDER BY id DESC LIMIT 1");
                         $pid = (int)$row['project_id'];
                         $stmtR->bind_param("i", $pid);
                         $stmtR->execute();
@@ -422,7 +483,7 @@ if ($isFoundationOwnView) {
                             <?php endif; ?>
                         <?php endif; ?>
                         <?php if (($row['project_status'] ?? '') === 'pending'): ?>
-                            <div class="foundation-status-alert st-pending">โครงการนี้รอแอดมินอนุมัติ</div>
+                            <div class="foundation-status-alert st-pending">โครงการนี้รอแอดมินตรวจสอบ</div>
                         <?php elseif (($row['project_status'] ?? '') === 'rejected'): ?>
                             <div class="foundation-status-alert st-rejected">โครงการนี้ไม่ผ่านการอนุมัติ<?= $remark ? ': '.htmlspecialchars($remark) : '' ?></div>
                         <?php endif; ?>
@@ -436,13 +497,50 @@ if ($isFoundationOwnView) {
                             <div class="foundation-progress-fill" style="width: <?= $progress ?>%"></div>
                         </div>
 
-                        <div class="project-edit-wrap">
-                            <a class="foundation-manage-btn foundation-manage-btn-edit" href="foundation_add_project.php?edit=<?= (int)$row['project_id'] ?>">แก้ไข</a>
+                        <?php
+                            $pst = strtolower(trim((string)($row['project_status'] ?? '')));
+                            if ($pst === '') {
+                                $pst = 'pending';
+                            }
+                            // แก้ไขได้ทุกสถานะยกเว้นโครงการจบแล้ว (รองรับค่า DB ตัวพิมพ์เล็ก-ใหญ่)
+                            $allowEditCard = !in_array($pst, ['completed', 'done'], true);
+                            $allowDeleteCard = in_array($pst, ['pending', 'rejected'], true);
+                            $tzB = new DateTimeZone('Asia/Bangkok');
+                            $endRaw = $row['end_date'] ?? null;
+                            $ended = false;
+                            if (!empty($endRaw)) {
+                                try {
+                                    $endD = new DateTimeImmutable(substr((string)$endRaw, 0, 10), $tzB);
+                                    $ended = $endD->format('Y-m-d') < (new DateTimeImmutable('now', $tzB))->format('Y-m-d');
+                                } catch (Exception $e) {
+                                    $ended = false;
+                                }
+                            }
+                            $halfGoal = ($goal > 0) ? ($goal * 0.5) : 0.0;
+                            $mergedIntoId = (int)($row['merged_into_project_id'] ?? 0);
+                            $canMergeFunds = ($pst === 'approved' && $ended && $goal > 0 && $raised > 0 && $raised < $halfGoal && $mergedIntoId <= 0);
+                        ?>
+                        <?php if ($mergedIntoId > 0): ?>
+                            <div class="foundation-merge-hint" style="background:#ecfdf5;">
+                                <span class="foundation-merge-note" style="color:#065f46;"><strong>สมทบยอดแล้ว</strong> — ยอดบริจาคถูกนำไปรวมกับโครงการหมายเลข <?= (int)$mergedIntoId ?></span>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($canMergeFunds): ?>
+                            <div class="foundation-merge-hint">
+                                <a class="foundation-manage-btn foundation-manage-btn-merge" href="foundation_merge_project.php?from=<?= (int)$row['project_id'] ?>">สมทบยอดที่ได้รับเข้าโครงการอื่น</a>
+                                <span class="foundation-merge-note">ครบกำหนดแล้วแต่ยอดบริจาคยังไม่ถึง 50% ของเป้าหมาย — สามารถรวมยอดไปนับเป็นโครงการที่สำเร็จร่วมกันได้</span>
+                            </div>
+                        <?php endif; ?>
+                        <div class="project-edit-wrap" data-allow-edit="<?= $allowEditCard ? '1' : '0' ?>">
+                            <a class="foundation-project-pill-edit" href="foundation_add_project.php?edit=<?= (int)$row['project_id'] ?>">แก้ไขโครงการ</a>
                         </div>
-                        <div class="project-delete-wrap">
-                            <form method="POST" class="foundation-delete-form" onsubmit="return confirm('ยืนยันการลบโครงการนี้?');">
+                        <div class="project-delete-wrap" data-allow-delete="<?= $allowDeleteCard ? '1' : '0' ?>">
+                            <form method="POST" class="foundation-delete-form">
                                 <input type="hidden" name="delete_project_id" value="<?= (int)$row['project_id'] ?>">
-                                <button type="submit" class="foundation-manage-btn foundation-manage-btn-danger">ลบ</button>
+                                <div class="foundation-delete-actions">
+                                    <button type="submit" class="foundation-pill-confirm-delete">ยืนยันลบ</button>
+                                    <button type="button" class="foundation-pill-cancel-delete">ยกเลิก</button>
+                                </div>
                             </form>
                         </div>
                     </div>
@@ -471,7 +569,7 @@ if ($isFoundationOwnView) {
             <div class="filter-pills">
                 <?php
                     $statusLabels = ['all' => 'สถานะ', 'fundraising' => 'กำลังระดมทุน', 'completed' => 'เสร็จสิ้น'];
-                    $sortLabels   = ['latest' => 'เรียงตาม', 'popular_desc' => 'บริจาค มากไปน้อย', 'popular_asc' => 'บริจาค น้อยไปมาก'];
+                    $sortLabels   = ['latest' => 'เรียงตาม', 'popular_desc' => 'ยอดบริจาค มาก→น้อย', 'popular_asc' => 'ยอดบริจาค น้อย→มาก'];
                 ?>
 
                 <!-- หมวดหมู่: เลือกได้หลายหมวด ส่งฟอร์มทันทีเมื่อคลิก (ไม่มีปุ่มนำไปใช้) -->
@@ -543,8 +641,8 @@ if ($isFoundationOwnView) {
                     <input type="hidden" name="sort" id="sort-value" value="<?= htmlspecialchars($sort) ?>">
                     <div class="cust-panel" id="sort-panel">
                         <div class="cust-option<?= $sort === 'latest' ? ' selected' : '' ?>" data-val="latest" data-label="เรียงตาม" data-default="1">ล่าสุด</div>
-                        <div class="cust-option<?= $sort === 'popular_desc' ? ' selected' : '' ?>" data-val="popular_desc" data-label="บริจาค มากไปน้อย">บริจาค มากไปน้อย</div>
-                        <div class="cust-option<?= $sort === 'popular_asc' ? ' selected' : '' ?>" data-val="popular_asc" data-label="บริจาค น้อยไปมาก">บริจาค น้อยไปมาก</div>
+                        <div class="cust-option<?= $sort === 'popular_desc' ? ' selected' : '' ?>" data-val="popular_desc" data-label="ยอดบริจาค มาก→น้อย">ยอดบริจาค มาก→น้อย</div>
+                        <div class="cust-option<?= $sort === 'popular_asc' ? ' selected' : '' ?>" data-val="popular_asc" data-label="ยอดบริจาค น้อย→มาก">ยอดบริจาค น้อย→มาก</div>
                     </div>
                 </div>
             </div>
@@ -576,7 +674,7 @@ if ($role === 'admin'):
             <div class="latest-track" id="latest-track">
                 <?php foreach ($latestProjects as $latest): ?>
                     <?php
-                        if (donorProjectEffectiveState($latest) !== 'fundraising') {
+                        if (!donorProjectShowInBrowseList($latest)) {
                             continue;
                         }
                         $latestGoal = !empty($latest['goal_amount']) ? floatval($latest['goal_amount']) : 100000;
@@ -773,35 +871,36 @@ if ($role === 'admin'):
 <?php endif; ?>
 
 <script>
-// toggle edit/delete mode เหมือนหน้าเด็ก
+// โหมดแก้ไข/ลบแบบเดียวกับหน้าเด็ก: ใช้ class บน body ควบคุม (เลี่ยงปัญหา display ถูก override)
 (function() {
-    const editBtn   = document.getElementById('toggleEditProjectBtn');
+    const editBtn = document.getElementById('toggleEditProjectBtn');
     const deleteBtn = document.getElementById('toggleDeleteProjectBtn');
     if (!editBtn || !deleteBtn) return;
 
-    function setMode(mode) {
-        const isEdit   = mode === 'edit';
-        const isDelete = mode === 'delete';
-
-        editBtn.classList.toggle('btn-mode-active', isEdit);
-        deleteBtn.classList.toggle('btn-mode-active', isDelete);
-
-        document.querySelectorAll('.project-edit-wrap').forEach(function(el) {
-            el.style.display = isEdit ? 'block' : 'none';
-        });
-        document.querySelectorAll('.project-delete-wrap').forEach(function(el) {
-            el.style.display = isDelete ? 'block' : 'none';
-        });
+    function syncToolbarActive() {
+        editBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-edit-project'));
+        deleteBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-delete-project'));
     }
 
-    var currentMode = null;
     editBtn.addEventListener('click', function() {
-        currentMode = currentMode === 'edit' ? null : 'edit';
-        setMode(currentMode);
+        const turnOn = !document.body.classList.contains('mode-edit-project');
+        document.body.classList.remove('mode-delete-project');
+        document.body.classList.toggle('mode-edit-project', turnOn);
+        syncToolbarActive();
     });
+
     deleteBtn.addEventListener('click', function() {
-        currentMode = currentMode === 'delete' ? null : 'delete';
-        setMode(currentMode);
+        const turnOn = !document.body.classList.contains('mode-delete-project');
+        document.body.classList.remove('mode-edit-project');
+        document.body.classList.toggle('mode-delete-project', turnOn);
+        syncToolbarActive();
+    });
+
+    document.querySelectorAll('.foundation-pill-cancel-delete').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.body.classList.remove('mode-delete-project');
+            syncToolbarActive();
+        });
     });
 })();
 

@@ -108,22 +108,30 @@ button {
 /* ===== Notification Bell ===== */
 .notif-btn {
     position: relative;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #f0f0f0;
-    display: flex;
+    width: auto;
+    height: auto;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 4px;
+    border-radius: 0;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     text-decoration: none;
     font-size: 20px;
-    transition: all 0.3s;
+    transition: opacity 0.2s;
     color: #333;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .notif-btn:hover {
-    background: #e0e0e0;
-    transform: scale(1.05);
+    background: transparent !important;
+    opacity: 0.72;
 }
 
 .notif-badge {
@@ -150,20 +158,23 @@ button {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #f0f0f0;
+    background: #e8e8e8;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: opacity 0.2s;
     text-decoration: none;
     color: #333;
     font-size: 20px;
+    overflow: hidden;
+    padding: 0;
+    border: none;
+    flex-shrink: 0;
 }
 
 .profile-btn:hover {
-    background: #e0e0e0;
-    transform: scale(1.05);
+    opacity: 0.88;
 }
 
 .logout-btn {
@@ -205,6 +216,27 @@ button {
     object-fit: contain !important;
     border-radius: 50%;
     display: inline-block;
+}
+
+.nav-bell-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+    color: #222;
+}
+
+.profile-btn .nav-profile-photo,
+.profile-btn img.nav-icon {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    object-fit: cover !important;
+    object-position: center center;
+    border-radius: 0;
+    display: block;
+}
+
+.nav-profile-photo {
+    object-fit: cover !important;
 }
 .nav-left {
     gap: 25px !important;
@@ -280,7 +312,14 @@ button {
         width: 100%;
         text-align: left;
     }
-    .notif-btn, .profile-btn {
+    .notif-btn {
+        width: auto;
+        height: auto;
+        min-width: 36px;
+        min-height: 36px;
+        font-size: 18px;
+    }
+    .profile-btn {
         width: 36px;
         height: 36px;
         font-size: 18px;
@@ -591,23 +630,35 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
     font-family: 'Prompt', sans-serif;
     font-size: 0.95rem;
     font-weight: 600;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.15);
-    transition: background 0.18s ease, transform 0.18s ease;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-.admin-side-utility:hover {
-    background: rgba(255, 255, 255, 0.24);
+/* โปรไฟล์ */
+.admin-side-utility:not(.admin-side-logout) {
+    background: #F1CF54;
+    color: #1f2937;
+}
+
+.admin-side-utility:not(.admin-side-logout):hover {
+    background: #e5c24b;
+    color: #0f172a;
     transform: translateY(-1px);
-    color: #fff;
 }
 
 .admin-side-utility-soft {
     background: rgba(255, 244, 214, 0.16);
 }
 
+/* ออกจากระบบ */
 .admin-side-logout {
-    background: rgba(255, 122, 94, 0.22);
+    background: #CC583F;
+    color: #fff;
+}
+
+.admin-side-logout:hover {
+    background: #b54d35;
+    color: #fff;
+    transform: translateY(-1px);
 }
 
 @media (max-width: 991px) {
@@ -680,14 +731,17 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
     top: 0;
     left: 0;
     right: 0;
-    z-index: 9999;
+    z-index: 10001;
     background: #597D57;
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 20px;
-    padding: 10px 20px;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    padding: 10px 16px;
+    min-height: 46px;
+    box-sizing: border-box;
     font-family: 'Prompt', 'Sarabun', sans-serif;
     font-size: 14px;
     font-weight: 600;
@@ -713,8 +767,13 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
     color: #fff;
 }
 
-body:has(.donor-preview-banner) .navbar {
-    margin-top: 40px;
+/* แถบโหมดดูตัวอย่างอยู่เหนือ navbar — เลื่อน navbar ลงมา + เพิ่ม padding เนื้อหา */
+body:has(.donor-preview-banner):not(.admin-sidebar-page) {
+    padding-top: calc(82px + 48px) !important;
+}
+
+body:has(.donor-preview-banner):not(.admin-sidebar-page) .navbar {
+    top: 48px;
 }
 
 /* badge จำนวนรออนุมัติในเมนู */

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: children_.php
 // หน้าที่: หน้ารวมโปรไฟล์เด็กสำหรับผู้บริจาคและมูลนิธิ
 // ------------------------------
@@ -8,6 +8,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 include 'db.php'; // เชื่อมต่อฐานข้อมูล
+require_once __DIR__ . '/includes/child_sponsorship.php';
+drawdream_child_sponsorship_ensure_columns($conn);
+drawdream_child_outcome_ensure_columns($conn);
 
 // ------------------------------
 // Current user context
@@ -32,9 +35,9 @@ if ($role === 'foundation') {
 }
 
 // Auto-migrate is_hidden column (run every request to ensure column exists before SELECT)
-$checkIsHidden = $conn->query("SHOW COLUMNS FROM Children LIKE 'is_hidden'");
+$checkIsHidden = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'is_hidden'");
 if ($checkIsHidden->num_rows === 0) {
-  $conn->query("ALTER TABLE Children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0");
+  $conn->query("ALTER TABLE foundation_children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0");
 }
 
 if ($role === 'foundation' && isset($_POST['bulk_action'])) {
@@ -53,24 +56,90 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
   }
 
   if (!empty($childIds) && $foundationId !== null) {
-    $placeholders = implode(',', array_fill(0, count($childIds), '?'));
-    $types = 'i' . str_repeat('i', count($childIds));
-    $params = array_merge([$foundationId], $childIds);
-
     if ($bulkAction === 'hide') {
-      $sqlAct = "UPDATE Children SET is_hidden=1 WHERE foundation_id=? AND child_id IN ($placeholders)";
-      $stmtAct = $conn->prepare($sqlAct);
-      $stmtAct->bind_param($types, ...$params);
-      $stmtAct->execute();
-      $affectedCount = $stmtAct->affected_rows;
-      header('Location: children_.php?msg=' . urlencode("ซ่อนโปรไฟล์สำเร็จ {$affectedCount} รายการ"));
+      $hidden = 0;
+      $blocked = 0;
+      foreach ($childIds as $cid) {
+        $st = $conn->prepare("SELECT child_id, approve_profile, first_approved_at, reviewed_at FROM foundation_children WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL LIMIT 1");
+        $st->bind_param("ii", $foundationId, $cid);
+        $st->execute();
+        $rowH = $st->get_result()->fetch_assoc();
+        if (!$rowH) {
+          continue;
+        }
+        $ap = (string)($rowH['approve_profile'] ?? '');
+        $totalDon = drawdream_child_total_donations($conn, $cid);
+        if ($ap === 'อนุมัติ' || $totalDon > 0 || drawdream_child_is_cycle_sponsored($conn, $cid, $rowH)) {
+          $blocked++;
+          continue;
+        }
+        $hid = $conn->prepare("UPDATE foundation_children SET is_hidden = 1 WHERE foundation_id = ? AND child_id = ?");
+        $hid->bind_param("ii", $foundationId, $cid);
+        $hid->execute();
+        if ($hid->affected_rows > 0) {
+          $hidden++;
+        }
+      }
+      $msgParts = [];
+      if ($hidden > 0) {
+        $msgParts[] = "ซ่อนโปรไฟล์สำเร็จ {$hidden} รายการ (นำกลับมาแก้แล้วส่งแอดมินใหม่ได้)";
+      }
+      if ($blocked > 0) {
+        $msgParts[] = "ไม่ดำเนินการ {$blocked} รายการ — โปรไฟล์ที่อนุมัติแล้ว มียอดบริจาค หรืออุปการะครบยอดในเดือนนี้ ไม่สามารถลบหรือซ่อนได้";
+      }
+      header('Location: children_.php?msg=' . urlencode($msgParts !== [] ? implode(' · ', $msgParts) : 'ดำเนินการแล้ว'));
     } else {
-      $sqlAct = "DELETE FROM Children WHERE foundation_id=? AND child_id IN ($placeholders)";
-      $stmtAct = $conn->prepare($sqlAct);
-      $stmtAct->bind_param($types, ...$params);
-      $stmtAct->execute();
-      $affectedCount = $stmtAct->affected_rows;
-      header('Location: children_.php?msg=' . urlencode("ลบโปรไฟล์สำเร็จ {$affectedCount} รายการ"));
+      $deleted = 0;
+      $blocked = 0;
+      $failedDelete = 0;
+      foreach ($childIds as $cid) {
+        $st = $conn->prepare("SELECT child_id, approve_profile, first_approved_at, reviewed_at, photo_child, qr_account_image FROM foundation_children WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL LIMIT 1");
+        $st->bind_param("ii", $foundationId, $cid);
+        $st->execute();
+        $crow = $st->get_result()->fetch_assoc();
+        if (!$crow) {
+          continue;
+        }
+        $ap = (string)($crow['approve_profile'] ?? '');
+        $totalDon = drawdream_child_total_donations($conn, $cid);
+        $cycleSponsored = drawdream_child_is_cycle_sponsored($conn, $cid, $crow);
+        // Soft delete — โปรไฟล์ไม่อนุมัติ: อนุญาตลบเมื่อไม่มียอดบริจาค (ไม่ผูกกับ cycle เพราะไม่เปิดรับบริจาค)
+        $maySoftDelete = ($ap === 'ไม่อนุมัติ' && $totalDon <= 0)
+          || (
+            !$cycleSponsored
+            && ($totalDon <= 0)
+            && ($ap !== 'อนุมัติ')
+            && (
+              in_array($ap, ['รอดำเนินการ', 'ไม่อนุมัติ'], true)
+              || ($ap === 'กำลังดำเนินการ')
+            )
+          );
+        if ($maySoftDelete) {
+          $reasonText = $deleteReason === '' ? null : $deleteReason;
+          $upd = $conn->prepare('UPDATE foundation_children SET deleted_at = NOW(), profile_delete_reason = ? WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL');
+          $upd->bind_param('sii', $reasonText, $foundationId, $cid);
+          if ($upd->execute() && $upd->affected_rows >= 1) {
+            $deleted++;
+          } else {
+            $failedDelete++;
+          }
+        } elseif ($ap === 'อนุมัติ' || $totalDon > 0 || $cycleSponsored) {
+          $blocked++;
+        } else {
+          $blocked++;
+        }
+      }
+      $msgParts = [];
+      if ($deleted > 0) {
+        $msgParts[] = "ลบ {$deleted} รายการ — ข้อมูลยังเก็บในฐานข้อมูล (ทำเครื่องหมายว่าลบแล้ว)";
+      }
+      if ($blocked > 0) {
+        $msgParts[] = "ไม่ดำเนินการ {$blocked} รายการ — อนุมัติแล้ว มียอดบริจาค หรืออุปการะครบยอดในเดือนนี้ (ไม่ให้ลบ)";
+      }
+      if ($failedDelete > 0) {
+        $msgParts[] = "ลบไม่สำเร็จ {$failedDelete} รายการ กรุณาลองใหม่";
+      }
+      header('Location: children_.php?msg=' . urlencode($msgParts !== [] ? implode(' · ', $msgParts) : 'ดำเนินการแล้ว'));
     }
     exit();
   }
@@ -83,11 +152,11 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
 // Build listing query by role
 // ------------------------------
 if ($role === 'donor') {
-  $sql = "SELECT * FROM Children WHERE approve_profile = 'อนุมัติ' AND is_hidden = 0 ORDER BY child_id DESC";
+  $sql = "SELECT * FROM foundation_children WHERE approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') AND is_hidden = 0 AND deleted_at IS NULL ORDER BY child_id DESC";
   $result = $conn->query($sql);
 } elseif ($role === 'foundation') {
   if ($foundationId !== null) {
-    $stmt = $conn->prepare("SELECT * FROM Children WHERE foundation_id = ? ORDER BY child_id DESC");
+    $stmt = $conn->prepare("SELECT * FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL ORDER BY child_id DESC");
     $stmt->bind_param("i", $foundationId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -95,23 +164,42 @@ if ($role === 'donor') {
     $result = false;
   }
 } else {
-  $sql = "SELECT * FROM Children ORDER BY child_id DESC";
+  $sql = "SELECT * FROM foundation_children WHERE deleted_at IS NULL ORDER BY child_id DESC";
   $result = $conn->query($sql);
 }
 
-// แยกกลุ่มเด็กตามสถานะเพื่อนำไปแสดงผล
-$unadopted = [];
-$adopted = [];
-
+// แยกกลุ่ม: รออุปการะ vs อุปการะแล้ว (ยอดบริจาคเดือนนี้ >= 20,000)
+$waiting_children = [];
+$sponsored_children = [];
+$all_list_rows = [];
 if ($result && $result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        if ($row['status'] == 'มีผู้อุปการะแล้ว') {
-            $adopted[] = $row;
-        } else {
-            $unadopted[] = $row;
-        }
-    }
+  while ($row = $result->fetch_assoc()) {
+    $all_list_rows[] = $row;
+  }
 }
+$cycleTotals = drawdream_child_cycle_totals_batch($conn, $all_list_rows);
+$childIdsForTotals = array_map(static fn ($r) => (int)($r['child_id'] ?? 0), $all_list_rows);
+$childDonationTotals = ($role === 'foundation' && $childIdsForTotals !== [])
+    ? drawdream_child_donation_totals_batch($conn, $childIdsForTotals)
+    : [];
+
+foreach ($all_list_rows as $row) {
+  $cid = (int)($row['child_id'] ?? 0);
+  $cycleAmt = (float)($cycleTotals[$cid] ?? 0);
+  $ap = (string)($row['approve_profile'] ?? '');
+  $countsAsSponsored = in_array($ap, ['อนุมัติ', 'กำลังดำเนินการ'], true)
+    && $cycleAmt >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD;
+  if ($countsAsSponsored) {
+    $sponsored_children[] = $row;
+  } else {
+    $waiting_children[] = $row;
+  }
+}
+
+$child_grid_sections = [
+  ['children' => $waiting_children, 'bar' => 'เด็กที่ยังไม่ได้อุปการะ', 'sponsored' => false],
+  ['children' => $sponsored_children, 'bar' => 'เด็กที่มีได้รับการอุปการะ', 'sponsored' => true],
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -124,7 +212,7 @@ if ($result && $result->num_rows > 0) {
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <!-- link css -->
-  <link rel="stylesheet" href="css/children.css?v=2">
+  <link rel="stylesheet" href="css/children.css?v=17">
 
 </head>
  
@@ -137,7 +225,7 @@ if ($result && $result->num_rows > 0) {
 
 <?php if ($role === 'foundation'): ?>
 <div class="page-header">
-  <h1>บริจาคให้เด็กรายบุคคล</h1>
+  <h1>บริจาครายบุคคล</h1>
   <p>ร่วมสนับสนุนเด็กที่ต้องการความช่วยเหลือ เลือกบริจาคโดยตรงให้กับเด็กแต่ละคนได้ที่นี่</p>
 </div>
 <?php endif; ?>
@@ -221,34 +309,61 @@ if ($result && $result->num_rows > 0) {
 </div>
 <?php endif; ?>
 
-<?php if ($role !== 'foundation'): ?>
-<div class="section-title danger donation-band">บริจาคให้เด็กรายบุคคล</div>
-<?php endif; ?>
-
+<?php foreach ($child_grid_sections as $gridSection): ?>
+  <?php if ($gridSection['children'] === []) { continue; } ?>
+  <?php if (!empty($gridSection['bar'])): ?>
+  <div class="child-section-wrap">
+    <div class="child-section-bar<?php echo !empty($gridSection['sponsored']) ? ' child-section-bar--sponsored' : ' child-section-bar--waiting'; ?>"><?php echo htmlspecialchars($gridSection['bar']); ?></div>
+  <?php endif; ?>
 <div class="container py-4">
   <div class="row donation-grid row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-6 g-4">
-    <?php foreach ($unadopted as $child): ?>
+    <?php foreach ($gridSection['children'] as $child): ?>
     <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
       <?php
         // --- กำหนดสถานะโปรไฟล์เด็ก ---
-        $rawStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
-        if ($rawStatus === 'กำลังดำเนินการ') $rawStatus = 'รอดำเนินการ';
-        $statusClass = 'status-pending';
-        $statusText = $rawStatus;
-        if ($rawStatus === 'อนุมัติ') {
-          $statusClass = 'status-approved';
-          $statusText = 'อนุมัติแล้ว';
-        } elseif ($rawStatus === 'ไม่อนุมัติ') {
-          $statusClass = 'status-rejected';
-          $statusText = 'ไม่อนุมัติ';
+        $rawAp = $child['approve_profile'] ?? 'รอดำเนินการ';
+        if (!empty($child['pending_edit_json']) && $rawAp === 'กำลังดำเนินการ') {
+          $statusClass = 'status-pending';
+          $statusText = 'รอตรวจสอบการแก้ไข';
+          $rawStatus = 'รอดำเนินการ';
+        } else {
+          $rawStatus = $rawAp;
+          if ($rawStatus === 'กำลังดำเนินการ') {
+            $rawStatus = 'รอดำเนินการ';
+          }
+          $statusClass = 'status-pending';
+          $statusText = $rawStatus;
+          if ($rawStatus === 'อนุมัติ') {
+            $statusClass = 'status-approved';
+            $statusText = 'อนุมัติแล้ว';
+          } elseif ($rawStatus === 'ไม่อนุมัติ') {
+            $statusClass = 'status-rejected';
+            $statusText = 'ไม่อนุมัติ';
+          }
         }
+        $cidCard = (int)$child['child_id'];
+        $totalDonCard = ($role === 'foundation') ? (float)($childDonationTotals[$cidCard] ?? 0) : 0.0;
+        $sponsoredLocked = ($role === 'foundation' && !empty($gridSection['sponsored']));
+        $blockBulkCheckbox = ($role === 'foundation')
+          && (($child['approve_profile'] ?? '') !== 'ไม่อนุมัติ')
+          && (
+            (($child['approve_profile'] ?? '') === 'อนุมัติ')
+            || ($totalDonCard > 0)
+            || $sponsoredLocked
+          );
       ?>
-      <div class="child-card-wrap">
-        <div class="child-card"
+      <div class="child-card-wrap<?php echo $blockBulkCheckbox ? ' child-card-wrap--bulk-protected' : ''; ?><?php echo $sponsoredLocked ? ' child-card-wrap--sponsored-lock' : ''; ?>">
+        <div class="child-card<?php echo !empty($gridSection['sponsored']) ? ' child-card--sponsored' : ''; ?>"
              data-view-url="children_donate.php?id=<?php echo (int)$child['child_id']; ?>"
-             data-edit-url="foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>">
+             data-edit-url="foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>"
+             data-sponsored-locked="<?php echo $sponsoredLocked ? '1' : '0'; ?>"
+             data-cycle-total="<?php echo htmlspecialchars((string)(float)($cycleTotals[(int)$child['child_id']] ?? 0)); ?>">
           <label class="delete-corner">
-            <input type="checkbox" class="delete-check" name="child_ids[]" value="<?php echo (int)$child['child_id']; ?>" form="bulkDeleteForm" aria-label="เลือกลบโปรไฟล์นี้">
+            <input type="checkbox" class="delete-check" name="child_ids[]" value="<?php echo (int)$child['child_id']; ?>" form="bulkDeleteForm" aria-label="เลือกลบหรือซ่อนโปรไฟล์นี้"<?php
+              if ($blockBulkCheckbox) {
+                echo ' disabled title="โปรไฟล์ที่อนุมัติแล้ว มียอดบริจาคสะสม หรืออุปการะครบยอดในเดือนนี้ ไม่สามารถลบถาวรหรือซ่อนได้"';
+              }
+            ?>>
           </label>
           <div class="card-img danger-bg">
             <img src="uploads/Children/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="รูปเด็ก">
@@ -262,7 +377,7 @@ if ($result && $result->num_rows > 0) {
                 <div class="child-status-pill <?php echo $statusClass; ?>">
                   <?php echo $statusText; ?>
                 </div>
-                <?php if ($role === 'foundation'): ?>
+                <?php if ($role === 'foundation' && !$sponsoredLocked): ?>
                   <div class="inline-delete-actions">
                     <button type="button" class="confirm-inline">ยืนยันลบ</button>
                     <button type="button" class="cancel-inline">ยกเลิก</button>
@@ -274,9 +389,29 @@ if ($result && $result->num_rows > 0) {
               <?php endif; ?>
               <?php if ($role === 'foundation'): ?>
                 <div class="edit-pill-wrap">
-                  <button type="button" class="btn-edit-pill" onclick="event.stopPropagation(); window.location.href='foundation_edit_child.php?id=<?php echo (int)$child['child_id']; ?>'">
+                  <?php
+                    $apForEdit = $child['approve_profile'] ?? '';
+                    $editWarn = ($apForEdit === 'อนุมัติ' || $apForEdit === 'กำลังดำเนินการ');
+                    $eid = (int)$child['child_id'];
+                  ?>
+                  <?php if ($sponsoredLocked): ?>
+                  <button type="button" class="btn-edit-pill" disabled title="เด็กที่ได้รับการอุปการะครบยอดในเดือนนี้ ไม่สามารถแก้ไขโปรไฟล์ได้">แก้ไขโปรไฟล์</button>
+                  <?php else: ?>
+                  <button type="button" class="btn-edit-pill" <?php
+                    if ($editWarn) {
+                      echo 'onclick="event.stopPropagation(); if(confirm(\'การแก้ไขหลังอนุมัติจะส่งให้แอดมินตรวจสอบอีกครั้งก่อนเผยแพร่ข้อมูลใหม่ ต้องการดำเนินการต่อหรือไม่\')) { window.location.href=\'foundation_edit_child.php?id=' . $eid . '\'; }"';
+                    } else {
+                      echo 'onclick="event.stopPropagation(); window.location.href=\'foundation_edit_child.php?id=' . $eid . '\';"';
+                    }
+                  ?>>
                     แก้ไขโปรไฟล์
                   </button>
+                  <?php endif; ?>
+                  <?php if ($sponsoredLocked): ?>
+                  <div class="foundation-outcome-pill-wrap">
+                    <a href="foundation_child_outcome.php?id=<?php echo (int)$child['child_id']; ?>" class="btn-outcome-pill" onclick="event.stopPropagation();">อัปเดตผลลัพธ์</a>
+                  </div>
+                  <?php endif; ?>
                 </div>
               <?php endif; ?>
           </div>
@@ -284,9 +419,12 @@ if ($result && $result->num_rows > 0) {
       </div>
     </div>
     <?php endforeach; ?>
-    
   </div>
 </div>
+  <?php if (!empty($gridSection['bar'])): ?>
+  </div><!-- .child-section-wrap -->
+  <?php endif; ?>
+<?php endforeach; ?>
 
 </div>
 
@@ -316,6 +454,9 @@ if ($result && $result->num_rows > 0) {
 
         if (document.body.classList.contains('mode-edit')) {
           e.preventDefault();
+          if (this.dataset.sponsoredLocked === '1') {
+            return;
+          }
           if (editUrl) window.location.href = editUrl;
           return;
         }
@@ -338,7 +479,7 @@ if ($result && $result->num_rows > 0) {
     let selectedReasonOption = null;
 
     function openReasonSheet() {
-      const selectedCount = Array.from(checks).filter(c => c.checked).length;
+      const selectedCount = Array.from(checks).filter(c => c.checked && !c.disabled).length;
       if (!selectedCount) {
         alert('กรุณาเลือกโปรไฟล์ที่ต้องการดำเนินการก่อน');
         return;
@@ -349,7 +490,7 @@ if ($result && $result->num_rows > 0) {
       selectedReasonOption = null;
       confirmReasonBtn.disabled = true;
       confirmReasonBtn.textContent = 'ยืนยัน';
-      confirmReasonBtn.style.background = '#CE573F';
+      confirmReasonBtn.style.background = '#CC583F';
       reasonSheetOverlay.classList.add('open');
     }
 
@@ -377,7 +518,7 @@ if ($result && $result->num_rows > 0) {
             confirmReasonBtn.style.background = '#6b7280';
           } else {
             confirmReasonBtn.textContent = 'ยืนยันลบ';
-            confirmReasonBtn.style.background = '#CE573F';
+            confirmReasonBtn.style.background = '#CC583F';
           }
         });
       });
@@ -416,7 +557,7 @@ if ($result && $result->num_rows > 0) {
     }
 
     function refreshDeleteState() {
-      const count = Array.from(checks).filter(c => c.checked).length;
+      const count = Array.from(checks).filter(c => c.checked && !c.disabled).length;
       if (document.body.classList.contains('mode-delete')) {
         toggleDeleteBtn.textContent = `ลบโปรไฟล์ (${count})`;
       } else {

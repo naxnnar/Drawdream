@@ -94,7 +94,7 @@ body.admin-sidebar-page.donation-page {
     box-sizing: border-box;
 }
 
-.section-title.danger { background: #CE573F; }
+.section-title.danger { background: #CC583F; }
 
 .donation-band {
     width: 100vw;
@@ -136,7 +136,7 @@ body.admin-sidebar-page.donation-page {
 }
 
 .btn-delete-selected {
-    background: #CE573F;
+    background: #CC583F;
     color: #fff;
     border: 0;
     border-radius: 10px;
@@ -223,12 +223,33 @@ body.mode-edit .card-actions.edit-mode { display: flex; }
 .delete-corner input[type="checkbox"] {
     width: 22px;
     height: 22px;
-    accent-color: #CE573F;
+    accent-color: #CC583F;
     border-radius: 6px;
     cursor: pointer;
 }
 
 body.mode-delete .delete-corner { display: inline-flex !important; }
+
+.delete-check:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+body.mode-edit .child-card[data-sponsored-locked="1"] {
+    cursor: not-allowed;
+}
+
+body.mode-edit .child-card-wrap--sponsored-lock .child-card[data-sponsored-locked="1"] {
+    outline: 2px dashed rgba(46, 127, 90, 0.35);
+    outline-offset: 4px;
+    border-radius: 12px;
+}
+
+body.mode-delete .child-card-wrap--bulk-protected {
+    outline: 2px dashed rgba(100, 120, 80, 0.35);
+    outline-offset: 4px;
+    border-radius: 12px;
+}
 body.mode-delete .child-status-pill { display: none; }
 body.mode-edit   .child-status-pill { display: none; }
 
@@ -237,7 +258,26 @@ body.mode-edit   .child-status-pill { display: none; }
 body.mode-edit .edit-pill-wrap { display: block; }
 
 .btn-edit-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: linear-gradient(135deg, #F1CF54, #e8b923);
+    color: #3b2f09;
+    border: 0;
+    border-radius: 999px;
+    padding: 8px 18px;
+    min-height: 42px;
+    min-width: 0;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(15,23,42,0.10);
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+}
 
 /* =============================
      Responsive สำหรับ Mobile
@@ -271,20 +311,13 @@ body.mode-edit .edit-pill-wrap { display: block; }
         font-size: 0.95rem;
     }
 }
-    color: #3b2f09;
-    border: 0;
-    border-radius: 999px;
-    padding: 12px 22px;
-    min-height: 52px;
-    min-width: 0;
-    font-size: 1.1rem;
-    font-weight: 800;
-    line-height: 1.2;
-    letter-spacing: 0.3px;
-    cursor: pointer;
-    box-shadow: 0 6px 14px rgba(15,23,42,0.10);
-    width: 100%;
-    text-align: center;
+
+.btn-edit-pill:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    box-shadow: none;
+    background: linear-gradient(135deg, #e8e0c8, #dcd3b8);
+    color: #6b6558;
 }
 
 /* ── inline delete actions ─── */
@@ -303,7 +336,7 @@ body.mode-delete .inline-delete-actions {
 }
 
 .inline-delete-actions .confirm-inline {
-    background: #CE573F;
+    background: #CC583F;
     color: #fff;
     border: 0;
     border-radius: 999px;
@@ -364,7 +397,7 @@ body.mode-delete .inline-delete-actions {
 .delete-check-wrap input[type="checkbox"] {
     width: 18px;
     height: 18px;
-    accent-color: #CE573F;
+    accent-color: #CC583F;
 }
 
 .reject-reason {
@@ -396,7 +429,7 @@ body.mode-delete .inline-delete-actions {
     display: block;
 }
 
-.danger-bg { background-color: #CE573F; }
+.danger-bg { background-color: #CC583F; }
 
 .donation-grid .card-info h3 {
     font-size: 1.6rem;
@@ -458,7 +491,7 @@ body.mode-delete .inline-delete-actions {
 
 .child-status-pill.status-approved { background: linear-gradient(135deg, #799677, #597D57); color: #fff; }
 .child-status-pill.status-pending  { background: linear-gradient(135deg, #f7cc47, #e8b923); color: #3b2f09; }
-.child-status-pill.status-rejected { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+.child-status-pill.status-rejected { background: #CC583F; color: #fff; }
 
 /* ── Reason Bottom Sheet ─── */
 .reason-sheet-overlay {
@@ -523,7 +556,7 @@ body.mode-delete .inline-delete-actions {
 }
 
 .reason-option:hover,
-.reason-option.selected                        { border-color: #CE573F; background: #fff5f3; }
+.reason-option.selected                        { border-color: #CC583F; background: #fff5f3; }
 .reason-option-hide:hover,
 .reason-option-hide.selected                   { border-color: #6b7280 !important; background: #f3f4f6 !important; }
 
@@ -543,7 +576,7 @@ body.mode-delete .inline-delete-actions {
 
 .reason-confirm-btn {
     flex: 1;
-    background: #CE573F;
+    background: #CC583F;
     color: #fff;
     border: 0;
     border-radius: 999px;
@@ -707,7 +740,9 @@ body.mode-delete .inline-delete-actions {
 }
 
 .admin-actions .btn-primary { background: #597D57; color: #fff; }
-.admin-actions .btn-danger  { background: #CE573F; color: #fff; }
+.admin-actions .btn-danger  { background: #CC583F; color: #fff; border-color: #CC583F; }
+.admin-actions .btn-danger:hover,
+.admin-actions .btn-danger:focus { background: #b04a33; border-color: #b04a33; color: #fff; }
 .admin-actions .btn:hover   { transform: translateY(-1px); box-shadow: 0 14px 24px rgba(15,23,42,0.14); }
 
 /* extra info panel */
@@ -766,7 +801,7 @@ main.child-profile-main {
 
 .stats-row .stat-box:nth-child(3) .stat-icon,
 .stats-row .stat-box:nth-child(3) .stat-num,
-.stats-row .stat-box:nth-child(3) .stat-label { color: #CE573F; }
+.stats-row .stat-box:nth-child(3) .stat-label { color: #CC583F; }
 
 .stat-icon {
     display: inline-flex;
@@ -848,7 +883,7 @@ main.child-profile-main {
     transition: background-color 0.2s, color 0.2s;
 }
 
-.btn-money-choice.active { background-color: #3f4f9a; color: #fff; }
+.btn-money-choice.active { background-color: #3C5099; color: #fff; }
 
 .amount-box {
     background-color: #fff;
@@ -869,13 +904,23 @@ main.child-profile-main {
     color: #222;
     width: 80%;
     outline: none;
-    pointer-events: none;
+}
+
+.amount-box input::-webkit-outer-spin-button,
+.amount-box input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.amount-box input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
 }
 
 .currency-label { font-size: 1.2rem; font-weight: 600; color: #aaa; }
 
 .btn-submit-donation {
-    background-color: #4A5CB5;
+    background-color: #3C5099;
     color: #fff;
     border: none;
     border-radius: 20px;
@@ -884,8 +929,13 @@ main.child-profile-main {
     font-weight: 800;
     width: 100%;
     margin-top: 18px;
-    box-shadow: 0 7px 0 #2d3a8c;
+    box-shadow: none;
     cursor: pointer;
+}
+
+.btn-submit-donation:hover {
+    background-color: #344788;
+    color: #fff;
 }
 
 /* Payment method selector (แสดงใน children_donate.php) */
@@ -995,8 +1045,8 @@ main.child-profile-main {
 }
 
 .left-info-card.has-error {
-    border-color: #CE573F;
-    box-shadow: 0 0 0 3px rgba(206,87,63,0.15);
+    border-color: #CC583F;
+    box-shadow: 0 0 0 3px rgba(204,88,63,0.15);
 }
 
 .left-info-card h3 { margin: 0 0 9px; font-size: 1.35rem; color: #17406a; font-weight: 800; }
@@ -1015,7 +1065,7 @@ main.child-profile-main {
 .consent-check input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2c7be5; cursor: pointer; }
 .consent-link { color: #3C5099; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
 .consent-link:hover { color: #304083; }
-.consent-note { margin-top: 8px; font-size: 1rem; color: #CE573F; line-height: 1.45; font-weight: 700; }
+.consent-note { margin-top: 8px; font-size: 1rem; color: #CC583F; line-height: 1.45; font-weight: 700; }
 
 /* toast alert */
 .top-alert {
@@ -1023,11 +1073,11 @@ main.child-profile-main {
     top: 16px;
     left: 50%;
     transform: translate(-50%, -16px);
-    background: #CE573F;
+    background: #CC583F;
     color: #fff;
     padding: 12px 18px;
     border-radius: 12px;
-    box-shadow: 0 10px 20px rgba(206,87,63,0.34);
+    box-shadow: 0 10px 20px rgba(204,88,63,0.34);
     font-size: 1rem;
     font-weight: 700;
     z-index: 9999;
@@ -1190,9 +1240,9 @@ select.dream-sel   { width: 100%; }
 /* error highlighting */
 .has-error input,
 .has-error select,
-.has-error textarea { border-color: #CE573F !important; box-shadow: 0 0 0 3px rgba(206,87,63,.15) !important; }
-.has-error label    { color: #CE573F; }
-.has-error .cat-tags { outline: 2.5px solid #CE573F; border-radius: 10px; }
+.has-error textarea { border-color: #CC583F !important; box-shadow: 0 0 0 3px rgba(204,88,63,.15) !important; }
+.has-error label    { color: #CC583F; }
+.has-error .cat-tags { outline: 2.5px solid #CC583F; border-radius: 10px; }
 
 /* size picker */
 .size-pick-wrap {
@@ -1203,8 +1253,8 @@ select.dream-sel   { width: 100%; }
     padding: 10px 13px;
 }
 
-.size-pick-wrap.has-error            { border-color: #CE573F; }
-.size-pick-wrap.has-error .size-pick-label { color: #CE573F; }
+.size-pick-wrap.has-error            { border-color: #CC583F; }
+.size-pick-wrap.has-error .size-pick-label { color: #CC583F; }
 .size-pick-label { display: block; font-weight: 700; font-size: .95rem; color: #1f3654; margin-bottom: 7px; }
 .size-btn-group  { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -1272,7 +1322,7 @@ select.dream-sel   { width: 100%; }
 }
 
 .btn-save { background: #3C5099; color: #fff; }
-.btn-back { background: #CE573F; color: #fff; }
+.btn-back { background: #CC583F; color: #fff; }
 
 .wrap .alert     { border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-weight: 700; }
 .wrap .alert.err { background: #fde8e8; color: #b32525; }
@@ -1382,4 +1432,458 @@ body.admin-children-page button:hover { background: #d4b13a; }
 
     body.admin-children-page .grid-inputs { grid-template-columns: 1fr; }
     body.admin-children-page .full-width { grid-column: span 1; }
+}
+
+/* โมดัลนโยบาย (foundation_add_children) */
+.consent-link--btn {
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--theme-primary, #3C5099);
+    text-decoration: underline;
+    background: #eef1f4;
+    border: 1px solid #d8dde3;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    vertical-align: middle;
+    margin-left: 4px;
+    box-sizing: border-box;
+    text-align: left;
+    max-width: 100%;
+}
+.consent-link--btn:hover {
+    color: var(--theme-primary-dark, #2e407f);
+    background: #e4e8ed;
+}
+
+.policy-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+.policy-modal.policy-modal--open {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+}
+.policy-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 24, 40, 0.55);
+}
+.policy-modal__panel {
+    position: relative;
+    width: min(720px, 100%);
+    max-height: min(88vh, 900px);
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.policy-modal__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid #e8e4dc;
+    background: #faf8f4;
+}
+.policy-modal__title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #24314a;
+}
+.policy-modal__close {
+    border: none;
+    background: transparent;
+    font-size: 1.75rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #5c6570;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+.policy-modal__close:hover {
+    background: #eee;
+    color: #222;
+}
+.policy-modal__body {
+    overflow: auto;
+    flex: 1;
+    padding: 0;
+}
+.policy-modal__paper {
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+    max-width: none;
+}
+
+/* หัวข้อแบ่งกลุ่มเด็ก (children_.php) — ขนาดฟอนต์เท่าแถบบริจาคให้เด็กรายบุคคล */
+.child-section-wrap {
+    width: 100%;
+    margin-top: 8px;
+    margin-bottom: 32px;
+    box-sizing: border-box;
+}
+.child-section-bar {
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(50% - 50vw);
+    margin-right: calc(50% - 50vw);
+    color: #fff;
+    text-align: center;
+    font-weight: 800;
+    font-size: 1.4rem;
+    padding: 18px 16px;
+    border-radius: 0;
+    margin-top: 0;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+.child-section-bar--waiting {
+    background: #CC583F;
+}
+.child-section-bar--sponsored {
+    background: #4a5d3a;
+}
+.child-section-wrap .donation-grid {
+    border-radius: 0 0 10px 10px;
+    background: #fff;
+    padding-top: 8px;
+}
+.child-card--sponsored .card-img {
+    background: #5a6b48 !important;
+}
+
+/* ── มูลนิธิ: อัปเดตผลลัพธ์ (เด็กอุปการะแล้ว) ─────────────────── */
+.foundation-outcome-cta {
+    margin-top: 18px;
+    width: 100%;
+    text-align: center;
+}
+.btn-foundation-outcome {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 420px;
+    min-height: 42px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 800;
+    text-decoration: none;
+    color: #fff !important;
+    background: linear-gradient(135deg, #799677, #597D57);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+    border: 0;
+    box-sizing: border-box;
+}
+.btn-foundation-outcome:hover {
+    filter: brightness(1.05);
+    color: #fff !important;
+}
+.foundation-outcome-cta__hint {
+    margin: 10px 0 0;
+    font-size: 0.92rem;
+    color: #4b5563;
+    line-height: 1.45;
+}
+
+.child-outcome-public {
+    margin-top: 22px;
+    width: 100%;
+    max-width: 520px;
+    text-align: left;
+    background: #fff;
+    border-radius: 18px;
+    padding: 16px 18px;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(60, 80, 153, 0.12);
+}
+.child-outcome-public__label {
+    font-weight: 800;
+    font-size: 1.05rem;
+    color: #3C5099;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.child-outcome-public__text {
+    font-size: 1.05rem;
+    color: #27364b;
+    line-height: 1.65;
+    font-weight: 600;
+}
+.child-outcome-public__meta {
+    margin: 12px 0 0;
+    font-size: 0.88rem;
+    color: #6b7280;
+}
+
+.foundation-outcome-pill-wrap {
+    display: block;
+    margin-top: 8px;
+}
+.btn-outcome-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 800;
+    text-decoration: none;
+    color: #fff !important;
+    background: linear-gradient(135deg, #799677, #597D57);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+    box-sizing: border-box;
+}
+.btn-outcome-pill:hover {
+    filter: brightness(1.05);
+    color: #fff !important;
+}
+body.mode-delete .foundation-outcome-pill-wrap,
+body.mode-edit .foundation-outcome-pill-wrap { display: none; }
+
+/* หน้า foundation_child_outcome.php — พื้นหลังครีม + โทนแบรนด์ #3C5099 หัวการ์ดฝันดาว/สายรุ้ง/เด็ก */
+body.outcome-form-page {
+    background: #F7ECDE;
+    min-height: 100vh;
+}
+.outcome-form-shell {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 28px 20px 56px;
+    box-sizing: border-box;
+}
+.outcome-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    color: #3C5099;
+    text-decoration: none;
+    margin-bottom: 18px;
+    font-size: 0.98rem;
+}
+.outcome-back-link:hover {
+    text-decoration: underline;
+    color: #2e407f;
+}
+.outcome-hero-card {
+    background: #fff;
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 20px 48px rgba(60, 80, 153, 0.12), 0 6px 18px rgba(15, 23, 42, 0.06);
+}
+.outcome-hero-card__sky {
+    position: relative;
+    min-height: 168px;
+    background: linear-gradient(165deg, #4a5cb8 0%, #3C5099 38%, #2e407f 100%);
+    overflow: hidden;
+}
+.outcome-hero-card__deco--ring {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    top: -36px;
+    right: -28px;
+    pointer-events: none;
+}
+.outcome-dream-stars {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.outcome-star {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.85), 0 0 20px rgba(255, 230, 150, 0.35);
+    animation: outcome-star-twinkle 2.8s ease-in-out infinite;
+}
+.outcome-star--1 { width: 5px; height: 5px; top: 18%; left: 14%; animation-delay: 0s; }
+.outcome-star--2 { width: 4px; height: 4px; top: 28%; left: 78%; animation-delay: 0.4s; }
+.outcome-star--3 { width: 6px; height: 6px; top: 12%; left: 42%; animation-delay: 0.8s; }
+.outcome-star--4 { width: 3px; height: 3px; top: 42%; left: 22%; animation-delay: 1.1s; }
+.outcome-star--5 { width: 4px; height: 4px; top: 36%; left: 88%; animation-delay: 0.2s; }
+.outcome-star--6 { width: 5px; height: 5px; top: 52%; left: 8%; animation-delay: 1.5s; }
+.outcome-star--7 { width: 3px; height: 3px; top: 22%; left: 58%; animation-delay: 0.6s; }
+.outcome-star--8 { width: 4px; height: 4px; top: 48%; left: 68%; animation-delay: 1.9s; }
+@keyframes outcome-star-twinkle {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.15); }
+}
+.outcome-dream-rainbow {
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    transform: translateX(-50%);
+    width: 118%;
+    max-width: 520px;
+    height: 72px;
+    pointer-events: none;
+    opacity: 0.92;
+}
+.outcome-rainbow-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.12));
+}
+.outcome-dream-kids {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    width: 132px;
+    height: 52px;
+    pointer-events: none;
+    z-index: 2;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
+    animation: outcome-kids-bob 3.5s ease-in-out infinite;
+}
+.outcome-kids-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+@keyframes outcome-kids-bob {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-3px); }
+}
+.outcome-hero-card__cloud {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 50%;
+    bottom: -10px;
+    z-index: 1;
+}
+.outcome-hero-card__cloud--1 {
+    width: 72px;
+    height: 28px;
+    left: 10%;
+    box-shadow: 40px 6px 0 -4px rgba(255,255,255,0.78);
+}
+.outcome-hero-card__cloud--2 {
+    width: 56px;
+    height: 22px;
+    right: 16%;
+    opacity: 0.95;
+}
+.outcome-hero-card__cloud--3 {
+    width: 48px;
+    height: 20px;
+    left: 48%;
+    transform: translateX(-50%);
+    bottom: -6px;
+    opacity: 0.88;
+}
+.outcome-hero-card__body {
+    padding: 26px 24px 30px;
+    text-align: center;
+}
+.outcome-hero-card__title {
+    margin: 0 0 12px;
+    font-size: 1.85rem;
+    font-weight: 900;
+    color: #111827;
+    letter-spacing: -0.02em;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+}
+.outcome-hero-card__lead {
+    margin: 0 0 18px;
+    font-size: 1.02rem;
+    color: #6b7280;
+    line-height: 1.55;
+    font-weight: 600;
+}
+.outcome-hero-card__lead strong {
+    color: #374151;
+}
+.outcome-hero-card__error {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    background: #fef2f2;
+    color: #b91c1c;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+.outcome-hero-form {
+    text-align: left;
+}
+.outcome-hero-form__label {
+    display: block;
+    font-weight: 800;
+    color: #374151;
+    margin-bottom: 8px;
+    font-size: 0.98rem;
+}
+.outcome-hero-form__textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border-radius: 14px;
+    border: 2px solid #e5e7eb;
+    padding: 14px 16px;
+    font-size: 1rem;
+    line-height: 1.55;
+    font-family: 'Sarabun', sans-serif;
+    resize: vertical;
+    min-height: 160px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.outcome-hero-form__textarea:focus {
+    outline: none;
+    border-color: #3C5099;
+    box-shadow: 0 0 0 4px rgba(60, 80, 153, 0.2);
+}
+.outcome-hero-form__actions {
+    margin-top: 18px;
+    text-align: center;
+}
+.outcome-hero-card__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 28px;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: 1.05rem;
+    text-decoration: none;
+    background: #e5e7eb;
+    color: #374151 !important;
+    border: 0;
+    cursor: pointer;
+}
+.outcome-hero-card__btn--primary {
+    background: linear-gradient(135deg, #3C5099, #2e407f);
+    color: #fff !important;
+    box-shadow: 0 8px 22px rgba(60, 80, 153, 0.35);
+}
+.outcome-hero-card__btn--primary:hover,
+.outcome-hero-card__btn--primary:focus {
+    background: linear-gradient(135deg, #3C5099, #2e407f) !important;
+    filter: none;
+    color: #fff !important;
+    box-shadow: 0 8px 22px rgba(60, 80, 153, 0.35);
 }

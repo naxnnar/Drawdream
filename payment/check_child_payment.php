@@ -4,6 +4,9 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
+require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
+require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
+require_once dirname(__DIR__) . '/includes/qr_payment_abandon.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -55,96 +58,142 @@ $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMI
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
 
-// กันบันทึกซ้ำเมื่อ refresh หรือเช็คซ้ำ
-$already_processed = false;
-$dup = $conn->prepare("SELECT log_id FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1");
-$dup->bind_param("s", $charge_id);
+$ptRow = null;
+$dup = $conn->prepare('SELECT log_id, donate_id, transaction_status FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1');
+$dup->bind_param('s', $charge_id);
 $dup->execute();
-$already_processed = (bool)$dup->get_result()->fetch_assoc();
+$ptRow = $dup->get_result()->fetch_assoc();
+$already_completed = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'completed');
+$has_pending       = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'pending');
 
-if ($is_success && !$already_processed && $child_id > 0) {
+$donor_uid = (int)$_SESSION['user_id'];
+
+if (!$is_mock && $has_pending && !$already_completed && !$is_success
+    && in_array($status, ['failed', 'expired'], true)) {
+    drawdream_abandon_pending_donation_by_charge($conn, $donor_uid, $charge_id);
+    drawdream_clear_pending_payment_session();
+    $has_pending = false;
+    if (is_array($ptRow)) {
+        $ptRow['transaction_status'] = 'failed';
+    }
+}
+
+$finalized_this_request = false;
+
+if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
     $amount = ($charge['amount'] ?? 0) / 100;
+    if ($amount <= 0) {
+        $amount = (float)($_SESSION['pending_amount'] ?? 0);
+    }
+    $donate_id = (int)($ptRow['donate_id'] ?? 0);
+    if ($donate_id > 0 && drawdream_finalize_child_donation($conn, $child_id, $donate_id, $charge_id, (float)$amount, $donor_uid)) {
+        $finalized_this_request = true;
+        unset(
+            $_SESSION['pending_charge_id'],
+            $_SESSION['pending_amount'],
+            $_SESSION['pending_child_id'],
+            $_SESSION['pending_child_name'],
+            $_SESSION['pending_donate_id'],
+            $_SESSION['qr_image']
+        );
+    } else {
+        $is_success = false;
+        $failure_message = 'ชำระเงินสำเร็จแล้ว แต่ระบบบันทึกรายการไม่สำเร็จ กรุณาติดต่อผู้ดูแลระบบพร้อมอ้างอิง Charge';
+    }
+} elseif ($is_success && !$ptRow && $child_id > 0) {
+    // เส้นทางเก่า: สร้าง charge ก่อนมีแถว pending ในฐานข้อมูล
+    $amount = ($charge['amount'] ?? 0) / 100;
+    if ($amount <= 0) {
+        $amount = (float)($_SESSION['pending_amount'] ?? 0);
+    }
 
-    // ดึง tax_id ของ donor
     $tax_id = '';
-    $stmt = $conn->prepare("SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1");
-    $stmt->bind_param("i", $_SESSION['user_id']);
+    $stmt = $conn->prepare('SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1');
+    $stmt->bind_param('i', $_SESSION['user_id']);
     $stmt->execute();
     $donor_row = $stmt->get_result()->fetch_assoc();
     $tax_id = $donor_row['tax_id'] ?? '';
 
-    // หา category_id สำหรับเด็กรายบุคคล — สร้างถ้ายังไม่มี
-    $stmt = $conn->prepare("SELECT category_id FROM donate_category WHERE child_donate IS NOT NULL LIMIT 1");
-    $stmt->execute();
-    $cat = $stmt->get_result()->fetch_assoc();
+    $category_id = drawdream_get_or_create_child_donate_category_id($conn);
+    $service_fee = 0.0;
+    $donor_id = (int)$_SESSION['user_id'];
 
-    if (!$cat) {
-        // ตรวจสอบว่ามีคอลัมน์ child_donate ในตาราง donate_category หรือยัง
-        $colCheck = $conn->query("SHOW COLUMNS FROM donate_category LIKE 'child_donate'");
-        if ($colCheck->num_rows === 0) {
-            $conn->query("ALTER TABLE donate_category ADD COLUMN child_donate VARCHAR(100) NULL");
-        }
-        $conn->query("INSERT INTO donate_category (child_donate) VALUES ('เด็กรายบุคคล')");
-        $category_id = $conn->insert_id;
-    } else {
-        $category_id = $cat['category_id'];
-    }
-
-    // Transaction: บันทึก donation + payment_transaction + child_donations
     $conn->begin_transaction();
     try {
-        // บันทึกลง donation
-        $stmt = $conn->prepare("
-            INSERT INTO donation (category_id, amount, service_fee, payment_status, transfer_datetime)
-            VALUES (?, ?, 0, 'completed', NOW())
-        ");
-        $stmt->bind_param("id", $category_id, $amount);
+        $stmt = $conn->prepare('
+            INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
+            VALUES (?, ?, ?, ?, ?, \'completed\', NOW())
+        ');
+        $stmt->bind_param('iiidd', $category_id, $child_id, $donor_id, $amount, $service_fee);
         $stmt->execute();
-        $donate_id = $conn->insert_id;
+        $donate_id = (int)$conn->insert_id;
 
-        // บันทึกลง payment_transaction
-        $stmt = $conn->prepare("
+        $stmt = $conn->prepare('
             INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
-            VALUES (?, ?, ?, 'completed')
-        ");
-        $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
+            VALUES (?, ?, ?, \'completed\')
+        ');
+        $stmt->bind_param('iss', $donate_id, $tax_id, $charge_id);
         $stmt->execute();
 
-        // บันทึกลง child_donations (ตารางเดิมที่ payment.php เคยใช้)
-        $conn->query("
-            CREATE TABLE IF NOT EXISTS child_donations (
+        $conn->query(
+            "CREATE TABLE IF NOT EXISTS child_donations (
                 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 child_id INT NOT NULL,
                 donor_user_id INT NULL,
                 amount DECIMAL(10,2) NOT NULL DEFAULT 0,
                 donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 INDEX(child_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-        ");
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
 
-        $stmt = $conn->prepare("
+        $stmt = $conn->prepare('
             INSERT INTO child_donations (child_id, donor_user_id, amount)
             VALUES (?, ?, ?)
-        ");
-        $stmt->bind_param("iid", $child_id, $_SESSION['user_id'], $amount);
+        ');
+        $stmt->bind_param('iid', $child_id, $_SESSION['user_id'], $amount);
         $stmt->execute();
 
+        drawdream_child_sync_sponsorship_status($conn, $child_id);
+
         $conn->commit();
+        $finalized_this_request = true;
+        unset(
+            $_SESSION['pending_charge_id'],
+            $_SESSION['pending_amount'],
+            $_SESSION['pending_child_id'],
+            $_SESSION['pending_child_name'],
+            $_SESSION['pending_donate_id'],
+            $_SESSION['qr_image']
+        );
     } catch (Exception $e) {
         $conn->rollback();
-        // ล้มเหลวในการบันทึก → แสดง error แทน success
         $is_success = false;
-        $failure_message = "เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาติดต่อผู้ดูแลระบบ";
+        $failure_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาติดต่อผู้ดูแลระบบ';
     }
-
-    // ล้าง session
-    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_child_id'], $_SESSION['pending_child_name']);
 }
 
-// ถ้าเคยประมวลผลแล้ว ให้ดึงจำนวนเงินจาก charge
-if ($already_processed) {
+$already_processed_display = $finalized_this_request
+    || $already_completed
+    || ($is_success && is_array($ptRow) && ($ptRow['transaction_status'] ?? '') === 'completed');
+
+if ($already_processed_display && !$finalized_this_request) {
     $is_success = true;
-    $amount     = ($charge['amount'] ?? ($_SESSION['pending_amount'] ?? 0) * 100) / 100;
+    $amount     = ($charge['amount'] ?? 0) / 100;
+    if ($amount <= 0) {
+        $amount = (float)($_SESSION['pending_amount'] ?? 0);
+    }
+    if ($amount <= 0 && is_array($ptRow)) {
+        $did = (int)($ptRow['donate_id'] ?? 0);
+        if ($did > 0) {
+            $qa = $conn->prepare('SELECT amount FROM donation WHERE donate_id = ? LIMIT 1');
+            $qa->bind_param('i', $did);
+            $qa->execute();
+            $ar = $qa->get_result()->fetch_assoc();
+            if ($ar) {
+                $amount = (float)($ar['amount'] ?? 0);
+            }
+        }
+    }
 }
 if ($is_success && $amount <= 0) {
     $amount = ($charge['amount'] ?? ($_SESSION['pending_amount'] ?? 0) * 100) / 100;
@@ -153,7 +202,7 @@ if ($is_success && $amount <= 0) {
 // ดึงชื่อเด็กเพื่อแสดงผล
 $child_name = $_SESSION['pending_child_name'] ?? '';
 if (empty($child_name) && $child_id > 0) {
-    $stmtN = $conn->prepare("SELECT child_name FROM Children WHERE child_id = ? LIMIT 1");
+    $stmtN = $conn->prepare("SELECT child_name FROM foundation_children WHERE child_id = ? LIMIT 1");
     $stmtN->bind_param("i", $child_id);
     $stmtN->execute();
     $childRow = $stmtN->get_result()->fetch_assoc();
@@ -192,8 +241,8 @@ if (empty($child_name) && $child_id > 0) {
 
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
-            <h2>รอการชำระเงิน</h2>
-            <p>ยังไม่พบการชำระเงิน กรุณาสแกน QR Code แล้วลองใหม่</p>
+            <h2>ยังไม่พบการโอนจากธนาคาร</h2>
+            <p>ถ้าคุณสแกนจ่ายแล้ว อาจต้องรอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอนจริง</strong>กด «ยกเลิกรายการนี้» — ระบบจะไม่เก็บสถานะค้างรอ และคุณสามารถกดบริจาคใหม่ได้</p>
             <?php if ($is_test_mode): ?>
                 <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ</p>
             <?php endif; ?>
@@ -203,6 +252,13 @@ if (empty($child_name) && $child_id > 0) {
             <p class="charge-ref">Charge: <?php echo htmlspecialchars($charge_id); ?> | Status: <?php echo htmlspecialchars($status); ?> | Paid: <?php echo $paid ? 'true' : 'false'; ?></p>
             <a href="check_child_payment.php?charge_id=<?php echo urlencode($charge_id); ?>&child_id=<?php echo $child_id; ?>"
                class="btn-pay">เช็คอีกครั้ง</a>
+            <form method="post" action="abandon_qr.php" style="margin:16px 0 0 0;">
+                <input type="hidden" name="charge_id" value="<?php echo htmlspecialchars($charge_id, ENT_QUOTES, 'UTF-8'); ?>">
+                <input type="hidden" name="return_url" value="../children_.php">
+                <button type="submit" class="btn-back" style="width:100%;max-width:400px;border:1px solid #b91c1c;color:#b91c1c;background:#fff;cursor:pointer;padding:12px;border-radius:8px;font-weight:600;">
+                    ยกเลิกรายการนี้ (ยังไม่ได้โอน)
+                </button>
+            </form>
             <a href="../children_.php" class="btn-back">กลับหน้ารายชื่อเด็ก</a>
 
         <?php else: ?>
@@ -221,13 +277,6 @@ if (empty($child_name) && $child_id > 0) {
 
     </div>
 </div>
-
-<?php if (!$is_success && $status === 'pending'): ?>
-<!-- รีเฟรชอัตโนมัติทุก 5 วินาทีเมื่อยังรอการชำระเงิน -->
-<script>
-setTimeout(function () { window.location.reload(); }, 5000);
-</script>
-<?php endif; ?>
 
 </body>
 </html>

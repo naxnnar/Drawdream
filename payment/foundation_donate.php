@@ -1,8 +1,9 @@
-﻿<?php
+<?php
 // ไฟล์นี้: payment\foundation_donate.php
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
+require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 
 if (!isset($_SESSION['user_id'])) { header("Location: ../login.php"); exit(); }
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'])) { header("Location: ../foundation.php"); exit(); }
@@ -33,6 +34,15 @@ $items_stmt->bind_param("i", $fid);
 $items_stmt->execute();
 $items = $items_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
+$fdCoverNeedImage = '';
+foreach ($items as $itCov) {
+    $nfCov = trim((string)($itCov['need_foundation_image'] ?? ''));
+    if ($nfCov !== '') {
+        $fdCoverNeedImage = $nfCov;
+        break;
+    }
+}
+
 $error = ""; $qr_image = ""; $charge_id = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
@@ -40,6 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     if ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
+        drawdream_clear_pending_payment_session();
         $amount_satang = $amount * 100;
         $source_response = omise_request('POST', '/sources', ['type' => 'promptpay', 'amount' => $amount_satang, 'currency' => 'THB']);
         if (isset($source_response['error'])) {
@@ -60,6 +71,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 $_SESSION['pending_amount']        = $amount;
                 $_SESSION['pending_foundation']    = $foundation['foundation_name'];
                 $_SESSION['pending_foundation_id'] = $fid;
+                $_SESSION['qr_image']              = $qr_image;
+                header('Location: scan_qr.php?type=foundation&charge_id=' . rawurlencode($charge_id) . '&fid=' . $fid);
+                exit();
             } else { $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด"; }
         } else { $error = "ไม่สามารถสร้าง PromptPay Source ได้: " . ($source_response['message'] ?? 'unknown error'); }
     }
@@ -85,7 +99,31 @@ function omise_request($method, $path, $data = []) {
 function _omise_local_mock(string $path, array $data): array {
     if (strpos($path, '/sources') !== false) return ['object' => 'source', 'id' => 'src_mock_' . bin2hex(random_bytes(6)), 'type' => 'promptpay'];
     if (strpos($path, '/charges') !== false) {
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#fff"/><rect x="10" y="10" width="56" height="56" fill="#000"/><rect x="17" y="17" width="42" height="42" fill="#fff"/><rect x="24" y="24" width="28" height="28" fill="#000"/><rect x="134" y="10" width="56" height="56" fill="#000"/><rect x="141" y="17" width="42" height="42" fill="#fff"/><rect x="148" y="24" width="28" height="28" fill="#000"/><rect x="10" y="134" width="56" height="56" fill="#000"/><rect x="17" y="141" width="42" height="42" fill="#fff"/><rect x="24" y="148" width="28" height="28" fill="#000"/><text x="100" y="108" font-size="11" text-anchor="middle" font-family="Arial" fill="#555">TEST MODE</text><text x="100" y="122" font-size="9" text-anchor="middle" font-family="Arial" fill="#999">Mock PromptPay QR</text></svg>';
+        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="420" viewBox="0 0 320 420">'
+            . '<rect width="320" height="420" fill="#ffffff"/>'
+            . '<rect x="40" y="22" width="240" height="60" rx="6" fill="#1f4f7c"/>'
+            . '<text x="160" y="56" font-size="20" text-anchor="middle" font-family="Prompt,Arial,sans-serif" fill="#fff" font-weight="700">THAI QR</text>'
+            . '<text x="160" y="76" font-size="14" text-anchor="middle" font-family="Prompt,Arial,sans-serif" fill="#d8e8f7">PROMPTPAY</text>'
+            . '<rect x="36" y="96" width="248" height="248" rx="8" fill="#fff" stroke="#d7dce4"/>'
+            . '<rect x="52" y="112" width="56" height="56" fill="#000"/><rect x="59" y="119" width="42" height="42" fill="#fff"/><rect x="66" y="126" width="28" height="28" fill="#000"/>'
+            . '<rect x="212" y="112" width="56" height="56" fill="#000"/><rect x="219" y="119" width="42" height="42" fill="#fff"/><rect x="226" y="126" width="28" height="28" fill="#000"/>'
+            . '<rect x="52" y="272" width="56" height="56" fill="#000"/><rect x="59" y="279" width="42" height="42" fill="#fff"/><rect x="66" y="286" width="28" height="28" fill="#000"/>'
+            . '<g fill="#000">'
+            . '<rect x="132" y="118" width="8" height="8"/><rect x="148" y="118" width="8" height="8"/><rect x="164" y="118" width="8" height="8"/><rect x="180" y="118" width="8" height="8"/>'
+            . '<rect x="124" y="134" width="8" height="8"/><rect x="140" y="134" width="8" height="8"/><rect x="156" y="134" width="8" height="8"/><rect x="172" y="134" width="8" height="8"/><rect x="188" y="134" width="8" height="8"/>'
+            . '<rect x="124" y="150" width="8" height="8"/><rect x="140" y="150" width="8" height="8"/><rect x="164" y="150" width="8" height="8"/><rect x="188" y="150" width="8" height="8"/>'
+            . '<rect x="116" y="166" width="8" height="8"/><rect x="132" y="166" width="8" height="8"/><rect x="148" y="166" width="8" height="8"/><rect x="164" y="166" width="8" height="8"/><rect x="180" y="166" width="8" height="8"/><rect x="196" y="166" width="8" height="8"/>'
+            . '<rect x="116" y="182" width="8" height="8"/><rect x="132" y="182" width="8" height="8"/><rect x="156" y="182" width="8" height="8"/><rect x="172" y="182" width="8" height="8"/><rect x="196" y="182" width="8" height="8"/>'
+            . '<rect x="116" y="198" width="8" height="8"/><rect x="140" y="198" width="8" height="8"/><rect x="156" y="198" width="8" height="8"/><rect x="180" y="198" width="8" height="8"/><rect x="196" y="198" width="8" height="8"/>'
+            . '<rect x="116" y="214" width="8" height="8"/><rect x="132" y="214" width="8" height="8"/><rect x="148" y="214" width="8" height="8"/><rect x="164" y="214" width="8" height="8"/><rect x="180" y="214" width="8" height="8"/><rect x="196" y="214" width="8" height="8"/>'
+            . '<rect x="124" y="230" width="8" height="8"/><rect x="140" y="230" width="8" height="8"/><rect x="156" y="230" width="8" height="8"/><rect x="172" y="230" width="8" height="8"/><rect x="188" y="230" width="8" height="8"/>'
+            . '<rect x="124" y="246" width="8" height="8"/><rect x="140" y="246" width="8" height="8"/><rect x="164" y="246" width="8" height="8"/><rect x="180" y="246" width="8" height="8"/>'
+            . '<rect x="132" y="262" width="8" height="8"/><rect x="148" y="262" width="8" height="8"/><rect x="164" y="262" width="8" height="8"/><rect x="180" y="262" width="8" height="8"/>'
+            . '<rect x="124" y="278" width="8" height="8"/><rect x="140" y="278" width="8" height="8"/><rect x="156" y="278" width="8" height="8"/><rect x="172" y="278" width="8" height="8"/><rect x="188" y="278" width="8" height="8"/>'
+            . '<rect x="124" y="294" width="8" height="8"/><rect x="148" y="294" width="8" height="8"/><rect x="172" y="294" width="8" height="8"/><rect x="188" y="294" width="8" height="8"/>'
+            . '<rect x="124" y="310" width="8" height="8"/><rect x="140" y="310" width="8" height="8"/><rect x="156" y="310" width="8" height="8"/><rect x="172" y="310" width="8" height="8"/><rect x="188" y="310" width="8" height="8"/>'
+            . '</g>'
+            . '</svg>';
         return ['object'=>'charge','id'=>'chrg_mock_'.bin2hex(random_bytes(8)),'status'=>'pending','paid'=>false,'amount'=>$data['amount']??0,'currency'=>'THB','source'=>['type'=>'promptpay','scannable_code'=>['image'=>['download_uri'=>'data:image/svg+xml;base64,'.base64_encode($svg)]]]];
     }
     return ['error' => 'mock_unknown', 'message' => 'Mock: unknown API path'];
@@ -99,7 +137,7 @@ function _omise_local_mock(string $path, array $data): array {
     <title>บริจาครายการสิ่งของ | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css">
     <link rel="stylesheet" href="../css/payment.css">
-    <link rel="stylesheet" href="../css/foundation.css">
+    <link rel="stylesheet" href="../css/foundation.css?v=21">
 </head>
 <body class="foundation-donate-page">
 
@@ -110,12 +148,18 @@ function _omise_local_mock(string $path, array $data): array {
 
         <!-- ==================== ฝั่งซ้าย ==================== -->
         <div class="fd-left">
-            <?php if (!empty($foundation['foundation_image'])): ?>
+            <?php if ($fdCoverNeedImage !== ''): ?>
+                <img src="../uploads/needs/<?= htmlspecialchars($fdCoverNeedImage) ?>"
+                     class="fd-cover" alt="ภาพประกอบรายการสิ่งของ">
+            <?php elseif (!empty($foundation['foundation_image'])): ?>
                 <img src="../uploads/profiles/<?= htmlspecialchars($foundation['foundation_image']) ?>"
                      class="fd-cover" alt="">
             <?php endif; ?>
 
             <h2 class="fd-name"><?= htmlspecialchars($foundation['foundation_name']) ?></h2>
+            <?php if (!empty($foundation['foundation_desc'])): ?>
+                <p class="fd-foundation-desc"><?= nl2br(htmlspecialchars($foundation['foundation_desc'])) ?></p>
+            <?php endif; ?>
 
             <div class="fd-progress">
                 <div class="fd-bar">
@@ -131,26 +175,28 @@ function _omise_local_mock(string $path, array $data): array {
                 <h3 class="fd-items-title">รายการสิ่งของที่ต้องการ</h3>
                 <?php foreach ($items as $item):
                     if (!is_array($item)) continue;
-                    $imgs = array_values(array_filter(explode('|', (string)($item['photo_item'] ?? ''))));
-                    $img0 = $imgs[0] ?? '';
-                    $qty   = (int)($item['quantity_required'] ?? 0);
-                    $price = number_format((float)($item['item_price'] ?? 0), 0);
+                    $rawNeedImgs = foundation_needlist_item_filenames_from_row($item);
+                    $imgsThree = array_pad(array_slice($rawNeedImgs, 0, 3), 3, '');
                     $total = number_format((float)($item['total_price'] ?? 0), 0);
                     $urgent = !empty($item['urgent']);
                 ?>
                 <div class="fd-item-row<?= $urgent ? ' fd-item-urgent' : '' ?>">
-                    <?php if ($img0): ?>
-                        <img src="../uploads/needs/<?= htmlspecialchars($img0) ?>" class="fd-item-thumb" alt="">
-                    <?php else: ?>
-                        <div class="fd-item-noimg">📦</div>
-                    <?php endif; ?>
+                    <div class="fd-item-thumbs">
+                    <?php foreach ($imgsThree as $imn): ?>
+                        <?php if ($imn !== ''): ?>
+                        <img src="../uploads/needs/<?= htmlspecialchars($imn) ?>" class="fd-item-thumb" alt="">
+                        <?php else: ?>
+                        <div class="fd-item-noimg fd-item-noimg--small" title="ไม่มีรูป">—</div>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                    </div>
                     <div class="fd-item-detail">
                         <div class="fd-item-name">
                             <?= htmlspecialchars($item['item_name'] ?? '') ?>
                             <?php if ($urgent): ?><span class="fd-urgent-badge">ด่วน</span><?php endif; ?>
                         </div>
                         <div class="fd-item-meta">
-                            ต้องการ <?= $qty ?> ชิ้น &nbsp;·&nbsp; ราคา/หน่วย <?= $price ?> บาท &nbsp;·&nbsp; รวม <?= $total ?> บาท
+                            รวม <?= $total ?> บาท
                         </div>
                     </div>
                 </div>
@@ -165,56 +211,58 @@ function _omise_local_mock(string $path, array $data): array {
                 <div class="fd-alert fd-alert-error"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-            <?php if (!empty($qr_image)): ?>
-                <div class="fd-qr-section">
-                    <h3>สแกน QR Code เพื่อชำระเงิน</h3>
-                    <p class="fd-qr-amount">จำนวน <strong><?= number_format($_SESSION['pending_amount'], 0) ?> บาท</strong></p>
-                    <img src="<?= htmlspecialchars($qr_image) ?>" class="fd-qr-img" alt="QR Code PromptPay">
-                    <p class="fd-qr-hint">QR Code มีอายุ 10 นาที</p>
-                    <p class="fd-qr-charge">Charge ID: <?= htmlspecialchars($charge_id) ?></p>
-                    <a href="check_needlist_payment.php?charge_id=<?= urlencode($charge_id) ?>&fid=<?= urlencode($fid) ?>" class="fd-btn-paid">
-                        ✓ ชำระเงินแล้ว
-                    </a>
-                    <a href="foundation_donate.php?fid=<?= $fid ?>" class="fd-btn-cancel">ยกเลิก</a>
-                </div>
-
-            <?php else: ?>
-                <h3 class="fd-form-title">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
+                <h3 class="fd-donate-section-title">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
                 <p class="fd-form-sub">เงินจะรวมเป็นกองทุนเพื่อซื้อสิ่งของให้มูลนิธิ</p>
 
-                <div class="fd-presets">
-                    <button type="button" class="fd-preset-btn" onclick="setAmount(50,this)"><span class="fd-preset-num">50</span><span class="fd-preset-unit">บาท</span></button>
-                    <button type="button" class="fd-preset-btn" onclick="setAmount(100,this)"><span class="fd-preset-num">100</span><span class="fd-preset-unit">บาท</span></button>
-                    <button type="button" class="fd-preset-btn" onclick="setAmount(500,this)"><span class="fd-preset-num">500</span><span class="fd-preset-unit">บาท</span></button>
-                    <button type="button" class="fd-preset-btn" onclick="setAmount(1000,this)"><span class="fd-preset-num">1,000</span><span class="fd-preset-unit">บาท</span></button>
-                </div>
-
-                <form method="POST" class="fd-form">
-                    <div class="fd-form-group">
-                        <label class="fd-label">จำนวนเงิน (บาท) *</label>
-                        <input type="number" name="amount" id="amountInput" min="20"
-                               placeholder="ขั้นต่ำ 20 บาท" required class="fd-input">
+                <form method="POST" id="foundationDonateForm">
+                    <div class="amount-presets-grid fd-amount-presets-grid">
+                        <button type="button" class="preset-btn" data-amt="2000" onclick="fdSelectPreset(2000)">2,000 บาท</button>
+                        <button type="button" class="preset-btn" data-amt="1000" onclick="fdSelectPreset(1000)">1,000 บาท</button>
+                        <button type="button" class="preset-btn" data-amt="500" onclick="fdSelectPreset(500)">500 บาท</button>
+                        <div class="preset-btn preset-input-btn fd-preset-custom-cell">
+                            <label for="amountInput" class="fd-preset-custom-label">ระบุจำนวน</label>
+                            <input type="number" name="amount" id="amountInput" min="20" step="1"
+                                   placeholder="ขั้นต่ำ 20 บาท" inputmode="numeric"
+                                   oninput="fdClearPresetHighlight()">
+                        </div>
                     </div>
-                    <div class="fd-method-card">
-                        <img src="../img/qr-code.png" alt="PromptPay" class="fd-method-icon">
-                        <span>PromptPay QR</span>
+                    <div class="payment-method">
+                        <div class="method-card active">
+                            <img src="../img/qr-code.png" alt="PromptPay" class="method-icon">
+                            <span>PromptPay QR</span>
+                        </div>
                     </div>
-                    <button type="submit" name="pay" class="fd-btn-pay">❤ บริจาค</button>
+                    <button type="submit" name="pay" class="btn-pay">บริจาค</button>
                 </form>
-
-                <a href="../foundation.php" class="fd-btn-back">← ย้อนกลับ</a>
-            <?php endif; ?>
         </div><!-- /.fd-right -->
 
     </div><!-- /.fd-layout -->
 </div><!-- /.fd-wrapper -->
 
 <script>
-function setAmount(val, btn) {
-    document.getElementById('amountInput').value = val;
-    document.querySelectorAll('.fd-preset-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+function fdClearPresetHighlight() {
+    document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+        b.classList.remove('preset-selected');
+    });
 }
+function fdSelectPreset(amt) {
+    var inp = document.getElementById('amountInput');
+    if (inp) {
+        inp.value = String(amt);
+    }
+    document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+        var v = parseInt(b.getAttribute('data-amt'), 10);
+        b.classList.toggle('preset-selected', v === amt);
+    });
+}
+document.getElementById('foundationDonateForm').addEventListener('submit', function (e) {
+    var inp = document.getElementById('amountInput');
+    var n = inp ? parseInt(String(inp.value).trim(), 10) : 0;
+    if (!n || n < 20) {
+        e.preventDefault();
+        alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
+    }
+});
 </script>
 </body>
 </html>

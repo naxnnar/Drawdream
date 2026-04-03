@@ -251,7 +251,7 @@ body {
 .btn-reject {
     flex: 1;
     padding: 15px;
-    background: #F08080;
+    background: #CC583F;
     color: white;
     border: none;
     border-radius: 14px;
@@ -263,9 +263,9 @@ body {
 }
 
 .btn-reject:hover {
-    background: #E74C3C;
+    background: #b04a33;
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(231,76,60,0.3);
+    box-shadow: 0 6px 18px rgba(204, 88, 63, 0.35);
 }
 
 .btn-approve {

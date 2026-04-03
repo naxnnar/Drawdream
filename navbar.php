@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: navbar.php
 // หน้าที่: คอมโพเนนต์เมนูนำทางและแจ้งเตือน
 if (session_status() === PHP_SESSION_NONE) {
@@ -17,13 +17,17 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
   $r = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile WHERE account_verified = 0");
   if ($r) $pending_count = mysqli_fetch_assoc($r)['cnt'];
 
-  $r2 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM project WHERE project_status = 'pending'");
-  if ($r2) $pending_projects = mysqli_fetch_assoc($r2)['cnt'];
-
+  $pending_projects = 0;
+  require_once __DIR__ . '/includes/drawdream_project_status.php';
+  $pendingProjExpr = drawdream_sql_project_is_pending('project_status');
+  $r2 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_project WHERE {$pendingProjExpr}");
+  if ($r2) {
+    $pending_projects = (int)mysqli_fetch_assoc($r2)['cnt'];
+  }
   $r3 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE approve_item = 'pending'");
   if ($r3) $pending_needs = mysqli_fetch_assoc($r3)['cnt'];
 
-  $r4 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM Children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')");
+  $r4 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ') AND deleted_at IS NULL");
   if ($r4) $pending_children = mysqli_fetch_assoc($r4)['cnt'];
 }
 
@@ -68,6 +72,41 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
 $_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
 $_nav_base  = str_repeat('../', max(0, $_nav_depth));
 
+// รูปโปรไฟล์มุมขวาบน (ผู้บริจาค / มูลนิธิ)
+$nav_profile_img = $_nav_base . 'img/donor-avatar-placeholder.svg';
+if ($is_logged_in && in_array($_SESSION['role'] ?? '', ['donor', 'foundation'], true)) {
+  if (!isset($conn) || !($conn instanceof mysqli)) {
+    include_once __DIR__ . '/db.php';
+  }
+  if (isset($conn) && $conn instanceof mysqli) {
+    $uidNav = (int)$_SESSION['user_id'];
+    $roleNav = $_SESSION['role'] ?? '';
+    if ($roleNav === 'donor') {
+      $stNav = $conn->prepare('SELECT profile_image FROM donor WHERE user_id = ? LIMIT 1');
+      if ($stNav) {
+        $stNav->bind_param('i', $uidNav);
+        $stNav->execute();
+        $rowNav = $stNav->get_result()->fetch_assoc();
+        $fn = isset($rowNav['profile_image']) ? basename((string)$rowNav['profile_image']) : '';
+        if ($fn !== '') {
+          $nav_profile_img = $_nav_base . 'uploads/profiles/' . rawurlencode($fn);
+        }
+      }
+    } elseif ($roleNav === 'foundation') {
+      $stNav = $conn->prepare('SELECT foundation_image FROM foundation_profile WHERE user_id = ? LIMIT 1');
+      if ($stNav) {
+        $stNav->bind_param('i', $uidNav);
+        $stNav->execute();
+        $rowNav = $stNav->get_result()->fetch_assoc();
+        $fn = isset($rowNav['foundation_image']) ? basename((string)$rowNav['foundation_image']) : '';
+        if ($fn !== '') {
+          $nav_profile_img = $_nav_base . 'uploads/profiles/' . rawurlencode($fn);
+        }
+      }
+    }
+  }
+}
+
 // โหมดดูตัวอย่างผู้บริจาค (foundation เท่านั้น)
 if (isset($_GET['preview_mode'])) {
   if ($_GET['preview_mode'] === 'donor' && ($_SESSION['real_role'] ?? $_SESSION['role'] ?? '') === 'foundation') {
@@ -85,7 +124,12 @@ if (isset($_GET['preview_mode'])) {
 $is_donor_preview = isset($_SESSION['real_role']) && $_SESSION['real_role'] === 'foundation';
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin';
 $current_page = basename($_SERVER['PHP_SELF']);
-$adminDashboardActive = in_array($current_page, ['admin_dashboard.php'], true);
+$adminDashboardActive = in_array($current_page, [
+    'admin_dashboard.php',
+    'admin_donors.php',
+    'admin_foundations_overview.php',
+    'admin_children_overview.php',
+], true);
 $adminFoundationActive = in_array($current_page, ['admin_approve_foundation.php'], true);
 $adminChildrenActive = in_array($current_page, ['children_.php', 'children_donate.php', 'admin_approve_children.php', 'admin_children.php'], true);
 $adminProjectActive = in_array($current_page, ['admin_approve_projects.php', 'admin_projects.php'], true);
@@ -93,7 +137,7 @@ $adminNeedlistActive = in_array($current_page, ['admin_approve_needlist.php', 'f
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
 <link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
-<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=2">
 <?php if ($is_admin_mode): ?>
 <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 <button type="button" class="admin-sidebar-show-btn" id="adminSidebarShowBtn" aria-label="แสดงเมนูแอดมิน">☰</button>
@@ -176,6 +220,13 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
   });
 </script>
 <?php else: ?>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<?php if ($is_donor_preview): ?>
+<div class="donor-preview-banner">
+  <span>&#128065; กำลังดูในโหมด <strong>มุมมองผู้บริจาค</strong> &mdash; เห็นเหมือนผู้บริจาคทั่วไป</span>
+  <a href="?preview_mode=exit" class="donor-preview-exit">✕ ออกจากโหมดดูตัวอย่าง</a>
+</div>
+<?php endif; ?>
 <nav class="navbar">
 
   <div class="nav-left">
@@ -219,8 +270,8 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
         <?php endif; ?>
         <!-- ระฆังแจ้งเตือน -->
         <div class="notif-wrap" id="notifWrap">
-          <button class="notif-btn" onclick="toggleNotif(event)" style="background:none;border:none;cursor:pointer;position:relative;padding:0;">
-            <img src="<?= $_nav_base ?>img/bell.png" alt="แจ้งเตือน" class="nav-icon">
+          <button type="button" class="notif-btn" onclick="toggleNotif(event)" aria-label="แจ้งเตือน">
+            <i class="bi bi-bell-fill nav-bell-icon" aria-hidden="true"></i>
             <?php if ($user_notif_count > 0): ?>
               <span class="notif-badge"><?= $user_notif_count ?></span>
             <?php endif; ?>
@@ -253,8 +304,8 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
         </div>
       <?php endif; ?>
 
-      <a href="<?= $_nav_base ?>profile.php" class="profile-btn">
-        <img src="<?= $_nav_base ?>img/user.png" alt="โปรไฟล์" class="nav-icon">
+      <a href="<?= $_nav_base ?>profile.php" class="profile-btn" title="โปรไฟล์">
+        <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="โปรไฟล์" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
       </a>
       <a href="<?= $_nav_base ?>logout.php" class="logout-btn">ออกจากระบบ</a>
 
@@ -264,13 +315,6 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
   </div>
 
 </nav>
-<?php endif; ?>
-
-<?php if ($is_donor_preview): ?>
-<div class="donor-preview-banner">
-  <span>&#128065; กำลังดูในโหมด <strong>มุมมองผู้บริจาค</strong> &mdash; เห็นเหมือนผู้บริจาคทั่วไป</span>
-  <a href="?preview_mode=exit" class="donor-preview-exit">✕ ออกจากโหมดดูตัวอย่าง</a>
-</div>
 <?php endif; ?>
 
 <script>

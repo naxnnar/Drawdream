@@ -10,6 +10,11 @@ body {
     margin: 0;
 }
 
+/* พื้นหลังแดชบอร์ดแอดมินให้ใกล้สไตล์การ์ดสรุปแบบแถว (ภาพอ้างอิง) */
+body.admin-dashboard-page {
+    background: #eceef5;
+}
+
 .dashboard {
     max-width: 1400px;
     margin: 30px auto;
@@ -40,13 +45,34 @@ body.admin-sidebar-page .dashboard {
     margin-bottom: 30px;
 }
 
-/* การ์ดสรุปตามลำดับที่กำหนดในหน้า admin */
-.cards.admin-overview-cards {
-    grid-template-columns: repeat(4, minmax(220px, 1fr));
+/* สรุปตัวเลขแดชบอร์ด — สไตล์การ์ดแนวนอนแบบภาพอ้างอิง (ไอคอน | เส้นแบ่ง | ข้อความ) */
+.admin-metric-stats {
+    margin-bottom: 32px;
 }
 
-.cards.admin-overview-cards .card.span-2 {
-    grid-column: span 2;
+.admin-metric-stats__row {
+    display: grid !important;
+    gap: 18px;
+}
+
+.admin-metric-stats__row--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 22px;
+}
+
+.admin-metric-stats__row--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-metric-stats__row > .admin-stat-card-wrap {
+    display: flex;
+    min-width: 0;
+    align-self: stretch;
+}
+
+.admin-metric-stats__row > .admin-stat-card-wrap > .stat-card {
+    flex: 1;
+    width: 100%;
 }
 .card {
     background: white;
@@ -55,88 +81,103 @@ body.admin-sidebar-page .dashboard {
     box-shadow: 0 2px 10px rgba(0,0,0,0.07);
     border-left: 5px solid #ddd;
 }
-}
 
 .card.blue   { border-left-color: #4A5BA8; }
 .card.green  { border-left-color: #4CAF50; }
-.cards.admin-overview-cards .stat-card {
+.admin-metric-stats .stat-card {
     --accent: #f38c88;
     --icon-bg: #fff1f0;
     --icon-color: #f38c88;
     position: relative;
-    display: flex;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
     border-left: 4px solid var(--accent);
-    border-radius: 14px;
-    padding: 18px 18px;
-    min-height: 110px;
-    box-shadow: 0 6px 16px rgba(31, 41, 55, 0.06);
+    border-radius: 16px;
+    padding: 18px 20px;
+    min-height: 104px;
+    box-sizing: border-box;
+    margin: 0;
+    box-shadow: 0 2px 14px rgba(15, 23, 42, 0.07);
+    border-top: 1px solid rgba(226, 232, 240, 0.95);
+    border-right: 1px solid rgba(226, 232, 240, 0.95);
+    border-bottom: 1px solid rgba(226, 232, 240, 0.95);
 }
 
-.cards.admin-overview-cards .stat-card .stat-icon {
-    width: 56px;
-    height: 56px;
+.admin-metric-stats .stat-card .stat-icon {
+    align-self: center;
+    width: 52px;
+    height: 52px;
     border-radius: 14px;
     background: var(--icon-bg);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    flex: 0 0 56px;
+    flex: 0 0 52px;
 }
 
-.cards.admin-overview-cards .stat-card .stat-icon i {
-    font-size: 1.9rem;
+.admin-metric-stats .stat-card .stat-icon i {
+    font-size: 1.75rem;
     line-height: 1;
     color: var(--icon-color);
 }
 
-.cards.admin-overview-cards .stat-card .stat-divider {
+.admin-metric-stats .stat-card .stat-divider {
     width: 1px;
-    height: 52px;
-    background: #ebe7f5;
+    align-self: stretch;
+    min-height: 56px;
+    height: auto;
+    background: #e2e8f0;
     flex: 0 0 1px;
 }
 
-.cards.admin-overview-cards .stat-card .stat-content {
+.admin-metric-stats .stat-card .stat-content {
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: flex-start;
-    gap: 2px;
+    gap: 6px;
     min-width: 0;
+    flex: 1;
 }
 
-.cards.admin-overview-cards .stat-card .card-label {
+.admin-metric-stats .stat-card .card-label {
     margin: 0;
-    font-size: 1.18rem;
-    color: #2f3a4f;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.cards.admin-overview-cards .stat-card .card-value {
-    margin: 2px 0 0;
-    font-size: 2rem;
-    line-height: 1.05;
-    font-weight: 800;
-    color: #1f2937;
-}
-
-.cards.admin-overview-cards .stat-card .card-sub {
-    margin-top: 2px;
-    font-size: 1rem;
-    color: #6f788b;
+    font-size: 0.95rem;
+    color: #64748b;
     font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+}
+
+.admin-metric-stats .stat-card .card-value {
+    margin: 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+    font-size: clamp(1.45rem, 2.2vw, 1.95rem);
+    line-height: 1.1;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.admin-metric-stats .stat-card .card-value-suffix {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #64748b;
 }
 
 /* ธีมสีรายกล่อง: ปรับสีได้ง่ายจากตัวแปรด้านล่าง */
-.cards.admin-overview-cards .stat-card.donation-total { --accent:#f28c88; --icon-bg:#fff1f0; --icon-color:#f28c88; }
-.cards.admin-overview-cards .stat-card.donation-today { --accent:#5f58b8; --icon-bg:#f1efff; --icon-color:#5f58b8; }
-.cards.admin-overview-cards .stat-card.escrow         { --accent:#f2be2d; --icon-bg:#fff8df; --icon-color:#d9a718; }
-.cards.admin-overview-cards .stat-card.donors         { --accent:#39b36a; --icon-bg:#eafaf0; --icon-color:#2e9d5b; }
-.cards.admin-overview-cards .stat-card.foundations    { --accent:#42b7c9; --icon-bg:#e8f9fc; --icon-color:#2f9bab; }
-.cards.admin-overview-cards .stat-card.children       { --accent:#9f47cf; --icon-bg:#f8eeff; --icon-color:#8a38b8; }
+.admin-metric-stats .stat-card.donation-total { --accent:#f28c88; --icon-bg:#fff1f0; --icon-color:#f28c88; }
+.admin-metric-stats .stat-card.donation-today { --accent:#5f58b8; --icon-bg:#f1efff; --icon-color:#5f58b8; }
+.admin-metric-stats .stat-card.escrow         { --accent:#f2be2d; --icon-bg:#fff8df; --icon-color:#d9a718; }
+.admin-metric-stats .stat-card.donors         { --accent:#39b36a; --icon-bg:#eafaf0; --icon-color:#2e9d5b; }
+.admin-metric-stats .stat-card.foundations    { --accent:#42b7c9; --icon-bg:#e8f9fc; --icon-color:#2f9bab; }
+.admin-metric-stats .stat-card.children       { --accent:#9f47cf; --icon-bg:#f8eeff; --icon-color:#8a38b8; }
 .card.orange { border-left-color: #FF9800; }
 .card.red    { border-left-color: #E74C3C; }
 .card.purple { border-left-color: #9C27B0; }
@@ -359,28 +400,32 @@ body.admin-sidebar-page .dashboard {
 
 /* ======== Responsive ======== */
 @media (max-width: 1024px) {
-    .cards.admin-overview-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .cards.admin-overview-cards .card.span-2 { grid-column: span 1; }
+    .admin-metric-stats__row--4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .admin-metric-stats__row--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .cards       { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pending-row { grid-template-columns: 1fr; }
     .sections    { grid-template-columns: 1fr; }
 }
 
+@media (max-width: 560px) {
+    .admin-metric-stats__row--4,
+    .admin-metric-stats__row--2 { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 640px) {
     .cards { grid-template-columns: 1fr; }
-    .cards.admin-overview-cards .stat-card {
-        min-height: 98px;
+    .admin-metric-stats .stat-card {
         padding: 14px;
         gap: 12px;
     }
-    .cards.admin-overview-cards .stat-card .stat-icon {
+    .admin-metric-stats .stat-card .stat-icon {
         width: 48px;
         height: 48px;
         flex-basis: 48px;
         font-size: 24px;
         border-radius: 12px;
     }
-    .cards.admin-overview-cards .stat-card .card-value {
+    .admin-metric-stats .stat-card .card-value {
         font-size: 1.75rem;
     }
 }
@@ -396,7 +441,7 @@ body.admin-sidebar-page .dashboard {
         font-size: 1.1rem;
         margin-bottom: 12px;
     }
-    .card, .section-box, .chart-box, .pending-card {
+    .card:not(.stat-card), .section-box, .chart-box, .pending-card {
         padding: 12px 2vw;
         font-size: 0.98rem;
     }
@@ -406,17 +451,16 @@ body.admin-sidebar-page .dashboard {
     .pending-count {
         font-size: 1.3rem;
     }
-    .cards.admin-overview-cards .stat-card .card-label {
+    .admin-metric-stats .stat-card .card-label {
         font-size: 1rem;
     }
-    .cards.admin-overview-cards .stat-card .card-value {
+    .admin-metric-stats .stat-card .card-value {
         font-size: 1.2rem;
     }
-    .cards.admin-overview-cards .stat-card .stat-icon {
+    .admin-metric-stats .stat-card .stat-icon {
         width: 36px;
         height: 36px;
         font-size: 18px;
         border-radius: 8px;
     }
-}
 }

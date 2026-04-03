@@ -1,103 +1,222 @@
 <?php
-// payment/scan_qr.php
-// แสดง QR Code สำหรับสแกนจ่าย + ข้อมูลใบเสร็จรับเงิน
+// payment/scan_qr.php — หน้าสแกน QR ร่วม (โครงการ / เด็ก / มูลนิธิ-สิ่งของ)
 session_start();
 include '../db.php';
 include 'config.php';
 
-$charge_id = $_GET['charge_id'] ?? ($_SESSION['pending_charge_id'] ?? '');
-$amount = $_SESSION['pending_amount'] ?? 0;
-$project_name = $_SESSION['pending_project'] ?? '';
-$project_id = $_SESSION['pending_project_id'] ?? 0;
-
-if (!$charge_id || !$amount || !$project_name) {
-    header('Location: ../project.php');
-    exit();
+$type = $_GET['type'] ?? 'project';
+if (!in_array($type, ['project', 'child', 'foundation'], true)) {
+    $type = 'project';
 }
 
-// mock: ดึง QR image จาก session (จริงควร query จาก DB หรือ Omise)
+$charge_id = trim((string)($_GET['charge_id'] ?? ($_SESSION['pending_charge_id'] ?? '')));
+$amount = (int)($_SESSION['pending_amount'] ?? 0);
+
+$qr_fail = function (string $url) use ($type): void {
+    if ($type === 'child') {
+        header('Location: ../children_.php');
+    } elseif ($type === 'foundation') {
+        header('Location: ../foundation.php');
+    } else {
+        header('Location: ' . $url);
+    }
+    exit;
+};
+
+if ($charge_id === '' || $amount < 20) {
+    $qr_fail('../project.php');
+}
+if (!isset($_SESSION['pending_charge_id']) || $_SESSION['pending_charge_id'] !== $charge_id) {
+    $qr_fail('../project.php');
+}
+
+$project_id = 0;
+$child_id = 0;
+$fid = 0;
+$project_name = '';
+$child_name = '';
+$foundation_name = '';
+$return_payment_page = 'payment_project.php';
+$receipt_target_label = '';
+$receipt_target_value = '';
+$subtitle_line = '';
+$page_title = 'Scan QR Code เพื่อบริจาค';
+$back_aria = 'กลับไปหน้าชำระเงิน';
+
+if ($type === 'project') {
+    $project_id = (int)($_GET['project_id'] ?? ($_SESSION['pending_project_id'] ?? 0));
+    if ($project_id <= 0 || (int)($_SESSION['pending_project_id'] ?? 0) !== $project_id) {
+        $qr_fail('../project.php');
+    }
+    $project_name = trim((string)($_SESSION['pending_project'] ?? ''));
+    if ($project_name === '') {
+        $st = $conn->prepare('SELECT project_name FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $project_id);
+            $st->execute();
+            $pn = $st->get_result()->fetch_assoc();
+            if ($pn) {
+                $project_name = (string)($pn['project_name'] ?? '');
+            }
+        }
+    }
+    $subtitle_line = 'บริจาคให้กับโครงการ ' . $project_name;
+    $receipt_target_label = 'ชื่อโครงการ';
+    $receipt_target_value = $project_name;
+    $return_payment_page = 'payment_project.php?project_id=' . $project_id;
+    $confirm_href = 'check_project_payment.php?charge_id=' . urlencode($charge_id) . '&project_id=' . $project_id;
+    $back_aria = 'กลับไปหน้าชำระเงินโครงการ';
+} elseif ($type === 'child') {
+    $child_id = (int)($_GET['child_id'] ?? ($_SESSION['pending_child_id'] ?? 0));
+    if ($child_id <= 0 || (int)($_SESSION['pending_child_id'] ?? 0) !== $child_id) {
+        header('Location: ../children_.php');
+        exit;
+    }
+    $child_name = trim((string)($_SESSION['pending_child_name'] ?? ''));
+    if ($child_name === '') {
+        $st = $conn->prepare('SELECT child_name FROM foundation_children WHERE child_id = ? AND deleted_at IS NULL LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $child_id);
+            $st->execute();
+            $row = $st->get_result()->fetch_assoc();
+            if ($row) {
+                $child_name = (string)($row['child_name'] ?? '');
+            }
+        }
+    }
+    $subtitle_line = 'บริจาคให้เด็ก ' . $child_name;
+    $receipt_target_label = 'ชื่อเด็ก';
+    $receipt_target_value = $child_name;
+    $return_payment_page = '../children_donate.php?id=' . $child_id;
+    $confirm_href = 'check_child_payment.php?charge_id=' . urlencode($charge_id) . '&child_id=' . $child_id;
+    $back_aria = 'กลับไปหน้าโปรไฟล์เด็ก';
+} else {
+    $fid = (int)($_GET['fid'] ?? ($_SESSION['pending_foundation_id'] ?? 0));
+    if ($fid <= 0 || (int)($_SESSION['pending_foundation_id'] ?? 0) !== $fid) {
+        header('Location: ../foundation.php');
+        exit;
+    }
+    $foundation_name = trim((string)($_SESSION['pending_foundation'] ?? ''));
+    if ($foundation_name === '') {
+        $st = $conn->prepare('SELECT foundation_name FROM foundation_profile WHERE foundation_id = ? LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $fid);
+            $st->execute();
+            $row = $st->get_result()->fetch_assoc();
+            if ($row) {
+                $foundation_name = (string)($row['foundation_name'] ?? '');
+            }
+        }
+    }
+    $subtitle_line = 'บริจาครายการสิ่งของ — ' . $foundation_name;
+    $receipt_target_label = 'มูลนิธิ';
+    $receipt_target_value = $foundation_name;
+    $return_payment_page = 'foundation_donate.php?fid=' . $fid;
+    $confirm_href = 'check_needlist_payment.php?charge_id=' . urlencode($charge_id) . '&fid=' . $fid;
+    $back_aria = 'กลับไปหน้าบริจาคมูลนิธิ';
+}
 
 $qr_image = '';
-if (isset($_SESSION['pending_charge_id']) && $_SESSION['pending_charge_id'] === $charge_id) {
+$is_test_mode = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
+if ($_SESSION['pending_charge_id'] === $charge_id) {
     $qr_image = $_SESSION['qr_image'] ?? '';
 }
-// fallback: Omise test QR PNG หากไม่มี qr_image จริง
 if (!$qr_image) {
-    $qr_image = 'https://cdn.omise.co/assets/dashboard/img/test-qr-code.png';
+    if ($is_test_mode) {
+        $svgTest = '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">'
+            . '<rect width="260" height="260" fill="#ffffff"/>'
+            . '<rect x="14" y="14" width="72" height="72" fill="#000"/><rect x="22" y="22" width="56" height="56" fill="#fff"/><rect x="30" y="30" width="40" height="40" fill="#000"/>'
+            . '<rect x="174" y="14" width="72" height="72" fill="#000"/><rect x="182" y="22" width="56" height="56" fill="#fff"/><rect x="190" y="30" width="40" height="40" fill="#000"/>'
+            . '<rect x="14" y="174" width="72" height="72" fill="#000"/><rect x="22" y="182" width="56" height="56" fill="#fff"/><rect x="30" y="190" width="40" height="40" fill="#000"/>'
+            . '<rect x="96" y="96" width="68" height="68" fill="#000"/>'
+            . '<rect x="104" y="104" width="52" height="52" fill="#fff"/>'
+            . '<text x="130" y="140" font-size="16" text-anchor="middle" font-family="Arial, sans-serif" fill="#000" font-weight="700">TEST MODE</text>'
+            . '</svg>';
+        $qr_image = 'data:image/svg+xml;base64,' . base64_encode($svgTest);
+    } else {
+        $qr_image = 'https://cdn.omise.co/assets/dashboard/img/test-qr-code.png';
+    }
 }
 
-// mock: หมายเลขรายการ
 $receipt_no = strtoupper(substr($charge_id, -10));
-
+$abandon_charge = ($type === 'foundation') ? '' : $charge_id;
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scan QR Code เพื่อบริจาค</title>
+    <title><?= htmlspecialchars($page_title) ?></title>
     <link rel="stylesheet" href="../css/payment.css">
     <style>
         body { background: #f7ecde; }
         .qr-main { max-width: 520px; margin: 36px auto; background: #fff; border-radius: 18px; box-shadow: 0 2px 16px 0 rgba(0,0,0,0.07); padding: 32px 28px 28px 28px; }
-        .qr-title { font-size: 2em; font-weight: 700; text-align: center; margin-bottom: 18px; }
-        .qr-amount-bar { background: #fff7ea; border-radius: 10px; padding: 16px 0 12px 0; font-size: 1.5em; color: #ff8800; font-weight: 700; text-align: center; margin-bottom: 18px; }
+        .qr-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 18px; }
+        .qr-header-spacer { width: 44px; height: 44px; flex-shrink: 0; }
+        .qr-title { flex: 1; font-size: 2em; font-weight: 700; text-align: center; margin: 0; line-height: 1.2; }
+        .qr-back-icon {
+            flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; background: #f0f2fa; color: #3C5099;
+            display: flex; align-items: center; justify-content: center; text-decoration: none;
+            transition: background 0.15s, color 0.15s;
+        }
+        .qr-back-icon:hover { background: #e2e6f5; color: #2d4580; }
+        .qr-back-icon svg { display: block; }
+        .qr-amount-bar { background: #f0f2fa; border-radius: 10px; padding: 16px 0 12px 0; font-size: 1.5em; color: #3C5099; font-weight: 700; text-align: center; margin-bottom: 18px; }
         .qr-project { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-        .qr-project-img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: #eee; }
         .qr-project-info { font-size: 1.1em; }
         .qr-section { text-align: center; margin: 24px 0 18px 0; }
         .qr-section img { max-width: 260px; width: 100%; background: #fff; padding: 16px; border-radius: 16px; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.08); }
         .qr-receipt { background: #f7f7f7; border-radius: 12px; padding: 18px 18px 10px 18px; margin-top: 18px; font-size: 1.08em; }
         .qr-receipt-row { margin-bottom: 8px; }
-        .qr-download-btn { margin: 18px auto 0 auto; display: block; background: #ff8800; color: #fff; font-size: 1.15em; font-weight: 700; border: none; border-radius: 10px; padding: 12px 0; width: 100%; cursor: pointer; transition: background 0.15s; }
-        .qr-download-btn:hover { background: #e67e22; }
-        .qr-note { color: #888; font-size: 0.98em; margin-top: 10px; text-align: center; }
+        .qr-download-btn { margin: 18px auto 0 auto; display: block; background: #3C5099; color: #fff; font-size: 1.15em; font-weight: 700; border: none; border-radius: 10px; padding: 14px 0; width: 100%; max-width: none; box-sizing: border-box; cursor: pointer; transition: background 0.15s; }
+        .qr-download-btn:hover { background: #2d4580; }
+        .qr-abandon-wrap { margin-top: 14px; }
+        .qr-abandon-btn {
+            width: 100%; margin: 0; display: block; box-sizing: border-box;
+            border: none; background: #CE573F; color: #fff;
+            cursor: pointer; padding: 14px 0; border-radius: 10px; font-weight: 700; font-size: 1.18em;
+            transition: filter 0.15s, background 0.15s;
+        }
+        .qr-abandon-btn:hover { filter: brightness(0.94); }
     </style>
 </head>
 <body>
     <div class="qr-main">
-        <div class="qr-title">Scan QR Code เพื่อบริจาค</div>
-        <div class="qr-amount-bar" style="color:#222;">ยอดบริจาค <?= number_format($amount) ?> บาท</div>
+        <div class="qr-header-row">
+            <a class="qr-back-icon"
+               href="<?= htmlspecialchars($return_payment_page, ENT_QUOTES, 'UTF-8') ?>"
+               title="กลับ"
+               aria-label="<?= htmlspecialchars($back_aria, ENT_QUOTES, 'UTF-8') ?>">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </a>
+            <div class="qr-title"><?= htmlspecialchars($page_title) ?></div>
+            <div class="qr-header-spacer" aria-hidden="true"></div>
+        </div>
+        <div class="qr-amount-bar">ยอดบริจาค <?= number_format($amount) ?> บาท</div>
         <div class="qr-project">
-            <span class="qr-project-info" style="font-size:1.1em;font-weight:600;display:inline-block;">บริจาคให้กับโครงการ <?= htmlspecialchars($project_name) ?></span>
+            <span class="qr-project-info" style="font-size:1.1em;font-weight:600;display:inline-block;"><?= htmlspecialchars($subtitle_line) ?></span>
         </div>
         <div class="qr-section">
             <img src="<?= htmlspecialchars($qr_image) ?>" alt="PromptPay QR">
         </div>
         <div class="qr-receipt">
-            <div class="qr-receipt-row"><b>จำนวนเงิน</b> <?= number_format($amount,2) ?> บาท</div>
+            <div class="qr-receipt-row"><b>จำนวนเงิน</b> <?= number_format($amount, 2) ?> บาท</div>
             <div class="qr-receipt-row"><b>เลขที่รายการบริจาค</b> <?= htmlspecialchars($receipt_no) ?></div>
-            <div class="qr-receipt-row"><b>ชื่อโครงการ</b> <?= htmlspecialchars($project_name) ?></div>
+            <div class="qr-receipt-row"><b><?= htmlspecialchars($receipt_target_label) ?></b> <?= htmlspecialchars($receipt_target_value) ?></div>
             <div class="qr-receipt-row"><b>วันที่</b> <?= date('d/m/Y H:i') ?></div>
         </div>
-                <a class="qr-download-btn" 
-                   href="check_project_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= urlencode($project_id) ?>"
-                   style="background:#F1CF54;color:#222;display:flex;align-items:center;justify-content:center;gap:10px;font-size:1.18em;text-decoration:none;">
-                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" style="vertical-align:middle;"><circle cx="11" cy="11" r="11" fill="#597D57"/><path d="M6.5 11.5L10 15L16 8.5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span>ชำระเงินแล้ว</span>
-                </a>
-                <div class="qr-note">* ในกรณีรับเงินเพื่อขอลดหย่อนภาษีแบบ e-Donation จะเป็นชื่อ-นามสกุล เจ้าของบัญชีธนาคารที่ใช้ชำระเงิน</div>
-                <div id="paid-modal" style="display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);z-index:9999;align-items:center;justify-content:center;">
-                        <div style="background:#fff;border-radius:16px;max-width:340px;margin:auto;padding:32px 24px;text-align:center;box-shadow:0 2px 16px 0 rgba(0,0,0,0.13);">
-                                <div style="font-size:2.2em;margin-bottom:12px;">
-                                    <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;">
-                                        <circle cx="19" cy="19" r="19" fill="#597D57"/>
-                                        <path d="M11 20.5L17 26L27 14" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                </div>
-                                <div style="font-size:1.25em;font-weight:600;margin-bottom:10px;">ขอบคุณสำหรับการสนับสนุนโครงการ</div>
-                                <div style="color:#666;font-size:1em;">ระบบจะตรวจสอบและอัปเดตสถานะการบริจาคของคุณโดยอัตโนมัติ</div>
-                                <button onclick="closePaidModal()" style="margin-top:22px;background:#F1CF54;color:#222;font-size:1.1em;font-weight:700;border:none;border-radius:8px;padding:10px 28px;cursor:pointer;">ปิด</button>
-                        </div>
-                </div>
+        <a class="qr-download-btn"
+           href="<?= htmlspecialchars($confirm_href, ENT_QUOTES, 'UTF-8') ?>"
+           style="background:#F1CF54;color:#222;display:flex;align-items:center;justify-content:center;font-size:1.18em;text-decoration:none;">
+            ยืนยันการชำระ
+        </a>
+        <form method="post" action="abandon_qr.php" class="qr-abandon-wrap">
+            <input type="hidden" name="charge_id" value="<?= htmlspecialchars($abandon_charge, ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="return_url" value="<?= htmlspecialchars($return_payment_page, ENT_QUOTES, 'UTF-8') ?>">
+            <button type="submit" class="qr-abandon-btn">ยกเลิกการชำระ</button>
+        </form>
     </div>
-    <script>
-    function showPaidModal() {
-        document.getElementById('paid-modal').style.display = 'flex';
-    }
-    function closePaidModal() {
-        window.location.href = '../project.php';
-    }
-    </script>
 </body>
 </html>

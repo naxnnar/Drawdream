@@ -6,6 +6,7 @@ error_reporting(E_ALL);
 
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/admin_audit_migrate.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -19,19 +20,21 @@ $role = $_SESSION['role'] ?? '';
 function checkCompletedProjects($conn) {
     // เช็คโครงการที่ครบเป้าหมาย
     $conn->query("
-        UPDATE project 
+        UPDATE foundation_project 
         SET project_status = 'completed'
         WHERE project_status = 'approved'
         AND current_donate >= goal_amount
         AND goal_amount > 0
+        AND deleted_at IS NULL
     ");
 
     // เช็คโครงการที่หมดเวลา
     $conn->query("
-        UPDATE project 
+        UPDATE foundation_project 
         SET project_status = 'completed'
         WHERE project_status = 'approved'
         AND end_date < CURDATE()
+        AND deleted_at IS NULL
     ");
 }
 
@@ -40,28 +43,96 @@ checkCompletedProjects($conn);
 
 if ($role === 'foundation') {
     $stmt = $conn->prepare("SELECT fp.*, u.email FROM foundation_profile fp 
-                           JOIN users u ON fp.user_id = u.user_id 
+                           JOIN `user` u ON fp.user_id = u.user_id 
                            WHERE fp.user_id = ? LIMIT 1");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $profile = $stmt->get_result()->fetch_assoc();
 
-    // ดึงเฉพาะโครงการของมูลนิธิที่ล็อกอินอยู่ (ยึดตาม foundation_name ในตาราง project)
     $foundationName = trim((string)($profile['foundation_name'] ?? ''));
-    $stmt_proj = $conn->prepare("
-         SELECT project_id, project_name, goal_amount, current_donate,
-             project_status, end_date, project_image
-         FROM project 
-         WHERE foundation_name = ?
-         ORDER BY project_status DESC, project_id DESC
-    ");
-    $stmt_proj->bind_param("s", $foundationName);
-    $stmt_proj->execute();
-    $foundation_projects = $stmt_proj->get_result()->fetch_all(MYSQLI_ASSOC);
+    $foundationId   = (int)($profile['foundation_id'] ?? 0);
+
+    // --- สรุปยอดบริจาคตามหมวด (เด็ก / โครงการ / สิ่งของ) ---
+    $finance_child_total  = 0.0;
+    $finance_project_total = 0.0;
+    $finance_need_total   = 0.0;
+    $foundation_finance_rows = [];
+
+    $has_child_donations_tbl = (bool)($conn->query("SHOW TABLES LIKE 'child_donations'")->num_rows);
+
+    if ($foundationId > 0) {
+        $nq = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS t FROM foundation_needlist WHERE foundation_id = ?");
+        $nq->bind_param("i", $foundationId);
+        $nq->execute();
+        $finance_need_total = (float)($nq->get_result()->fetch_assoc()['t'] ?? 0);
+    }
+
+    if ($foundationName !== '') {
+        $pq = $conn->prepare("
+            SELECT COALESCE(SUM(d.amount), 0) AS t
+            FROM donation d
+            INNER JOIN donate_category dc ON dc.category_id = d.category_id AND dc.project_donate IS NOT NULL
+            INNER JOIN foundation_project p ON p.project_id = d.target_id AND p.foundation_name = ?
+            WHERE d.payment_status = 'completed'
+        ");
+        $pq->bind_param("s", $foundationName);
+        $pq->execute();
+        $finance_project_total = (float)($pq->get_result()->fetch_assoc()['t'] ?? 0);
+    }
+
+    if ($has_child_donations_tbl && $foundationId > 0) {
+        $cq = $conn->prepare("
+            SELECT COALESCE(SUM(cd.amount), 0) AS t
+            FROM child_donations cd
+            INNER JOIN foundation_children fc ON fc.child_id = cd.child_id AND fc.foundation_id = ?
+        ");
+        $cq->bind_param("i", $foundationId);
+        $cq->execute();
+        $finance_child_total = (float)($cq->get_result()->fetch_assoc()['t'] ?? 0);
+    }
+
+    $finance_grand_total = $finance_child_total + $finance_project_total + $finance_need_total;
+
+    if ($foundationName !== '') {
+        $lr = $conn->prepare("
+            SELECT d.transfer_datetime AS ts, d.amount, 'project' AS cat_key, p.project_name AS title
+            FROM donation d
+            INNER JOIN donate_category dc ON dc.category_id = d.category_id AND dc.project_donate IS NOT NULL
+            INNER JOIN foundation_project p ON p.project_id = d.target_id AND p.foundation_name = ?
+            WHERE d.payment_status = 'completed'
+            ORDER BY d.transfer_datetime DESC
+            LIMIT 80
+        ");
+        $lr->bind_param("s", $foundationName);
+        $lr->execute();
+        foreach ($lr->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+            $foundation_finance_rows[] = $row;
+        }
+    }
+
+    if ($has_child_donations_tbl && $foundationId > 0) {
+        $lr2 = $conn->prepare("
+            SELECT cd.donated_at AS ts, cd.amount, 'child' AS cat_key, fc.child_name AS title
+            FROM child_donations cd
+            INNER JOIN foundation_children fc ON fc.child_id = cd.child_id AND fc.foundation_id = ?
+            ORDER BY cd.donated_at DESC
+            LIMIT 80
+        ");
+        $lr2->bind_param("i", $foundationId);
+        $lr2->execute();
+        foreach ($lr2->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+            $foundation_finance_rows[] = $row;
+        }
+    }
+
+    usort($foundation_finance_rows, static function ($a, $b) {
+        return strtotime((string)$b['ts']) <=> strtotime((string)$a['ts']);
+    });
+    $foundation_finance_rows = array_slice($foundation_finance_rows, 0, 50);
 
 } elseif ($role === 'donor') {
     $stmt = $conn->prepare("SELECT d.*, u.email FROM donor d 
-                           JOIN users u ON d.user_id = u.user_id 
+                           JOIN `user` u ON d.user_id = u.user_id 
                            WHERE d.user_id = ? LIMIT 1");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -87,7 +158,7 @@ if ($role === 'foundation') {
     $donation_history = $stmt_don->get_result()->fetch_all(MYSQLI_ASSOC);
 
 } elseif ($role === 'admin') {
-    $stmt = $conn->prepare("SELECT email FROM users WHERE user_id = ? LIMIT 1");
+    $stmt = $conn->prepare("SELECT email FROM `user` WHERE user_id = ? LIMIT 1");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $user_data = $stmt->get_result()->fetch_assoc();
@@ -105,11 +176,13 @@ if ($role === 'foundation') {
                nl.item_image AS photo_item,
                nl.foundation_id,
                p.project_name, p.project_desc,
-               fp.foundation_name
+               fp.foundation_name,
+               fp_audit.foundation_name AS audit_foundation_name
         FROM admin a
-        LEFT JOIN foundation_needlist nl ON a.target_id = nl.item_id AND a.action_type IN ('Approve_Need', 'Reject_Need')
-        LEFT JOIN project p ON a.target_id = p.project_id AND a.action_type IN ('Approve_Project', 'Reject_Project')
+        LEFT JOIN foundation_needlist nl ON a.target_entity = 'need' AND a.target_id = nl.item_id
+        LEFT JOIN foundation_project p ON a.target_entity = 'project' AND a.target_id = p.project_id
         LEFT JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
+        LEFT JOIN foundation_profile fp_audit ON a.target_entity = 'foundation' AND a.target_id = fp_audit.foundation_id
         WHERE a.admin_id = ?
         ORDER BY a.action_at DESC LIMIT 50
     ");
@@ -122,28 +195,6 @@ if ($role === 'foundation') {
 
 if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
 
-function translateAction($action) {
-    $map = [
-        'Login'          => 'เข้าสู่ระบบ',
-        'Approve_Child'  => 'อนุมัติเด็ก',
-        'Reject_Project' => 'ปฏิเสธโครงการ',
-        'Approve_Need'   => 'อนุมัติรายการสิ่งของ',
-        'Reject_Need'    => 'ปฏิเสธรายการสิ่งของ',
-        'Approve_Project'=> 'อนุมัติโครงการ',
-        'Other'          => 'อื่นๆ'
-    ];
-    return $map[$action] ?? $action;
-}
-
-function statusLabel($status) {
-    $map = [
-        'pending'   => ['label' => 'รออนุมัติ',    'color' => '#FFC107'],
-        'approved'  => ['label' => 'กำลังระดมทุน', 'color' => '#4CAF50'],
-        'completed' => ['label' => 'สำเร็จแล้ว',   'color' => '#4A5BA8'],
-        'rejected'  => ['label' => 'ไม่ผ่าน',      'color' => '#E57373'],
-    ];
-    return $map[$status] ?? ['label' => $status, 'color' => '#999'];
-}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -153,26 +204,32 @@ function statusLabel($status) {
     <title>โปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/profile.css?v=5">
+    <link rel="stylesheet" href="css/profile.css?v=10">
 </head>
 <body>
 
 <?php include 'navbar.php'; ?>
 
 <div class="profile-container">
-    <div class="profile-header <?= $role === 'donor' ? 'profile-header--donor' : '' ?>">
+    <div class="profile-header <?= ($role === 'donor' || $role === 'foundation') ? 'profile-header--donor' : '' ?>">
 
         <?php if ($role === 'foundation'): ?>
-            <div class="profile-image-placeholder">
+            <div class="profile-image-placeholder profile-image-placeholder--donor">
                 <?php if (!empty($profile['foundation_image'])): ?>
                     <img src="uploads/profiles/<?= htmlspecialchars($profile['foundation_image']) ?>" alt="รูปโปรไฟล์">
                 <?php else: ?>
                     <img src="img/newfoundation.jpg" alt="รูปโปรไฟล์มูลนิธิ">
                 <?php endif; ?>
             </div>
-            <div class="profile-info">
+            <div class="profile-info profile-info--donor">
                 <h1><?= htmlspecialchars($profile['foundation_name']) ?></h1>
                 <p><?= htmlspecialchars($profile['email']) ?></p>
+                <?php if (!empty($profile['phone'])): ?>
+                    <div class="info-row">
+                        <span class="info-label">โทรศัพท์:</span>
+                        <?= htmlspecialchars($profile['phone']) ?>
+                    </div>
+                <?php endif; ?>
             </div>
 
         <?php elseif ($role === 'admin'): ?>
@@ -190,7 +247,7 @@ function statusLabel($status) {
                 <?php if (!empty($profile['profile_image'])): ?>
                     <img src="uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" alt="รูปโปรไฟล์">
                 <?php else: ?>
-                    <img src="img/icoprofile.png" alt="รูปโปรไฟล์ผู้บริจาคเริ่มต้น" class="profile-image-default">
+                    <img src="img/donor-avatar-placeholder.svg" alt="รูปโปรไฟล์ผู้บริจาคเริ่มต้น" class="profile-image-default">
                 <?php endif; ?>
             </div>
             <div class="profile-info">
@@ -212,64 +269,88 @@ function statusLabel($status) {
         <?php endif; ?>
     </div>
 
-    <?php if ($role === 'foundation' && !empty($profile['account_verified']) && empty($profile['bank_account_number'])): ?>
-        <div class="alert-bank">
-            บัญชีของคุณได้รับการยืนยันแล้ว กรุณาเพิ่มข้อมูลบัญชีธนาคารในหน้าแก้ไขโปรไฟล์เพื่อรับการโอนเงินบริจาค
-        </div>
-    <?php endif; ?>
-
     <?php if ($role === 'foundation'): ?>
-        <a href="update_profile.php" class="btn-edit">แก้ไขโปรไฟล์</a>
+        <?php if (!empty($profile['account_verified']) && empty($profile['bank_account_number'])): ?>
+            <div class="alert-bank alert-bank--foundation">
+                บัญชีของคุณได้รับการยืนยันแล้ว กรุณาเพิ่มข้อมูลบัญชีธนาคารในหน้าแก้ไขโปรไฟล์เพื่อรับการโอนเงินบริจาค
+            </div>
+        <?php endif; ?>
 
-        <!-- โครงการของมูลนิธิ -->
-        <div class="logs-section">
-            <h2>โครงการของเรา</h2>
+        <div class="donor-menu foundation-donor-menu">
+            <a href="update_profile.php" class="profile-menu-btn profile-menu-btn--edit">
+                <span class="profile-menu-icon"><i class="bi bi-person-fill"></i></span>
+                <span class="profile-menu-label">แก้ไขโปรไฟล์</span>
+                <span class="profile-menu-arrow">›</span>
+            </a>
+            <button type="button" class="profile-menu-btn profile-menu-btn--history" id="openFoundationFinance">
+                <span class="profile-menu-icon"><i class="bi bi-cash-stack"></i></span>
+                <span class="profile-menu-label">ยอดบริจาค</span>
+                <span class="profile-menu-arrow">›</span>
+            </button>
+        </div>
 
-            <?php if (!empty($foundation_projects)): ?>
-                <div class="project-list">
-                <?php foreach ($foundation_projects as $proj): ?>
-                    <?php
-                        $st = statusLabel($proj['project_status']);
-                        $goal = (float)($proj['goal_amount'] ?? 0);
-                        $current = (float)($proj['current_donate'] ?? 0);
-                        $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
-                    ?>
-                    <div class="project-item <?= htmlspecialchars($proj['project_status']) ?>">
-                        <?php if (!empty($proj['project_image'])): ?>
-                            <img src="uploads/<?= htmlspecialchars($proj['project_image']) ?>" class="project-thumb" alt="">
-                        <?php else: ?>
-                            <div class="project-thumb-empty"></div>
-                        <?php endif; ?>
-                        <div class="project-detail">
-                            <div class="project-name"><?= htmlspecialchars($proj['project_name']) ?></div>
-                            <span class="project-status" style="background:<?= $st['color'] ?>">
-                                <?= $st['label'] ?>
-                            </span>
-                            <?php if ($proj['project_status'] !== 'pending' && $proj['project_status'] !== 'rejected'): ?>
-                                <div class="project-bar-wrap">
-                                    <div class="project-bar-fill" style="width:<?= (int)$percent ?>%"></div>
-                                </div>
-                                <div class="project-amount">
-                                    ได้รับ <strong><?= number_format($current, 0) ?></strong> / 
-                                    <?= number_format($goal, 0) ?> บาท
-                                    (<?= round($percent) ?>%)
-                                    <?php if ($proj['project_status'] === 'completed'): ?>
-                                        — <span style="color:#4A5BA8; font-weight:600;">โครงการสำเร็จแล้ว</span>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php if (!empty($proj['end_date'])): ?>
-                                <div style="font-size:12px; color:#999; margin-top:4px;">
-                                    วันสิ้นสุด: <?= date('d/m/Y', strtotime($proj['end_date'])) ?>
-                                </div>
-                            <?php endif; ?>
+        <?php
+        $foundation_cat_labels = [
+            'child'   => ['label' => 'เด็ก', 'short' => 'เด็ก'],
+            'project' => ['label' => 'โครงการ', 'short' => 'โครงการ'],
+            'need'    => ['label' => 'สิ่งของ', 'short' => 'สิ่งของ'],
+        ];
+        ?>
+        <div class="logs-section donor-history-panel foundation-projects-panel foundation-finance-panel" id="foundationFinancePanel" hidden>
+            <h2>ยอดบริจาค</h2>
+            <p class="foundation-finance-lead">สรุปตามช่องทางบริจาค (เด็ก / โครงการ / สิ่งของ) และรายการล่าสุดที่ระบบบันทึกได้</p>
+
+            <div class="foundation-finance-summary">
+                <div class="foundation-finance-card foundation-finance-card--child">
+                    <span class="foundation-finance-card__cat"><?= htmlspecialchars($foundation_cat_labels['child']['label']) ?></span>
+                    <span class="foundation-finance-card__amount"><?= number_format($finance_child_total, 2) ?> <small>บาท</small></span>
+                </div>
+                <div class="foundation-finance-card foundation-finance-card--project">
+                    <span class="foundation-finance-card__cat"><?= htmlspecialchars($foundation_cat_labels['project']['label']) ?></span>
+                    <span class="foundation-finance-card__amount"><?= number_format($finance_project_total, 2) ?> <small>บาท</small></span>
+                </div>
+                <div class="foundation-finance-card foundation-finance-card--need">
+                    <span class="foundation-finance-card__cat"><?= htmlspecialchars($foundation_cat_labels['need']['label']) ?></span>
+                    <span class="foundation-finance-card__amount"><?= number_format($finance_need_total, 2) ?> <small>บาท</small></span>
+                </div>
+            </div>
+            <div class="foundation-finance-total-row">
+                รวมทั้งหมด <strong><?= number_format($finance_grand_total, 2) ?> บาท</strong>
+            </div>
+            <?php if ($finance_need_total > 0): ?>
+                <p class="foundation-finance-note">หมายเหตุ: ยอด &ldquo;สิ่งของ&rdquo; เป็นยอดสะสมที่กระจายเข้ารายการสิ่งของที่อนุมัติแล้วของมูลนิธิคุณ (ไม่แสดงเป็นทีละรายการด้านล่าง)</p>
+            <?php endif; ?>
+
+            <h3 class="foundation-finance-subhead">รายการล่าสุด</h3>
+            <?php if (!empty($foundation_finance_rows)): ?>
+                <div class="foundation-finance-list">
+                    <?php foreach ($foundation_finance_rows as $fr): ?>
+                        <?php
+                            $ck = $fr['cat_key'] ?? 'project';
+                            $meta = $foundation_cat_labels[$ck] ?? $foundation_cat_labels['project'];
+                            $ts = $fr['ts'] ?? '';
+                            $title = trim((string)($fr['title'] ?? ''));
+                            if ($title === '') {
+                                $title = '—';
+                            }
+                        ?>
+                        <div class="foundation-finance-row">
+                            <span class="foundation-finance-badge foundation-finance-badge--<?= htmlspecialchars($ck) ?>"><?= htmlspecialchars($meta['short']) ?></span>
+                            <div class="foundation-finance-row__body">
+                                <div class="foundation-finance-row__title"><?= htmlspecialchars($title) ?></div>
+                                <div class="foundation-finance-row__time"><?= $ts ? date('d/m/Y H:i', strtotime((string)$ts)) : '—' ?></div>
+                            </div>
+                            <span class="foundation-finance-row__amount"><?= number_format((float)($fr['amount'] ?? 0), 2) ?> ฿</span>
                         </div>
-                    </div>
-                <?php endforeach; ?>
+                    <?php endforeach; ?>
                 </div>
             <?php else: ?>
-                <div style="text-align:center; color:#999; padding:30px;">
-                    ยังไม่มีโครงการ
+                <div class="foundation-empty-projects foundation-finance-empty">
+                    <?php if ($finance_grand_total > 0): ?>
+                        ยังไม่มีรายการแยกรายครั้ง (เช่น บริจาคเฉพาะสิ่งของจะแสดงเฉพาะในช่องสรุปด้านบน)
+                    <?php else: ?>
+                        ยังไม่มียอดบริจาคที่บันทึกในระบบ
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -360,13 +441,15 @@ function statusLabel($status) {
             <h2>ประวัติการทำงาน</h2>
             <?php foreach ($logs as $log): ?>
                 <?php
-                    $isApprove = strpos($log['action_type'], 'Approve') !== false;
-                    $isReject  = strpos($log['action_type'], 'Reject') !== false;
+                    $nt = (string)($log['notif_type'] ?? '');
+                    $ntBucket = drawdream_normalize_notif_type_to_th($nt);
+                    $isApprove = ($ntBucket === 'อนุมัติ');
+                    $isReject  = ($ntBucket === 'ไม่อนุมัติ');
                     $class     = $isApprove ? 'approve' : ($isReject ? 'reject' : '');
-                    $hasDetails = !empty($log['item_name']) || !empty($log['project_name']);
+                    $hasDetails = !empty($log['item_name']) || !empty($log['project_name']) || !empty($log['audit_foundation_name']);
                 ?>
                 <div class="log-item <?= $class ?>" <?= $hasDetails ? 'onclick="showModal(' . htmlspecialchars(json_encode($log)) . ')"' : '' ?>>
-                    <div class="log-action"><?= translateAction($log['action_type']) ?></div>
+                    <div class="log-action"><?= htmlspecialchars(drawdream_admin_notif_type_label_th($nt)) ?></div>
                     <div class="log-details">
                         <?php if ($log['target_id']): ?>
                             <strong>รหัสอ้างอิง:</strong> #<?= $log['target_id'] ?>
@@ -376,6 +459,12 @@ function statusLabel($status) {
                     <?php if (!empty($log['remark'])): ?>
                         <div class="log-remark">
                             <strong>เหตุผล:</strong> <?= htmlspecialchars($log['remark']) ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($log['notif_recipient_user_id'])): ?>
+                        <div class="log-details" style="font-size:0.9em;color:#555;">
+                            แจ้งเตือนผู้ใช้ #<?= (int)$log['notif_recipient_user_id'] ?>
+                            <?php if (!empty($log['notif_type'])): ?><span> — <?= htmlspecialchars(drawdream_admin_notif_type_label_th($nt)) ?></span><?php endif; ?>
                         </div>
                     <?php endif; ?>
                     <div class="log-time"><?= date('d/m/Y H:i:s', strtotime($log['action_at'])) ?></div>
@@ -411,6 +500,10 @@ function showModal(data) {
         html += `<div class="modal-title">${data.project_name}</div>`;
         html += `<div class="modal-section"><div class="modal-label">รายละเอียด:</div><div class="modal-value">${data.project_desc || '-'}</div></div>`;
     }
+    if (data.audit_foundation_name) {
+        html += `<div class="modal-title">มูลนิธิ: ${data.audit_foundation_name}</div>`;
+        html += `<div class="modal-section"><div class="modal-label">คำขอสมัคร / อนุมัติบัญชี</div><div class="modal-value">รหัสอ้างอิง foundation_id #${data.target_id}</div></div>`;
+    }
     body.innerHTML = html;
     modal.classList.add('active');
 }
@@ -428,6 +521,15 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
         openBtn.addEventListener('click', function() {
             panel.hidden = false;
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    var openFin = document.getElementById('openFoundationFinance');
+    var finPanel = document.getElementById('foundationFinancePanel');
+    if (openFin && finPanel) {
+        openFin.addEventListener('click', function() {
+            finPanel.hidden = false;
+            finPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     }
 

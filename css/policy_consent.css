@@ -1,74 +1,83 @@
 /* ========================================
-   policy_consent.css — สำหรับหน้า policy_consent.php
+   policy_consent.css
+   - หน้าเต็ม: body.policy-consent-page + .policy-consent-page__*
+   - โมดัล: ใช้เฉพาะ .policy-consent-prose (ไม่มีสไตล์ global กระทบหน้าอื่น)
    ======================================== */
 
 :root {
-    --ink: #1f2e43;
-    --muted: #4d5f77;
-    --paper: #ffffff;
-    --line: #d9e0ea;
-    --brand: #3C5099;
-    --accent: #f6f8fc;
+    --policy-ink: #1f2e43;
+    --policy-muted: #4d5f77;
+    --policy-paper: #ffffff;
+    --policy-line: #d9e0ea;
+    --policy-brand: #3C5099;
+    --policy-accent: #f6f8fc;
 }
 
-body {
+/* —— หน้า policy_consent.php เท่านั้น —— */
+body.policy-consent-page {
     margin: 0;
     background: linear-gradient(180deg, #f8fbff 0%, #ffffff 35%);
-    color: var(--ink);
+    color: var(--policy-ink);
     font-family: Tahoma, "Noto Sans Thai", sans-serif;
 }
 
-.container {
+body.policy-consent-page .policy-consent-page__container {
     max-width: 980px;
     margin: 24px auto 40px;
     padding: 0 16px;
 }
 
-.paper {
-    background: var(--paper);
-    border: 1px solid var(--line);
+body.policy-consent-page .policy-consent-page__paper {
+    background: var(--policy-paper);
+    border: 1px solid var(--policy-line);
     border-radius: 14px;
     box-shadow: 0 8px 22px rgba(17, 45, 78, 0.08);
     padding: 24px 24px 18px;
 }
 
-h1 {
+/* —— เนื้อหานโยบาย (หน้าเต็ม + โมดัล) —— */
+.policy-consent-prose {
+    color: var(--policy-ink);
+    font-family: Tahoma, "Noto Sans Thai", sans-serif;
+}
+
+.policy-consent-prose h1 {
     margin: 0 0 10px;
-    color: var(--brand);
+    color: var(--policy-brand);
     font-size: 1.55rem;
 }
 
-h2 {
+.policy-consent-prose h2 {
     margin: 24px 0 10px;
     font-size: 1.35rem;
     color: #243e84;
 }
 
-h3 {
+.policy-consent-prose h3 {
     margin: 14px 0 8px;
     font-size: 1.07rem;
     color: #294a8f;
 }
 
-p {
+.policy-consent-prose p {
     margin: 0 0 8px;
     line-height: 1.65;
-    color: var(--muted);
+    color: var(--policy-muted);
     font-size: 1rem;
 }
 
-ol,
-ul {
+.policy-consent-prose ol,
+.policy-consent-prose ul {
     margin-top: 6px;
     margin-bottom: 10px;
     padding-left: 24px;
-    color: var(--muted);
+    color: var(--policy-muted);
     line-height: 1.62;
 }
 
-.badge {
+.policy-consent-prose .badge {
     display: inline-block;
-    background: var(--accent);
+    background: var(--policy-accent);
     border: 1px solid #cad6ea;
     color: #2b4689;
     border-radius: 999px;
@@ -78,7 +87,7 @@ ul {
     font-weight: 700;
 }
 
-.footer-note {
+.policy-consent-prose .footer-note {
     margin-top: 14px;
     padding: 12px 14px;
     background: #fff4d6;

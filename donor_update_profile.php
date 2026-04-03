@@ -32,7 +32,7 @@ if (!is_dir($uploadDir)) {
 }
 
 $stmt = $conn->prepare('SELECT d.*, u.email FROM donor d 
-                       JOIN users u ON d.user_id = u.user_id 
+                       JOIN `user` u ON d.user_id = u.user_id 
                        WHERE d.user_id = ? LIMIT 1');
 $stmt->bind_param('i', $user_id);
 $stmt->execute();
@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         if ($stmt->execute()) {
             $msg = 'บันทึกข้อมูลสำเร็จ!';
             $stmt2 = $conn->prepare('SELECT d.*, u.email FROM donor d 
-                                    JOIN users u ON d.user_id = u.user_id 
+                                    JOIN `user` u ON d.user_id = u.user_id 
                                     WHERE d.user_id = ? LIMIT 1');
             $stmt2->bind_param('i', $user_id);
             $stmt2->execute();
@@ -225,7 +225,7 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
     <title>แก้ไขโปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="css/donor_update_profile.css?v=4">
+    <link rel="stylesheet" href="css/donor_update_profile.css?v=6">
 </head>
 <body>
 
@@ -238,7 +238,7 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
                 <?php if (!empty($profile['profile_image'])): ?>
                     <img src="uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" alt="" class="donor-avatar-img" id="avatarPreview">
                 <?php else: ?>
-                    <img src="img/icoprofile.png" alt="" class="donor-avatar-img donor-avatar-img--placeholder" id="avatarPreview">
+                    <img src="img/donor-avatar-placeholder.svg" alt="" class="donor-avatar-img donor-avatar-img--placeholder" id="avatarPreview">
                 <?php endif; ?>
             </div>
             <button type="button" class="donor-avatar-fab" id="avatarFab" title="อัปโหลดรูปโปรไฟล์" aria-label="อัปโหลดรูปโปรไฟล์">
@@ -250,11 +250,11 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
     </div>
 
     <?php if ($msg): ?>
-        <div class="alert alert-success">✅ <?= htmlspecialchars($msg) ?></div>
+        <div class="alert alert-success"><?= htmlspecialchars($msg) ?></div>
     <?php endif; ?>
 
     <?php if ($error): ?>
-        <div class="alert alert-error">❌ <?= htmlspecialchars($error) ?></div>
+        <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 
     <form method="post" enctype="multipart/form-data">
@@ -360,9 +360,9 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
         </section>
         <?php endif; ?>
 
-        <div class="btn-group">
+        <div class="btn-group btn-group--save-left">
+            <button type="submit" name="update_profile" class="btn btn-primary">บันทึก</button>
             <a href="profile.php" class="btn btn-secondary">ยกเลิก</a>
-            <button type="submit" name="update_profile" class="btn btn-primary">💾 บันทึก</button>
         </div>
     </form>
 </div>
@@ -372,6 +372,7 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
   var fileInput = document.getElementById('profile_image');
   var fab = document.getElementById('avatarFab');
   var preview = document.getElementById('avatarPreview');
+  var lastBlobUrl = null;
   if (fab && fileInput) {
     fab.addEventListener('click', function() { fileInput.click(); });
   }
@@ -379,8 +380,9 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
     fileInput.addEventListener('change', function() {
       var f = fileInput.files && fileInput.files[0];
       if (!f || !f.type.match(/^image\//)) return;
-      var url = URL.createObjectURL(f);
-      preview.src = url;
+      if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
+      lastBlobUrl = URL.createObjectURL(f);
+      preview.src = lastBlobUrl;
       preview.classList.remove('donor-avatar-img--placeholder');
     });
   }

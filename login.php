@@ -1,8 +1,10 @@
-﻿<?php
+<?php
 // ไฟล์นี้: login.php
 // หน้าที่: หน้าเข้าสู่ระบบของผู้ใช้
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/address_helpers.php';
+require_once __DIR__ . '/includes/foundation_banks.php';
 
 // ถ้า login แล้ว ไป homepage
 if (isset($_SESSION['user_id'])) {
@@ -39,14 +41,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         } elseif ($password !== $confirm_password) {
             $error = "รหัสผ่านไม่ตรงกัน";
         } else {
-            $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+            $stmt = $conn->prepare("SELECT user_id FROM `user` WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
             if ($stmt->get_result()->num_rows > 0) {
                 $error = "อีเมลนี้ถูกใช้งานแล้ว";
             } else {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare("INSERT INTO users (email, password, role) VALUES (?, ?, 'donor')");
+                $stmt = $conn->prepare("INSERT INTO `user` (email, password, role) VALUES (?, ?, 'donor')");
                 $stmt->bind_param("ss", $email, $hashed_password);
 
                 if ($stmt->execute()) {
@@ -71,29 +73,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         $registration_number = trim($_POST['registration_number']);
         $email = trim($_POST['email']);
         $phone = trim($_POST['phone']);
-        $address = trim($_POST['address']);
+        $address = drawdream_merge_foundation_address_from_post($_POST);
         $password = $_POST['password'];
         $confirm_password = $_POST['confirm_password'];
+        $bank_name = trim($_POST['bank_name'] ?? '');
+        $bank_account_number = preg_replace('/\D/', '', trim($_POST['bank_account_number'] ?? ''));
+        $bank_account_name = trim($_POST['bank_account_name'] ?? '');
 
         if (empty($foundation_name) || empty($email) || empty($password)) {
             $error = "กรุณากรอกข้อมูลให้ครบถ้วน";
+        } elseif ($address === '') {
+            $error = "กรุณาเลือกจังหวัด อำเภอ ตำบล และรหัสไปรษณีย์ให้ครบ";
         } elseif ($password !== $confirm_password) {
             $error = "รหัสผ่านไม่ตรงกัน";
+        } elseif ($bank_name !== '' && !in_array($bank_name, array_keys(drawdream_foundation_bank_list()), true)) {
+            $error = "กรุณาเลือกธนาคารจากรายการ";
+        } elseif ($bank_account_number !== '' && strlen($bank_account_number) !== 10) {
+            $error = "เลขบัญชีต้องเป็นตัวเลขครบ 10 หลัก";
         } else {
-            $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+            $stmt = $conn->prepare("SELECT user_id FROM `user` WHERE email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
             if ($stmt->get_result()->num_rows > 0) {
                 $error = "อีเมลนี้ถูกใช้งานแล้ว";
             } else {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare("INSERT INTO users (email, password, role) VALUES (?, ?, 'foundation')");
+                $stmt = $conn->prepare("INSERT INTO `user` (email, password, role) VALUES (?, ?, 'foundation')");
                 $stmt->bind_param("ss", $email, $hashed_password);
 
                 if ($stmt->execute()) {
                     $user_id = $conn->insert_id;
-                    $stmt2 = $conn->prepare("INSERT INTO foundation_profile (user_id, foundation_name, registration_number, phone, address) VALUES (?, ?, ?, ?, ?)");
-                    $stmt2->bind_param("issss", $user_id, $foundation_name, $registration_number, $phone, $address);
+                    $stmt2 = $conn->prepare("INSERT INTO foundation_profile (user_id, foundation_name, registration_number, phone, address, bank_name, bank_account_number, bank_account_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $stmt2->bind_param("isssssss", $user_id, $foundation_name, $registration_number, $phone, $address, $bank_name, $bank_account_number, $bank_account_name);
                     $stmt2->execute();
 
                     $success = "สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...";
@@ -120,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         $error = "กรุณากรอกอีเมลและรหัสผ่าน";
     } else {
         // ดึงข้อมูล user จาก email ก่อน ไม่ filter role
-        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+        $stmt = $conn->prepare("SELECT * FROM `user` WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
@@ -172,6 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $page === 'home' ? 'DrawDream' : ($page === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก') ?> | DrawDream</title>
     <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/thai_address.css?v=1">
 </head>
 
 <body>
@@ -284,8 +296,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         <div class="form-group">
                             <input type="tel" name="phone" placeholder="เบอร์โทรศัพท์">
                         </div>
+                        <?php
+                        $thai_address_options = ['require' => true];
+                        include __DIR__ . '/includes/thai_address_fields.php';
+                        ?>
                         <div class="form-group">
-                            <textarea name="address" placeholder="ที่อยู่มูลนิธิ" rows="3"></textarea>
+                            <label for="foundation_reg_bank_name" class="form-label" style="display:block;margin-bottom:6px;font-weight:600;">ชื่อธนาคาร</label>
+                            <select name="bank_name" id="foundation_reg_bank_name" class="form-input" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #D1D5DB;">
+                                <option value="">— เลือกธนาคาร (ถ้ามี) —</option>
+                                <?php foreach (drawdream_foundation_bank_list() as $bval => $blabel): ?>
+                                    <option value="<?= htmlspecialchars($bval) ?>"><?= htmlspecialchars($blabel) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="foundation_reg_bank_account" class="form-label" style="display:block;margin-bottom:6px;font-weight:600;">เลขบัญชี</label>
+                            <input type="text" name="bank_account_number" id="foundation_reg_bank_account" inputmode="numeric" autocomplete="off" maxlength="10" pattern="\d{10}" class="form-input" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #D1D5DB;">
+                        </div>
+                        <div class="form-group">
+                            <label for="foundation_reg_bank_holder" class="form-label" style="display:block;margin-bottom:6px;font-weight:600;">ชื่อบัญชี</label>
+                            <input type="text" name="bank_account_name" id="foundation_reg_bank_holder" placeholder="ชื่อบัญชี (ถ้ามี)" class="form-input" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #D1D5DB;">
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
@@ -329,6 +359,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
        
     });
     </script>
+<?php if ($page === 'register' && ($step ?? '') === 'form' && ($role ?? '') === 'foundation'): ?>
+    <script src="js/thai_address_select.js?v=1"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      if (typeof ThaiAddressSelect !== 'undefined') {
+        ThaiAddressSelect.mount({
+          province: '#addr_province',
+          amphoe: '#addr_amphoe',
+          tambon: '#addr_tambon',
+          zip: '#addr_zip'
+        });
+      }
+      var acc = document.getElementById('foundation_reg_bank_account');
+      if (acc) {
+        acc.addEventListener('input', function () {
+          acc.value = acc.value.replace(/\D/g, '').slice(0, 10);
+        });
+      }
+    });
+    </script>
+<?php endif; ?>
 
 </body>
 

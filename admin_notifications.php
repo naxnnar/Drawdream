@@ -3,6 +3,7 @@
 // หน้าที่: รวมการแจ้งเตือนรออนุมัติของแอดมินทุกฟีเจอร์
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/drawdream_project_status.php';
 
 if (!isset($_SESSION['user_id']) || (($_SESSION['role'] ?? '') !== 'admin')) {
     header('Location: login.php');
@@ -31,8 +32,8 @@ if ($qFoundation) {
 // โปรไฟล์เด็ก
 $qChildren = mysqli_query($conn, "
     SELECT c.child_id, c.child_name, c.foundation_name, c.approve_profile, c.status
-    FROM Children c
-    WHERE COALESCE(c.approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')
+    FROM foundation_children c
+    WHERE COALESCE(c.approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ') AND c.deleted_at IS NULL
     ORDER BY c.child_id DESC
     LIMIT 50
 ");
@@ -42,11 +43,12 @@ if ($qChildren) {
     }
 }
 
-// โครงการ
+// โครงการ (รองรับทั้ง pending กับข้อความไทยรอดำเนินการ — db.php normalize แล้ว แต่คงเงื่อนไขคู่เพื่อความปลอดภัย)
+$pendingExpr = drawdream_sql_project_is_pending('project_status');
 $qProjects = mysqli_query($conn, "
     SELECT project_id, project_name, foundation_name, end_date, start_date
-    FROM project
-    WHERE project_status = 'pending'
+    FROM foundation_project
+    WHERE {$pendingExpr} AND deleted_at IS NULL
     ORDER BY project_id DESC
     LIMIT 50
 ");

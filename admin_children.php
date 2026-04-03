@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: admin_children.php
 // หน้าที่: หน้าสร้างโปรไฟล์เด็กฝั่งมูลนิธิ/แอดมิน
 session_start();
@@ -28,21 +28,21 @@ if ($fetchArr = $result->fetch_assoc()) {
 
 // รองรับ schema เดิม/ใหม่: เพิ่มคอลัมน์ที่โค้ดใช้งานจริงแบบอัตโนมัติ
 $needed_columns = [
-    'foundation_name' => "ALTER TABLE Children ADD COLUMN foundation_name VARCHAR(255) NULL",
-    'child_name' => "ALTER TABLE Children ADD COLUMN child_name VARCHAR(255) NULL",
-    'birth_date' => "ALTER TABLE Children ADD COLUMN birth_date DATE NULL",
-    'age' => "ALTER TABLE Children ADD COLUMN age INT NULL",
-    'education' => "ALTER TABLE Children ADD COLUMN education VARCHAR(255) NULL",
-    'dream' => "ALTER TABLE Children ADD COLUMN dream VARCHAR(255) NULL",
-    'wish' => "ALTER TABLE Children ADD COLUMN wish VARCHAR(255) NULL",
-    'bank_name' => "ALTER TABLE Children ADD COLUMN bank_name VARCHAR(100) NULL",
-    'child_bank' => "ALTER TABLE Children ADD COLUMN child_bank VARCHAR(100) NULL",
-    'status' => "ALTER TABLE Children ADD COLUMN status VARCHAR(100) NULL",
-    'photo_child' => "ALTER TABLE Children ADD COLUMN photo_child VARCHAR(255) NULL",
-    'approve_profile' => "ALTER TABLE Children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
+    'foundation_name' => "ALTER TABLE foundation_children ADD COLUMN foundation_name VARCHAR(255) NULL",
+    'child_name' => "ALTER TABLE foundation_children ADD COLUMN child_name VARCHAR(255) NULL",
+    'birth_date' => "ALTER TABLE foundation_children ADD COLUMN birth_date DATE NULL",
+    'age' => "ALTER TABLE foundation_children ADD COLUMN age INT NULL",
+    'education' => "ALTER TABLE foundation_children ADD COLUMN education VARCHAR(255) NULL",
+    'dream' => "ALTER TABLE foundation_children ADD COLUMN dream VARCHAR(255) NULL",
+    'wish' => "ALTER TABLE foundation_children ADD COLUMN wish VARCHAR(255) NULL",
+    'bank_name' => "ALTER TABLE foundation_children ADD COLUMN bank_name VARCHAR(100) NULL",
+    'child_bank' => "ALTER TABLE foundation_children ADD COLUMN child_bank VARCHAR(100) NULL",
+    'status' => "ALTER TABLE foundation_children ADD COLUMN status VARCHAR(100) NULL",
+    'photo_child' => "ALTER TABLE foundation_children ADD COLUMN photo_child VARCHAR(255) NULL",
+    'approve_profile' => "ALTER TABLE foundation_children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
 ];
 foreach ($needed_columns as $col => $ddl) {
-    $chk = $conn->query("SHOW COLUMNS FROM Children LIKE '$col'");
+    $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
     if ($chk && $chk->num_rows === 0) {
         $conn->query($ddl);
     }
@@ -100,7 +100,7 @@ if (isset($_POST['submit'])) {
 
 
     if ($has_birth_date_column) {
-        $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
+        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
@@ -120,7 +120,7 @@ if (isset($_POST['submit'])) {
             $approve_status
         );
     } else {
-        $sql = "INSERT INTO Children (foundation_id, foundation_name, child_name, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
+        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, age, education, dream, wish, bank_name, child_bank, status, photo_child, approve_profile) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ississssssss", $f_id, $f_name, $child_name, $age, $education, $dream, $wish, $bank_name, $child_bank, $status, $newName, $approve_status);

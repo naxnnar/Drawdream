@@ -1,9 +1,10 @@
-﻿<?php
+<?php
 // ไฟล์นี้: foundation_post_update.php
 // หน้าที่: หน้ามูลนิธิสำหรับโพสต์อัปเดตสถานะ/โครงการ
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/admin_audit_migrate.php';
 
 // กำหนดค่า default ให้ $readonly ก่อนใช้งาน
 $readonly = isset($_GET['readonly']) && $_GET['readonly'] == '1';
@@ -43,8 +44,8 @@ if ($locked_project_id > 0) {
         // เฉพาะ foundation: ตรวจสอบว่าเป็นของตัวเอง
         $lk = $conn->prepare("
             SELECT project_id, project_name, current_donate, goal_amount, project_status
-            FROM project 
-            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('completed','done')
+            FROM foundation_project 
+            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('completed','done') AND deleted_at IS NULL
             LIMIT 1
         ");
         $lk->bind_param("is", $locked_project_id, $foundation['foundation_name']);
@@ -54,8 +55,8 @@ if ($locked_project_id > 0) {
         // readonly: ดึง project เฉย ๆ
         $lk = $conn->prepare("
             SELECT project_id, project_name, current_donate, goal_amount, project_status
-            FROM project 
-            WHERE project_id = ? AND project_status IN ('completed','done')
+            FROM foundation_project 
+            WHERE project_id = ? AND project_status IN ('completed','done') AND deleted_at IS NULL
             LIMIT 1
         ");
         $lk->bind_param("i", $locked_project_id);
@@ -72,8 +73,8 @@ if ($locked_project_id > 0 && $locked_project) {
 } else {
     $stmt2 = $conn->prepare("
         SELECT project_id, project_name, current_donate, goal_amount, project_status
-        FROM project 
-        WHERE foundation_id = ? AND project_status IN ('completed', 'done')
+        FROM foundation_project 
+        WHERE foundation_id = ? AND project_status IN ('completed', 'done') AND deleted_at IS NULL
         ORDER BY project_id DESC
     ");
     $stmt2->bind_param("i", $fid);
@@ -92,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
     $image_name  = '';
 
     // ตรวจสอบว่าโครงการนี้เป็นของมูลนิธินี้จริง (ใช้ foundation_name แทน foundation_id)
-    $chk = $conn->prepare("SELECT project_id, project_name FROM project WHERE project_id = ? AND foundation_name = ?");
+    $chk = $conn->prepare("SELECT project_id, project_name FROM foundation_project WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL");
     $chk->bind_param("is", $project_id, $foundation['foundation_name']);
     $chk->execute();
     $proj_row = $chk->get_result()->fetch_assoc();
@@ -130,6 +131,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
             $stmt3->execute();
             $update_id = $conn->insert_id;
 
+            // สรุปให้ผู้บริจาคเห็นในหน้าชำระเงิน/รายละเอียดโครงการ (คอลัมน์ update_info — ไม่ใช้ในฟอร์มเสนอโครงการ)
+            $donorSummary = $title . "\n\n" . $description;
+            $stmtUi = $conn->prepare(
+                "UPDATE foundation_project SET update_info = ? WHERE project_id = ? AND foundation_name = ? AND LOWER(TRIM(COALESCE(project_status,''))) IN ('completed','done') AND deleted_at IS NULL"
+            );
+            if ($stmtUi) {
+                $stmtUi->bind_param("sis", $donorSummary, $project_id, $foundation['foundation_name']);
+                $stmtUi->execute();
+            }
+
             // ===== แจ้งเตือน donor ที่บริจาคให้โครงการนี้โดยตรง =====
             $donors_q = $conn->prepare("
                 SELECT DISTINCT dn.user_id
@@ -144,26 +155,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
             $donor_users = $donors_q->get_result()->fetch_all(MYSQLI_ASSOC);
 
             foreach ($donor_users as $du) {
-                $notif_stmt = $conn->prepare("
+                $notif_type_th = drawdream_normalize_notif_type_to_th('project_update');
+                $notif_stmt = $conn->prepare('
                     INSERT INTO notifications (user_id, type, title, message, link)
-                    VALUES (?, 'project_update', ?, ?, ?)
-                ");
+                    VALUES (?, ?, ?, ?, ?)
+                ');
                 $notif_title = "อัปเดตโครงการ: " . $proj_row['project_name'];
                 $notif_msg   = $foundation['foundation_name'] . " อัปเดตผลลัพธ์: " . $title;
                 $notif_link  = "project.php";
-                $notif_stmt->bind_param("isss", $du['user_id'], $notif_title, $notif_msg, $notif_link);
+                $notif_stmt->bind_param("issss", $du['user_id'], $notif_type_th, $notif_title, $notif_msg, $notif_link);
                 $notif_stmt->execute();
             }
 
             // แจ้งเตือนมูลนิธิตัวเองด้วย (ยืนยันการโพสต์)
-            $self_notif = $conn->prepare("
+            $self_type_th = drawdream_normalize_notif_type_to_th('post_success');
+            $self_notif = $conn->prepare('
                 INSERT INTO notifications (user_id, type, title, message, link)
-                VALUES (?, 'post_success', ?, ?, ?)
-            ");
+                VALUES (?, ?, ?, ?, ?)
+            ');
             $self_title = "โพสต์ผลลัพธ์สำเร็จ";
             $self_msg   = "คุณได้โพสต์ผลลัพธ์โครงการ \"" . $proj_row['project_name'] . "\" เรียบร้อยแล้ว";
             $self_link  = "profile.php";
-            $self_notif->bind_param("isss", $user_id, $self_title, $self_msg, $self_link);
+            $self_notif->bind_param("issss", $user_id, $self_type_th, $self_title, $self_msg, $self_link);
             $self_notif->execute();
 
             $success = "โพสต์ผลลัพธ์สำเร็จแล้วค่ะ!";
@@ -178,7 +191,7 @@ if ($locked_project_id > 0 && $locked_project) {
     $prev_updates = $conn->prepare("
         SELECT pu.*, p.project_name 
         FROM project_updates pu
-        JOIN project p ON p.project_id = pu.project_id
+        JOIN foundation_project p ON p.project_id = pu.project_id AND p.deleted_at IS NULL
         WHERE pu.project_id = ?
         ORDER BY pu.update_id DESC
         LIMIT 20
@@ -190,7 +203,7 @@ if ($locked_project_id > 0 && $locked_project) {
     $prev_updates = $conn->prepare("
         SELECT pu.*, p.project_name 
         FROM project_updates pu
-        JOIN project p ON p.project_id = pu.project_id
+        JOIN foundation_project p ON p.project_id = pu.project_id AND p.deleted_at IS NULL
         WHERE p.foundation_id = ?
         ORDER BY pu.update_id DESC
         LIMIT 20

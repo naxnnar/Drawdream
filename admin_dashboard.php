@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: admin_dashboard.php
 // หน้าที่: แดชบอร์ดภาพรวมสำหรับผู้ดูแลระบบ
 if (session_status() === PHP_SESSION_NONE) session_start();
@@ -14,15 +14,16 @@ $total_donation    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM
 $today_donation    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM donation WHERE payment_status='completed' AND DATE(transfer_datetime) = CURDATE()"))['total'];
 $total_donors      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM donor"))['cnt'];
 $total_foundations = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile"))['cnt'];
-$total_children    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM Children"))['cnt'];
+$total_children    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE deleted_at IS NULL"))['cnt'];
 $pending_foundations = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile WHERE account_verified=0"))['cnt'];
-$pending_projects  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM project WHERE project_status='pending'"))['cnt'];
+$pendingProjExprDash = drawdream_sql_project_is_pending('project_status');
+$pending_projects  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_project WHERE {$pendingProjExprDash} AND deleted_at IS NULL"))['cnt'];
 $pending_needs     = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE approve_item='pending'"))['cnt'];
 $escrow_total      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM escrow_funds WHERE status='holding'"))['total'];
 
 $active_projects = mysqli_query($conn, "
-    SELECT * FROM project
-    WHERE project_status IN ('approved','completed')
+    SELECT * FROM foundation_project
+    WHERE project_status IN ('approved','completed') AND deleted_at IS NULL
     ORDER BY project_status DESC, project_id DESC
     LIMIT 10
 ");
@@ -70,75 +71,82 @@ for ($i = 29; $i >= 0; $i--) {
     <title>Admin Dashboard | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_dashboard.css">
+    <link rel="stylesheet" href="css/admin_directory.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
-<body>
+<body class="admin-dashboard-page">
 
 <?php include 'navbar.php'; ?>
 
 <div class="dashboard">
     <div class="dash-title">Dashboard ผู้ดูแลระบบ</div>
 
-    <!-- Cards ภาพรวม -->
-    <div class="cards admin-overview-cards">
-        <div class="card stat-card donors">
-            <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
-            <div class="stat-divider"></div>
-            <div class="stat-content">
-                <div class="card-label">ผู้บริจาคทั้งหมด</div>
-                <div class="card-value"><?= number_format($total_donors, 0) ?></div>
-                <div class="card-sub">คน</div>
-            </div>
+    <!-- Cards ภาพรวม: แยก 2 แถวเพื่อเว้นระยะแนวตั้งระหว่างแถวบน–ล่าง -->
+    <div class="admin-metric-stats">
+        <div class="admin-metric-stats__row admin-metric-stats__row--4">
+            <a href="admin_donors.php" class="admin-stat-card-wrap" title="ดูรายชื่อผู้บริจาค">
+                <div class="card stat-card donors">
+                    <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-content">
+                        <div class="card-label">ผู้บริจาคทั้งหมด</div>
+                        <div class="card-value"><?= number_format($total_donors, 0) ?><span class="card-value-suffix">คน</span></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="admin_escrow.php" class="admin-stat-card-wrap" title="จัดการ Escrow">
+                <div class="card stat-card escrow">
+                    <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-content">
+                        <div class="card-label">เงินใน Escrow</div>
+                        <div class="card-value"><?= number_format($escrow_total, 0) ?><span class="card-value-suffix">บาท</span></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="admin_foundations_overview.php" class="admin-stat-card-wrap" title="ดูรายชื่อมูลนิธิ">
+                <div class="card stat-card foundations">
+                    <div class="stat-icon"><i class="bi bi-bank2"></i></div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-content">
+                        <div class="card-label">มูลนิธิทั้งหมด</div>
+                        <div class="card-value"><?= number_format($total_foundations, 0) ?><span class="card-value-suffix">แห่ง</span></div>
+                    </div>
+                </div>
+            </a>
+
+            <a href="admin_children_overview.php" class="admin-stat-card-wrap" title="ดูรายชื่อเด็ก">
+                <div class="card stat-card children">
+                    <div class="stat-icon"><i class="bi bi-person-hearts"></i></div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-content">
+                        <div class="card-label">เด็กทั้งหมด</div>
+                        <div class="card-value"><?= number_format($total_children, 0) ?><span class="card-value-suffix">คน</span></div>
+                    </div>
+                </div>
+            </a>
         </div>
 
-        <div class="card stat-card escrow">
-            <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
-            <div class="stat-divider"></div>
-            <div class="stat-content">
-                <div class="card-label">เงินใน Escrow</div>
-                <div class="card-value"><?= number_format($escrow_total, 0) ?></div>
-                <div class="card-sub">บาท (รอจัดซื้อ)</div>
+        <div class="admin-metric-stats__row admin-metric-stats__row--2">
+            <div class="card stat-card donation-total">
+                <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                <div class="stat-divider" aria-hidden="true"></div>
+                <div class="stat-content">
+                    <div class="card-label">ยอดบริจาคทั้งหมด</div>
+                    <div class="card-value"><?= number_format($total_donation, 0) ?><span class="card-value-suffix">บาท</span></div>
+                </div>
             </div>
-        </div>
 
-        <div class="card stat-card foundations">
-            <div class="stat-icon"><i class="bi bi-bank2"></i></div>
-            <div class="stat-divider"></div>
-            <div class="stat-content">
-                <div class="card-label">มูลนิธิทั้งหมด</div>
-                <div class="card-value"><?= number_format($total_foundations, 0) ?></div>
-                <div class="card-sub">มูลนิธิ</div>
-            </div>
-        </div>
-
-        <div class="card stat-card children">
-            <div class="stat-icon"><i class="bi bi-person-hearts"></i></div>
-            <div class="stat-divider"></div>
-            <div class="stat-content">
-                <div class="card-label">เด็กทั้งหมด</div>
-                <div class="card-value"><?= number_format($total_children, 0) ?></div>
-                <div class="card-sub">คน</div>
-            </div>
-        </div>
-
-        <div class="card stat-card donation-total span-2">
-            <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
-            <div class="stat-divider"></div>
-            <div class="stat-content">
-                <div class="card-label">ยอดบริจาคทั้งหมด</div>
-                <div class="card-value"><?= number_format($total_donation, 0) ?></div>
-                <div class="card-sub">บาท</div>
-            </div>
-        </div>
-
-        <div class="card stat-card donation-today span-2">
-            <div class="stat-icon"><i class="bi bi-calendar2-check-fill"></i></div>
-            <div class="stat-divider"></div>
-            <div class="stat-content">
-                <div class="card-label">ยอดบริจาควันนี้</div>
-                <div class="card-value"><?= number_format($today_donation, 0) ?></div>
-                <div class="card-sub">บาท</div>
+            <div class="card stat-card donation-today">
+                <div class="stat-icon"><i class="bi bi-calendar2-check-fill"></i></div>
+                <div class="stat-divider" aria-hidden="true"></div>
+                <div class="stat-content">
+                    <div class="card-label">ยอดบริจาควันนี้</div>
+                    <div class="card-value"><?= number_format($today_donation, 0) ?><span class="card-value-suffix">บาท</span></div>
+                </div>
             </div>
         </div>
     </div>

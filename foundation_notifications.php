@@ -3,6 +3,7 @@
 // หน้าที่: หน้าแจ้งเตือนของมูลนิธิ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/admin_audit_migrate.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'foundation') {
     header("Location: index.php");
@@ -191,10 +192,18 @@ $unread_count = mysqli_fetch_assoc(mysqli_query($conn,
         <?php while ($row = mysqli_fetch_assoc($result)):
             $is_unread = !(bool)$row['is_read'];
             $type = $row['type'] ?? '';
-            $icon = match($type) {
-                'project_funded' => '💰',
-                'needlist_done'  => '📦',
-                default          => '🔔',
+            $typeBucket = drawdream_normalize_notif_type_to_th($type);
+            $icon = match ($typeBucket) {
+                'อนุมัติ' => '✅',
+                'ไม่อนุมัติ' => '⛔',
+                'กำลังรอดำเนินการ' => '⏳',
+                default => '🔔',
+            };
+            $typeClass = match ($typeBucket) {
+                'อนุมัติ' => 'approved',
+                'ไม่อนุมัติ' => 'rejected',
+                'กำลังรอดำเนินการ' => 'pending',
+                default => 'other',
             };
             $time_diff = '';
             $created = strtotime($row['created_at']);
@@ -204,7 +213,7 @@ $unread_count = mysqli_fetch_assoc(mysqli_query($conn,
             elseif ($diff < 86400)   $time_diff = floor($diff/3600) . ' ชั่วโมงที่แล้ว';
             else                     $time_diff = date('d/m/Y H:i', $created);
         ?>
-            <div class="notif-card <?= $is_unread ? 'unread' : '' ?> type-<?= htmlspecialchars($type) ?>">
+            <div class="notif-card <?= $is_unread ? 'unread' : '' ?> type-<?= htmlspecialchars($typeClass) ?>">
                 <div class="notif-icon"><?= $icon ?></div>
                 <div class="notif-body">
                     <div class="notif-title"><?= htmlspecialchars($row['title']) ?></div>

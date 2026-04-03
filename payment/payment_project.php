@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ไฟล์นี้: payment\payment_project.php
 // หน้าที่: หน้าชำระเงินสำหรับโครงการ
 // ------------------------------
@@ -7,6 +7,8 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
+require_once __DIR__ . '/../includes/project_donation_dates.php';
+require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 
 // ต้อง login ก่อน
 if (!isset($_SESSION['user_id'])) {
@@ -24,10 +26,10 @@ if ($project_id <= 0) {
 $stmt = $conn->prepare("
     SELECT p.*,
            fp.phone, u.email AS email, fp.address
-    FROM project p
+    FROM foundation_project p
     LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
-    LEFT JOIN users u ON u.user_id = fp.user_id
-    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done')
+    LEFT JOIN `user` u ON u.user_id = fp.user_id
+    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done') AND p.deleted_at IS NULL
     LIMIT 1
 ");
 $stmt->bind_param("i", $project_id);
@@ -35,6 +37,13 @@ $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
 
 if (!$project) {
+    header("Location: ../project.php");
+    exit();
+}
+
+$todayBangkok = (new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
+$donationStartEff = drawdream_project_effective_donation_start($project);
+if (!empty($project['end_date']) && $todayBangkok > substr((string)$project['end_date'], 0, 10)) {
     header("Location: ../project.php");
     exit();
 }
@@ -50,19 +59,124 @@ function formatThaiDate($dateStr) {
     return $day . ' ' . $thaiMonths[$monthIdx] . ' ' . $year;
 }
 
-function mapCategoryToSdgs($category) {
+/** @return array{num:int,title:string} */
+function mapCategoryToSdgDetails(?string $category): array
+{
     $map = [
-        'การศึกษา' => 'SDG 4: การศึกษาที่มีคุณภาพ',
-        'สุขภาพและอนามัย' => 'SDG 3: สุขภาพและความเป็นอยู่ที่ดี',
-        'อาหารและโภชนาการ' => 'SDG 2: ขจัดความหิวโหย',
-        'สิ่งอำนวยความสะดวก' => 'SDG 10: ลดความเหลื่อมล้ำ',
+        'การศึกษา' => ['num' => 4, 'title' => 'SDG 4: การศึกษาที่มีคุณภาพ'],
+        'สุขภาพและอนามัย' => ['num' => 3, 'title' => 'SDG 3: สุขภาพและความเป็นอยู่ที่ดี'],
+        'อาหารและโภชนาการ' => ['num' => 2, 'title' => 'SDG 2: ขจัดความหิวโหย'],
+        'สิ่งอำนวยความสะดวก' => ['num' => 10, 'title' => 'SDG 10: ลดความเหลื่อมล้ำ'],
     ];
-    return $map[$category] ?? 'SDG 1: ขจัดความยากจน';
+    $key = (string)($category ?? '');
+    return $map[$key] ?? ['num' => 1, 'title' => 'SDG 1: ขจัดความยากจน'];
 }
 
-$fundraisingPeriod = formatThaiDate($project['start_date'] ?? null) . ' - ' . formatThaiDate($project['end_date'] ?? null);
-$projectArea = trim((string)($project['address'] ?? '')) !== '' ? (string)$project['address'] : '-';
-$sdgGoal = mapCategoryToSdgs((string)($project['category'] ?? ''));
+/**
+ * path แบบ URL สำหรับแท็ก img (เรียกจากไฟล์ใน payment/) → img/sdg/sdg1–sdg16 นามสกุลใดที่มีในโฟลเดอร์
+ */
+function drawdream_sdg_icon_web_path(int $sdgNum): string
+{
+    $n = max(1, min(16, $sdgNum));
+    $dir = realpath(__DIR__ . '/../img/sdg');
+    if ($dir === false) {
+        return '../img/rainbow.png';
+    }
+    $base = $dir . DIRECTORY_SEPARATOR . 'sdg' . $n;
+    foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
+        if (is_file($base . $ext)) {
+            return '../img/sdg/sdg' . $n . $ext;
+        }
+    }
+    return '../img/rainbow.png';
+}
+
+/** category_id สำหรับบริจาคโครงการ */
+function drawdream_project_resolve_category_id(mysqli $conn): int
+{
+    $stmt = $conn->prepare('SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1');
+    if ($stmt) {
+        $stmt->execute();
+        $cat = $stmt->get_result()->fetch_assoc();
+        if ($cat) {
+            return (int)$cat['category_id'];
+        }
+    }
+    $conn->query("INSERT INTO donate_category (project_donate) VALUES ('โครงการ')");
+    return (int)$conn->insert_id;
+}
+
+/**
+ * บันทึก donation สถานะ pending + payment_transaction หลังสร้าง Omise charge
+ *
+ * @return int donate_id หรือ 0 ถ้าล้มเหลว
+ */
+function drawdream_insert_pending_project_donation(
+    mysqli $conn,
+    int $categoryId,
+    int $targetProjectId,
+    int $donorUserId,
+    float $amountBaht,
+    string $omiseChargeId
+): int {
+    $serviceFee = 0.0;
+    $taxId = '';
+    $stTax = $conn->prepare('SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1');
+    if ($stTax) {
+        $stTax->bind_param('i', $donorUserId);
+        $stTax->execute();
+        $rowT = $stTax->get_result()->fetch_assoc();
+        if ($rowT) {
+            $taxId = (string)($rowT['tax_id'] ?? '');
+        }
+    }
+
+    if (!$conn->begin_transaction()) {
+        return 0;
+    }
+    try {
+        $insD = $conn->prepare(
+            'INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
+        );
+        if (!$insD) {
+            throw new RuntimeException('prepare donation failed');
+        }
+        $pending = 'pending';
+        $transferTs = date('Y-m-d H:i:s');
+        $insD->bind_param('iiiddss', $categoryId, $targetProjectId, $donorUserId, $amountBaht, $serviceFee, $pending, $transferTs);
+        if (!$insD->execute()) {
+            throw new RuntimeException('insert donation failed');
+        }
+        $donateId = (int)$conn->insert_id;
+        if ($donateId <= 0) {
+            throw new RuntimeException('no donate_id');
+        }
+        $insP = $conn->prepare(
+            'INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status) VALUES (?, ?, ?, ?)'
+        );
+        if (!$insP) {
+            throw new RuntimeException('prepare payment_transaction failed');
+        }
+        $ptPending = 'pending';
+        $insP->bind_param('isss', $donateId, $taxId, $omiseChargeId, $ptPending);
+        if (!$insP->execute()) {
+            throw new RuntimeException('insert payment_transaction failed');
+        }
+        $conn->commit();
+        return $donateId;
+    } catch (Throwable $e) {
+        $conn->rollback();
+        return 0;
+    }
+}
+
+$fundraisingPeriod = formatThaiDate($donationStartEff ?? '') . ' - ' . formatThaiDate($project['end_date'] ?? null);
+$locText = trim((string)($project['location'] ?? ''));
+$addrFallback = trim((string)($project['address'] ?? ''));
+$projectArea = $locText !== '' ? $locText : ($addrFallback !== '' ? $addrFallback : '-');
+$sdgDetails = mapCategoryToSdgDetails((string)($project['category'] ?? ''));
+$sdgGoal = $sdgDetails['title'];
 $beneficiaryGroup = trim((string)($project['target_group'] ?? '')) !== '' ? (string)$project['target_group'] : '-';
 
 $donationOptions = [];
@@ -85,9 +199,15 @@ $charge_id = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     $amount = (int)($_POST['amount'] ?? 0);
 
-    if ($amount < 20) {
+    if (!empty($project['end_date']) && $todayBangkok > substr((string)$project['end_date'], 0, 10)) {
+        $error = "ปิดรับบริจาคแล้ว";
+    } elseif ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
+        // ปิดรายการ QR เก่าที่ไม่สำเร็จค้างในระบบ แล้วเริ่มรายการสแกนใหม่
+        drawdream_abandon_all_pending_qr_for_donor($conn, (int)$_SESSION['user_id']);
+        drawdream_clear_pending_payment_session();
+
         // เรียก Omise API สร้าง PromptPay Source
         $amount_satang = $amount * 100; // Omise ใช้สตางค์
 
@@ -122,16 +242,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
 
-                // เก็บ charge_id, qr_image, amount, project info ใน session
-                $_SESSION['pending_charge_id']  = $charge_id;
-                $_SESSION['pending_amount']     = $amount;
-                $_SESSION['pending_project']    = $project['project_name'];
-                $_SESSION['pending_project_id'] = $project_id;
-                $_SESSION['qr_image']           = $qr_image;
+                $categoryIdResolved = drawdream_project_resolve_category_id($conn);
+                $pendingDonateId = drawdream_insert_pending_project_donation(
+                    $conn,
+                    $categoryIdResolved,
+                    $project_id,
+                    (int)$_SESSION['user_id'],
+                    (float)$amount,
+                    $charge_id
+                );
+                if ($pendingDonateId <= 0) {
+                    $error = 'ไม่สามารถบันทึกรายการบริจาคชั่วคราวได้ กรุณาลองใหม่';
+                } else {
+                    // เก็บ charge_id, qr_image, amount, project info ใน session
+                    $_SESSION['pending_charge_id']  = $charge_id;
+                    $_SESSION['pending_amount']     = $amount;
+                    $_SESSION['pending_project']    = $project['project_name'];
+                    $_SESSION['pending_project_id'] = $project_id;
+                    $_SESSION['qr_image']           = $qr_image;
+                    $_SESSION['pending_donate_id']  = $pendingDonateId;
 
-                // redirect ไปหน้า scan_qr.php
-                header('Location: scan_qr.php?charge_id=' . urlencode($charge_id));
-                exit();
+                    // redirect ไปหน้าสแกน QR ร่วม (โครงการ)
+                    header('Location: scan_qr.php?type=project&charge_id=' . urlencode($charge_id));
+                    exit();
+                }
 
             } else {
                 $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
@@ -217,7 +351,7 @@ function _omise_local_mock(string $path, array $data): array {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ชำระเงิน | DrawDream</title>
-        <link rel="stylesheet" href="../css/payment.css">
+        <link rel="stylesheet" href="../css/payment.css?v=2">
         <style>
         .project-sdgs-benefit-wrap {
             display: flex;
@@ -305,7 +439,7 @@ function _omise_local_mock(string $path, array $data): array {
     <div class="project-info">
         <div style="position:relative;">
             <a href="javascript:history.back()" style="position:absolute;top:18px;left:18px;z-index:2;background:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px 0 rgba(0,0,0,0.07);border:none;text-decoration:none;">
-                <span style="font-size:1.5em;color:#ff8800;">←</span>
+                <span style="font-size:1.5em;color:#3C5099;">←</span>
             </a>
             <?php if (!empty($project['project_image'])): ?>
                 <img src="../uploads/<?= htmlspecialchars($project['project_image']) ?>" class="project-img" alt="" style="margin-top:0;padding-top:0;display:block;border-top-left-radius:24px;border-top-right-radius:0;">
@@ -316,7 +450,7 @@ function _omise_local_mock(string $path, array $data): array {
                 <h2 style="margin:0;display:flex;align-items:center;gap:10px;">
                     บริจาคให้โครงการ
                     <?php if (!empty($project['category'])): ?>
-                        <span style="background:#ffe0b2;color:#e67e22;padding:3px 14px 3px 10px;border-radius:16px;font-size:0.95em;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                        <span class="project-category-pill" style="background:rgba(60,80,153,0.14);color:#3C5099;padding:3px 14px 3px 10px;border-radius:16px;font-size:0.95em;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
                             <span style="font-size:1.2em;">🏷️</span> <?= htmlspecialchars($project['category']) ?>
                         </span>
                     <?php endif; ?>
@@ -339,72 +473,38 @@ function _omise_local_mock(string $path, array $data): array {
                     $foundationImg = $fpRow['foundation_image'] ?? '';
                     $foundationId = (int)($fpRow['foundation_id'] ?? 0);
                 }
+                $fdnName = htmlspecialchars($project['foundation_name']);
+                $profileAria = 'ดูโปรไฟล์มูลนิธิ ' . $project['foundation_name'];
                 ?>
-                <div style="display:flex;align-items:center;gap:12px;">
+                <?php if ($foundationId): ?>
+                <a class="contact-card-link" href="../foundation_public_profile.php?id=<?= (int)$foundationId ?>" aria-label="<?= htmlspecialchars($profileAria, ENT_QUOTES, 'UTF-8') ?>">
+                <?php endif; ?>
+                <div class="contact-card-inner">
                     <?php if ($foundationImg): ?>
-                        <img src="../uploads/profiles/<?= htmlspecialchars($foundationImg) ?>" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:50%;border:1.5px solid #eee;">
+                        <img src="../uploads/profiles/<?= htmlspecialchars($foundationImg) ?>" alt="" class="contact-card-avatar">
                     <?php else: ?>
-                        <div style="width:48px;height:48px;background:#f3f3f3;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:22px;">?</div>
+                        <div class="contact-card-avatar contact-card-avatar--empty">?</div>
                     <?php endif; ?>
-                    <div style="flex:1;">
-                        <div style="font-weight:600;font-size:1.1em;line-height:1.2;">
-                            <?= htmlspecialchars($project['foundation_name']) ?>
-                        </div>
-                        <?php if ($foundationId): ?>
-                            <a href="../foundation.php#f<?= $foundationId ?>" target="_blank" style="color:#1a73e8;font-size:0.97em;">ดูโปรไฟล์มูลนิธิ</a>
-                        <?php endif; ?>
+                    <div class="contact-card-text">
+                        <div class="contact-card-name"><?= $fdnName ?></div>
                     </div>
                 </div>
+                <?php if ($foundationId): ?>
+                </a>
+                <?php endif; ?>
             </div>
                         <div class="goal-info">🎯 เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท</div>
 
                         <!-- SDG Image Row -->
                         <?php
-                        // แมปหมวดหมู่กับ SDG (ตัวอย่าง)
-                        $sdgMap = [
-                            'การศึกษา' => ['num' => 4, 'title' => 'SDG 4: การศึกษาที่มีคุณภาพ'],
-                            'สุขภาพและอนามัย' => ['num' => 3, 'title' => 'SDG 3: สุขภาพและความเป็นอยู่ที่ดี'],
-                            'อาหารและโภชนาการ' => ['num' => 2, 'title' => 'SDG 2: ขจัดความหิวโหย'],
-                            'สิ่งอำนวยความสะดวก' => ['num' => 10, 'title' => 'SDG 10: ลดความเหลื่อมล้ำ'],
-                        ];
-                        $cat = $project['category'] ?? '';
-                        $sdgNum = $sdgMap[$cat]['num'] ?? 1;
-                        $sdgTitle = $sdgMap[$cat]['title'] ?? 'SDG 1: ขจัดความยากจน';
-                        // กรณี SDG 2 ให้ใช้ path img/sdg2.png โดยตรง
-                        if ($sdgNum == 2) {
-                            $sdgImgPath = "../img/sdg2.png";
-                        } else {
-                            $sdgImgPath = "../img/sdgs/sdg{$sdgNum}.png";
-                        }
+                        $sdgNum = (int)$sdgDetails['num'];
+                        $sdgTitle = (string)$sdgDetails['title'];
+                        $sdgImgPath = drawdream_sdg_icon_web_path($sdgNum);
                         ?>
-                                                <div class="sdg-row">
-                                                        <img src="<?= $sdgImgPath ?>" alt="SDG <?= $sdgNum ?>" class="sdg-img" title="<?= htmlspecialchars($sdgTitle) ?>" id="sdg-img-clickable" style="cursor:zoom-in;">
-                                                            <span class="sdg-title">เป้าหมาย SDGs<br>SDG <?= $sdgNum ?> <?= htmlspecialchars(preg_replace('/^SDG ?\d+:? ?/', '', $sdgTitle)) ?></span>
-                                                </div>
-                                                <!-- SDG Image Modal -->
-                                                <div id="sdgModal" style="display:none;position:fixed;z-index:9999;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;">
-                                                    <img id="sdgModalImg" src="" alt="SDG" style="max-width:80vw;max-height:80vh;border-radius:16px;box-shadow:0 4px 32px #0008;">
-                                                </div>
-        <script>
-        // SDG Image Modal Popup
-        document.addEventListener('DOMContentLoaded', function() {
-            const sdgImg = document.getElementById('sdg-img-clickable');
-            const modal = document.getElementById('sdgModal');
-            const modalImg = document.getElementById('sdgModalImg');
-            if(sdgImg && modal && modalImg) {
-                sdgImg.addEventListener('click', function() {
-                    modal.style.display = 'flex';
-                    modalImg.src = sdgImg.src;
-                });
-                modal.addEventListener('click', function(e) {
-                    if(e.target === modal) {
-                        modal.style.display = 'none';
-                        modalImg.src = '';
-                    }
-                });
-            }
-        });
-        </script>
+                        <div class="sdg-row">
+                            <img src="<?= htmlspecialchars($sdgImgPath) ?>" alt="SDG <?= (int)$sdgNum ?>" class="sdg-img" title="<?= htmlspecialchars($sdgTitle) ?>" id="sdg-img-clickable" style="cursor:zoom-in;">
+                            <span class="sdg-title">เป้าหมาย SDGs<br>SDG <?= (int)$sdgNum ?> <?= htmlspecialchars(preg_replace('/^SDG ?\d+:? ?/', '', $sdgTitle)) ?></span>
+                        </div>
         </div>
     </div>
     <!-- ขวา: รายละเอียด ฟอร์ม ปุ่ม -->
@@ -424,18 +524,18 @@ function _omise_local_mock(string $path, array $data): array {
                 <div class="detail-row"><strong>กิจกรรมมูลนิธิ</strong> <?= htmlspecialchars($project['need_info']) ?></div>
             <?php endif; ?>
             <?php if (!empty($project['update_info'])): ?>
-                <div class="detail-row"><strong>อัปเดต</strong> <?= htmlspecialchars($project['update_info']) ?></div>
+                <div class="detail-row"><strong>สรุปผลลัพธ์ล่าสุดจากมูลนิธิ</strong> <?= nl2br(htmlspecialchars($project['update_info'])) ?></div>
             <?php endif; ?>
         </div>
         <h3 style="margin-top:18px;">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
-        <form method="POST">
+        <form method="POST" id="projectDonateForm">
             <div class="amount-presets-grid">
-                <button type="button" class="preset-btn" onclick="selectPreset(2000)">2,000 บาท</button>
-                <button type="button" class="preset-btn" onclick="selectPreset(1000)">1,000 บาท</button>
-                <button type="button" class="preset-btn" onclick="selectPreset(500)">500 บาท</button>
-                <div class="preset-btn preset-input-btn">
-                    <label for="amountInput" style="display:block;font-size:1em;font-weight:700;color:#222;margin-bottom:2px;cursor:pointer;">ระบุจำนวน</label>
-                    <input type="number" name="amount" id="amountInput" min="20" placeholder="ขั้นต่ำ 20 บาท" required style="font-size:1.2em;text-align:center;width:90%;border:none;border-bottom:2px solid #aaa;background:transparent;outline:none;margin:0 auto;display:block;" oninput="clearPresetBtns()">
+                <button type="button" class="preset-btn" data-amt="2000" onclick="selectPreset(2000)">2,000 บาท</button>
+                <button type="button" class="preset-btn" data-amt="1000" onclick="selectPreset(1000)">1,000 บาท</button>
+                <button type="button" class="preset-btn" data-amt="500" onclick="selectPreset(500)">500 บาท</button>
+                <div class="preset-btn preset-input-btn project-preset-custom-cell">
+                    <label for="amountInput" class="project-preset-custom-label">ระบุจำนวน</label>
+                    <input type="number" name="amount" id="amountInput" min="20" step="1" placeholder="ขั้นต่ำ 20 บาท" inputmode="numeric" oninput="clearPresetBtns()">
                 </div>
             </div>
             <div class="payment-method">
@@ -446,7 +546,6 @@ function _omise_local_mock(string $path, array $data): array {
             </div>
             <button type="submit" name="pay" class="btn-pay" id="donateBtn">บริจาค</button>
         </form>
-        <script>
         <style>
         .sdg-row {
             display: flex;
@@ -475,7 +574,36 @@ function _omise_local_mock(string $path, array $data): array {
             line-height: 1.2;
             word-break: break-word;
         }
+        .amount-presets-grid .preset-btn.preset-selected {
+            outline: 2px solid #3C5099;
+            background: #f0f2fa;
+        }
         </style>
+        <script>
+        function clearPresetBtns() {
+            document.querySelectorAll('.amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+                b.classList.remove('preset-selected');
+            });
+        }
+        function selectPreset(amt) {
+            var inp = document.getElementById('amountInput');
+            if (inp) {
+                inp.value = String(amt);
+            }
+            document.querySelectorAll('.amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+                var v = parseInt(b.getAttribute('data-amt'), 10);
+                b.classList.toggle('preset-selected', v === amt);
+            });
+        }
+        document.getElementById('projectDonateForm').addEventListener('submit', function (e) {
+            var inp = document.getElementById('amountInput');
+            var n = inp ? parseInt(String(inp.value).trim(), 10) : 0;
+            if (!n || n < 20) {
+                e.preventDefault();
+                alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
+            }
+        });
+        </script>
 
         <!-- SDG Image Modal -->
         <div id="sdgModal" style="display:none;position:fixed;z-index:9999;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;">

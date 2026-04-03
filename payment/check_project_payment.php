@@ -1,9 +1,11 @@
-﻿<?php
+<?php
 // ไฟล์นี้: payment\check_payment.php
 // หน้าที่: ไฟล์ตรวจสอบสถานะการชำระเงินโครงการ
 if (session_status() === PHP_SESSION_NONE) session_start();
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
+require_once __DIR__ . '/../includes/admin_audit_migrate.php';
+require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -56,20 +58,104 @@ $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMI
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
 
-// กันบันทึกซ้ำ เมื่อผู้ใช้กด refresh หรือเช็คซ้ำ
-$already_processed = false;
-$dup = $conn->prepare("SELECT log_id FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1");
+// รายการเดิมที่สร้างตอนเปิด QR (pending) หรือ completed แล้ว
+$ptRow = null;
+$dup = $conn->prepare("SELECT log_id, donate_id, transaction_status FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1");
 $dup->bind_param("s", $charge_id);
 $dup->execute();
-$already_processed = (bool)$dup->get_result()->fetch_assoc();
+$ptRow = $dup->get_result()->fetch_assoc();
+$already_completed = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'completed');
+$has_pending = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'pending');
 
-if ($is_success && !$already_processed && $project_id > 0) {
+$donor_uid = (int)$_SESSION['user_id'];
+// Omise แจ้งว่ารายการถึงที่สุดแล้ว (ไม่สำเร็จ/หมดอายุ) → อัปเดตฐานข้อมูลเป็น failed ไม่ค้าง pending
+if (!$is_mock && $has_pending && !$already_completed && !$is_success
+    && in_array($status, ['failed', 'expired'], true)) {
+    drawdream_abandon_pending_donation_by_charge($conn, $donor_uid, $charge_id);
+    drawdream_clear_pending_payment_session();
+    $has_pending = false;
+    if (is_array($ptRow)) {
+        $ptRow['transaction_status'] = 'failed';
+    }
+}
 
+function drawdream_finalize_project_donation(mysqli $conn, int $project_id, int $donate_id, string $charge_id, float $amountBaht): bool
+{
+    $service_fee = 0.0;
+    $stmt = $conn->prepare("
+        UPDATE donation
+        SET amount = ?, service_fee = ?, payment_status = 'completed', transfer_datetime = NOW()
+        WHERE donate_id = ? AND payment_status = 'pending'
+    ");
+    $stmt->bind_param("ddi", $amountBaht, $service_fee, $donate_id);
+    $stmt->execute();
+    if ($stmt->affected_rows < 1) {
+        return false;
+    }
+
+    $stmt = $conn->prepare("UPDATE payment_transaction SET transaction_status = 'completed' WHERE omise_charge_id = ? AND transaction_status = 'pending'");
+    $stmt->bind_param("s", $charge_id);
+    $stmt->execute();
+
+    $stmt = $conn->prepare("UPDATE foundation_project SET current_donate = current_donate + ? WHERE project_id = ? AND deleted_at IS NULL");
+    $stmt->bind_param("di", $amountBaht, $project_id);
+    $stmt->execute();
+
+    $check = $conn->prepare("
+        SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
+        FROM foundation_project p
+        JOIN foundation_profile fp ON p.foundation_name = fp.foundation_name
+        WHERE p.project_id = ?
+          AND p.project_status = 'approved'
+          AND p.deleted_at IS NULL
+          AND (
+              p.current_donate >= p.goal_amount
+              OR (p.end_date IS NOT NULL AND p.end_date <= CURDATE())
+          )
+    ");
+    $check->bind_param("i", $project_id);
+    $check->execute();
+    $completed_proj = $check->get_result()->fetch_assoc();
+    if ($completed_proj) {
+        $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'completed', completed_at = NOW() WHERE project_id = ? AND deleted_at IS NULL");
+        $upd->bind_param("i", $project_id);
+        $upd->execute();
+
+        $foundation_user_id = (int)$completed_proj['foundation_user_id'];
+        $proj_name          = $completed_proj['project_name'];
+        $total              = number_format((float)$completed_proj['current_donate'], 2);
+
+        $notif_type_th = drawdream_normalize_notif_type_to_th('project_completed');
+        $notif = $conn->prepare('
+            INSERT INTO notifications (user_id, type, title, message, link)
+            VALUES (?, ?, ?, ?, ?)
+        ');
+        $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
+        $notif_msg   = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
+        $notif_link  = "foundation_post_update.php?project_id=" . $project_id;
+        $notif->bind_param("issss", $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
+        $notif->execute();
+    }
+    return true;
+}
+
+$finalized_this_request = false;
+if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
+    $amount      = ($charge['amount'] ?? 0) / 100;
+    if ($amount <= 0) {
+        $amount = (float)($_SESSION['pending_amount'] ?? 0);
+    }
+    $donate_id = (int)($ptRow['donate_id'] ?? 0);
+    if ($donate_id > 0 && drawdream_finalize_project_donation($conn, $project_id, $donate_id, $charge_id, (float)$amount)) {
+        $finalized_this_request = true;
+        unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
+    }
+} elseif ($is_success && !$ptRow && $project_id > 0) {
+    // เส้นทางเก่า: ยังไม่มีแถว pending (สแกนจากลิงก์เก่า)
     $amount      = ($charge['amount'] ?? 0) / 100;
     $service_fee = 0;
     $donor_id    = $_SESSION['user_id'];
     $target_id   = $project_id;
-    // ดึง tax_id ของ donor
     $tax_id = '';
     $stmt = $conn->prepare("SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1");
     $stmt->bind_param("i", $donor_id);
@@ -77,7 +163,6 @@ if ($is_success && !$already_processed && $project_id > 0) {
     $donor  = $stmt->get_result()->fetch_assoc();
     $tax_id = $donor['tax_id'] ?? '';
 
-    // หา category_id สำหรับโครงการ
     $stmt = $conn->prepare("SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1");
     $stmt->execute();
     $cat = $stmt->get_result()->fetch_assoc();
@@ -89,16 +174,14 @@ if ($is_success && !$already_processed && $project_id > 0) {
         $category_id = $cat['category_id'];
     }
 
-    // บันทึกลง donation (เพิ่ม donor_id, target_id)
     $stmt = $conn->prepare("
         INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
         VALUES (?, ?, ?, ?, ?, 'completed', NOW())
     ");
     $stmt->bind_param("iiidd", $category_id, $target_id, $donor_id, $amount, $service_fee);
     $stmt->execute();
-    $donate_id = $stmt->insert_id;
+    $donate_id = (int)$stmt->insert_id;
 
-    // บันทึกลง payment_transaction
     $stmt = $conn->prepare("
         INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
         VALUES (?, ?, ?, 'completed')
@@ -106,19 +189,17 @@ if ($is_success && !$already_processed && $project_id > 0) {
     $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
     $stmt->execute();
 
-    // อัปเดต current_donate ในตาราง project
-    $net_amount = $amount;
-    $stmt = $conn->prepare("UPDATE project SET current_donate = current_donate + ? WHERE project_id = ?");
-    $stmt->bind_param("di", $net_amount, $project_id);
+    $stmt = $conn->prepare("UPDATE foundation_project SET current_donate = current_donate + ? WHERE project_id = ? AND deleted_at IS NULL");
+    $stmt->bind_param("di", $amount, $project_id);
     $stmt->execute();
 
-    // ✅ เช็คว่าครบเป้าหรือหมดเวลา แล้วเปลี่ยน status เป็น completed
     $check = $conn->prepare("
         SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
-        FROM project p
+        FROM foundation_project p
         JOIN foundation_profile fp ON p.foundation_name = fp.foundation_name
-        WHERE p.project_id = ? 
+        WHERE p.project_id = ?
           AND p.project_status = 'approved'
+          AND p.deleted_at IS NULL
           AND (
               p.current_donate >= p.goal_amount
               OR (p.end_date IS NOT NULL AND p.end_date <= CURDATE())
@@ -128,30 +209,33 @@ if ($is_success && !$already_processed && $project_id > 0) {
     $check->execute();
     $completed_proj = $check->get_result()->fetch_assoc();
     if ($completed_proj) {
-        // เปลี่ยน status พร้อมบันทึกวันที่ครบ
-        $upd = $conn->prepare("UPDATE project SET project_status = 'completed', completed_at = NOW() WHERE project_id = ?");
+        $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'completed', completed_at = NOW() WHERE project_id = ? AND deleted_at IS NULL");
         $upd->bind_param("i", $project_id);
         $upd->execute();
 
-        // ✅ แจ้งเตือนมูลนิธิเจ้าของโครงการ
         $foundation_user_id = (int)$completed_proj['foundation_user_id'];
         $proj_name          = $completed_proj['project_name'];
         $total              = number_format((float)$completed_proj['current_donate'], 2);
 
-        $notif = $conn->prepare("
+        $notif_type_th = drawdream_normalize_notif_type_to_th('project_completed');
+        $notif = $conn->prepare('
             INSERT INTO notifications (user_id, type, title, message, link)
-            VALUES (?, 'project_completed', ?, ?, ?)
-        ");
+            VALUES (?, ?, ?, ?, ?)
+        ');
         $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
         $notif_msg   = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
         $notif_link  = "foundation_post_update.php?project_id=" . $project_id;
-        $notif->bind_param("isss", $foundation_user_id, $notif_title, $notif_msg, $notif_link);
+        $notif->bind_param("issss", $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
         $notif->execute();
     }
 
-    // ล้าง session
-    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id']);
+    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
+    $finalized_this_request = true;
 }
+
+$already_processed = $finalized_this_request
+    || $already_completed
+    || ($is_success && is_array($ptRow) && ($ptRow['transaction_status'] ?? '') === 'completed');
 
 // ถ้าเคยประมวลผลแล้ว ให้ดึงจำนวนเงินจาก charge
 if ($already_processed) {
@@ -189,8 +273,8 @@ if ($is_success && $amount <= 0) {
 
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
-            <h2>รอการชำระเงิน</h2>
-            <p>ยังไม่พบการชำระเงิน กรุณาสแกน QR Code แล้วลองใหม่</p>
+            <h2>ยังไม่พบการโอนจากธนาคาร</h2>
+            <p>ถ้าคุณสแกนจ่ายแล้ว อาจต้องรอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอนจริง</strong>กด «ยกเลิกรายการนี้» — ระบบจะไม่เก็บเป็นคำว่ารอดำเนินการ และคุณสามารถกดบริจาคใหม่ได้</p>
             <?php if ($is_test_mode): ?>
                 <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ</p>
             <?php endif; ?>
@@ -200,6 +284,13 @@ if ($is_success && $amount <= 0) {
             <p class="charge-ref">Charge: <?= htmlspecialchars($charge_id) ?> | Status: <?= htmlspecialchars($status) ?> | Paid: <?= $paid ? 'true' : 'false' ?></p>
             <a href="check_project_payment.php?charge_id=<?= urlencode($charge_id) ?>&project_id=<?= $project_id ?>"
                class="btn-pay">เช็คอีกครั้ง</a>
+            <form method="post" action="abandon_qr.php" style="margin:16px 0 0 0;">
+                <input type="hidden" name="charge_id" value="<?= htmlspecialchars($charge_id, ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="return_url" value="../project.php">
+                <button type="submit" class="btn-back" style="width:100%;max-width:400px;border:1px solid #b91c1c;color:#b91c1c;background:#fff;cursor:pointer;padding:12px;border-radius:8px;font-weight:600;">
+                    ยกเลิกรายการนี้ (ยังไม่ได้โอน)
+                </button>
+            </form>
             <a href="../project.php" class="btn-back">กลับหน้าโครงการ</a>
 
         <?php else: ?>
@@ -216,12 +307,6 @@ if ($is_success && $amount <= 0) {
 
 </div>
 </div>
-
-<?php if (!$is_success && $status === 'pending'): ?>
-<script>
-setTimeout(function(){ window.location.reload(); }, 5000);
-</script>
-<?php endif; ?>
 
 </body>
 </html>
