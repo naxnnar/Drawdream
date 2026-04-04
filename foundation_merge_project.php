@@ -1,7 +1,9 @@
 <?php
+// foundation_merge_project.php — รวม/จัดการโครงการ
 // มูลนิธิ: สมทบยอดบริจาคจากโครงการที่ปิดแล้วแต่ได้ไม่ถึง 50% เข้าโครงการอื่น
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/donate_category_resolve.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: project.php');
@@ -61,8 +63,10 @@ if (!$eligible) {
     exit();
 }
 
-$catRes = $conn->query("SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1");
-$projectCatId = $catRes && ($cr = $catRes->fetch_assoc()) ? (int)$cr['category_id'] : 0;
+$projectCatId = drawdream_donate_category_id_for_project($conn);
+if ($projectCatId <= 0) {
+    $projectCatId = drawdream_get_or_create_project_donate_category_id($conn);
+}
 
 $targets = [];
 $q = $conn->prepare("SELECT project_id, project_name, current_donate, goal_amount FROM foundation_project WHERE foundation_name = ? AND project_id != ? AND project_status = 'approved' AND COALESCE(merged_into_project_id,0) = 0 AND deleted_at IS NULL ORDER BY project_id DESC");

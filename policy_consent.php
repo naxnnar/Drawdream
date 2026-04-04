@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: policy_consent.php
-// หน้าที่: หน้านโยบายเต็ม (เปิดจาก URL); เนื้อหาเดียวกับโมดัลในหน้าสร้างโปรไฟล์เด็ก (includes/policy_consent_content.php)
+// policy_consent.php — หน้าความยินยอมและนโยบาย
+
 ?>
 <!DOCTYPE html>
 <html lang="th">

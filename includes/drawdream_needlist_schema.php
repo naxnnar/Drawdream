@@ -1,5 +1,6 @@
 <?php
 
+// includes/drawdream_needlist_schema.php — Schema/migration รายการสิ่งของ
 declare(strict_types=1);
 
 /**
@@ -28,6 +29,16 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     }
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_foundation_image'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN need_foundation_image VARCHAR(255) NULL DEFAULT NULL AFTER item_image_3');
+    }
+
+    $addedDonateWindowEnd = false;
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'donate_window_end_at'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN donate_window_end_at DATETIME NULL DEFAULT NULL');
+        $addedDonateWindowEnd = true;
+    }
+    if ($addedDonateWindowEnd) {
+        require_once __DIR__ . '/needlist_donate_window.php';
+        drawdream_needlist_backfill_donate_window_ends($conn);
     }
 }
 

@@ -1,12 +1,13 @@
 <?php
-// ไฟล์นี้: profile.php
-// หน้าที่: หน้าโปรไฟล์ผู้ใช้และข้อมูลบัญชี
+// profile.php — โปรไฟล์ผู้ใช้และประวัติบริจาค
+
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
+require_once __DIR__ . '/includes/donate_category_resolve.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -71,7 +72,8 @@ if ($role === 'foundation') {
         $pq = $conn->prepare("
             SELECT COALESCE(SUM(d.amount), 0) AS t
             FROM donation d
-            INNER JOIN donate_category dc ON dc.category_id = d.category_id AND dc.project_donate IS NOT NULL
+            INNER JOIN donate_category dc ON dc.category_id = d.category_id
+                AND TRIM(COALESCE(dc.project_donate, '')) NOT IN ('', '-')
             INNER JOIN foundation_project p ON p.project_id = d.target_id AND p.foundation_name = ?
             WHERE d.payment_status = 'completed'
         ");
@@ -97,7 +99,8 @@ if ($role === 'foundation') {
         $lr = $conn->prepare("
             SELECT d.transfer_datetime AS ts, d.amount, 'project' AS cat_key, p.project_name AS title
             FROM donation d
-            INNER JOIN donate_category dc ON dc.category_id = d.category_id AND dc.project_donate IS NOT NULL
+            INNER JOIN donate_category dc ON dc.category_id = d.category_id
+                AND TRIM(COALESCE(dc.project_donate, '')) NOT IN ('', '-')
             INNER JOIN foundation_project p ON p.project_id = d.target_id AND p.foundation_name = ?
             WHERE d.payment_status = 'completed'
             ORDER BY d.transfer_datetime DESC
@@ -131,6 +134,7 @@ if ($role === 'foundation') {
     $foundation_finance_rows = array_slice($foundation_finance_rows, 0, 50);
 
 } elseif ($role === 'donor') {
+    $donor_active_child_subscriptions = [];
     $stmt = $conn->prepare("SELECT d.*, u.email FROM donor d 
                            JOIN `user` u ON d.user_id = u.user_id 
                            WHERE d.user_id = ? LIMIT 1");
@@ -146,16 +150,91 @@ if ($role === 'foundation') {
             d.transfer_datetime,
             dc.project_donate,
             dc.needitem_donate,
-            pt.omise_charge_id
+            dc.child_donate,
+            (SELECT pt2.omise_charge_id FROM payment_transaction pt2
+             WHERE pt2.donate_id = d.donate_id
+             ORDER BY pt2.log_id DESC LIMIT 1) AS omise_charge_id,
+            fc.child_name AS child_name_by_target,
+            p.project_name AS project_name_by_target,
+            fp.foundation_name AS foundation_name_by_target
         FROM donation d
-        JOIN donate_category dc ON d.category_id = dc.category_id
-        LEFT JOIN payment_transaction pt ON pt.donate_id = d.donate_id
-        WHERE d.donor_id = ? AND d.payment_status = 'completed'
+        INNER JOIN donate_category dc ON d.category_id = dc.category_id
+        LEFT JOIN foundation_children fc
+            ON fc.child_id = d.target_id AND fc.deleted_at IS NULL
+        LEFT JOIN foundation_project p
+            ON p.project_id = d.target_id AND p.deleted_at IS NULL
+        LEFT JOIN foundation_profile fp
+            ON fp.foundation_id = d.target_id
+        WHERE d.donor_id = ? AND LOWER(TRIM(d.payment_status)) = 'completed'
         ORDER BY d.transfer_datetime DESC
+        LIMIT 200
     ");
     $stmt_don->bind_param('i', $user_id);
     $stmt_don->execute();
     $donation_history = $stmt_don->get_result()->fetch_all(MYSQLI_ASSOC);
+
+    // รายการที่บันทึกเฉพาะ child_donations (งวด Omise เก่า / webhook ยังไม่สร้างแถว donation) — แสดงในประวัติเมื่อไม่มีคู่ใน donation
+    if ((bool)($conn->query("SHOW TABLES LIKE 'child_donations'")->num_rows)) {
+        $stCd = $conn->prepare(
+            'SELECT cd.amount, cd.donated_at, fc.child_name
+             FROM child_donations cd
+             INNER JOIN foundation_children fc ON fc.child_id = cd.child_id AND fc.deleted_at IS NULL
+             WHERE cd.donor_user_id = ?
+               AND NOT EXISTS (
+                   SELECT 1 FROM donation d
+                   WHERE d.donor_id = cd.donor_user_id
+                     AND d.target_id = cd.child_id
+                     AND LOWER(TRIM(COALESCE(d.payment_status, \'\'))) = \'completed\'
+                     AND ABS(d.amount - cd.amount) < 0.00001
+                     AND d.transfer_datetime BETWEEN cd.donated_at - INTERVAL 10 MINUTE AND cd.donated_at + INTERVAL 10 MINUTE
+               )
+             ORDER BY cd.donated_at DESC
+             LIMIT 150'
+        );
+        if ($stCd) {
+            $stCd->bind_param('i', $user_id);
+            $stCd->execute();
+            foreach ($stCd->get_result()->fetch_all(MYSQLI_ASSOC) as $cr) {
+                $donation_history[] = [
+                    'donate_id' => 0,
+                    'amount' => (float)($cr['amount'] ?? 0),
+                    'payment_status' => 'completed',
+                    'transfer_datetime' => $cr['donated_at'],
+                    'project_donate' => '-',
+                    'needitem_donate' => '-',
+                    'child_donate' => 'อุปการะเด็ก',
+                    'omise_charge_id' => '',
+                    'child_name_by_target' => trim((string)($cr['child_name'] ?? '')),
+                    'project_name_by_target' => '',
+                    'foundation_name_by_target' => '',
+                ];
+            }
+        }
+    }
+
+    usort(
+        $donation_history,
+        static function ($a, $b) {
+            return strtotime((string)($b['transfer_datetime'])) <=> strtotime((string)($a['transfer_datetime']));
+        }
+    );
+    $donation_history = array_slice($donation_history, 0, 200);
+
+    if ((bool)($conn->query("SHOW TABLES LIKE 'child_omise_subscription'")->num_rows)) {
+        $stSub = $conn->prepare(
+            'SELECT cos.plan_code, cos.amount_thb, fc.child_name
+             FROM child_omise_subscription cos
+             INNER JOIN foundation_children fc ON fc.child_id = cos.child_id AND fc.deleted_at IS NULL
+             WHERE cos.donor_user_id = ? AND cos.status = ?
+             ORDER BY fc.child_name ASC'
+        );
+        if ($stSub) {
+            $active = 'active';
+            $stSub->bind_param('is', $user_id, $active);
+            $stSub->execute();
+            $donor_active_child_subscriptions = $stSub->get_result()->fetch_all(MYSQLI_ASSOC);
+        }
+    }
 
 } elseif ($role === 'admin') {
     $stmt = $conn->prepare("SELECT email FROM `user` WHERE user_id = ? LIMIT 1");
@@ -204,7 +283,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     <title>โปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/profile.css?v=10">
+    <link rel="stylesheet" href="css/profile.css?v=12">
 </head>
 <body>
 
@@ -381,6 +460,29 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
 
         <div class="logs-section donor-history-panel" id="donationHistoryPanel" hidden>
             <h2>ประวัติการบริจาค</h2>
+            <?php if (!empty($donor_active_child_subscriptions)): ?>
+            <div class="donor-sponsorship-active-banner" role="region" aria-label="เด็กที่กำลังอุปการะ">
+                <div class="donor-sponsorship-active-banner__title"><i class="bi bi-heart-fill" aria-hidden="true"></i> กำลังอุปการะเด็ก</div>
+                <ul class="donor-sponsorship-active-banner__list">
+                    <?php foreach ($donor_active_child_subscriptions as $sub): ?>
+                        <?php
+                        $pl = strtolower(trim((string)($sub['plan_code'] ?? '')));
+                        $planTh = match ($pl) {
+                            'monthly' => 'รายเดือน',
+                            'semiannual' => 'ราย 6 เดือน',
+                            'yearly' => 'รายปี',
+                            default => $pl !== '' ? $pl : 'รายงวด',
+                        };
+                        ?>
+                        <li>
+                            <strong><?= htmlspecialchars((string)($sub['child_name'] ?? '')) ?></strong>
+                            <span class="donor-sponsorship-active-banner__meta"> · <?= htmlspecialchars($planTh) ?> <?= number_format((float)($sub['amount_thb'] ?? 0), 0) ?> บาท/งวด</span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+
             <?php if (!empty($donation_history)): ?>
                 <div class="donor-summary-head">
                     <label class="donor-year-filter-wrap" for="donation-year-filter">
@@ -399,10 +501,39 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                     <?php $is_extra = $idx >= 3; $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
                     <div class="log-item log-item--donation<?= $is_extra ? ' log-item--extra' : '' ?>" data-year="<?= htmlspecialchars($yr) ?>"<?= $is_extra ? ' hidden' : '' ?>>
                         <div class="log-action">
-                            <?php if (!empty($don['project_donate'])): ?>
-                                บริจาคให้โครงการ
-                            <?php elseif (!empty($don['needitem_donate'])): ?>
-                                บริจาครายการสิ่งของ
+                            <?php
+                            $histChild = trim((string)($don['child_name_by_target'] ?? ''));
+                            $histProject = trim((string)($don['project_name_by_target'] ?? ''));
+                            $histFoundation = trim((string)($don['foundation_name_by_target'] ?? ''));
+                            $histCatChild = drawdream_donate_cat_label_is_active($don['child_donate'] ?? null);
+                            $histCatProject = drawdream_donate_cat_label_is_active($don['project_donate'] ?? null);
+                            $histCatNeed = drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null);
+                            ?>
+                            <?php if ($histCatChild && $histChild !== ''): ?>
+                                อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
+                            <?php elseif ($histCatProject && $histProject !== ''): ?>
+                                บริจาคให้โครงการ — <?= htmlspecialchars($histProject) ?>
+                            <?php elseif ($histCatNeed && $histFoundation !== ''): ?>
+                                บริจาครายการสิ่งของ — <?= htmlspecialchars($histFoundation) ?>
+                            <?php elseif ($histChild !== ''): ?>
+                                <?php /* category_id ผิดแต่ target_id ชี้เด็กจริง (เช่น QR/งวด Omise) */ ?>
+                                อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
+                            <?php elseif ($histProject !== ''): ?>
+                                บริจาคให้โครงการ — <?= htmlspecialchars($histProject) ?>
+                            <?php elseif ($histFoundation !== ''): ?>
+                                บริจาคมูลนิธิ (สิ่งของ) — <?= htmlspecialchars($histFoundation) ?>
+                            <?php elseif ($histCatChild): ?>
+                                อุปการะเด็ก<?php
+                                echo $histChild !== '' ? ' — ' . htmlspecialchars($histChild) : '';
+                                ?>
+                            <?php elseif ($histCatProject): ?>
+                                บริจาคให้โครงการ<?php
+                                echo $histProject !== '' ? ' — ' . htmlspecialchars($histProject) : '';
+                                ?>
+                            <?php elseif ($histCatNeed): ?>
+                                บริจาครายการสิ่งของ<?php
+                                echo $histFoundation !== '' ? ' — ' . htmlspecialchars($histFoundation) : '';
+                                ?>
                             <?php else: ?>
                                 บริจาค
                             <?php endif; ?>
@@ -428,6 +559,8 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                     <button type="button" class="btn-donation-more" id="btn-donation-more">ดูเพิ่มเติม</button>
                 </div>
                 <?php endif; ?>
+            <?php elseif (!empty($donor_active_child_subscriptions)): ?>
+                <p class="donor-history-hint">รายการแต่ละงวดจะแสดงด้านล่างเมื่อระบบบันทึกยอดสำเร็จ (Webhook Omise → <code>payment/omise_webhook.php</code> หรือ cron งวด)</p>
             <?php else: ?>
                 <div style="text-align:center; color:#999; padding:30px;">
                     ยังไม่มีประวัติการบริจาค

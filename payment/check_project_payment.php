@@ -1,11 +1,13 @@
 <?php
-// ไฟล์นี้: payment\check_payment.php
-// หน้าที่: ไฟล์ตรวจสอบสถานะการชำระเงินโครงการ
+// payment/check_project_payment.php — ยืนยันการชำระโครงการ (หลัง Omise)
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/admin_audit_migrate.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/../includes/payment_transaction_schema.php';
+require_once __DIR__ . '/../includes/donate_category_resolve.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -34,7 +36,7 @@ if ($is_mock) {
     ];
 } else {
     // เช็คสถานะ charge จาก Omise API
-    $ch = curl_init(OMISE_API_URL . '/charges/' . $charge_id);
+    $ch = curl_init(rtrim(OMISE_API_URL, '/') . '/charges/' . rawurlencode($charge_id) . '?expand[]=source');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
@@ -79,26 +81,10 @@ if (!$is_mock && $has_pending && !$already_completed && !$is_success
     }
 }
 
-function drawdream_finalize_project_donation(mysqli $conn, int $project_id, int $donate_id, string $charge_id, float $amountBaht): bool
+function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id, float $amountBaht): void
 {
-    $service_fee = 0.0;
-    $stmt = $conn->prepare("
-        UPDATE donation
-        SET amount = ?, service_fee = ?, payment_status = 'completed', transfer_datetime = NOW()
-        WHERE donate_id = ? AND payment_status = 'pending'
-    ");
-    $stmt->bind_param("ddi", $amountBaht, $service_fee, $donate_id);
-    $stmt->execute();
-    if ($stmt->affected_rows < 1) {
-        return false;
-    }
-
-    $stmt = $conn->prepare("UPDATE payment_transaction SET transaction_status = 'completed' WHERE omise_charge_id = ? AND transaction_status = 'pending'");
-    $stmt->bind_param("s", $charge_id);
-    $stmt->execute();
-
-    $stmt = $conn->prepare("UPDATE foundation_project SET current_donate = current_donate + ? WHERE project_id = ? AND deleted_at IS NULL");
-    $stmt->bind_param("di", $amountBaht, $project_id);
+    $stmt = $conn->prepare('UPDATE foundation_project SET current_donate = current_donate + ? WHERE project_id = ? AND deleted_at IS NULL');
+    $stmt->bind_param('di', $amountBaht, $project_id);
     $stmt->execute();
 
     $check = $conn->prepare("
@@ -113,17 +99,17 @@ function drawdream_finalize_project_donation(mysqli $conn, int $project_id, int 
               OR (p.end_date IS NOT NULL AND p.end_date <= CURDATE())
           )
     ");
-    $check->bind_param("i", $project_id);
+    $check->bind_param('i', $project_id);
     $check->execute();
     $completed_proj = $check->get_result()->fetch_assoc();
     if ($completed_proj) {
         $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'completed', completed_at = NOW() WHERE project_id = ? AND deleted_at IS NULL");
-        $upd->bind_param("i", $project_id);
+        $upd->bind_param('i', $project_id);
         $upd->execute();
 
         $foundation_user_id = (int)$completed_proj['foundation_user_id'];
-        $proj_name          = $completed_proj['project_name'];
-        $total              = number_format((float)$completed_proj['current_donate'], 2);
+        $proj_name = $completed_proj['project_name'];
+        $total = number_format((float)$completed_proj['current_donate'], 2);
 
         $notif_type_th = drawdream_normalize_notif_type_to_th('project_completed');
         $notif = $conn->prepare('
@@ -131,12 +117,138 @@ function drawdream_finalize_project_donation(mysqli $conn, int $project_id, int 
             VALUES (?, ?, ?, ?, ?)
         ');
         $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
-        $notif_msg   = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
-        $notif_link  = "foundation_post_update.php?project_id=" . $project_id;
-        $notif->bind_param("issss", $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
+        $notif_msg = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
+        $notif_link = 'foundation_post_update.php?project_id=' . $project_id;
+        $notif->bind_param('issss', $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
         $notif->execute();
     }
-    return true;
+}
+
+/**
+ * @param int $donate_id_param donate_id จาก payment_transaction (0 = ยังไม่มีแถว donation — สร้างเมื่อสำเร็จ)
+ */
+function drawdream_finalize_project_donation(
+    mysqli $conn,
+    int $project_id,
+    int $donate_id_param,
+    string $charge_id,
+    float $amountBaht,
+    int $donor_user_id
+): bool {
+    drawdream_payment_transaction_ensure_schema($conn);
+
+    $pend = 'pending';
+    $pt = $conn->prepare(
+        'SELECT log_id, donate_id, pending_category_id, pending_target_id, pending_amount, pending_donor_user_id
+         FROM payment_transaction WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
+    );
+    $pt->bind_param('ss', $charge_id, $pend);
+    $pt->execute();
+    $ptRow = $pt->get_result()->fetch_assoc();
+    if (!$ptRow) {
+        return false;
+    }
+
+    $logId = (int)$ptRow['log_id'];
+    $ptDonateId = isset($ptRow['donate_id']) && $ptRow['donate_id'] !== null ? (int)$ptRow['donate_id'] : 0;
+
+    if ($donate_id_param > 0 && $ptDonateId > 0 && $donate_id_param !== $ptDonateId) {
+        return false;
+    }
+
+    if ($ptDonateId > 0) {
+        $chk = $conn->prepare(
+            'SELECT donor_id, target_id, payment_status FROM donation WHERE donate_id = ? LIMIT 1'
+        );
+        $chk->bind_param('i', $ptDonateId);
+        $chk->execute();
+        $row = $chk->get_result()->fetch_assoc();
+        if (!$row
+            || (int)($row['donor_id'] ?? 0) !== $donor_user_id
+            || (int)($row['target_id'] ?? 0) !== $project_id
+            || (string)($row['payment_status'] ?? '') !== 'pending'
+        ) {
+            return false;
+        }
+
+        $service_fee = 0.0;
+        if (!$conn->begin_transaction()) {
+            return false;
+        }
+        try {
+            $stmt = $conn->prepare('
+                UPDATE donation
+                SET amount = ?, service_fee = ?, payment_status = \'completed\', transfer_datetime = NOW()
+                WHERE donate_id = ? AND payment_status = \'pending\'
+            ');
+            $stmt->bind_param('ddi', $amountBaht, $service_fee, $ptDonateId);
+            $stmt->execute();
+            if ($stmt->affected_rows < 1) {
+                throw new RuntimeException('update donation');
+            }
+
+            $stmt = $conn->prepare(
+                'UPDATE payment_transaction SET transaction_status = \'completed\' WHERE log_id = ? AND transaction_status = \'pending\''
+            );
+            $stmt->bind_param('i', $logId);
+            $stmt->execute();
+
+            drawdream_project_bump_and_maybe_complete($conn, $project_id, $amountBaht);
+
+            $conn->commit();
+
+            return true;
+        } catch (Throwable $e) {
+            $conn->rollback();
+
+            return false;
+        }
+    }
+
+    $pDonor = (int)($ptRow['pending_donor_user_id'] ?? 0);
+    $pTarget = (int)($ptRow['pending_target_id'] ?? 0);
+    $pCat = (int)($ptRow['pending_category_id'] ?? 0);
+    if ($pDonor !== $donor_user_id || $pTarget !== $project_id || $pCat <= 0) {
+        return false;
+    }
+
+    $service_fee = 0.0;
+    if (!$conn->begin_transaction()) {
+        return false;
+    }
+    try {
+        $ins = $conn->prepare('
+            INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
+            VALUES (?, ?, ?, ?, ?, \'completed\', NOW())
+        ');
+        $ins->bind_param('iiidd', $pCat, $project_id, $donor_user_id, $amountBaht, $service_fee);
+        $ins->execute();
+        $newDonateId = (int)$conn->insert_id;
+        if ($newDonateId <= 0) {
+            throw new RuntimeException('no donate');
+        }
+
+        $upt = $conn->prepare(
+            'UPDATE payment_transaction SET donate_id = ?, transaction_status = \'completed\',
+             pending_category_id = NULL, pending_target_id = NULL, pending_amount = NULL, pending_donor_user_id = NULL
+             WHERE log_id = ? AND transaction_status = \'pending\''
+        );
+        $upt->bind_param('ii', $newDonateId, $logId);
+        $upt->execute();
+        if ($upt->affected_rows < 1) {
+            throw new RuntimeException('pt');
+        }
+
+        drawdream_project_bump_and_maybe_complete($conn, $project_id, $amountBaht);
+
+        $conn->commit();
+
+        return true;
+    } catch (Throwable $e) {
+        $conn->rollback();
+
+        return false;
+    }
 }
 
 $finalized_this_request = false;
@@ -145,8 +257,8 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
     if ($amount <= 0) {
         $amount = (float)($_SESSION['pending_amount'] ?? 0);
     }
-    $donate_id = (int)($ptRow['donate_id'] ?? 0);
-    if ($donate_id > 0 && drawdream_finalize_project_donation($conn, $project_id, $donate_id, $charge_id, (float)$amount)) {
+    $donate_id_from_pt = (int)($ptRow['donate_id'] ?? 0);
+    if (drawdream_finalize_project_donation($conn, $project_id, $donate_id_from_pt, $charge_id, (float)$amount, $donor_uid)) {
         $finalized_this_request = true;
         unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
     }
@@ -163,16 +275,7 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
     $donor  = $stmt->get_result()->fetch_assoc();
     $tax_id = $donor['tax_id'] ?? '';
 
-    $stmt = $conn->prepare("SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1");
-    $stmt->execute();
-    $cat = $stmt->get_result()->fetch_assoc();
-
-    if (!$cat) {
-        $conn->query("INSERT INTO donate_category (project_donate) VALUES ('โครงการ')");
-        $category_id = $conn->insert_id;
-    } else {
-        $category_id = $cat['category_id'];
-    }
+    $category_id = drawdream_get_or_create_project_donate_category_id($conn);
 
     $stmt = $conn->prepare("
         INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
@@ -189,45 +292,7 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
     $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
     $stmt->execute();
 
-    $stmt = $conn->prepare("UPDATE foundation_project SET current_donate = current_donate + ? WHERE project_id = ? AND deleted_at IS NULL");
-    $stmt->bind_param("di", $amount, $project_id);
-    $stmt->execute();
-
-    $check = $conn->prepare("
-        SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
-        FROM foundation_project p
-        JOIN foundation_profile fp ON p.foundation_name = fp.foundation_name
-        WHERE p.project_id = ?
-          AND p.project_status = 'approved'
-          AND p.deleted_at IS NULL
-          AND (
-              p.current_donate >= p.goal_amount
-              OR (p.end_date IS NOT NULL AND p.end_date <= CURDATE())
-          )
-    ");
-    $check->bind_param("i", $project_id);
-    $check->execute();
-    $completed_proj = $check->get_result()->fetch_assoc();
-    if ($completed_proj) {
-        $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'completed', completed_at = NOW() WHERE project_id = ? AND deleted_at IS NULL");
-        $upd->bind_param("i", $project_id);
-        $upd->execute();
-
-        $foundation_user_id = (int)$completed_proj['foundation_user_id'];
-        $proj_name          = $completed_proj['project_name'];
-        $total              = number_format((float)$completed_proj['current_donate'], 2);
-
-        $notif_type_th = drawdream_normalize_notif_type_to_th('project_completed');
-        $notif = $conn->prepare('
-            INSERT INTO notifications (user_id, type, title, message, link)
-            VALUES (?, ?, ?, ?, ?)
-        ');
-        $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
-        $notif_msg   = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
-        $notif_link  = "foundation_post_update.php?project_id=" . $project_id;
-        $notif->bind_param("issss", $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
-        $notif->execute();
-    }
+    drawdream_project_bump_and_maybe_complete($conn, $project_id, (float)$amount);
 
     unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
     $finalized_this_request = true;
@@ -276,7 +341,9 @@ if ($is_success && $amount <= 0) {
             <h2>ยังไม่พบการโอนจากธนาคาร</h2>
             <p>ถ้าคุณสแกนจ่ายแล้ว อาจต้องรอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอนจริง</strong>กด «ยกเลิกรายการนี้» — ระบบจะไม่เก็บเป็นคำว่ารอดำเนินการ และคุณสามารถกดบริจาคใหม่ได้</p>
             <?php if ($is_test_mode): ?>
-                <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ</p>
+                <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ — ใน Dashboard ให้เปิดรายการนี้แล้วใช้ <strong>Mark as paid</strong></p>
+                <?php $omise_charge_test_url = 'https://dashboard.omise.co/test/charges/' . rawurlencode($charge_id); ?>
+                <p><a href="<?= htmlspecialchars($omise_charge_test_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">เปิด charge นี้ใน Omise Dashboard (test)</a></p>
             <?php endif; ?>
             <?php if (!empty($expires_at)): ?>
                 <p>QR หมดอายุ: <?= htmlspecialchars($expires_at) ?></p>

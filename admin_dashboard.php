@@ -1,8 +1,9 @@
 <?php
-// ไฟล์นี้: admin_dashboard.php
-// หน้าที่: แดชบอร์ดภาพรวมสำหรับผู้ดูแลระบบ
+// admin_dashboard.php — แดชบอร์ดแอดมิน
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/donate_category_resolve.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -29,7 +30,7 @@ $active_projects = mysqli_query($conn, "
 ");
 
 $recent_donations = mysqli_query($conn, "
-    SELECT d.*, dc.project_donate, dc.needitem_donate, pt.omise_charge_id
+    SELECT d.*, dc.project_donate, dc.needitem_donate, dc.child_donate, pt.omise_charge_id
     FROM donation d
     JOIN donate_category dc ON d.category_id = dc.category_id
     LEFT JOIN payment_transaction pt ON pt.donate_id = d.donate_id
@@ -118,7 +119,7 @@ for ($i = 29; $i >= 0; $i--) {
                 </div>
             </a>
 
-            <a href="admin_children_overview.php" class="admin-stat-card-wrap" title="ดูรายชื่อเด็ก">
+            <a href="children_.php" class="admin-stat-card-wrap" title="ดูรายชื่อเด็ก (Profilechildren)">
                 <div class="card stat-card children">
                     <div class="stat-icon"><i class="bi bi-person-hearts"></i></div>
                     <div class="stat-divider" aria-hidden="true"></div>
@@ -231,8 +232,9 @@ for ($i = 29; $i >= 0; $i--) {
                     <div class="don-item">
                         <div>
                             <div class="don-type">
-                                <?php if (!empty($don['project_donate'])): ?>บริจาคโครงการ
-                                <?php elseif (!empty($don['needitem_donate'])): ?>บริจาคสิ่งของ
+                                <?php if (drawdream_donate_cat_label_is_active($don['project_donate'] ?? null)): ?>บริจาคโครงการ
+                                <?php elseif (drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null)): ?>บริจาคสิ่งของ
+                                <?php elseif (drawdream_donate_cat_label_is_active($don['child_donate'] ?? null)): ?>บริจาคให้เด็ก
                                 <?php else: ?>บริจาค<?php endif; ?>
                             </div>
                             <div class="don-ref"><?= htmlspecialchars($don['omise_charge_id'] ?? '-') ?></div>

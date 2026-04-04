@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_children.php
-// หน้าที่: หน้าสร้างโปรไฟล์เด็กฝั่งมูลนิธิ/แอดมิน
+// admin_children.php — แอดมินจัดการโปรไฟล์เด็ก
+
 session_start();
 include 'db.php';
 

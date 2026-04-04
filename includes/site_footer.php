@@ -1,4 +1,5 @@
 <?php
+// includes/site_footer.php — HTML footer เว็บไซต์
 // ฟุตเตอร์กลางเว็บไซต์ (ใช้ร่วมกับ foundation.php และหน้าอื่นที่ต้องการให้สอดคล้องกับ homepage)
 $footerBase = $footer_base_path ?? '';
 ?>

@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: foundation_add_children.php
-// หน้าที่: หน้ามูลนิธิสำหรับเพิ่มโปรไฟล์เด็ก
+// foundation_add_children.php — มูลนิธิเพิ่มโปรไฟล์เด็ก
+
 session_start();
 include 'db.php';
 

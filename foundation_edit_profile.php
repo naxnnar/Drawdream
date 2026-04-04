@@ -1,5 +1,6 @@
 <?php
 
+// foundation_edit_profile.php — มูลนิธิแก้ไขโปรไฟล์องค์กร
 declare(strict_types=1);
 
 /**

@@ -764,3 +764,9 @@ a.contact-card-link:focus-visible .contact-card-name {
     .banner-project-name { font-size: 1.2em; }
     .payment-form-wrap { margin-top: -30px; padding: 12px 2vw 10px 2vw; }
 }
+
+/* หน้าบริจาครายการสิ่งของ — ปิดฟอร์มเมื่อไม่มีรายการเปิดรับ */
+body.foundation-donate-page form.fd-form-disabled {
+    opacity: 0.55;
+    pointer-events: none;
+}

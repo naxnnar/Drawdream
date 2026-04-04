@@ -1,6 +1,12 @@
 <?php
-// ไฟล์นี้: welcome.php
-// หน้าที่: หน้าต้อนรับสำหรับผู้ใช้ทั้งหมด (Admin, Donor, Foundation)
+// welcome.php — หน้าต้อนรับหลัง login (แอนิเมชัน + redirect)
+/**
+ * Welcome — ครั้งเดียวหลัง login สำหรับทุก role รวม admin (login.php ตั้ง $_SESSION['show_welcome'])
+ * ปุ่ม/redirect: admin → admin_dashboard.php | อื่นๆ → homepage.php
+ * ไม่ใช้หน้า admin_welcome แยก (ถูกลบแล้ว)
+ *
+ * แอนิเมชัน: css/welcome.css | เปลี่ยนหน้าอัตโนมัติ: JS countdown 3 วินาที
+ */
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

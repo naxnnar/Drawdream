@@ -1,9 +1,6 @@
-﻿<?php
-// ไฟล์นี้: account.php
-// หน้าที่: หน้าจัดการข้อมูลบัญชีผู้ใช้
-// ------------------------------
+<?php
+// account.php — หน้าจัดการข้อมูลบัญชีผู้ใช้
 // Backend: ตัดสินใจปลายทางหลังล็อกอินตาม role
-// ------------------------------
 session_start();
 
 if (!isset($_SESSION['email'])) {
@@ -21,7 +18,7 @@ if ($role === 'foundation') {
 }
 
 if ($role === 'admin') {
-  header("Location: admin+approve_projects.php");
+  header('Location: admin_dashboard.php');
   exit();
 }
 

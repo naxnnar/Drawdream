@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: navbar.php
-// หน้าที่: คอมโพเนนต์เมนูนำทางและแจ้งเตือน
+// navbar.php — แถบนำทางร่วมทุกหน้า
+
 if (session_status() === PHP_SESSION_NONE) {
   @session_start();
 }

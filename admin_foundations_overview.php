@@ -1,4 +1,5 @@
 <?php
+// admin_foundations_overview.php — ภาพรวมมูลนิธิ
 // รายการมูลนิธิทั้งหมด — มุมมองแอดมิน
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

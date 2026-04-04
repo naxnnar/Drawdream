@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: children_.php
-// หน้าที่: หน้ารวมโปรไฟล์เด็กสำหรับผู้บริจาคและมูลนิธิ
+// children_.php — รายชื่อเด็ก (สาธารณะ / มุมมองมูลนิธิ)
+
 // ------------------------------
 // Session and database bootstrap
 // ------------------------------
@@ -9,8 +9,10 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 include 'db.php'; // เชื่อมต่อฐานข้อมูล
 require_once __DIR__ . '/includes/child_sponsorship.php';
+require_once __DIR__ . '/includes/child_omise_subscription.php';
 drawdream_child_sponsorship_ensure_columns($conn);
 drawdream_child_outcome_ensure_columns($conn);
+drawdream_child_omise_subscription_ensure_schema($conn);
 
 // ------------------------------
 // Current user context
@@ -148,6 +150,29 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
   exit();
 }
 
+/** ป้ายสถานะโปรไฟล์เด็ก (การ์ดมูลนิธิ/ผู้บริจาค + ตารางแอดมิน) */
+function children_row_profile_status_meta(array $child): array
+{
+    $rawAp = $child['approve_profile'] ?? 'รอดำเนินการ';
+    if (!empty($child['pending_edit_json']) && $rawAp === 'กำลังดำเนินการ') {
+        return ['text' => 'รอตรวจสอบการแก้ไข', 'class' => 'status-pending', 'raw' => 'รอดำเนินการ'];
+    }
+    $rawStatus = $rawAp;
+    if ($rawStatus === 'กำลังดำเนินการ') {
+        $rawStatus = 'รอดำเนินการ';
+    }
+    $statusClass = 'status-pending';
+    $statusText = $rawStatus;
+    if ($rawStatus === 'อนุมัติ') {
+        $statusClass = 'status-approved';
+        $statusText = 'อนุมัติแล้ว';
+    } elseif ($rawStatus === 'ไม่อนุมัติ') {
+        $statusClass = 'status-rejected';
+        $statusText = 'ไม่อนุมัติ';
+    }
+    return ['text' => $statusText, 'class' => $statusClass, 'raw' => $rawStatus];
+}
+
 // ------------------------------
 // Build listing query by role
 // ------------------------------
@@ -163,12 +188,21 @@ if ($role === 'donor') {
   } else {
     $result = false;
   }
+} elseif ($role === 'admin') {
+  $sql = "
+    SELECT c.*, f.foundation_name AS fp_name
+    FROM foundation_children c
+    LEFT JOIN foundation_profile f ON c.foundation_id = f.foundation_id
+    WHERE c.deleted_at IS NULL
+    ORDER BY c.child_id DESC
+  ";
+  $result = $conn->query($sql);
 } else {
   $sql = "SELECT * FROM foundation_children WHERE deleted_at IS NULL ORDER BY child_id DESC";
   $result = $conn->query($sql);
 }
 
-// แยกกลุ่ม: รออุปการะ vs อุปการะแล้ว (ยอดบริจาคเดือนนี้ >= 20,000)
+// แยกกลุ่ม: รออุปการะ vs มีผู้อุปการะ (ยอดรอบเดือน >= 20,000 หรือมี Omise subscription active)
 $waiting_children = [];
 $sponsored_children = [];
 $all_list_rows = [];
@@ -182,14 +216,12 @@ $childIdsForTotals = array_map(static fn ($r) => (int)($r['child_id'] ?? 0), $al
 $childDonationTotals = ($role === 'foundation' && $childIdsForTotals !== [])
     ? drawdream_child_donation_totals_batch($conn, $childIdsForTotals)
     : [];
+$planSponsoredMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIdsForTotals);
 
 foreach ($all_list_rows as $row) {
   $cid = (int)($row['child_id'] ?? 0);
   $cycleAmt = (float)($cycleTotals[$cid] ?? 0);
-  $ap = (string)($row['approve_profile'] ?? '');
-  $countsAsSponsored = in_array($ap, ['อนุมัติ', 'กำลังดำเนินการ'], true)
-    && $cycleAmt >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD;
-  if ($countsAsSponsored) {
+  if (drawdream_child_is_showcase_sponsored($conn, $cid, $row, $cycleAmt, $planSponsoredMap)) {
     $sponsored_children[] = $row;
   } else {
     $waiting_children[] = $row;
@@ -198,7 +230,7 @@ foreach ($all_list_rows as $row) {
 
 $child_grid_sections = [
   ['children' => $waiting_children, 'bar' => 'เด็กที่ยังไม่ได้อุปการะ', 'sponsored' => false],
-  ['children' => $sponsored_children, 'bar' => 'เด็กที่มีได้รับการอุปการะ', 'sponsored' => true],
+  ['children' => $sponsored_children, 'bar' => 'เด็กที่มีผู้อุปการะ', 'sponsored' => true],
 ];
 ?>
 <!DOCTYPE html>
@@ -212,7 +244,10 @@ $child_grid_sections = [
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <!-- link css -->
-  <link rel="stylesheet" href="css/children.css?v=17">
+  <link rel="stylesheet" href="css/children.css?v=19">
+  <?php if ($role === 'admin'): ?>
+  <link rel="stylesheet" href="css/admin_directory.css">
+  <?php endif; ?>
 
 </head>
  
@@ -309,6 +344,81 @@ $child_grid_sections = [
 </div>
 <?php endif; ?>
 
+<?php if ($role === 'admin'): ?>
+<div class="admin-directory-page children-admin-directory">
+    <div class="admin-directory-head">
+        <h1 class="admin-directory-title">เด็กทั้งหมด</h1>
+        <p class="admin-directory-desc">
+            รายชื่อเด็กจากมูลนิธิ: สถานะโปรไฟล์ การอุปการะจริงในระบบ และลิงก์ไปหน้าบริจาคสาธารณะ
+            (ยอดรอบเดือนครบเกณฑ์หรือมีอุปการะรายงวดที่ active)
+        </p>
+    </div>
+    <div class="admin-directory-actions-hint">
+        <strong>แอดมินทำอะไรได้จากหน้านี้:</strong>
+        ตรวจสถานะอนุมัติโปรไฟล์ · เปิดเพจบริจาคเพื่อดูภาพและข้อความที่ donor เห็น ·
+        <a href="admin_approve_children.php">อนุมัติโปรไฟล์เด็ก</a> เมื่อมีคิวรอตรวจ
+    </div>
+    <div class="admin-dir-table-wrap">
+        <table class="admin-dir-table">
+            <thead>
+            <tr>
+                <th>รูป</th>
+                <th>ชื่อเด็ก</th>
+                <th>มูลนิธิ</th>
+                <th>สถานะโปรไฟล์</th>
+                <th>สถานะอุปการะ</th>
+                <th>การดำเนินการ</th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php if ($all_list_rows === []): ?>
+                <tr><td colspan="6" class="b--muted">ยังไม่มีโปรไฟล์เด็ก</td></tr>
+            <?php else: ?>
+                <?php foreach ($all_list_rows as $r):
+                    $cid = (int)($r['child_id'] ?? 0);
+                    $photo = trim((string)($r['photo_child'] ?? ''));
+                    $fn = trim((string)($r['foundation_name'] ?? ''));
+                    if ($fn === '') {
+                        $fn = trim((string)($r['fp_name'] ?? ''));
+                    }
+                    if ($fn === '') {
+                        $fn = '—';
+                    }
+                    $profMeta = children_row_profile_status_meta($r);
+                    $cycleAmtRow = (float)($cycleTotals[$cid] ?? 0);
+                    $sponsoredRow = drawdream_child_is_showcase_sponsored($conn, $cid, $r, $cycleAmtRow, $planSponsoredMap);
+                    $sponsorLabel = $sponsoredRow ? 'มีผู้อุปการะ' : 'รออุปการะ';
+                    $imgSrc = $photo !== '' ? 'uploads/Children/' . rawurlencode($photo) : '';
+                    ?>
+                    <tr>
+                        <td>
+                            <?php if ($imgSrc !== ''): ?>
+                                <img class="admin-dir-thumb" src="<?php echo htmlspecialchars($imgSrc); ?>" alt="">
+                            <?php else: ?>
+                                <span class="b--muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars((string)($r['child_name'] ?? '')); ?></td>
+                        <td><?php echo htmlspecialchars($fn); ?></td>
+                        <td><?php echo htmlspecialchars($profMeta['text']); ?></td>
+                        <td><?php echo htmlspecialchars($sponsorLabel); ?></td>
+                        <td>
+                            <div class="admin-dir-actions">
+                                <a class="admin-dir-btn admin-dir-btn--primary"
+                                   href="children_donate.php?id=<?php echo $cid; ?>">หน้าบริจาค</a>
+                                <a class="admin-dir-btn admin-dir-btn--ghost"
+                                   href="admin_approve_children.php">คิวอนุมัติ</a>
+                                <a class="admin-dir-btn admin-dir-btn--ghost" href="admin_dashboard.php">Dashboard</a>
+                            </div>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+            <?php endif; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
+<?php else: ?>
 <?php foreach ($child_grid_sections as $gridSection): ?>
   <?php if ($gridSection['children'] === []) { continue; } ?>
   <?php if (!empty($gridSection['bar'])): ?>
@@ -320,27 +430,10 @@ $child_grid_sections = [
     <?php foreach ($gridSection['children'] as $child): ?>
     <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
       <?php
-        // --- กำหนดสถานะโปรไฟล์เด็ก ---
-        $rawAp = $child['approve_profile'] ?? 'รอดำเนินการ';
-        if (!empty($child['pending_edit_json']) && $rawAp === 'กำลังดำเนินการ') {
-          $statusClass = 'status-pending';
-          $statusText = 'รอตรวจสอบการแก้ไข';
-          $rawStatus = 'รอดำเนินการ';
-        } else {
-          $rawStatus = $rawAp;
-          if ($rawStatus === 'กำลังดำเนินการ') {
-            $rawStatus = 'รอดำเนินการ';
-          }
-          $statusClass = 'status-pending';
-          $statusText = $rawStatus;
-          if ($rawStatus === 'อนุมัติ') {
-            $statusClass = 'status-approved';
-            $statusText = 'อนุมัติแล้ว';
-          } elseif ($rawStatus === 'ไม่อนุมัติ') {
-            $statusClass = 'status-rejected';
-            $statusText = 'ไม่อนุมัติ';
-          }
-        }
+        $profMeta = children_row_profile_status_meta($child);
+        $statusClass = $profMeta['class'];
+        $statusText = $profMeta['text'];
+        $rawStatus = $profMeta['raw'];
         $cidCard = (int)$child['child_id'];
         $totalDonCard = ($role === 'foundation') ? (float)($childDonationTotals[$cidCard] ?? 0) : 0.0;
         $sponsoredLocked = ($role === 'foundation' && !empty($gridSection['sponsored']));
@@ -425,6 +518,7 @@ $child_grid_sections = [
   </div><!-- .child-section-wrap -->
   <?php endif; ?>
 <?php endforeach; ?>
+<?php endif; ?>
 
 </div>
 

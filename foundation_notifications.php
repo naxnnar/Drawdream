@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: foundation_notifications.php
-// หน้าที่: หน้าแจ้งเตือนของมูลนิธิ
+// foundation_notifications.php — กล่องแจ้งเตือนมูลนิธิ
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';

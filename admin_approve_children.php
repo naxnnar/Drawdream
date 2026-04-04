@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_approve_children.php
-// หน้าที่: หน้าแอดมินสำหรับอนุมัติโปรไฟล์เด็ก
+// admin_approve_children.php — แอดมินอนุมัติ/ปฏิเสธโปรไฟล์เด็ก
+
 session_start();
 include 'db.php';
 

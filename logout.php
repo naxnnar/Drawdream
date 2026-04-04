@@ -1,6 +1,5 @@
-﻿<?php
-// ไฟล์นี้: logout.php
-// หน้าที่: ไฟล์ออกจากระบบและล้างเซสชัน
+<?php
+// logout.php — ออกจากระบบและล้างเซสชัน
 session_start();
 session_unset();
 session_destroy();

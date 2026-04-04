@@ -1,6 +1,5 @@
-﻿<?php
-// ไฟล์นี้: about.php
-// หน้าที่: หน้าเกี่ยวกับเราและคำถามที่พบบ่อย
+<?php
+// about.php — เกี่ยวกับเรา / FAQ
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }

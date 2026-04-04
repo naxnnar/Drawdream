@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: payment\check_child_payment.php
-// หน้าที่: ตรวจสอบสถานะการชำระเงินบริจาคเด็กรายบุคคล
+// payment/check_child_payment.php — ยืนยันการชำระบริจาคเด็ก
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
@@ -33,11 +33,14 @@ if ($is_mock) {
         'metadata' => ['child_id' => (int)($_SESSION['pending_child_id'] ?? $child_id)],
     ];
 } else {
-    // เช็คสถานะ charge จาก Omise API
-    $ch = curl_init(OMISE_API_URL . '/charges/' . $charge_id);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    $ch = curl_init(rtrim(OMISE_API_URL, '/') . '/charges/' . rawurlencode($charge_id) . '?expand[]=source');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_USERPWD => OMISE_SECRET_KEY . ':',
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_TIMEOUT => 15,
+    ]);
     $response = curl_exec($ch);
     curl_close($ch);
     $charge = json_decode($response, true) ?? [];
@@ -85,8 +88,8 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
     if ($amount <= 0) {
         $amount = (float)($_SESSION['pending_amount'] ?? 0);
     }
-    $donate_id = (int)($ptRow['donate_id'] ?? 0);
-    if ($donate_id > 0 && drawdream_finalize_child_donation($conn, $child_id, $donate_id, $charge_id, (float)$amount, $donor_uid)) {
+    $donate_id_from_pt = (int)($ptRow['donate_id'] ?? 0);
+    if (drawdream_finalize_child_donation($conn, $child_id, $donate_id_from_pt, $charge_id, (float)$amount, $donor_uid)) {
         $finalized_this_request = true;
         unset(
             $_SESSION['pending_charge_id'],
@@ -244,7 +247,9 @@ if (empty($child_name) && $child_id > 0) {
             <h2>ยังไม่พบการโอนจากธนาคาร</h2>
             <p>ถ้าคุณสแกนจ่ายแล้ว อาจต้องรอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอนจริง</strong>กด «ยกเลิกรายการนี้» — ระบบจะไม่เก็บสถานะค้างรอ และคุณสามารถกดบริจาคใหม่ได้</p>
             <?php if ($is_test_mode): ?>
-                <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ</p>
+                <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ — ใน Dashboard ให้เปิดรายการนี้แล้วใช้ <strong>Mark as paid</strong></p>
+                <?php $omise_charge_test_url = 'https://dashboard.omise.co/test/charges/' . rawurlencode($charge_id); ?>
+                <p><a href="<?php echo htmlspecialchars($omise_charge_test_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">เปิด charge นี้ใน Omise Dashboard (test)</a></p>
             <?php endif; ?>
             <?php if (!empty($expires_at)): ?>
                 <p>QR หมดอายุ: <?php echo htmlspecialchars($expires_at); ?></p>

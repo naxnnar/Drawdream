@@ -1,8 +1,14 @@
 <?php
-
+// includes/child_sponsorship.php — อุปการะเด็กรายเดือน + child_donations
 /**
- * อุปการะรายเดือน: ยอดบริจาคในเดือนปฏิทินปัจจุบัน (ม.ค.–ธ.ค. ตาม Asia/Bangkok) ครบ 20,000 บาท = อุปการะแล้ว
- * ไม่นับยอดก่อน first_approved_at; ในเดือนที่อนุมัติ นับเฉพาะตั้งแต่วันเวลาที่อนุมัติเป็นต้นไป
+ * อุปการะเด็กรายเดือน (ปฏิทิน Asia/Bangkok)
+ *
+ * - sum(child_donations) ในช่วง [max(วันที่ 1 เดือนนี้, first_approved_at), เดือนถัดไป)
+ * - >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD (20_000 บ.) = อุปการะครบในรอบเดือน
+ * - ไม่นับยอดก่อน first_approved_at / anchor
+ * - drawdream_child_can_receive_donation() หยุดรับเมื่อครบ threshold ในรอบนั้น
+ *
+ * @see docs/SYSTEM_PRESENTATION_GUIDE.md
  */
 
 const DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD = 20000.0;
@@ -203,6 +209,10 @@ function drawdream_child_can_receive_donation(mysqli $conn, int $childId, array 
     if (!empty($childRow['is_hidden'])) {
         return false;
     }
+    require_once __DIR__ . '/child_omise_subscription.php';
+    if (drawdream_child_has_any_active_subscription($conn, $childId)) {
+        return false;
+    }
     return !drawdream_child_is_cycle_sponsored($conn, $childId, $childRow);
 }
 
@@ -216,6 +226,28 @@ function drawdream_child_is_monthly_fully_sponsored(mysqli $conn, int $childId, 
     return drawdream_child_is_cycle_sponsored($conn, $childId, $childRow);
 }
 
+/**
+ * เด็กอยู่ในโซน "มีผู้อุปการะ" สาธารณะ: ครบยอดรอบเดือน หรือมีสมาชิกอุปการะแบบรายงวด (Omise) อย่างน้อย 1 ราย
+ *
+ * @param array<int, true> $planSponsoredMap จาก drawdream_child_ids_with_active_plan_sponsorship()
+ */
+function drawdream_child_is_showcase_sponsored(
+    mysqli $conn,
+    int $childId,
+    array $childRow,
+    float $cycleAmountInMonth,
+    array $planSponsoredMap
+): bool {
+    $ap = (string)($childRow['approve_profile'] ?? '');
+    if (!in_array($ap, ['อนุมัติ', 'กำลังดำเนินการ'], true)) {
+        return false;
+    }
+    if (!empty($planSponsoredMap[$childId])) {
+        return true;
+    }
+    return $cycleAmountInMonth >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD;
+}
+
 function drawdream_child_outcome_ensure_columns(mysqli $conn): void
 {
     $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'sponsor_outcome_text'");
@@ -226,6 +258,73 @@ function drawdream_child_outcome_ensure_columns(mysqli $conn): void
     if ($chk2 && $chk2->num_rows === 0) {
         $conn->query('ALTER TABLE foundation_children ADD COLUMN sponsor_outcome_updated_at DATETIME NULL');
     }
+    $chk3 = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'sponsor_outcome_images'");
+    if ($chk3 && $chk3->num_rows === 0) {
+        $conn->query('ALTER TABLE foundation_children ADD COLUMN sponsor_outcome_images LONGTEXT NULL');
+    }
+}
+
+/**
+ * @return list<string> ชื่อไฟล์ใน uploads/Children/outcomes/ (basename เท่านั้น)
+ */
+function drawdream_child_outcome_images_parse(?string $raw): array
+{
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+        return [];
+    }
+    $j = json_decode($raw, true);
+    if (!is_array($j)) {
+        return [];
+    }
+    $out = [];
+    foreach ($j as $x) {
+        $b = basename((string)$x);
+        if ($b !== '' && preg_match('/^[a-zA-Z0-9._-]+$/', $b) === 1) {
+            $out[] = $b;
+        }
+    }
+
+    return array_values(array_unique($out));
+}
+
+/**
+ * @param list<string> $basenames
+ */
+function drawdream_child_outcome_images_json(array $basenames): string
+{
+    $clean = [];
+    foreach ($basenames as $x) {
+        $b = basename((string)$x);
+        if ($b !== '' && preg_match('/^[a-zA-Z0-9._-]+$/', $b) === 1) {
+            $clean[] = $b;
+        }
+    }
+    $clean = array_values(array_unique($clean));
+
+    return json_encode($clean, JSON_UNESCAPED_UNICODE);
+}
+
+/**
+ * HTML แกลเลอรีรูปผลลัพธ์ (path สัมพันธ์จากรากเว็บ)
+ *
+ * @param list<string> $basenames
+ */
+function drawdream_child_outcome_images_html(array $basenames): string
+{
+    if ($basenames === []) {
+        return '';
+    }
+    $html = '<div class="child-outcome-public__gallery">';
+    foreach ($basenames as $fn) {
+        $safe = htmlspecialchars($fn, ENT_QUOTES, 'UTF-8');
+        $html .= '<a class="child-outcome-public__gallery-item" href="uploads/Children/outcomes/' . $safe . '" target="_blank" rel="noopener">';
+        $html .= '<img src="uploads/Children/outcomes/' . $safe . '" alt="" loading="lazy" decoding="async">';
+        $html .= '</a>';
+    }
+    $html .= '</div>';
+
+    return $html;
 }
 
 function drawdream_child_total_donations(mysqli $conn, int $childId): float
@@ -331,7 +430,7 @@ function drawdream_purge_child_related_data(mysqli $conn, int $childId): void
     $dq = $conn->prepare(
         'SELECT d.donate_id FROM donation d
          INNER JOIN donate_category dc ON dc.category_id = d.category_id
-         WHERE d.target_id = ? AND dc.child_donate IS NOT NULL'
+         WHERE d.target_id = ? AND TRIM(COALESCE(dc.child_donate, \'\')) NOT IN (\'\', \'-\')'
     );
     if ($dq) {
         $dq->bind_param('i', $childId);

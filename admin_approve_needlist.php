@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_approve_needlist.php
-// หน้าที่: หน้าแอดมินสำหรับอนุมัติรายการสิ่งของ
+// admin_approve_needlist.php — แอดมินอนุมัติรายการสิ่งของมูลนิธิ
+
 session_start();
 include 'db.php';
 
@@ -33,18 +33,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($newStatus === 'rejected' && $note === '') {
         $error = "กรุณากรอกเหตุผลเมื่อปฏิเสธ";
     } else {
-        $stmt = $conn->prepare("
-            UPDATE foundation_needlist
-            SET approve_item=?,
-                reviewed_by_user_id=?,
-                reviewed_at=NOW(),
-                review_note=?
-            WHERE item_id=? AND approve_item='pending'
-        ");
-        if (!$stmt) {
-            $error = "Prepare failed: " . $conn->error;
+        require_once __DIR__ . '/includes/needlist_donate_window.php';
+
+        $donateEndSql = null;
+        if ($newStatus === 'approved') {
+            $sn = $conn->prepare("SELECT note FROM foundation_needlist WHERE item_id = ? AND approve_item = 'pending' LIMIT 1");
+            if (!$sn) {
+                $error = "Prepare failed: " . $conn->error;
+            } else {
+                $sn->bind_param("i", $item_id);
+                $sn->execute();
+                $nrow = $sn->get_result()->fetch_assoc();
+                $periodLabel = drawdream_needlist_period_label_from_note((string)($nrow['note'] ?? ''));
+                $donateEndSql = drawdream_needlist_compute_donate_window_end($periodLabel, new DateTimeImmutable('now'));
+            }
+        }
+
+        if ($error !== '') {
+            // ข้าม execute
+        } elseif ($newStatus === 'approved' && $donateEndSql === null) {
+            $stmt = $conn->prepare("
+                UPDATE foundation_needlist
+                SET approve_item=?,
+                    reviewed_by_user_id=?,
+                    reviewed_at=NOW(),
+                    review_note=?,
+                    donate_window_end_at=NULL
+                WHERE item_id=? AND approve_item='pending'
+            ");
+            if (!$stmt) {
+                $error = "Prepare failed: " . $conn->error;
+            } else {
+                $stmt->bind_param("sisi", $newStatus, $uid, $note, $item_id);
+            }
+        } elseif ($newStatus === 'approved' && $donateEndSql !== null) {
+            $stmt = $conn->prepare("
+                UPDATE foundation_needlist
+                SET approve_item=?,
+                    reviewed_by_user_id=?,
+                    reviewed_at=NOW(),
+                    review_note=?,
+                    donate_window_end_at=?
+                WHERE item_id=? AND approve_item='pending'
+            ");
+            if (!$stmt) {
+                $error = "Prepare failed: " . $conn->error;
+            } else {
+                $stmt->bind_param("sissi", $newStatus, $uid, $note, $donateEndSql, $item_id);
+            }
         } else {
-            $stmt->bind_param("sisi", $newStatus, $uid, $note, $item_id);
+            $stmt = $conn->prepare("
+                UPDATE foundation_needlist
+                SET approve_item=?,
+                    reviewed_by_user_id=?,
+                    reviewed_at=NOW(),
+                    review_note=?,
+                    donate_window_end_at=NULL
+                WHERE item_id=? AND approve_item='pending'
+            ");
+            if (!$stmt) {
+                $error = "Prepare failed: " . $conn->error;
+            } else {
+                $stmt->bind_param("sisi", $newStatus, $uid, $note, $item_id);
+            }
+        }
+
+        if ($error === '' && isset($stmt) && $stmt instanceof mysqli_stmt) {
             if ($stmt->execute()) {
                 require_once __DIR__ . '/includes/notification_audit.php';
                 drawdream_notifications_delete_by_entity_key($conn, 'adm_pending_need:' . $item_id);

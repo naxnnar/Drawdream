@@ -1,6 +1,7 @@
 /**
  * Cascading selects: จังหวัด → อำเภอ/เขต → ตำบล/แขวง → รหัสไปรษณีย์
- * ข้อมูล: earthchie/jquery.Thailand.js (raw_database.json)
+ * ข้อมูล: earthchie/jquery.Thailand.js — raw_database.json จาก CDN
+ * คู่กับ includes/thai_address_fields.php | อธิบายเต็ม: docs/SYSTEM_PRESENTATION_GUIDE.md
  */
 (function (global) {
   'use strict';

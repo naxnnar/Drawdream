@@ -1,33 +1,15 @@
 <?php
-// สร้างแถว donation + payment_transaction สถานะ pending หลังได้ Omise charge (บริจาคเด็กรายบุคคล)
+// includes/pending_child_donation.php — รอชำระ PromptPay: เก็บเฉพาะ payment_transaction (donation บันทึกเมื่อสำเร็จเท่านั้น)
 
 declare(strict_types=1);
 
-/**
- * @return int category_id สำหรับบริจาคเด็กรายบุคคล
- */
-function drawdream_get_or_create_child_donate_category_id(mysqli $conn): int
-{
-    $stmt = $conn->prepare('SELECT category_id FROM donate_category WHERE child_donate IS NOT NULL LIMIT 1');
-    if ($stmt) {
-        $stmt->execute();
-        $cat = $stmt->get_result()->fetch_assoc();
-        if ($cat) {
-            return (int)$cat['category_id'];
-        }
-    }
-    $col = @$conn->query("SHOW COLUMNS FROM donate_category LIKE 'child_donate'");
-    if ($col && $col->num_rows === 0) {
-        @$conn->query('ALTER TABLE donate_category ADD COLUMN child_donate VARCHAR(100) NULL');
-    }
-    @$conn->query("INSERT INTO donate_category (child_donate) VALUES ('เด็กรายบุคคล')");
-    return (int)$conn->insert_id;
-}
+require_once __DIR__ . '/payment_transaction_schema.php';
+require_once __DIR__ . '/donate_category_resolve.php';
 
 /**
- * บันทึก donation (pending) + payment_transaction (pending) หลังสร้าง charge
+ * บันทึก payment_transaction สถานะ pending (ไม่สร้างแถว donation จนกว่าจะชำระสำเร็จ)
  *
- * @return int donate_id หรือ 0 ถ้าล้มเหลว
+ * @return int log_id ของ payment_transaction หรือ 0 ถ้าล้มเหลว
  */
 function drawdream_insert_pending_child_donation(
     mysqli $conn,
@@ -39,6 +21,8 @@ function drawdream_insert_pending_child_donation(
     if ($childId <= 0 || $donorUserId <= 0 || $amountBaht < 20 || $omiseChargeId === '') {
         return 0;
     }
+
+    drawdream_payment_transaction_ensure_schema($conn);
 
     $categoryId = drawdream_get_or_create_child_donate_category_id($conn);
 
@@ -53,61 +37,34 @@ function drawdream_insert_pending_child_donation(
         }
     }
 
-    $serviceFee = 0.0;
     $pending = 'pending';
-    $transferTs = date('Y-m-d H:i:s');
-
-    if (!$conn->begin_transaction()) {
+    $insP = $conn->prepare(
+        'INSERT INTO payment_transaction (
+            donate_id, tax_id, omise_charge_id, transaction_status,
+            pending_category_id, pending_target_id, pending_amount, pending_donor_user_id
+        ) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    if (!$insP) {
         return 0;
     }
-    try {
-        $insD = $conn->prepare(
-            'INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        if (!$insD) {
-            throw new RuntimeException('prepare donation failed');
-        }
-        $insD->bind_param(
-            'iiiddss',
-            $categoryId,
-            $childId,
-            $donorUserId,
-            $amountBaht,
-            $serviceFee,
-            $pending,
-            $transferTs
-        );
-        if (!$insD->execute()) {
-            throw new RuntimeException('insert donation failed');
-        }
-        $donateId = (int)$conn->insert_id;
-        if ($donateId <= 0) {
-            throw new RuntimeException('no donate_id');
-        }
-
-        $insP = $conn->prepare(
-            'INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status) VALUES (?, ?, ?, ?)'
-        );
-        if (!$insP) {
-            throw new RuntimeException('prepare payment_transaction failed');
-        }
-        $ptPending = 'pending';
-        $insP->bind_param('isss', $donateId, $taxId, $omiseChargeId, $ptPending);
-        if (!$insP->execute()) {
-            throw new RuntimeException('insert payment_transaction failed');
-        }
-
-        $conn->commit();
-        return $donateId;
-    } catch (Throwable $e) {
-        $conn->rollback();
+    $insP->bind_param(
+        'sssiiid',
+        $taxId,
+        $omiseChargeId,
+        $pending,
+        $categoryId,
+        $childId,
+        $amountBaht,
+        $donorUserId
+    );
+    if (!$insP->execute()) {
         return 0;
     }
+    return (int)$conn->insert_id;
 }
 
 /**
- * อัปเดตแถว pending → สำเร็จ + บันทึก child_donations
+ * ยืนยันชำระสำเร็จ: สร้างแถว donation (completed) + อัปเดต payment_transaction + child_donations
  */
 function drawdream_finalize_child_donation(
     mysqli $conn,
@@ -117,24 +74,116 @@ function drawdream_finalize_child_donation(
     float $amountBaht,
     int $donorUserId
 ): bool {
-    if ($childId <= 0 || $donateId <= 0 || $chargeId === '' || $donorUserId <= 0) {
+    if ($childId <= 0 || $chargeId === '' || $donorUserId <= 0) {
         return false;
     }
 
-    $chk = $conn->prepare(
-        'SELECT donor_id, target_id, payment_status FROM donation WHERE donate_id = ? LIMIT 1'
+    drawdream_payment_transaction_ensure_schema($conn);
+
+    $pt = $conn->prepare(
+        'SELECT log_id, donate_id, pending_category_id, pending_target_id, pending_amount, pending_donor_user_id
+         FROM payment_transaction
+         WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
     );
-    if (!$chk) {
+    $pend = 'pending';
+    $pt->bind_param('ss', $chargeId, $pend);
+    $pt->execute();
+    $ptRow = $pt->get_result()->fetch_assoc();
+    if (!$ptRow) {
         return false;
     }
-    $chk->bind_param('i', $donateId);
-    $chk->execute();
-    $row = $chk->get_result()->fetch_assoc();
-    if (!$row
-        || (int)($row['donor_id'] ?? 0) !== $donorUserId
-        || (int)($row['target_id'] ?? 0) !== $childId
-        || (string)($row['payment_status'] ?? '') !== 'pending'
-    ) {
+
+    $ptDonateId = isset($ptRow['donate_id']) && $ptRow['donate_id'] !== null ? (int)$ptRow['donate_id'] : 0;
+    $logId = (int)$ptRow['log_id'];
+
+    // เส้นทางเก่า: มีแถว donation pending อยู่แล้ว
+    if ($ptDonateId > 0) {
+        if ($donateId > 0 && $donateId !== $ptDonateId) {
+            return false;
+        }
+        $chk = $conn->prepare(
+            'SELECT donor_id, target_id, payment_status FROM donation WHERE donate_id = ? LIMIT 1'
+        );
+        $chk->bind_param('i', $ptDonateId);
+        $chk->execute();
+        $row = $chk->get_result()->fetch_assoc();
+        if (!$row
+            || (int)($row['donor_id'] ?? 0) !== $donorUserId
+            || (int)($row['target_id'] ?? 0) !== $childId
+            || (string)($row['payment_status'] ?? '') !== 'pending'
+        ) {
+            return false;
+        }
+
+        $serviceFee = 0.0;
+        if (!$conn->begin_transaction()) {
+            return false;
+        }
+        try {
+            $upd = $conn->prepare(
+                'UPDATE donation
+                 SET amount = ?, service_fee = ?, payment_status = \'completed\', transfer_datetime = NOW()
+                 WHERE donate_id = ? AND payment_status = \'pending\''
+            );
+            if (!$upd) {
+                throw new RuntimeException('prepare update donation');
+            }
+            $upd->bind_param('ddi', $amountBaht, $serviceFee, $ptDonateId);
+            $upd->execute();
+            if ($upd->affected_rows < 1) {
+                throw new RuntimeException('update donation');
+            }
+
+            $upt = $conn->prepare(
+                'UPDATE payment_transaction SET transaction_status = \'completed\'
+                 WHERE log_id = ? AND transaction_status = \'pending\''
+            );
+            if (!$upt) {
+                throw new RuntimeException('prepare pt');
+            }
+            $upt->bind_param('i', $logId);
+            $upt->execute();
+
+            $conn->query(
+                "CREATE TABLE IF NOT EXISTS child_donations (
+                    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    child_id INT NOT NULL,
+                    donor_user_id INT NULL,
+                    amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+                    donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    INDEX(child_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+
+            $insC = $conn->prepare(
+                'INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, ?, ?)'
+            );
+            if (!$insC) {
+                throw new RuntimeException('prepare child_donations');
+            }
+            $insC->bind_param('iid', $childId, $donorUserId, $amountBaht);
+            $insC->execute();
+
+            if (!function_exists('drawdream_child_sync_sponsorship_status')) {
+                require_once __DIR__ . '/child_sponsorship.php';
+            }
+            if (function_exists('drawdream_child_sync_sponsorship_status')) {
+                drawdream_child_sync_sponsorship_status($conn, $childId);
+            }
+
+            $conn->commit();
+            return true;
+        } catch (Throwable $e) {
+            $conn->rollback();
+            return false;
+        }
+    }
+
+    // เส้นทางใหม่: ยังไม่มี donation — สร้าง completed ทันที
+    $pDonor = (int)($ptRow['pending_donor_user_id'] ?? 0);
+    $pTarget = (int)($ptRow['pending_target_id'] ?? 0);
+    $pCat = (int)($ptRow['pending_category_id'] ?? 0);
+    if ($pDonor !== $donorUserId || $pTarget !== $childId || $pCat <= 0) {
         return false;
     }
 
@@ -143,29 +192,33 @@ function drawdream_finalize_child_donation(
         return false;
     }
     try {
-        $upd = $conn->prepare(
-            'UPDATE donation
-             SET amount = ?, service_fee = ?, payment_status = \'completed\', transfer_datetime = NOW()
-             WHERE donate_id = ? AND payment_status = \'pending\''
+        $insD = $conn->prepare(
+            'INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
+             VALUES (?, ?, ?, ?, ?, \'completed\', NOW())'
         );
-        if (!$upd) {
-            throw new RuntimeException('prepare update donation');
+        if (!$insD) {
+            throw new RuntimeException('prepare insert donation');
         }
-        $upd->bind_param('ddi', $amountBaht, $serviceFee, $donateId);
-        $upd->execute();
-        if ($upd->affected_rows < 1) {
-            throw new RuntimeException('update donation');
+        $insD->bind_param('iiidd', $pCat, $childId, $donorUserId, $amountBaht, $serviceFee);
+        $insD->execute();
+        $newDonateId = (int)$conn->insert_id;
+        if ($newDonateId <= 0) {
+            throw new RuntimeException('no donate_id');
         }
 
         $upt = $conn->prepare(
-            'UPDATE payment_transaction SET transaction_status = \'completed\'
-             WHERE omise_charge_id = ? AND transaction_status = \'pending\''
+            'UPDATE payment_transaction SET donate_id = ?, transaction_status = \'completed\',
+             pending_category_id = NULL, pending_target_id = NULL, pending_amount = NULL, pending_donor_user_id = NULL
+             WHERE log_id = ? AND transaction_status = \'pending\''
         );
         if (!$upt) {
-            throw new RuntimeException('prepare pt');
+            throw new RuntimeException('prepare pt update');
         }
-        $upt->bind_param('s', $chargeId);
+        $upt->bind_param('ii', $newDonateId, $logId);
         $upt->execute();
+        if ($upt->affected_rows < 1) {
+            throw new RuntimeException('update pt');
+        }
 
         $conn->query(
             "CREATE TABLE IF NOT EXISTS child_donations (
@@ -187,6 +240,9 @@ function drawdream_finalize_child_donation(
         $insC->bind_param('iid', $childId, $donorUserId, $amountBaht);
         $insC->execute();
 
+        if (!function_exists('drawdream_child_sync_sponsorship_status')) {
+            require_once __DIR__ . '/child_sponsorship.php';
+        }
         if (function_exists('drawdream_child_sync_sponsorship_status')) {
             drawdream_child_sync_sponsorship_status($conn, $childId);
         }

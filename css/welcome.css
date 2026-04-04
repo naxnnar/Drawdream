@@ -1,3 +1,7 @@
+/* welcome.css — หน้า welcome.php
+ * แอนิเมชัน: .welcome-card = cardPop (เข้าครั้งเดียว) | .welcome-logo = logoFloat (ลูป)
+ * | .confetti span = confettiFall + CSS variables (--x,--delay,--dur) | .shape-a/b = driftA/B
+ * Responsive + prefers-reduced-motion ด้านล่าง */
 /* ไฟล์นี้: css/welcome.css */
 /* หน้าที่: สไตล์หน้า Welcome สำหรับทั้ง Admin, Donor, Foundation */
 :root {

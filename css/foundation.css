@@ -1446,6 +1446,8 @@ body.foundation-page .need-status-badge { display: inline-block; padding: 3px 12
 body.foundation-page .status-pending  { background: #FEF3C7; color: #92400E; }
 body.foundation-page .status-approved { background: #D1FAE5; color: #065F46; }
 body.foundation-page .status-rejected { background: #FEE2E2; color: #991B1B; }
+body.foundation-page .status-closed-window { background: #e5e7eb; color: #374151; margin-left: 4px; }
+body.foundation-page .need-window-hint { font-size: 11px; color: #6b7280; display: block; margin-top: 2px; }
 body.foundation-page .need-card-name { font-size: 15px; font-weight: 700; color: #1f2937; line-height: 1.4; }
 body.foundation-page .need-card-cat { font-size: 12px; color: #6b7280; line-height: 1.4; }
 body.foundation-page .need-card-goal { font-size: 14px; font-weight: 700; color: #3C5099; }

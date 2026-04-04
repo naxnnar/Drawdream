@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_notifications.php
-// หน้าที่: รวมการแจ้งเตือนรออนุมัติของแอดมินทุกฟีเจอร์
+// admin_notifications.php — ศูนย์รวมงานรออนุมัติและลิงก์คิว
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_project_status.php';

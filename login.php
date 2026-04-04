@@ -1,6 +1,7 @@
 <?php
-// ไฟล์นี้: login.php
-// หน้าที่: หน้าเข้าสู่ระบบของผู้ใช้
+// login.php — เข้าสู่ระบบ / เลือกบทบาท
+// ล็อกอินสำเร็จ: ตั้ง show_welcome → welcome.php (ทุก role รวม admin; ไม่ใช้ admin_welcome)
+
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';

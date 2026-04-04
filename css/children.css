@@ -43,6 +43,11 @@ body.admin-sidebar-page.donation-page {
     box-sizing: border-box;
 }
 
+/* แอดมิน children_.php — ตารางเด็กทั้งหมด (สไตล์เดียวกับ admin_directory) */
+.donation-shell .children-admin-directory {
+    margin-top: 0;
+}
+
 /* หัวข้อหน้า (แสดงก่อนปุ่มสำหรับมูลนิธิ) */
 .page-header {
     margin-bottom: 20px;
@@ -863,7 +868,7 @@ main.child-profile-main {
 .child-details p { margin: 0; }
 .child-details strong { font-size: 1.25rem; }
 
-.col-right { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.col-right { flex: 1; display: flex; flex-direction: column; align-items: stretch; text-align: center; min-width: 0; }
 
 .brand-header { font-size: 3.5rem; font-weight: 900; color: #222; margin-bottom: 10px; letter-spacing: -1px; line-height: 1.1; }
 .donate-text  { font-size: 1rem; color: #333; margin-bottom: 28px; line-height: 1.7; }
@@ -984,6 +989,261 @@ main.child-profile-main {
 }
 
 .payment-method-option.active .pm-check { opacity: 1; }
+
+/* อุปการะรายงวด Omise (children_donate) — เต็มความกว้างคอลัมน์ขวา ให้แถวปุ่มกับ summary/ปุ่มบริจาคเสมอกัน */
+.child-subscription-box {
+    width: 100%;
+    max-width: none;
+    align-self: stretch;
+    box-sizing: border-box;
+}
+.child-sub-active-notice {
+    padding: 14px 16px;
+    background: #eef7ee;
+    border-radius: 14px;
+    border: 1px solid #b9d9b8;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+/* แถวปุ่มแพ็ก — เต็มแถว ปุ่มใหญ่สมส่วนกับกล่องเหลือง */
+.sub-plan-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+.sub-plan-btn {
+    margin: 0;
+    border: 1px solid #c9ccd4;
+    background: #fff;
+    border-radius: 14px;
+    padding: 18px 12px;
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #111;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: center;
+    line-height: 1.15;
+    min-height: 62px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.sub-plan-btn:hover {
+    border-color: #9aa3b5;
+    background: #fafbfd;
+}
+.sub-plan-btn.active {
+    border-width: 2px;
+    border-color: #4054b2;
+    background: #eef0fb;
+    color: #1a237e;
+    box-shadow: 0 0 0 1px rgba(64, 84, 178, 0.12);
+}
+/* แถวสรุป — ขอบกว้างเท่าแถวปุ่ม */
+.sub-plan-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 16px 20px;
+    min-height: 64px;
+    background: #fff;
+    border: 1px solid #c9ccd4;
+    border-radius: 14px;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+.sub-summary-main {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+}
+.sub-summary-sep {
+    color: #999;
+    font-weight: 400;
+}
+.sub-summary-period {
+    color: #444;
+}
+.sub-summary-amt {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #111;
+    white-space: nowrap;
+}
+.sub-plan-summary--prominent {
+    min-height: 92px;
+    padding: 22px 26px;
+    margin-bottom: 16px;
+}
+.sub-plan-summary--prominent .sub-summary-main {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+.sub-plan-summary--prominent .sub-summary-period {
+    color: #222;
+    font-size: 1.22rem;
+}
+.sub-plan-summary--prominent .sub-summary-amt {
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+}
+.sub-hint {
+    line-height: 1.45;
+}
+/* ปุ่มบริจาค — ความกว้างเท่าแถวด้านบน */
+.child-sub-form {
+    width: 100%;
+    box-sizing: border-box;
+}
+.child-sub-form .btn-submit-donation--sub {
+    border-radius: 14px;
+    padding: 18px 22px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-top: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    background-color: #4054b2;
+}
+.child-sub-form .btn-submit-donation--sub:hover {
+    background-color: #344397;
+}
+
+.sub-section--hidden {
+    display: none !important;
+}
+
+/* รายวัน — กรอกยอดเอง → PromptPay */
+.sub-daily-amount-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 20px;
+    min-height: 64px;
+    border: 1px solid #c9ccd4;
+    border-radius: 14px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-align: center;
+    color: #111;
+    margin-bottom: 8px;
+    font-family: inherit;
+}
+.sub-daily-amount-input::placeholder {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #888;
+}
+
+.child-daily-form {
+    width: 100%;
+    box-sizing: border-box;
+}
+/* การ์ด PromptPay — ให้ตรงกับ payment_project.php + css/payment.css */
+.child-daily-payment-method {
+    margin-bottom: 12px;
+}
+.child-daily-payment-method .method-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 2px solid rgba(60, 80, 153, 0.35);
+    border-radius: 10px;
+    background: linear-gradient(180deg, #f5f7fd 0%, #eef0fb 100%);
+    color: #24314a;
+    box-shadow: 0 2px 12px rgba(60, 80, 153, 0.12);
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: default;
+    user-select: none;
+}
+.child-daily-payment-method .method-card.active {
+    border-color: #3c5099;
+    background: linear-gradient(180deg, #eef1fc 0%, #e4e9f8 100%);
+    box-shadow: 0 3px 14px rgba(60, 80, 153, 0.2);
+}
+.child-daily-payment-method .method-icon {
+    height: 30px;
+    width: auto;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+.child-daily-form .btn-submit-donation--sub {
+    border-radius: 14px;
+    padding: 18px 22px;
+    font-size: 1.5rem;
+    font-weight: 800;
+    margin-top: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    background-color: #4054b2;
+}
+.child-daily-form .btn-submit-donation--sub:hover {
+    background-color: #344397;
+}
+
+/* รายเดือน — เลือก 700 หรือ 4200 ในปุ่มเดียวกัน (คอลัมน์) */
+.sub-cycle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+.sub-cycle-btn {
+    margin: 0;
+    border: 1px solid #c9ccd4;
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px 10px;
+    min-height: 72px;
+    cursor: pointer;
+    font-family: inherit;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+}
+.sub-cycle-btn:hover {
+    border-color: #9aa3b5;
+    background: #fafbfd;
+}
+.sub-cycle-btn.active {
+    border-width: 2px;
+    border-color: #4054b2;
+    background: #eef0fb;
+    box-shadow: 0 0 0 1px rgba(64, 84, 178, 0.12);
+}
+.sub-cycle-amt {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #111;
+    line-height: 1.1;
+}
+.sub-cycle-note {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #444;
+    line-height: 1.2;
+    text-align: center;
+}
 
 /* Responsive — children_donate */
 @media (max-width: 768px) {
@@ -1635,6 +1895,162 @@ body.admin-children-page button:hover { background: #d4b13a; }
     color: #6b7280;
 }
 
+.child-outcome-public--plan-sponsored {
+    margin-top: 14px;
+    background: linear-gradient(180deg, #f0fdf4 0%, #fff 48%);
+    border-color: rgba(22, 163, 74, 0.22);
+}
+
+/* บอกเล่าความประทับใจ — วางบนพื้นเหลืองของหน้า ไม่มีกล่องขาว */
+.child-impression-card {
+    margin-top: 14px;
+    width: 100%;
+    max-width: none;
+    text-align: left;
+    background: transparent;
+    border-radius: 0;
+    padding: 0;
+    box-shadow: none;
+    border: none;
+    box-sizing: border-box;
+}
+.child-impression-card--subscriber-only {
+    padding: 0;
+    margin-top: 14px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+.child-impression-card__label {
+    font-weight: 800;
+    font-size: 1.2rem;
+    color: #3C5099;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.child-impression-card__label .bi {
+    font-size: 1.35rem;
+}
+.child-impression-card__body {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 20px;
+}
+.child-impression-card__photo-wrap {
+    flex: 0 0 auto;
+    width: min(200px, 38vw);
+    max-width: 42%;
+}
+.child-impression-card__photo {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 14px;
+    border: none;
+    background: transparent;
+}
+.child-impression-card__text-col {
+    flex: 1;
+    min-width: 0;
+}
+.child-impression-card__quote {
+    font-size: 1.2rem;
+    color: #111827;
+    line-height: 1.65;
+    font-weight: 700;
+}
+.child-impression-card__empty-inline {
+    font-size: 1.1rem;
+    color: #4b5563;
+    line-height: 1.6;
+}
+.child-impression-card__text-col .child-outcome-public__gallery {
+    margin-top: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+}
+.child-impression-card__attribution {
+    margin: 14px 0 0;
+    font-size: 1rem;
+    color: #4b5563;
+    line-height: 1.45;
+}
+.child-impression-card__meta {
+    margin: 10px 0 0;
+    font-size: 0.95rem;
+    color: #6b7280;
+}
+.child-impression-card__empty {
+    font-size: 1.1rem;
+    color: #4b5563;
+    line-height: 1.6;
+}
+.child-impression-card__subscriber {
+    margin: 16px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid rgba(17, 24, 39, 0.12);
+    font-size: 1.05rem;
+    color: #1f2937;
+    line-height: 1.5;
+}
+.child-impression-card--subscriber-only .child-impression-card__subscriber {
+    margin: 0;
+    padding-top: 0;
+    border-top: none;
+}
+@media (max-width: 480px) {
+    .child-impression-card__body {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .child-impression-card__photo-wrap {
+        width: 100%;
+        max-width: none;
+        max-height: none;
+    }
+    .child-impression-card__photo {
+        max-height: 280px;
+        width: 100%;
+        aspect-ratio: auto;
+        object-fit: cover;
+    }
+    .child-impression-card__quote {
+        font-size: 1.12rem;
+    }
+}
+
+.child-outcome-public__placeholder {
+    font-size: 1rem;
+    color: #64748b;
+    line-height: 1.6;
+}
+
+.child-outcome-public__gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+.child-outcome-public__gallery-item {
+    display: block;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid rgba(60, 80, 153, 0.12);
+    aspect-ratio: 1;
+    background: #f3f4f6;
+}
+.child-outcome-public__gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    vertical-align: middle;
+}
+
 .foundation-outcome-pill-wrap {
     display: block;
     margin-top: 8px;
@@ -1838,6 +2254,58 @@ body.outcome-form-page {
     color: #374151;
     margin-bottom: 8px;
     font-size: 0.98rem;
+}
+.outcome-hero-form__label--sub {
+    margin-top: 16px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #4b5563;
+}
+.outcome-hero-form__file {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 12px;
+    border: 2px dashed #c7d2fe;
+    border-radius: 14px;
+    background: #f8fafc;
+    font-size: 0.92rem;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+.outcome-existing-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 12px;
+    margin: 10px 0 6px;
+}
+.outcome-existing-gallery__item {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    aspect-ratio: 1;
+    background: #f3f4f6;
+}
+.outcome-existing-gallery__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.outcome-existing-gallery__check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.95);
+    border-top: 1px solid #e5e7eb;
+    color: #b91c1c;
+}
+.outcome-existing-gallery__check input {
+    margin: 0;
 }
 .outcome-hero-form__textarea {
     width: 100%;

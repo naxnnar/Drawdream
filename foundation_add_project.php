@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: foundation_add_project.php
-// หน้าที่: หน้ามูลนิธิสำหรับสร้างหรือแก้ไขโครงการ
+// foundation_add_project.php — มูลนิธิเสนอ/แก้ไขโครงการ
+
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';

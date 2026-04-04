@@ -1,6 +1,12 @@
 <?php
+// includes/thai_address_fields.php — Partial select จังหวัด→ตำบล
 /**
- * ฟิลด์เลือกที่อยู่ไทย — ตั้งค่าก่อน include: $thai_address_options = ['require' => true|false, 'initial' => [...]]
+ * Partial HTML: จังหวัด → อำเภอ → ตำบล → รหัสไปรษณีย์ (4 select)
+ *
+ * Logic เติม option อยู่ที่ js/thai_address_select.js (โหลด raw_database.json จาก CDN)
+ * บันทึกรวมเป็นข้อความ: includes/address_helpers.php drawdream_merge_foundation_address_from_post()
+ *
+ * ก่อน include: $thai_address_options = ['require' => true|false, 'initial' => [...]]
  */
 $__ta = $thai_address_options ?? [];
 $__req = ($__ta['require'] ?? true) === true;

@@ -1,10 +1,11 @@
 <?php
-// payment/child_donate.php — รับ POST สร้าง Omise charge แล้วไปหน้าสแกนเท่านั้น (ไม่มีหน้า UI แยก)
+// payment/child_donate.php — รับ POST สร้าง Omise charge แล้วไป scan_qr.php (PromptPay จริงจาก Omise test/live)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 include '../db.php';
 include 'config.php';
+require_once __DIR__ . '/omise_helpers.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
 require_once dirname(__DIR__) . '/includes/qr_payment_abandon.php';
@@ -73,10 +74,11 @@ function omise_request(string $method, string $path, array $data = []): array {
     curl_close($ch);
 
     if ($response === false || $response === '') {
-        if (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
+        if (defined('OMISE_ALLOW_LOCAL_MOCK') && OMISE_ALLOW_LOCAL_MOCK && strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
             return _omise_local_mock_child($path, $data);
         }
-        return ['error' => 'curl_error', 'message' => $curl_error];
+        $msg = ($curl_error !== '') ? $curl_error : 'ไม่ได้รับตอบกลับจาก Omise (ตรวจสอบอินเทอร์เน็ต / PHP cURL / SSL)';
+        return ['error' => 'curl_error', 'message' => $msg];
     }
 
     $decoded = json_decode($response, true);
@@ -124,7 +126,9 @@ $redirectBack = function (string $msg) use ($child_id): void {
     exit;
 };
 
-$amount = (int)($_POST['amount'] ?? 0);
+$rawAmt = (string)($_POST['amount'] ?? '');
+$rawAmt = str_replace([',', ' ', "\xC2\xA0"], '', $rawAmt);
+$amount = (int) max(0, round((float) $rawAmt));
 if ($amount < 20) {
     $redirectBack('จำนวนเงินขั้นต่ำ 20 บาท');
 }
@@ -167,7 +171,13 @@ if (!isset($charge_response['id'])) {
 }
 
 $charge_id = $charge_response['id'];
-$qr_image = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
+$qr_image = drawdream_omise_promptpay_qr_uri_from_charge($charge_response);
+if ($qr_image === '' && strpos((string) $charge_id, 'chrg_mock_') !== 0) {
+    $again = drawdream_omise_fetch_charge((string) $charge_id);
+    if ($again) {
+        $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($again);
+    }
+}
 
 $pendingDonateId = drawdream_insert_pending_child_donation(
     $conn,

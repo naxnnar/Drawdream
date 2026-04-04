@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: foundation_edit_child.php
-// หน้าที่: หน้ามูลนิธิสำหรับแก้ไขข้อมูลเด็ก
+// foundation_edit_child.php — มูลนิธิแก้ไขโปรไฟล์เด็ก
+
 session_start();
 include 'db.php';
 

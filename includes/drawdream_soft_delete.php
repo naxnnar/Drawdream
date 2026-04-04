@@ -1,9 +1,13 @@
 <?php
 
+// includes/drawdream_soft_delete.php — คอลัมน์ soft delete เด็ก/โครงการ
 declare(strict_types=1);
 
 /**
- * เพิ่มคอลัมน์สำหรับ soft delete (ลบแล้วแถวอยู่ ข้อมูลอ้างอิงไม่ถูกลบ)
+ * Soft delete: foundation_children และ foundation_project
+ *
+ * - deleted_at = เวลาที่ “ซ่อน” แทนลบถาวร | query สาธารณะใช้ deleted_at IS NULL
+ * - เรียกจาก db.php ทุก request ผ่าน drawdream_ensure_soft_delete_columns()
  */
 function drawdream_ensure_soft_delete_columns(mysqli $conn): void
 {

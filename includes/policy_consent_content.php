@@ -1,4 +1,5 @@
 <?php
+// includes/policy_consent_content.php — เนื้อหานโยบาย (ฝังในหน้า consent)
 /**
  * เนื้อหานโยบายชุดเดียวกัน:
  * - หน้าเต็ม policy_consent.php (เปิด URL โดยตรง)

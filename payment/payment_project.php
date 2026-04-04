@@ -1,14 +1,19 @@
 <?php
-// ไฟล์นี้: payment\payment_project.php
-// หน้าที่: หน้าชำระเงินสำหรับโครงการ
-// ------------------------------
-// Backend: สร้างรายการชำระเงินโครงการผ่าน Omise
-// ------------------------------
+// payment/payment_project.php — หน้าชำระเงินโครงการ + Omise PromptPay
+/**
+ * ชำระเงินโครงการ: Omise PromptPay (source + charge) แล้วไป scan_qr.php
+ * mock ใช้ได้เฉพาะเมื่อ OMISE_ALLOW_LOCAL_MOCK=true (ค่าเริ่มต้น false → QR จาก Omise test จริง)
+ *
+ * @see docs/SYSTEM_PRESENTATION_GUIDE.md
+ */
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
+require_once __DIR__ . '/omise_helpers.php';
 require_once __DIR__ . '/../includes/project_donation_dates.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/../includes/payment_transaction_schema.php';
+require_once __DIR__ . '/../includes/donate_category_resolve.php';
 
 // ต้อง login ก่อน
 if (!isset($_SESSION['user_id'])) {
@@ -91,25 +96,10 @@ function drawdream_sdg_icon_web_path(int $sdgNum): string
     return '../img/rainbow.png';
 }
 
-/** category_id สำหรับบริจาคโครงการ */
-function drawdream_project_resolve_category_id(mysqli $conn): int
-{
-    $stmt = $conn->prepare('SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1');
-    if ($stmt) {
-        $stmt->execute();
-        $cat = $stmt->get_result()->fetch_assoc();
-        if ($cat) {
-            return (int)$cat['category_id'];
-        }
-    }
-    $conn->query("INSERT INTO donate_category (project_donate) VALUES ('โครงการ')");
-    return (int)$conn->insert_id;
-}
-
 /**
- * บันทึก donation สถานะ pending + payment_transaction หลังสร้าง Omise charge
+ * บันทึก payment_transaction สถานะ pending (ไม่สร้างแถว donation จนกว่าจะชำระสำเร็จ)
  *
- * @return int donate_id หรือ 0 ถ้าล้มเหลว
+ * @return int log_id ของ payment_transaction หรือ 0 ถ้าล้มเหลว
  */
 function drawdream_insert_pending_project_donation(
     mysqli $conn,
@@ -119,7 +109,8 @@ function drawdream_insert_pending_project_donation(
     float $amountBaht,
     string $omiseChargeId
 ): int {
-    $serviceFee = 0.0;
+    drawdream_payment_transaction_ensure_schema($conn);
+
     $taxId = '';
     $stTax = $conn->prepare('SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1');
     if ($stTax) {
@@ -131,44 +122,31 @@ function drawdream_insert_pending_project_donation(
         }
     }
 
-    if (!$conn->begin_transaction()) {
+    $pending = 'pending';
+    $insP = $conn->prepare(
+        'INSERT INTO payment_transaction (
+            donate_id, tax_id, omise_charge_id, transaction_status,
+            pending_category_id, pending_target_id, pending_amount, pending_donor_user_id
+        ) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    if (!$insP) {
         return 0;
     }
-    try {
-        $insD = $conn->prepare(
-            'INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-             VALUES (?, ?, ?, ?, ?, ?, ?)'
-        );
-        if (!$insD) {
-            throw new RuntimeException('prepare donation failed');
-        }
-        $pending = 'pending';
-        $transferTs = date('Y-m-d H:i:s');
-        $insD->bind_param('iiiddss', $categoryId, $targetProjectId, $donorUserId, $amountBaht, $serviceFee, $pending, $transferTs);
-        if (!$insD->execute()) {
-            throw new RuntimeException('insert donation failed');
-        }
-        $donateId = (int)$conn->insert_id;
-        if ($donateId <= 0) {
-            throw new RuntimeException('no donate_id');
-        }
-        $insP = $conn->prepare(
-            'INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status) VALUES (?, ?, ?, ?)'
-        );
-        if (!$insP) {
-            throw new RuntimeException('prepare payment_transaction failed');
-        }
-        $ptPending = 'pending';
-        $insP->bind_param('isss', $donateId, $taxId, $omiseChargeId, $ptPending);
-        if (!$insP->execute()) {
-            throw new RuntimeException('insert payment_transaction failed');
-        }
-        $conn->commit();
-        return $donateId;
-    } catch (Throwable $e) {
-        $conn->rollback();
+    $insP->bind_param(
+        'sssiiid',
+        $taxId,
+        $omiseChargeId,
+        $pending,
+        $categoryId,
+        $targetProjectId,
+        $amountBaht,
+        $donorUserId
+    );
+    if (!$insP->execute()) {
         return 0;
     }
+
+    return (int)$conn->insert_id;
 }
 
 $fundraisingPeriod = formatThaiDate($donationStartEff ?? '') . ' - ' . formatThaiDate($project['end_date'] ?? null);
@@ -197,7 +175,9 @@ $charge_id = "";
 
 // ======== ประมวลผลการชำระเงิน ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
-    $amount = (int)($_POST['amount'] ?? 0);
+    $rawAmt = (string)($_POST['amount'] ?? '');
+    $rawAmt = str_replace([',', ' ', "\xC2\xA0"], '', $rawAmt);
+    $amount = (int) max(0, round((float) $rawAmt));
 
     if (!empty($project['end_date']) && $todayBangkok > substr((string)$project['end_date'], 0, 10)) {
         $error = "ปิดรับบริจาคแล้ว";
@@ -240,9 +220,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
                 $error = "เกิดข้อผิดพลาดในการสร้าง QR Code: " . $charge_response['message'];
             } elseif (isset($charge_response['id'])) {
                 $charge_id = $charge_response['id'];
-                $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
+                $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($charge_response);
+                if ($qr_image === '' && strpos((string) $charge_id, 'chrg_mock_') !== 0) {
+                    $again = drawdream_omise_fetch_charge((string) $charge_id);
+                    if ($again) {
+                        $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($again);
+                    }
+                }
 
-                $categoryIdResolved = drawdream_project_resolve_category_id($conn);
+                $categoryIdResolved = drawdream_get_or_create_project_donate_category_id($conn);
                 $pendingDonateId = drawdream_insert_pending_project_donation(
                     $conn,
                     $categoryIdResolved,
@@ -295,12 +281,13 @@ function omise_request($method, $path, $data = []) {
     $curl_error = curl_error($ch);
     curl_close($ch);
 
-    // API ไม่สามารถเข้าถึงได้ (เช่น ไม่มีเน็ตใน local) → fallback mock สำหรับ test key
+    // API ไม่สามารถเข้าถึงได้ → mock เฉพาะเมื่อเปิด OMISE_ALLOW_LOCAL_MOCK และใช้ test key
     if ($response === false || $response === '') {
-        if (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
+        if (defined('OMISE_ALLOW_LOCAL_MOCK') && OMISE_ALLOW_LOCAL_MOCK && strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
             return _omise_local_mock($path, $data);
         }
-        return ['error' => 'curl_error', 'message' => $curl_error];
+        $msg = ($curl_error !== '') ? $curl_error : 'ไม่ได้รับตอบกลับจาก Omise (ตรวจสอบอินเทอร์เน็ต / PHP cURL / SSL)';
+        return ['error' => 'curl_error', 'message' => $msg];
     }
 
     $decoded = json_decode($response, true);
@@ -535,7 +522,7 @@ function _omise_local_mock(string $path, array $data): array {
                 <button type="button" class="preset-btn" data-amt="500" onclick="selectPreset(500)">500 บาท</button>
                 <div class="preset-btn preset-input-btn project-preset-custom-cell">
                     <label for="amountInput" class="project-preset-custom-label">ระบุจำนวน</label>
-                    <input type="number" name="amount" id="amountInput" min="20" step="1" placeholder="ขั้นต่ำ 20 บาท" inputmode="numeric" oninput="clearPresetBtns()">
+                    <input type="text" name="amount" id="amountInput" placeholder="ขั้นต่ำ 20 บาท" inputmode="decimal" autocomplete="off" enterkeyhint="done" oninput="clearPresetBtns()" aria-label="จำนวนเงินบริจาค (บาท) ขั้นต่ำ 20 บาท">
                 </div>
             </div>
             <div class="payment-method">
@@ -585,6 +572,13 @@ function _omise_local_mock(string $path, array $data): array {
                 b.classList.remove('preset-selected');
             });
         }
+        function parseBahtAmount(raw) {
+            if (raw == null) return NaN;
+            var s = String(raw).replace(/,/g, '').replace(/\u00a0/g, '').replace(/\s/g, '').trim();
+            if (s === '') return NaN;
+            var x = parseFloat(s);
+            return isNaN(x) ? NaN : Math.round(x);
+        }
         function selectPreset(amt) {
             var inp = document.getElementById('amountInput');
             if (inp) {
@@ -597,11 +591,14 @@ function _omise_local_mock(string $path, array $data): array {
         }
         document.getElementById('projectDonateForm').addEventListener('submit', function (e) {
             var inp = document.getElementById('amountInput');
-            var n = inp ? parseInt(String(inp.value).trim(), 10) : 0;
-            if (!n || n < 20) {
-                e.preventDefault();
-                alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
+            var n = inp ? parseBahtAmount(inp.value) : NaN;
+            if (inp && !isNaN(n) && n >= 20) {
+                inp.value = String(n);
+                return;
             }
+            e.preventDefault();
+            alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
+            if (inp) inp.focus();
         });
         </script>
 

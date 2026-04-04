@@ -1,9 +1,10 @@
 <?php
-// ไฟล์นี้: admin_escrow.php
-// หน้าที่: จัดการ Escrow — แท็บโครงการ และ แท็บรายการสิ่งของ
+// admin_escrow.php — จัดการเงินค้ำ / escrow
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
+require_once __DIR__ . '/includes/donate_category_resolve.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -124,23 +125,25 @@ $escrow_project_total = mysqli_fetch_assoc(mysqli_query($conn,
     "SELECT COALESCE(SUM(current_donate),0) AS total FROM foundation_project WHERE project_status IN ('completed','purchasing') AND deleted_at IS NULL"
 ))['total'];
 
+$escrow_needlist_category_id = drawdream_donate_category_id_for_needitem($conn);
+if ($escrow_needlist_category_id <= 0) {
+    $escrow_needlist_category_id = drawdream_get_or_create_needitem_donate_category_id($conn);
+}
+
 // ======== ดึงข้อมูล: สิ่งของ ========
+// ยอดต่อรายการมาจาก current_donate (สะสมจากบริจาครวมของมูลนิธิตาม check_needlist_payment)
 $ready_needs = mysqli_query($conn, "
-    SELECT nl.*, fp.foundation_name, fp.phone, fp.address,
-           COALESCE((SELECT SUM(d.amount) FROM donation d
-                     WHERE d.category_id = 3 AND d.target_id = nl.item_id AND d.payment_status = 'completed'), 0) AS donated_sum
+    SELECT nl.*, fp.foundation_name, fp.phone, fp.address, nl.current_donate AS donated_sum
     FROM foundation_needlist nl JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
     WHERE nl.approve_item IN ('approved','purchasing')
-    HAVING donated_sum >= nl.total_price
+    HAVING nl.current_donate >= nl.total_price
     ORDER BY nl.approve_item ASC, nl.item_id DESC
 ");
 $active_needs = mysqli_query($conn, "
-    SELECT nl.*, fp.foundation_name,
-           COALESCE((SELECT SUM(d.amount) FROM donation d
-                     WHERE d.category_id = 3 AND d.target_id = nl.item_id AND d.payment_status = 'completed'), 0) AS donated_sum
+    SELECT nl.*, fp.foundation_name, nl.current_donate AS donated_sum
     FROM foundation_needlist nl JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
     WHERE nl.approve_item = 'approved'
-    HAVING donated_sum < nl.total_price
+    HAVING nl.current_donate < nl.total_price
     ORDER BY nl.item_id DESC
 ");
 $done_needs = mysqli_query($conn, "
@@ -149,9 +152,8 @@ $done_needs = mysqli_query($conn, "
     WHERE nl.approve_item = 'done' ORDER BY nl.item_id DESC LIMIT 10
 ");
 $escrow_need_total = mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COALESCE(SUM(d.amount),0) AS total FROM donation d
-     WHERE d.category_id = 3 AND d.payment_status = 'completed'
-     AND d.target_id IN (SELECT item_id FROM foundation_needlist WHERE approve_item IN ('approved','purchasing'))"
+    'SELECT COALESCE(SUM(d.amount),0) AS total FROM donation d
+     WHERE d.category_id = ' . (int)$escrow_needlist_category_id . " AND d.payment_status = 'completed'"
 ))['total'];
 ?>
 <!DOCTYPE html>

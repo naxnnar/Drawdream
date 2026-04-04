@@ -281,6 +281,7 @@ body.admin-approve-projects-page {
 .foundation-project-item.st-approved { border-left-color: #4CAF50; }
 .foundation-project-item.st-pending { border-left-color: #f6c243; }
 .foundation-project-item.st-completed { border-left-color: #3C5099; }
+.foundation-project-item.st-purchasing { border-left-color: #ca8a04; }
 .foundation-project-item.st-rejected { border-left-color: #d66565; }
 
 .foundation-project-thumb {
@@ -321,6 +322,7 @@ body.admin-approve-projects-page {
 .foundation-status-pill.st-approved { background: #41a956; }
 .foundation-status-pill.st-pending { background: #e3a91f; }
 .foundation-status-pill.st-completed { background: #3C5099; }
+.foundation-status-pill.st-purchasing { background: #eab308; color: #1f2937; }
 .foundation-status-pill.st-rejected { background: #d66565; }
 
 .foundation-project-desc {
@@ -874,10 +876,25 @@ body.mode-delete-project .foundation-project-list .project-delete-wrap[data-allo
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     box-sizing: border-box;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.latest-card .project-card-title-row {
+    flex-shrink: 0;
+}
+
+.latest-card .project-card-title-row h3 {
+    min-height: 3.6em;
+}
+
+.latest-card .latest-progress-section {
+    margin-top: auto;
 }
 
 /* รูปเต็มการ์ดแนวเดียวกับการ์ดด้านล่าง (cover) */
 .latest-card .project-card-media {
+    flex-shrink: 0;
     min-height: 200px;
     position: relative;
     background: #F1CF54;
@@ -901,14 +918,21 @@ body.mode-delete-project .foundation-project-list .project-delete-wrap[data-allo
 }
 
 .latest-card .project-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
     padding: 8px 12px 10px;
 }
 
 .latest-card .category-tag {
     display: inline-block;
+    width: fit-content;
+    max-width: 100%;
     font-size: 12px;
-    padding: 5px 14px;
+    padding: 4px 12px;
     margin-bottom: 8px;
+    align-self: flex-start;
 }
 
 .latest-card .project-card p,
@@ -1080,6 +1104,37 @@ body.mode-delete-project .foundation-project-list .project-delete-wrap[data-allo
     grid-template-columns: repeat(3, 1fr);
     column-gap: 32px;
     row-gap: 36px;
+    align-items: stretch;
+}
+
+/* การ์ดเต็มความสูงแถว + ปุ่มบริจาคชิดล่างเสมอกันทุกใบ */
+.project-grid > .project-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.project-grid .project-card-media {
+    flex-shrink: 0;
+}
+
+.project-grid .project-card-title-row {
+    flex-shrink: 0;
+}
+
+.project-grid .project-card-title-row h3 {
+    min-height: 3.6em;
+}
+
+.project-grid .project-card > .project-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.project-grid .project-card > .project-content > .progress-section {
+    margin-top: auto;
 }
 
 /* ======== Project Card ======== */
@@ -1220,7 +1275,10 @@ body.mode-delete-project .foundation-project-list .project-delete-wrap[data-allo
 /* ======== Category Tag ======== */
 .category-tag {
     display: inline-block;
-    padding: 7px 20px;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 6px 14px;
     background: #597D57;
     color: #ffffff;
     border-radius: 999px;
@@ -1228,6 +1286,12 @@ body.mode-delete-project .foundation-project-list .project-delete-wrap[data-allo
     font-weight: 700;
     margin-bottom: 12px;
     font-family: 'Prompt', sans-serif;
+}
+
+/* ในการ์ด flex คอลัมน์ — ไม่ให้แท็กยืดเต็มความกว้างการ์ด */
+.project-grid .project-card > .project-content > .category-tag,
+.latest-card .project-content > .category-tag {
+    align-self: flex-start;
 }
 
 .location-tag {

@@ -1,9 +1,10 @@
 <?php
-// ไฟล์นี้: project.php
-// หน้าที่: หน้ารวมโครงการพร้อมระบบค้นหาและกรอง
+// project.php — รายการโครงการ
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/project_donation_dates.php';
+require_once __DIR__ . '/includes/donate_category_resolve.php';
 
 $is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
 
@@ -154,13 +155,15 @@ function projectStatusThai($status) {
         'approved' => ['label' => 'กำลังระดมทุน', 'class' => 'st-approved'],
         'completed' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
         'done' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
+        'purchasing' => ['label' => 'กำลังจัดซื้อ', 'class' => 'st-purchasing'],
         'rejected' => ['label' => 'ไม่ผ่านการอนุมัติ', 'class' => 'st-rejected'],
     ];
     return $map[$status] ?? ['label' => (string)$status, 'class' => 'st-pending'];
 }
 
 /**
- * สถานะที่ผู้บริจาคเห็น: fundraising | completed | closed (ซ่อนจาก donor ทั้งหมด; อนุมัติแล้วไม่หน่วงรับบริจาค)
+ * สถานะที่ผู้บริจาคเห็น: fundraising | completed | closed (ซ่อนจาก donor ทั้งหมด)
+ * DB status purchasing (กำลังจัดซื้อหลังแอดมิน escrow) นับเป็น completed ในมุมผู้บริจาค
  */
 function donorProjectEffectiveState(array $row): string {
     $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
@@ -181,7 +184,7 @@ function donorProjectEffectiveState(array $row): string {
         }
     }
 
-    if (in_array($dbSt, ['completed', 'done'], true)) {
+    if (in_array($dbSt, ['completed', 'done', 'purchasing'], true)) {
         return 'completed';
     }
 
@@ -220,6 +223,13 @@ function donorProjectShowInBrowseList(array $row): bool
     return donorProjectEffectiveState($row) === 'fundraising';
 }
 
+/** แถบโครงการล่าสุด: แสดงทั้งที่ระดมทุนและที่ครบเป้า/กำลังจัดซื้อ (ซ่อนเฉพาะโครงการปิดเพราะยอดไม่ถึงครึ่งเป้า) */
+function donorProjectShowInDonorLatestStrip(array $row): bool
+{
+    $eff = donorProjectEffectiveState($row);
+    return $eff === 'fundraising' || $eff === 'completed';
+}
+
 function donorProjectProgressPct(array $row): float {
     $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
     $raised = (float)($row['current_donate'] ?? 0);
@@ -237,7 +247,7 @@ function donorFilterProjectRows(array $rows, string $status): array {
             continue;
         }
         $eff = donorProjectEffectiveState($row);
-        $dbDone = in_array((string)($row['project_status'] ?? ''), ['completed', 'done'], true);
+        $dbDone = in_array((string)($row['project_status'] ?? ''), ['completed', 'done', 'purchasing'], true);
 
         if ($status === 'completed') {
             if ($dbDone || $eff === 'completed') {
@@ -294,10 +304,10 @@ if ($publicDonorStyle) {
     if ($status === 'fundraising') {
         $where[] = "p.project_status = 'approved'";
     } else {
-        $where[] = "p.project_status IN ('approved', 'completed', 'done')";
+        $where[] = "p.project_status IN ('approved', 'completed', 'done', 'purchasing')";
     }
 } elseif ($role !== 'admin') {
-    $where[] = "p.project_status IN ('approved', 'completed', 'done')";
+    $where[] = "p.project_status IN ('approved', 'completed', 'done', 'purchasing')";
 }
 
 if (!empty($selectedCats)) {
@@ -382,9 +392,9 @@ if ($isFoundationOwnView) {
     $latestTypes = '';
     $latestParams = [];
     if ($publicDonorStyle) {
-        $latestWhere[] = "p.project_status = 'approved'";
+        $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done', 'purchasing')";
     } elseif ($role !== 'admin') {
-        $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done')";
+        $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done', 'purchasing')";
     }
     $latestWhere[] = 'p.deleted_at IS NULL';
     $latestSql = "
@@ -416,7 +426,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=25">
+    <link rel="stylesheet" href="css/project.css?v=28">
 
 </head>
 <body class="projects-page">
@@ -472,7 +482,7 @@ if ($isFoundationOwnView) {
                         <h3><?= htmlspecialchars($row['project_name']) ?></h3>
                         <span class="foundation-status-pill <?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span>
                         <?php
-                        $isCompleted = in_array($row['project_status'], ['completed', 'done']);
+                        $isCompleted = in_array($row['project_status'], ['completed', 'done', 'purchasing'], true);
                         $isOwner = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && $row['foundation_name'] === $foundationName);
                         ?>
                         <?php if ($isCompleted): ?>
@@ -503,7 +513,7 @@ if ($isFoundationOwnView) {
                                 $pst = 'pending';
                             }
                             // แก้ไขได้ทุกสถานะยกเว้นโครงการจบแล้ว (รองรับค่า DB ตัวพิมพ์เล็ก-ใหญ่)
-                            $allowEditCard = !in_array($pst, ['completed', 'done'], true);
+                            $allowEditCard = !in_array($pst, ['completed', 'done', 'purchasing'], true);
                             $allowDeleteCard = in_array($pst, ['pending', 'rejected'], true);
                             $tzB = new DateTimeZone('Asia/Bangkok');
                             $endRaw = $row['end_date'] ?? null;
@@ -661,10 +671,9 @@ if ($role === 'admin'):
 
 <div class="container">
     <?php
-    $projectDonationCategoryId = 2;
-    $resPC = $conn->query("SELECT category_id FROM donate_category WHERE project_donate IS NOT NULL LIMIT 1");
-    if ($resPC && ($rpc = $resPC->fetch_assoc())) {
-        $projectDonationCategoryId = (int)$rpc['category_id'];
+    $projectDonationCategoryId = drawdream_donate_category_id_for_project($conn);
+    if ($projectDonationCategoryId <= 0) {
+        $projectDonationCategoryId = drawdream_get_or_create_project_donate_category_id($conn);
     }
     ?>
     <?php if (!empty($latestProjects)): ?>
@@ -674,7 +683,7 @@ if ($role === 'admin'):
             <div class="latest-track" id="latest-track">
                 <?php foreach ($latestProjects as $latest): ?>
                     <?php
-                        if (!donorProjectShowInBrowseList($latest)) {
+                        if (!donorProjectShowInDonorLatestStrip($latest)) {
                             continue;
                         }
                         $latestGoal = !empty($latest['goal_amount']) ? floatval($latest['goal_amount']) : 100000;
@@ -700,8 +709,13 @@ if ($role === 'admin'):
                             $intervalLatest = $todayLatest->diff($latestEnd);
                             $latestDaysLeft = (int)$intervalLatest->format('%r%a');
                         }
+                        $latestEff = donorProjectEffectiveState($latest);
+                        $latestShowResults = ($latestEff === 'completed');
+                        $latestCardLink = $latestShowResults
+                            ? 'project_result.php?project_id=' . (int)$latest['project_id']
+                            : 'payment/payment_project.php?project_id=' . (int)$latest['project_id'];
                     ?>
-                    <article class="project-card latest-card clickable-card" data-href="payment/payment_project.php?project_id=<?= (int)$latest['project_id'] ?>">
+                    <article class="project-card latest-card clickable-card<?= $latestShowResults ? ' project-card--completed' : '' ?>" data-href="<?= htmlspecialchars($latestCardLink) ?>">
                         <div class="project-card-media">
                             <img src="uploads/<?= htmlspecialchars($latest['project_image']) ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
                         </div>
@@ -712,8 +726,11 @@ if ($role === 'admin'):
                                     <svg class="icon-person-outline" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                     <?= $latestDonorCount ?> คน
                                 </span>
-                                <span class="project-stat project-stat-deadline">
-                                    <?php if ($latestDaysLeft !== null): ?>
+                                <span class="project-stat project-stat-deadline<?= $latestShowResults ? ' is-done' : '' ?>">
+                                    <?php if ($latestShowResults): ?>
+                                        <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                                        เสร็จสิ้น
+                                    <?php elseif ($latestDaysLeft !== null): ?>
                                         <svg class="icon-calendar-end" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                                         <?= $latestDaysLeft >= 0 ? 'อีก ' . $latestDaysLeft . ' วัน' : 'ปิดโครงการ' ?>
                                     <?php else: ?>
@@ -740,7 +757,11 @@ if ($role === 'admin'):
                                     <div class="progress-bar-fill" style="width: <?= $latestProgress ?>%"></div>
                                 </div>
                             </div>
-                            <a href="payment/payment_project.php?project_id=<?= $latest['project_id'] ?>" class="donate-btn">บริจาค</a>
+                            <?php if (!$latestShowResults): ?>
+                            <a href="payment/payment_project.php?project_id=<?= (int)$latest['project_id'] ?>" class="donate-btn">บริจาค</a>
+                            <?php else: ?>
+                            <a href="project_result.php?project_id=<?= (int)$latest['project_id'] ?>" class="donate-btn donate-btn--results">ผลลัพธ์ของโครงการ</a>
+                            <?php endif; ?>
                         </div>
                     </article>
                 <?php endforeach; ?>

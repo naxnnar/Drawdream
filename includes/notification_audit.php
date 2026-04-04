@@ -1,4 +1,13 @@
 <?php
+// includes/notification_audit.php — แจ้งเตือน notifications + audit แอดมิน
+/**
+ * แจ้งเตือน (notifications) + บันทึกคิว/audit ฝั่งแอดมิน (ตาราง admin)
+ *
+ * drawdream_send_notification(..., $entityKey) แทนที่แถวเดิมต่อ (user_id, entity_key)
+ * ลดการสะสมซ้ำ | legacy titles “ส่ง…แล้ว” ถูกลบ boot ผ่าน db.php
+ *
+ * @see docs/SYSTEM_PRESENTATION_GUIDE.md
+ */
 // helpers: แจ้งเตือนผู้ใช้ + บันทึก admin พร้อมเชื่อมว่ามีการแจ้งเตือนไปที่ใคร
 
 declare(strict_types=1);

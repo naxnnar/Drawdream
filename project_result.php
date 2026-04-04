@@ -1,5 +1,5 @@
 <?php
-// project_result.php
+// project_result.php — แสดงผลลัพธ์โครงการที่เสร็จสิ้น
 // แสดงผลลัพธ์โครงการที่เสร็จสิ้น (สำหรับผู้บริจาค/บุคคลทั่วไป)
 include 'db.php';
 session_start();
@@ -11,7 +11,7 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("SELECT * FROM foundation_project WHERE project_id = ? AND project_status IN ('completed','done') AND deleted_at IS NULL LIMIT 1");
+$stmt = $conn->prepare("SELECT * FROM foundation_project WHERE project_id = ? AND project_status IN ('completed','done','purchasing') AND deleted_at IS NULL LIMIT 1");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();

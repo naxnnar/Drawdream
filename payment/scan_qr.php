@@ -1,5 +1,11 @@
 <?php
-// payment/scan_qr.php — หน้าสแกน QR ร่วม (โครงการ / เด็ก / มูลนิธิ-สิ่งของ)
+// payment/scan_qr.php — หน้าแสดง QR หลังสร้าง charge (ร่วมทุกประเภท)
+/**
+ * หน้าแสดง QR หลังสร้าง Omise charge (โครงการ / เด็ก / มูลนิธิ)
+ *
+ * ตรวจสอบ charge_id + session (pending_*) ให้ตรงกันก่อนแสดง — กันป้อน URL ข้ามคน
+ * ภาพ QR ควรมาจาก Omise (session / GET charge) — ไม่ใช้ภาพจำลองในโหมดทดสอบยกเว้นชาร์จ mock (OMISE_ALLOW_LOCAL_MOCK)
+ */
 session_start();
 include '../db.php';
 include 'config.php';
@@ -117,26 +123,23 @@ if ($type === 'project') {
 }
 
 $qr_image = '';
+$qr_missing = false;
 $is_test_mode = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 if ($_SESSION['pending_charge_id'] === $charge_id) {
-    $qr_image = $_SESSION['qr_image'] ?? '';
+    $qr_image = trim((string)($_SESSION['qr_image'] ?? ''));
 }
-if (!$qr_image) {
-    if ($is_test_mode) {
-        $svgTest = '<svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">'
-            . '<rect width="260" height="260" fill="#ffffff"/>'
-            . '<rect x="14" y="14" width="72" height="72" fill="#000"/><rect x="22" y="22" width="56" height="56" fill="#fff"/><rect x="30" y="30" width="40" height="40" fill="#000"/>'
-            . '<rect x="174" y="14" width="72" height="72" fill="#000"/><rect x="182" y="22" width="56" height="56" fill="#fff"/><rect x="190" y="30" width="40" height="40" fill="#000"/>'
-            . '<rect x="14" y="174" width="72" height="72" fill="#000"/><rect x="22" y="182" width="56" height="56" fill="#fff"/><rect x="30" y="190" width="40" height="40" fill="#000"/>'
-            . '<rect x="96" y="96" width="68" height="68" fill="#000"/>'
-            . '<rect x="104" y="104" width="52" height="52" fill="#fff"/>'
-            . '<text x="130" y="140" font-size="16" text-anchor="middle" font-family="Arial, sans-serif" fill="#000" font-weight="700">TEST MODE</text>'
-            . '</svg>';
-        $qr_image = 'data:image/svg+xml;base64,' . base64_encode($svgTest);
-    } else {
-        $qr_image = 'https://cdn.omise.co/assets/dashboard/img/test-qr-code.png';
+$is_mock_charge = (strpos($charge_id, 'chrg_mock_') === 0);
+if ($qr_image === '' && !$is_mock_charge) {
+    require_once __DIR__ . '/omise_helpers.php';
+    $fetched = drawdream_omise_fetch_charge($charge_id);
+    if ($fetched) {
+        $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($fetched);
+        if ($qr_image !== '' && $_SESSION['pending_charge_id'] === $charge_id) {
+            $_SESSION['qr_image'] = $qr_image;
+        }
     }
 }
+$qr_missing = ($qr_image === '');
 
 $receipt_no = strtoupper(substr($charge_id, -10));
 $abandon_charge = ($type === 'foundation') ? '' : $charge_id;
@@ -199,7 +202,17 @@ $abandon_charge = ($type === 'foundation') ? '' : $charge_id;
             <span class="qr-project-info" style="font-size:1.1em;font-weight:600;display:inline-block;"><?= htmlspecialchars($subtitle_line) ?></span>
         </div>
         <div class="qr-section">
-            <img src="<?= htmlspecialchars($qr_image) ?>" alt="PromptPay QR">
+            <?php if ($qr_missing): ?>
+                <p style="color:#b45309;text-align:left;line-height:1.5;padding:12px;background:#fffbeb;border-radius:12px;border:1px solid #fcd34d;">
+                    ไม่สามารถโหลดภาพ QR จาก Omise ได้ (อาจเป็นเครือข่ายหรือคีย์ API)<br>
+                    ลองกลับไปหน้าชำระเงินแล้วกดบริจาคใหม่ หรือเปิด
+                    <a href="https://dashboard.omise.co/test/charges" target="_blank" rel="noopener">Omise Dashboard (test)</a>
+                    ค้นหา charge <code style="word-break:break-all;"><?= htmlspecialchars($charge_id) ?></code>
+                    แล้วใช้ «Mark as paid» หลังทดสอบ
+                </p>
+            <?php else: ?>
+                <img src="<?= htmlspecialchars($qr_image, ENT_QUOTES, 'UTF-8') ?>" alt="PromptPay QR">
+            <?php endif; ?>
         </div>
         <div class="qr-receipt">
             <div class="qr-receipt-row"><b>จำนวนเงิน</b> <?= number_format($amount, 2) ?> บาท</div>
@@ -214,7 +227,6 @@ $abandon_charge = ($type === 'foundation') ? '' : $charge_id;
         </a>
         <form method="post" action="abandon_qr.php" class="qr-abandon-wrap">
             <input type="hidden" name="charge_id" value="<?= htmlspecialchars($abandon_charge, ENT_QUOTES, 'UTF-8') ?>">
-            <input type="hidden" name="return_url" value="<?= htmlspecialchars($return_payment_page, ENT_QUOTES, 'UTF-8') ?>">
             <button type="submit" class="qr-abandon-btn">ยกเลิกการชำระ</button>
         </form>
     </div>

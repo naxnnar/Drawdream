@@ -1,8 +1,9 @@
 <?php
-// ไฟล์นี้: foundation.php
-// หน้าที่: หน้ารายการมูลนิธิและรายการสิ่งของที่ต้องการ
+// foundation.php — หน้ามูลนิธิ + รายการสิ่งของ (สาธารณะ/จัดการ)
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/needlist_donate_window.php';
 
 /**
  * หา path รูปในโฟลเดอร์ img/ เมื่อชื่อไฟล์ไม่มีนามสกุล (ลอง .jpg .jpeg .png .webp)
@@ -32,22 +33,23 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 }
 if (!$foundations) die("Query foundations failed: " . mysqli_error($conn));
 
-// ✅ แก้แล้ว — ดึงยอด current_donate จาก foundation_needlist แยกตาม foundation_id
+// ✅ ยอดบริจาค/เป้าหมายเฉพาะรายการที่ยังเปิดรับบริจาคตามระยะเวลา
+$needOpenPub = drawdream_needlist_sql_open_for_donation();
 $donationTotals = [];
 $q = mysqli_query($conn, "
     SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
     FROM foundation_needlist
-    WHERE approve_item = 'approved'
+    WHERE $needOpenPub
     GROUP BY foundation_id
 ");
 if ($q) while ($r = mysqli_fetch_assoc($q)) $donationTotals[(int)$r['foundation_id']] = (float)$r['total'];
 
 $goalTotals = [];
-$q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE approve_item='approved' GROUP BY foundation_id");
+$q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE $needOpenPub GROUP BY foundation_id");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
 /* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — LIMIT 3 เดิมทำให้แถวที่มีรูปถูกตัดออก */
-$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE foundation_id=? AND approve_item='approved' ORDER BY urgent DESC, item_id DESC LIMIT 120");
+$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE foundation_id=? AND $needOpenPub ORDER BY urgent DESC, item_id DESC LIMIT 120");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
@@ -59,7 +61,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, item_desc, brand, price_estimate, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note
+            SELECT item_id, item_name, item_desc, brand, price_estimate, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, reviewed_at
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -138,7 +140,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=26">
+  <link rel="stylesheet" href="css/foundation.css?v=27">
 </head>
 <body class="foundation-page">
 
@@ -188,6 +190,8 @@ $hasAnySlides = !empty($foundationSlides);
               }
               $statusLabel = ['pending' => 'รอการอนุมัติ', 'approved' => 'อนุมัติแล้ว', 'rejected' => 'ไม่อนุมัติ'][$status] ?? $status;
               $statusClass = ['pending' => 'status-pending', 'approved' => 'status-approved', 'rejected' => 'status-rejected'][$status] ?? 'status-pending';
+              $dweRaw = trim((string)($nl['donate_window_end_at'] ?? ''));
+              $donateWindowExpired = ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false && strtotime($dweRaw) < time());
             ?>
             <div class="need-card">
               <div class="need-card-img-wrap">
@@ -204,6 +208,11 @@ $hasAnySlides = !empty($foundationSlides);
               </div>
               <div class="need-card-body">
                 <span class="need-status-badge <?= $statusClass ?>"><?= $statusLabel ?></span>
+                <?php if ($donateWindowExpired): ?>
+                  <span class="need-status-badge status-closed-window" title="ครบระยะเวลารับบริจาคแล้ว">ปิดรับบริจาคแล้ว</span>
+                <?php elseif ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false): ?>
+                  <span class="need-window-hint" title="วันปิดรับบริจาค">ปิดรับ <?= htmlspecialchars(date('d/m/Y H:i', strtotime($dweRaw))) ?></span>
+                <?php endif; ?>
                 <div class="need-card-name"><?= htmlspecialchars($nl['item_name']) ?></div>
                 <?php if ($nl['brand']): ?>
                   <div class="need-card-cat"><?= htmlspecialchars($nl['brand']) ?></div>
@@ -256,24 +265,34 @@ $hasAnySlides = !empty($foundationSlides);
               break;
             }
           }
-          $urgentItemsOrdered = array_values(array_filter($items, static function ($it) {
-              $u = $it['urgent'] ?? 0;
-              return (int)$u === 1 || $u === true || $u === '1' || strtolower((string)$u) === 'true';
-          }));
-          $urgentImagePool = [];
-          foreach ($urgentItemsOrdered as $itu) {
-              foreach (foundation_needlist_item_filenames_from_row($itu) as $bn) {
-                  if ($bn === '' || $bn === '.' || $bn === '..') {
-                      continue;
-                  }
-                  $urgentImagePool[] = $bn;
-                  if (count($urgentImagePool) >= 3) {
-                      break 2;
-                  }
+          /* ถ้าไม่มีรูปประกอบจากมูลนิธิ ให้ใช้รูปสิ่งของใบแรกที่มี (ไม่บังคับติ๊กด่วน) */
+          if ($heroProposalImage === '') {
+            foreach ($items as $itHero) {
+              $needImgs = foundation_needlist_item_filenames_from_row($itHero);
+              foreach ($needImgs as $bn) {
+                if ($bn !== '' && $bn !== '.' && $bn !== '..') {
+                  $heroProposalImage = $bn;
+                  break 2;
+                }
               }
+            }
           }
-          if ($urgentImagePool === []) {
-              $urgentImagePool = [''];
+          /* แสดงรูปสิ่งของด้านซ้ายสูงสุด 3 รายการ — ทั้งด่วนและไม่ด่วน (เรียงตาม query: urgent ก่อน) */
+          $itemShowcaseEntries = [];
+          foreach ($items as $itRow) {
+            $isUrgent = (int)($itRow['urgent'] ?? 0) === 1
+              || $itRow['urgent'] === true
+              || $itRow['urgent'] === '1'
+              || strtolower((string)($itRow['urgent'] ?? '')) === 'true';
+            foreach (foundation_needlist_item_filenames_from_row($itRow) as $bn) {
+              if ($bn === '' || $bn === '.' || $bn === '..') {
+                continue;
+              }
+              $itemShowcaseEntries[] = ['file' => $bn, 'urgent' => $isUrgent];
+              if (count($itemShowcaseEntries) >= 3) {
+                break 2;
+              }
+            }
           }
         ?>
         <article class="foundation-card foundation-slide<?= $idx === 0 ? ' is-active' : '' ?>" id="f<?= $fid ?>" data-slide-index="<?= (int)$idx ?>" aria-hidden="<?= $idx === 0 ? 'false' : 'true' ?>">
@@ -293,11 +312,16 @@ $hasAnySlides = !empty($foundationSlides);
             </div>
 
             <div class="fc-urgent-zone">
-              <?php if (count($urgentItemsOrdered) > 0): ?>
-              <div class="items urgent-items fc-urgent-items-grid">
-                <?php foreach ($urgentImagePool as $oneImg): ?>
+              <?php if (count($itemShowcaseEntries) > 0): ?>
+              <div class="items urgent-items fc-urgent-items-grid fc-needlist-showcase-grid" aria-label="ภาพรายการสิ่งของ">
+                <?php foreach ($itemShowcaseEntries as $showEnt):
+                  $oneImg = (string)($showEnt['file'] ?? '');
+                  $showUrgent = !empty($showEnt['urgent']);
+                ?>
                 <div class="item urgent-item-card">
-                  <span class="urgent-tag urgent-tag-abs">ต้องการด่วน</span>
+                  <?php if ($showUrgent): ?>
+                    <span class="urgent-tag urgent-tag-abs">ต้องการด่วน</span>
+                  <?php endif; ?>
                   <?php if ($oneImg !== ''): ?>
                     <img class="item-img urgent-img-big" src="uploads/needs/<?= htmlspecialchars($oneImg) ?>" alt="">
                   <?php else: ?>

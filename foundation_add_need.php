@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: foundation_add_need.php
-// หน้าที่: หน้ามูลนิธิสำหรับเพิ่มรายการสิ่งของที่ต้องการ
+// foundation_add_need.php — มูลนิธิเสนอรายการสิ่งของ
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -341,6 +341,33 @@ if (isset($_POST['submit'])) {
                 );
 
                 if ($stmt->execute()) {
+                    if (($existingNeedRow['approve_item'] ?? '') === 'approved') {
+                        require_once __DIR__ . '/includes/needlist_donate_window.php';
+                        $periodLabel = drawdream_needlist_period_label_from_note($note);
+                        $rv = trim((string)($existingNeedRow['reviewed_at'] ?? ''));
+                        try {
+                            $from = ($rv !== '' && !str_starts_with($rv, '0000-00-00'))
+                                ? new DateTimeImmutable($rv)
+                                : new DateTimeImmutable('now');
+                        } catch (Throwable $e) {
+                            $from = new DateTimeImmutable('now');
+                        }
+                        $end = drawdream_needlist_compute_donate_window_end($periodLabel, $from);
+                        $eid = (int)$itemIdEdit;
+                        if ($end === null) {
+                            $zu = $conn->prepare('UPDATE foundation_needlist SET donate_window_end_at = NULL WHERE item_id = ? AND foundation_id = ?');
+                            if ($zu) {
+                                $zu->bind_param('ii', $eid, $foundation_id);
+                                $zu->execute();
+                            }
+                        } else {
+                            $stE = $conn->prepare('UPDATE foundation_needlist SET donate_window_end_at = ? WHERE item_id = ? AND foundation_id = ?');
+                            if ($stE) {
+                                $stE->bind_param('sii', $end, $eid, $foundation_id);
+                                $stE->execute();
+                            }
+                        }
+                    }
                     header('Location: foundation.php?need_updated=1#my-needlist-section');
                     exit;
                 }

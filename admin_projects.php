@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_projects.php
-// หน้าที่: หน้าจัดการและตรวจสอบโครงการฝั่งแอดมิน
+// admin_projects.php — แอดมินจัดการโครงการ (อนุมัติ/ปฏิเสธ)
+
 session_start();
 include 'db.php';
 

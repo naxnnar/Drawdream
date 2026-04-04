@@ -1,6 +1,5 @@
-﻿<?php
-// ไฟล์นี้: homepage.php
-// หน้าที่: หน้าแรกของเว็บไซต์และเล่าเรื่องโครงการ
+<?php
+// homepage.php — หน้าแรก
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }

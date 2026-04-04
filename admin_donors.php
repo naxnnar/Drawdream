@@ -1,4 +1,5 @@
 <?php
+// admin_donors.php — ภาพรวมผู้บริจาค
 // รายการผู้บริจาค — มุมมองแอดมิน (ยอดสะสม, ความถี่, ช่องทางติดต่อ)
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

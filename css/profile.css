@@ -977,3 +977,44 @@ textarea {
 }
 
 .project-amount strong { color: #4A5BA8; }
+
+/* โปรไฟล์ผู้บริจาค — เด็กที่สมัครอุปการะงวด (profile.php) */
+.donor-sponsorship-active-banner {
+    margin: 0 0 18px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+    border: 1px solid rgba(22, 163, 74, 0.25);
+}
+.donor-sponsorship-active-banner__title {
+    font-weight: 800;
+    font-size: 1rem;
+    color: #166534;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.donor-sponsorship-active-banner__list {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: #14532d;
+    line-height: 1.55;
+}
+.donor-sponsorship-active-banner__meta {
+    font-weight: 600;
+    color: #15803d;
+}
+.donor-history-hint {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    font-size: 0.92rem;
+    color: #4b5563;
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+.donor-history-hint code {
+    font-size: 0.85em;
+    word-break: break-all;
+}

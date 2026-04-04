@@ -1,9 +1,10 @@
 <?php
-// ไฟล์นี้: payment\foundation_donate.php
+// payment/foundation_donate.php — บริจาคมูลนิธิ (need list) + Omise
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/../includes/needlist_donate_window.php';
 
 if (!isset($_SESSION['user_id'])) { header("Location: ../login.php"); exit(); }
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'])) { header("Location: ../foundation.php"); exit(); }
@@ -17,19 +18,20 @@ $stmt->execute();
 $foundation = $stmt->get_result()->fetch_assoc();
 if (!$foundation) { header("Location: ../foundation.php"); exit(); }
 
-$stmt2 = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved'");
+$needOpen = drawdream_needlist_sql_open_for_donation();
+$stmt2 = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
 $stmt2->bind_param("i", $fid);
 $stmt2->execute();
 $goal = (float)($stmt2->get_result()->fetch_assoc()['goal'] ?? 0);
 
-$stmt3 = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved'");
+$stmt3 = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
 $stmt3->bind_param("i", $fid);
 $stmt3->execute();
 $current = (float)($stmt3->get_result()->fetch_assoc()['current'] ?? 0);
 
 $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
 
-$items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'approved' ORDER BY urgent DESC, item_id DESC");
+$items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND $needOpen ORDER BY urgent DESC, item_id DESC");
 $items_stmt->bind_param("i", $fid);
 $items_stmt->execute();
 $items = $items_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -47,7 +49,9 @@ $error = ""; $qr_image = ""; $charge_id = "";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     $amount = (int)($_POST['amount'] ?? 0);
-    if ($amount < 20) {
+    if ($goal <= 0 || count($items) === 0) {
+        $error = "ขณะนี้ไม่มีรายการสิ่งของที่เปิดรับบริจาค (ครบระยะเวลาหรือปิดรับแล้ว)";
+    } elseif ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
         drawdream_clear_pending_payment_session();
@@ -157,6 +161,9 @@ function _omise_local_mock(string $path, array $data): array {
             <?php endif; ?>
 
             <h2 class="fd-name"><?= htmlspecialchars($foundation['foundation_name']) ?></h2>
+            <?php if ($goal <= 0 || empty($items)): ?>
+                <div class="fd-alert fd-alert-error" role="status">ขณะนี้ไม่มีรายการสิ่งของที่เปิดรับบริจาค (ครบระยะเวลาหรือยังไม่มีรายการที่อนุมัติ)</div>
+            <?php endif; ?>
             <?php if (!empty($foundation['foundation_desc'])): ?>
                 <p class="fd-foundation-desc"><?= nl2br(htmlspecialchars($foundation['foundation_desc'])) ?></p>
             <?php endif; ?>
@@ -214,7 +221,7 @@ function _omise_local_mock(string $path, array $data): array {
                 <h3 class="fd-donate-section-title">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
                 <p class="fd-form-sub">เงินจะรวมเป็นกองทุนเพื่อซื้อสิ่งของให้มูลนิธิ</p>
 
-                <form method="POST" id="foundationDonateForm">
+                <form method="POST" id="foundationDonateForm"<?= ($goal <= 0 || empty($items)) ? ' class="fd-form-disabled"' : '' ?>>
                     <div class="amount-presets-grid fd-amount-presets-grid">
                         <button type="button" class="preset-btn" data-amt="2000" onclick="fdSelectPreset(2000)">2,000 บาท</button>
                         <button type="button" class="preset-btn" data-amt="1000" onclick="fdSelectPreset(1000)">1,000 บาท</button>
@@ -232,7 +239,7 @@ function _omise_local_mock(string $path, array $data): array {
                             <span>PromptPay QR</span>
                         </div>
                     </div>
-                    <button type="submit" name="pay" class="btn-pay">บริจาค</button>
+                    <button type="submit" name="pay" class="btn-pay"<?= ($goal <= 0 || empty($items)) ? ' disabled' : '' ?>>บริจาค</button>
                 </form>
         </div><!-- /.fd-right -->
 

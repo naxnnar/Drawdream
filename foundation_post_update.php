@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: foundation_post_update.php
-// หน้าที่: หน้ามูลนิธิสำหรับโพสต์อัปเดตสถานะ/โครงการ
+// foundation_post_update.php — โพสต์อัปเดตความคืบหน้าโครงการ
+
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
@@ -148,9 +148,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
                 JOIN donate_category dc ON d.category_id = dc.category_id
                 JOIN payment_transaction pt ON pt.donate_id = d.donate_id
                 JOIN donor dn ON pt.tax_id = dn.tax_id
-                WHERE dc.project_donate IS NOT NULL
+                WHERE TRIM(COALESCE(dc.project_donate, '')) NOT IN ('', '-')
                 AND d.payment_status = 'completed'
+                AND d.target_id = ?
             ");
+            $donors_q->bind_param('i', $project_id);
             $donors_q->execute();
             $donor_users = $donors_q->get_result()->fetch_all(MYSQLI_ASSOC);
 

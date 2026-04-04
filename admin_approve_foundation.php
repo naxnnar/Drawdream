@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_approve_foundation.php
-// หน้าที่: หน้าแอดมินสำหรับอนุมัติมูลนิธิ
+// admin_approve_foundation.php — แอดมินอนุมัติ/ปฏิเสธคำขอสมัครมูลนิธิ
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/notification_audit.php';
@@ -175,18 +175,18 @@ if ($view === 'detail') {
             </div>
 
             <div class="btn-row">
-                <form method="POST" style="flex:1">
-                    <input type="hidden" name="foundation_id" value="<?= $row['foundation_id'] ?>">
-                    <input type="hidden" name="action" value="reject">
-                    <button type="submit" class="btn-reject"
-                        onclick="return confirm('ยืนยันการปฏิเสธ? บัญชีนี้จะถูกลบออกจากระบบ')">
-                        ปฏิเสธ
-                    </button>
-                </form>
-                <form method="POST" style="flex:1">
+                <form method="POST" class="btn-row__form">
                     <input type="hidden" name="foundation_id" value="<?= $row['foundation_id'] ?>">
                     <input type="hidden" name="action" value="approve">
                     <button type="submit" class="btn-approve">อนุมัติ</button>
+                </form>
+                <form method="POST" class="btn-row__form">
+                    <input type="hidden" name="foundation_id" value="<?= $row['foundation_id'] ?>">
+                    <input type="hidden" name="action" value="reject">
+                    <button type="submit" class="btn-reject"
+                        onclick="return confirm('ยืนยันไม่อนุมัติ? บัญชีนี้จะถูกลบออกจากระบบ')">
+                        ไม่อนุมัติ
+                    </button>
                 </form>
             </div>
         </div>

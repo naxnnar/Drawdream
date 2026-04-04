@@ -248,11 +248,40 @@ body {
     margin-top: 36px;
 }
 
+.btn-row__form {
+    flex: 1;
+}
+
+.btn-row__form .btn-approve,
+.btn-row__form .btn-reject {
+    width: 100%;
+}
+
+.btn-approve {
+    flex: 1;
+    padding: 15px;
+    background: #597D57;
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    font-family: 'Prompt', sans-serif;
+    cursor: pointer;
+    transition: all 0.25s;
+}
+
+.btn-approve:hover {
+    background: #4a6a48;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(89, 125, 87, 0.35);
+}
+
 .btn-reject {
     flex: 1;
     padding: 15px;
     background: #CC583F;
-    color: white;
+    color: #fff;
     border: none;
     border-radius: 14px;
     font-size: 16px;
@@ -266,26 +295,6 @@ body {
     background: #b04a33;
     transform: translateY(-2px);
     box-shadow: 0 6px 18px rgba(204, 88, 63, 0.35);
-}
-
-.btn-approve {
-    flex: 1;
-    padding: 15px;
-    background: #7BC67E;
-    color: white;
-    border: none;
-    border-radius: 14px;
-    font-size: 16px;
-    font-weight: 600;
-    font-family: 'Prompt', sans-serif;
-    cursor: pointer;
-    transition: all 0.25s;
-}
-
-.btn-approve:hover {
-    background: #5CB85C;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(92,184,92,0.3);
 }
 
 /* ===== Responsive ===== */

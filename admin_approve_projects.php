@@ -1,6 +1,6 @@
 <?php
-// ไฟล์นี้: admin_approve_projects.php
-// หน้าที่: หน้าแอดมินสำหรับอนุมัติโครงการ
+// admin_approve_projects.php — แอดมินอนุมัติโครงการ
+
 session_start();
 include 'db.php';
 

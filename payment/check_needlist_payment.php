@@ -1,10 +1,12 @@
 <?php
-// ไฟล์นี้: payment\check_needlist_payment.php
-// หน้าที่: ไฟล์ตรวจสอบสถานะการชำระเงินรายการสิ่งของ
+// payment/check_needlist_payment.php — ยืนยันการชำระรายการสิ่งของ
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/../includes/donate_category_resolve.php';
+require_once __DIR__ . '/../includes/needlist_donate_window.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -76,22 +78,18 @@ if ($is_success && !$already_processed && $fid > 0) {
     $donor  = $stmt->get_result()->fetch_assoc();
     $tax_id = $donor['tax_id'] ?? '';
 
-    $stmt = $conn->prepare("SELECT category_id FROM donate_category WHERE needitem_donate IS NOT NULL LIMIT 1");
-    $stmt->execute();
-    $cat = $stmt->get_result()->fetch_assoc();
-
-    if (!$cat) {
-        $conn->query("INSERT INTO donate_category (needitem_donate) VALUES ('รายการสิ่งของ')");
-        $category_id = $conn->insert_id;
-    } else {
-        $category_id = $cat['category_id'];
+    $category_id = drawdream_get_or_create_needitem_donate_category_id($conn);
+    if ($category_id <= 0) {
+        $is_success = false;
     }
 
+    $donor_uid = (int)$_SESSION['user_id'];
+    if ($is_success) {
     $stmt = $conn->prepare("
-        INSERT INTO donation (category_id, amount, service_fee, payment_status, transfer_datetime)
-        VALUES (?, ?, 0, 'completed', NOW())
+        INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
+        VALUES (?, ?, ?, ?, 0, 'completed', NOW())
     ");
-    $stmt->bind_param("id", $category_id, $amount);
+    $stmt->bind_param("iiid", $category_id, $fid, $donor_uid, $amount);
     $stmt->execute();
     $donate_id = $conn->insert_id;
 
@@ -102,10 +100,11 @@ if ($is_success && !$already_processed && $fid > 0) {
     $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
     $stmt->execute();
 
+    $needOpen = drawdream_needlist_sql_open_for_donation();
     $res = $conn->prepare("
         SELECT SUM(total_price) AS grand_total
         FROM foundation_needlist
-        WHERE foundation_id = ? AND approve_item = 'approved'
+        WHERE foundation_id = ? AND $needOpen
     ");
     $res->bind_param("i", $fid);
     $res->execute();
@@ -116,7 +115,7 @@ if ($is_success && !$already_processed && $fid > 0) {
         $items = $conn->prepare("
             SELECT item_id, total_price
             FROM foundation_needlist
-            WHERE foundation_id = ? AND approve_item = 'approved'
+            WHERE foundation_id = ? AND $needOpen
         ");
         $items->bind_param("i", $fid);
         $items->execute();
@@ -137,6 +136,7 @@ if ($is_success && !$already_processed && $fid > 0) {
     }
 
     unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id']);
+    }
 }
 
 // ถ้าเคยประมวลผลแล้ว ให้ดึงจำนวนเงินจาก charge

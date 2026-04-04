@@ -1,5 +1,6 @@
 <?php
 
+// includes/address_helpers.php — แปลง/รวมข้อความที่อยู่ไทยจาก POST
 /**
  * @return array{tambon: string, amphoe: string, province: string, zip: string}|null
  */

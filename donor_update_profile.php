@@ -1,5 +1,5 @@
 <?php
-// ไฟล์นี้: donor_update_profile.php — แก้ไขโปรไฟล์ผู้บริจาค + อัปโหลดรูป + ข้อมูลใบเสร็จ
+// donor_update_profile.php — แก้ไขโปรไฟล์ผู้บริจาค + อัปโหลดรูป + ข้อมูลใบเสร็จ
 session_start();
 include 'db.php';
 

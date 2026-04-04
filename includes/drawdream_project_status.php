@@ -1,4 +1,5 @@
 <?php
+// includes/drawdream_project_status.php — มาตรฐานสถานะโครงการ + normalize DB
 // โครงการบางแถวเก็บสถานะภาษาไทย (เช่น รอดำเนินการ) แต่โค้ดส่วนใหญ่ใช้ pending/approved/rejected — ปรับค่าและเงื่อนไขให้สอดคล้องกัน
 
 declare(strict_types=1);
