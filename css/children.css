@@ -865,6 +865,88 @@ body.admin-approve-projects-page {
     resize: vertical;
 }
 
+/* Unified review actions (foundation/child/project/need inspect pages) */
+.admin-review-actions-note {
+    max-width: 620px;
+    margin: 0 auto 8px;
+    text-align: center;
+    color: #6b7280;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.admin-review-actions-form {
+    margin-top: 8px;
+}
+
+.admin-review-actions-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(112px, 132px) minmax(112px, 132px);
+    gap: 10px 12px;
+    align-items: start;
+}
+
+.admin-review-actions-grid textarea {
+    width: 100%;
+    min-height: 76px;
+    border-radius: 10px;
+    border: 1px solid #dfe5ee;
+    padding: 10px 12px;
+    font-family: inherit;
+    font-size: 0.92rem;
+    resize: vertical;
+}
+
+.admin-review-actions-grid textarea:focus {
+    outline: 2px solid rgba(60, 80, 153, 0.28);
+    border-color: #3C5099;
+}
+
+.admin-review-actions-grid .admin-review-action-btn.btn {
+    width: 100%;
+    min-height: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border-width: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+}
+
+.admin-review-action-btn.btn-success {
+    background: #597D57;
+    border-color: #597D57;
+    color: #fff;
+}
+
+.admin-review-action-btn.btn-danger {
+    background: #CC583F;
+    border-color: #CC583F;
+    color: #fff;
+}
+
+.admin-review-action-btn.btn-danger:hover,
+.admin-review-action-btn.btn-danger:focus {
+    background: #b04a33;
+    border-color: #b04a33;
+}
+
+.admin-review-action-btn:hover {
+    transform: translateY(-1px);
+}
+
+@media (max-width: 900px) {
+    .admin-review-actions-grid {
+        grid-template-columns: 1fr;
+    }
+    .admin-review-actions-grid .admin-review-action-btn.btn {
+        min-height: 0;
+        padding: 10px 14px;
+        font-size: 0.98rem;
+    }
+}
+
 .admin-project-review .stat-num--date {
     font-size: 1.35rem;
     line-height: 1.15;

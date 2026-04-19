@@ -8,6 +8,8 @@ session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
+require_once __DIR__ . '/includes/notification_audit.php';
+require_once __DIR__ . '/includes/foundation_review_schema.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -41,6 +43,9 @@ if ($role === 'foundation') {
 }
 
 if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
+if ($role === 'foundation') {
+    drawdream_foundation_review_ensure_schema($conn);
+}
 
 $thai_addr_parsed = null;
 $thai_addr_init_json = 'null';
@@ -152,7 +157,41 @@ if (isset($_POST['update'])) {
             }
 
             if ($stmt->execute()) {
-                $success = "อัปเดตโปรไฟล์สำเร็จ!";
+                $wasRejected = ((int)($profile['account_verified'] ?? 0) === 2);
+                $isVerifiedNow = ((int)($profile['account_verified'] ?? 0) === 1);
+
+                if (!$isVerifiedNow) {
+                    // บัญชียังไม่ผ่านอนุมัติ: เมื่อแก้ไขแล้วให้กลับเข้าคิว pending เพื่อตรวจสอบใหม่
+                    $foundationId = (int)($profile['foundation_id'] ?? 0);
+                    if ($foundationId > 0) {
+                        $rst = $conn->prepare(
+                            'UPDATE foundation_profile
+                             SET account_verified = 0, verified_at = NULL, verified_by = NULL, review_note = NULL, reviewed_at = NULL
+                             WHERE foundation_id = ?'
+                        );
+                        if ($rst) {
+                            $rst->bind_param('i', $foundationId);
+                            $rst->execute();
+                        }
+                        $foundationNameForNotif = trim($foundation_name) !== '' ? $foundation_name : (string)($profile['foundation_name'] ?? '');
+                        foreach (drawdream_admin_user_ids($conn) as $adminUid) {
+                            drawdream_send_notification(
+                                $conn,
+                                (int)$adminUid,
+                                'admin_foundation_pending',
+                                'มีมูลนิธิส่งโปรไฟล์รอตรวจสอบ',
+                                'มูลนิธิ "' . $foundationNameForNotif . '" แก้ไขข้อมูลและส่งให้ตรวจสอบใหม่',
+                                'admin_approve_foundation.php?id=' . $foundationId,
+                                'adm_pending_foundation:' . $foundationId
+                            );
+                        }
+                    }
+                    $success = $wasRejected
+                        ? 'บันทึกสำเร็จ และส่งโปรไฟล์ให้แอดมินตรวจสอบใหม่แล้ว'
+                        : 'บันทึกสำเร็จ และคงสถานะรอตรวจสอบไว้';
+                } else {
+                    $success = "อัปเดตโปรไฟล์สำเร็จ!";
+                }
                 header("refresh:2;url=profile.php");
             } else {
                 $error = "เกิดข้อผิดพลาด: " . $stmt->error;
@@ -312,7 +351,7 @@ if (isset($_POST['update'])) {
                         <?php if (!empty($profile['profile_image'])): ?>
                             <img src="uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" alt="" class="donor-avatar-img" id="avatarPreviewLegacy">
                         <?php else: ?>
-                            <img src="img/user.png" alt="" class="donor-avatar-img donor-avatar-img--placeholder" id="avatarPreviewLegacy">
+                            <img src="img/icoprofile.png" alt="" class="donor-avatar-img donor-avatar-img--placeholder" id="avatarPreviewLegacy">
                         <?php endif; ?>
                     </div>
                     <button type="button" class="donor-avatar-fab" id="avatarFabLegacy" title="อัปโหลดรูปโปรไฟล์" aria-label="อัปโหลดรูปโปรไฟล์">

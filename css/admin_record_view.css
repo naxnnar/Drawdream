@@ -1,0 +1,138 @@
+/* admin_view_*.php — มุมมอง “ดูข้อมูล” จากไดเรกทอรี (คนละสไตล์กับหน้าตรวจสอบ/อนุมัติ) */
+
+body.admin-record-view-page {
+    background: #e8eef5;
+    min-height: 100vh;
+}
+
+.admin-record-shell {
+    max-width: 960px;
+    margin: 22px auto 40px;
+    padding: 0 16px;
+}
+
+.admin-record-back {
+    margin-bottom: 14px;
+}
+
+.admin-record-back a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: #334155;
+    text-decoration: none;
+}
+
+.admin-record-back a:hover {
+    color: #4e3b84;
+}
+
+.admin-record-sheet {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 10px 32px rgba(15, 23, 42, 0.09);
+    border: 1px solid #cbd5e1;
+    overflow: hidden;
+}
+
+.admin-record-sheet__head {
+    background: #597D57;
+    color: #fff;
+    padding: 20px 22px 18px;
+}
+
+.admin-record-sheet__head h1 {
+    margin: 0;
+    font-size: 1.22rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.admin-record-sheet__sub {
+    margin: 8px 0 0;
+    font-size: 0.95rem;
+    opacity: 0.94;
+    font-weight: 600;
+}
+
+.admin-record-body {
+    padding: 22px 20px 26px;
+}
+
+.admin-record-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 14px;
+}
+
+@media (max-width: 640px) {
+    .admin-record-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.admin-record-field {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+
+.admin-record-field--full {
+    grid-column: 1 / -1;
+}
+
+.admin-record-field .admin-record-k {
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.admin-record-field .admin-record-v {
+    font-size: 0.96rem;
+    font-weight: 650;
+    color: #0f172a;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.admin-record-media {
+    text-align: center;
+    margin-bottom: 18px;
+}
+
+.admin-record-media img {
+    max-width: 100%;
+    width: 100%;
+    max-width: 300px;
+    border-radius: 14px;
+    border: 1px solid #cbd5e1;
+    object-fit: cover;
+    max-height: 280px;
+}
+
+.admin-record-media .admin-record-ph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 300px;
+    min-height: 180px;
+    margin: 0 auto;
+    border-radius: 14px;
+    background: #e2e8f0;
+    color: #64748b;
+    font-weight: 700;
+    font-size: 0.92rem;
+    border: 1px dashed #94a3b8;
+}
+
+.admin-record-stats {
+    margin-top: 18px;
+}

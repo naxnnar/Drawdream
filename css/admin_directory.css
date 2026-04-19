@@ -137,6 +137,17 @@ body.admin-sidebar-page .admin-directory-page {
     background: #e5e7eb;
 }
 
+.admin-dir-btn--analytics {
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fdba74;
+}
+
+.admin-dir-btn--analytics:hover {
+    background: #ffedd5;
+    color: #7c2d12;
+}
+
 .b--muted {
     color: #9ca3af;
     font-size: 0.85rem;

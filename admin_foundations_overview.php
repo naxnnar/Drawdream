@@ -43,17 +43,7 @@ $rows = $conn->query($sql);
 
 <div class="admin-directory-page">
     <div class="admin-directory-head">
-        <a href="admin_dashboard.php" class="admin-directory-back">← กลับ Dashboard</a>
         <h1 class="admin-directory-title">มูลนิธิทั้งหมด</h1>
-        <p class="admin-directory-desc">
-            ภาพรวมมูลนิธิในระบบ: สถานะยืนยันบัญชี จำนวนโครงการ / เด็ก / รายการสิ่งของ
-            ใช้ควบคุมคุณภาพข้อมูลและตัดสินใจอนุมัติเพิ่มเติม
-        </p>
-    </div>
-
-    <div class="admin-directory-actions-hint">
-        <strong>แอดมินทำอะไรได้จากหน้านี้:</strong>
-        ดูว่ามูลนิธิไหนยังไม่ verified · เปิดรายละเอียดเพื่ออนุมัติ/ปฏิเสธ · เข้าหน้าโครงการ/บริจาคสาธารณะเพื่อตรวจเนื้อหาที่แสดงผู้ใช้
     </div>
 
     <div class="admin-dir-table-wrap">
@@ -74,15 +64,18 @@ $rows = $conn->query($sql);
             <?php if ($rows && $rows->num_rows > 0): ?>
                 <?php while ($r = $rows->fetch_assoc()):
                     $fid = (int)$r['foundation_id'];
-                    $verified = (int)($r['account_verified'] ?? 0) === 1;
+                    $verifyVal = (int)($r['account_verified'] ?? 0);
                     $created = $r['created_at'] ?? '';
                     $createdStr = $created ? date('d/m/Y', strtotime((string)$created)) : '—';
+                    $foundationDetailHref = 'admin_view_foundation.php?id=' . $fid;
                     ?>
                     <tr>
                         <td><?= htmlspecialchars($r['foundation_name'] ?? '') ?></td>
                         <td>
-                            <?php if ($verified): ?>
+                            <?php if ($verifyVal === 1): ?>
                                 <span class="admin-pill admin-pill--success">ยืนยันแล้ว</span>
+                            <?php elseif ($verifyVal === 2): ?>
+                                <span class="admin-pill admin-pill--danger">ไม่อนุมัติ (รอแก้ไข)</span>
                             <?php else: ?>
                                 <span class="admin-pill admin-pill--warning">รออนุมัติ</span>
                             <?php endif; ?>
@@ -95,8 +88,11 @@ $rows = $conn->query($sql);
                         <td>
                             <div class="admin-dir-actions">
                                 <a class="admin-dir-btn admin-dir-btn--primary"
-                                   href="admin_approve_foundation.php?id=<?= $fid ?>">เปิดรายละเอียด</a>
-                                <a class="admin-dir-btn admin-dir-btn--ghost" href="project.php">ดูหน้าโครงการสาธารณะ</a>
+                                   href="<?= htmlspecialchars($foundationDetailHref, ENT_QUOTES, 'UTF-8') ?>">มูลนิธิ</a>
+                                <a class="admin-dir-btn admin-dir-btn--ghost"
+                                   href="admin_foundation_totals.php?foundation_id=<?= $fid ?>">ยอดมูลนิธิ</a>
+                                <a class="admin-dir-btn admin-dir-btn--analytics"
+                                   href="admin_foundation_analytics_pdf.php?foundation_id=<?= $fid ?>">รายงานเชิงวิเคราะห์</a>
                             </div>
                         </td>
                     </tr>

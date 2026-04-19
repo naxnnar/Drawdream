@@ -376,6 +376,27 @@ if (isset($_POST['submit'])) {
                 );
 
                 if ($stmt->execute()) {
+                    $prevApproveItem = strtolower(trim((string)($existingNeedRow['approve_item'] ?? '')));
+                    if ($prevApproveItem === 'rejected') {
+                        $stPend = $conn->prepare(
+                            "UPDATE foundation_needlist
+                             SET approve_item='pending', review_note=NULL, reviewed_at=NULL, reviewed_by_user_id=NULL
+                             WHERE item_id = ? AND foundation_id = ?"
+                        );
+                        if ($stPend) {
+                            $stPend->bind_param('ii', $itemIdEdit, $foundation_id);
+                            $stPend->execute();
+                        }
+                        require_once __DIR__ . '/includes/notification_audit.php';
+                        drawdream_notify_admins_need_submitted(
+                            $conn,
+                            (int)$itemIdEdit,
+                            $item_name,
+                            $foundation_display_name,
+                            (float)$total_price,
+                            (int)$urgent === 1
+                        );
+                    }
                     if (($existingNeedRow['approve_item'] ?? '') === 'approved') {
                         require_once __DIR__ . '/includes/needlist_donate_window.php';
                         $periodLabel = drawdream_needlist_period_label_from_note($note);

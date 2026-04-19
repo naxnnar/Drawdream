@@ -1,0 +1,297 @@
+/* admin_donors.php — กราฟเปรียบเทียบ 3 ฟีเจอร์ + Top 3 ผู้บริจาค */
+
+.admin-donors-insights {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 991px) {
+    .admin-donors-insights {
+        grid-template-columns: 1fr;
+    }
+}
+
+.admin-insight-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+    padding: 20px 22px 22px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.admin-insight-card__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.admin-insight-card__title {
+    margin: 0;
+    font-family: 'Prompt', sans-serif;
+    font-size: 1.12rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.admin-insight-card__hint {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* ----- กราณแท่งเปรียบเทียบ ----- */
+.admin-compare-chart {
+    display: flex;
+    gap: 18px;
+    align-items: stretch;
+    min-height: 220px;
+}
+
+.admin-compare-legend {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.admin-compare-legend__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.admin-compare-legend__dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.admin-compare-legend__dot--child { background: #597D57; }
+.admin-compare-legend__dot--project { background: #F1CF54; }
+.admin-compare-legend__dot--need { background: #3C5099; }
+
+.admin-compare-legend__sub {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-top: 2px;
+    margin-left: 19px;
+}
+
+.admin-compare-bars-area {
+    flex: 1;
+    position: relative;
+    border-left: 1px solid #e2e8f0;
+    padding-left: 34px;
+    min-height: 200px;
+}
+
+.admin-compare-bars-area::before {
+    content: '';
+    position: absolute;
+    left: 34px;
+    right: 8px;
+    bottom: 4px;
+    height: 1px;
+    background: #e2e8f0;
+}
+
+.admin-compare-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 14px;
+    padding: 0 8px 4px;
+    height: 200px;
+}
+
+.admin-compare-bar-wrap {
+    flex: 0 0 96px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    height: 200px;
+    justify-content: flex-end;
+}
+
+.admin-compare-bar {
+    width: 84px;
+    min-height: 4px;
+    border-radius: 10px 10px 6px 6px;
+    position: relative;
+    transform: none;
+    box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.12), 4px 6px 14px rgba(15, 23, 42, 0.12);
+    transition: height 0.35s ease;
+}
+
+.admin-compare-bar--child {
+    background: #597D57;
+}
+
+.admin-compare-bar--project {
+    background: #F1CF54;
+}
+
+.admin-compare-bar--need {
+    background: #3C5099;
+}
+
+.admin-compare-bar-val {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: #475569;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.admin-compare-y {
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 20px;
+    width: 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    font-weight: 700;
+    pointer-events: none;
+    text-align: right;
+    padding-right: 4px;
+}
+
+/* ----- Top 3 ผู้บริจาค ----- */
+.admin-top-donors {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+
+@media (max-width: 900px) {
+    .admin-top-donors {
+        grid-template-columns: 1fr;
+    }
+}
+
+.admin-top-donor {
+    border-radius: 16px;
+    padding: 22px 16px 18px;
+    text-align: center;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.15);
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.admin-top-donor::after {
+    content: none;
+}
+
+.admin-top-donor--1 {
+    background: #CC583F;
+}
+
+.admin-top-donor--2 {
+    background: #F1CF54;
+}
+
+.admin-top-donor--3 {
+    background: #597D57;
+}
+
+.admin-top-donor__avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.admin-top-donor__avatar-ph {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    font-weight: 900;
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.admin-top-donor__name {
+    margin-top: 12px;
+    font-size: 1rem;
+    font-weight: 800;
+    position: relative;
+    z-index: 1;
+    line-height: 1.3;
+}
+
+.admin-top-donor__amt {
+    margin-top: 10px;
+    font-size: 1.35rem;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    position: relative;
+    z-index: 1;
+}
+
+.admin-top-donor__amt small {
+    font-size: 0.78rem;
+    font-weight: 700;
+    opacity: 0.9;
+}
+
+.admin-top-donor__badge {
+    margin-top: auto;
+    padding: 6px 18px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 800;
+    position: relative;
+    z-index: 1;
+}
+
+.admin-top-donor--1 .admin-top-donor__badge { background: #f3b7aa; color: #1f2937; }
+.admin-top-donor--2 .admin-top-donor__badge { background: #f7e8ad; color: #1f2937; }
+.admin-top-donor--3 .admin-top-donor__badge { background: #b7c9b6; color: #1f2937; }
+
+.admin-top-donor--1 .admin-top-donor__name,
+.admin-top-donor--2 .admin-top-donor__name { color: #fff; }
+
+.admin-top-donor--2 .admin-top-donor__name,
+.admin-top-donor--2 .admin-top-donor__amt,
+.admin-top-donor--3 .admin-top-donor__name,
+.admin-top-donor--3 .admin-top-donor__amt { color: #1f2937; }
+
+.admin-top-donor--2 .admin-top-donor__avatar-ph,
+.admin-top-donor--3 .admin-top-donor__avatar-ph {
+    color: #1f2937;
+    border-color: rgba(31, 41, 55, 0.28);
+}

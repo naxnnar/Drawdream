@@ -255,6 +255,9 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/children.css?v=34">
+    <?php if ($isAdmin): ?>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <?php endif; ?>
 </head>
 <body>
 
@@ -395,16 +398,25 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         </div>
                     </div>
 
-                    <?php if ($reviewStatus !== 'อนุมัติ'): ?>
-                    <p class="text-muted small mb-2">การไม่อนุมัติจะอัปเดตสถานะในระบบเท่านั้น ไม่มีการลบข้อมูลโปรไฟล์ออกจากฐานข้อมูล</p>
-                    <form method="post" action="admin_approve_children.php" class="admin-actions" onsubmit="return submitChildReview(this, event)">
-                        <input type="hidden" name="id" value="<?php echo (int)$child['child_id']; ?>">
+                    <?php
+                    $rawProfileForInspect = trim((string)($child['approve_profile'] ?? ''));
+                    $showChildInspectActions = in_array($rawProfileForInspect, ['รอดำเนินการ', 'กำลังดำเนินการ'], true);
+                    ?>
+                    <?php if ($showChildInspectActions): ?>
+                    <p class="admin-review-actions-note">การไม่อนุมัติจะอัปเดตสถานะโปรไฟล์เด็กในระบบ — มูลนิธิสามารถแก้ไขและส่งพิจารณาใหม่ได้</p>
+                    <form method="post" action="admin_approve_children.php" class="admin-review-actions-form">
+                        <input type="hidden" name="id" value="<?php echo (int)$child_id; ?>">
                         <input type="hidden" name="return" value="admin_notifications.php#admin-pending-children">
-                        <textarea name="reject_reason" data-role="reject-reason" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ" style="min-width:280px;min-height:96px;border-radius:12px;border:1px solid #e5e7eb;padding:10px 12px;"></textarea>
-                        <button type="submit" name="action" value="approve" class="btn btn-primary" onclick="this.form.dataset.action='approve';">อนุมัติ</button>
-                        <button type="submit" name="action" value="reject" class="btn btn-danger" onclick="this.form.dataset.action='reject';">ไม่อนุมัติ</button>
+                        <div class="admin-review-actions-grid">
+                            <textarea name="reject_reason" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>
+                            <button type="submit" name="action" value="approve" class="btn btn-success admin-review-action-btn"
+                                    onclick="return confirm('ยืนยันอนุมัติโปรไฟล์เด็กคนนี้?');">อนุมัติ</button>
+                            <button type="submit" name="action" value="reject" class="btn btn-danger admin-review-action-btn"
+                                    onclick="var t=this.form.querySelector('[name=reject_reason]');if(!t||!t.value.trim()){alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');if(t)t.focus();return false;}return confirm('ยืนยันไม่อนุมัติโปรไฟล์เด็กคนนี้?');">ไม่อนุมัติ</button>
+                        </div>
                     </form>
                     <?php endif; ?>
+
                 </div>
             </div>
         </div>
@@ -792,27 +804,6 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
     </div>
 </main>
 <?php endif; ?>
-
-<script>
-function submitChildReview(form) {
-    const action = form.dataset.action || '';
-    if (action === 'approve') {
-        return confirm('ยืนยันอนุมัติโปรไฟล์เด็กคนนี้?');
-    }
-    if (action === 'reject') {
-        const reasonEl = form.querySelector('[data-role="reject-reason"]');
-        const reason = reasonEl ? reasonEl.value.trim() : '';
-        if (!reason) {
-            alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');
-            if (reasonEl) reasonEl.focus();
-            return false;
-        }
-        return confirm('ยืนยันไม่อนุมัติโปรไฟล์เด็กคนนี้?');
-    }
-    return true;
-}
-
-</script>
 
 </body>
 </html>

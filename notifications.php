@@ -143,6 +143,9 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
         .notif-card.type-needlist_done { border-left-color: #FF9800; }
         .notif-card.unread.type-needlist_done { background: #fff8f0; }
 
+        .notif-card.type-broadcast { border-left-color: #5c6bc0; }
+        .notif-card.unread.type-broadcast { background: #eef1ff; }
+
         .notif-icon {
             font-size: 28px;
             flex-shrink: 0;
@@ -220,12 +223,14 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
                 'อนุมัติ' => '✅',
                 'ไม่อนุมัติ' => '⛔',
                 'กำลังรอดำเนินการ' => '⏳',
+                'ประกาศจากผู้ดูแลระบบ' => '📣',
                 default => '🔔',
             };
             $typeClass = match ($typeBucket) {
                 'อนุมัติ' => 'approved',
                 'ไม่อนุมัติ' => 'rejected',
                 'กำลังรอดำเนินการ' => 'pending',
+                'ประกาศจากผู้ดูแลระบบ' => 'broadcast',
                 default => 'other',
             };
             $created = strtotime($row['created_at']);

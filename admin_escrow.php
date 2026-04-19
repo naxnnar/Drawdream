@@ -5,6 +5,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
+require_once __DIR__ . '/includes/escrow_funds_schema.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -28,14 +29,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ===== โครงการ: ยืนยันโอนเงิน + แจ้งมูลนิธิ =====
     if ($action === 'confirm_transfer' && $project_id) {
-        $proj = mysqli_fetch_assoc(mysqli_query($conn,
+        $ps = $conn->prepare(
             "SELECT p.project_name, fp.user_id, fp.foundation_name
              FROM foundation_project p
              JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-             WHERE p.project_id = $project_id AND p.deleted_at IS NULL"
-        ));
+             WHERE p.project_id = ? AND p.deleted_at IS NULL"
+        );
+        $ps->bind_param('i', $project_id);
+        $ps->execute();
+        $proj = $ps->get_result()->fetch_assoc();
         if ($proj) {
-            $conn->query("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = $project_id");
+            $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = ? AND deleted_at IS NULL");
+            $upd->bind_param('i', $project_id);
+            $upd->execute();
+            drawdream_escrow_funds_release_holding_for_project($conn, $project_id);
             $title   = "ยอดบริจาคโครงการครบแล้ว!";
             $message = "โครงการ \"{$proj['project_name']}\" ได้รับยอดบริจาคครบแล้ว กรุณาอัปเดตความคืบหน้าของโครงการ";
             $link    = "notifications.php";
@@ -121,9 +128,7 @@ $done_projects = mysqli_query($conn, "
     LEFT JOIN evidence e ON e.project_id = p.project_id
     WHERE p.project_status = 'done' AND p.deleted_at IS NULL ORDER BY p.project_id DESC LIMIT 10
 ");
-$escrow_project_total = mysqli_fetch_assoc(mysqli_query($conn,
-    "SELECT COALESCE(SUM(current_donate),0) AS total FROM foundation_project WHERE project_status IN ('completed','purchasing') AND deleted_at IS NULL"
-))['total'];
+$escrow_project_total = drawdream_escrow_project_holding_total_display($conn);
 
 $escrow_needlist_category_id = drawdream_donate_category_id_for_needitem($conn);
 if ($escrow_needlist_category_id <= 0) {

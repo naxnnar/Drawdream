@@ -240,6 +240,197 @@ body.admin-sidebar-page .dashboard {
 
 .pending-count.zero { color: #4CAF50; }
 
+/* แถวโปรไฟล์เด็ก + ปุ่มส่งแจ้งเตือน */
+.pending-row--children-actions {
+    grid-template-columns: repeat(3, minmax(230px, 1fr));
+    margin-top: 10px;
+    margin-bottom: 30px;
+}
+
+.pending-row--children-actions .pending-card {
+    min-height: 92px;
+}
+
+.pending-card--button {
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    background: #fff;
+}
+
+.pending-count--icon {
+    font-size: 22px;
+    color: #4A5BA8;
+}
+
+.pending-card--ghost {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.admin-broadcast-flash {
+    padding: 12px 18px;
+    border-radius: 12px;
+    margin-bottom: 18px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.admin-broadcast-flash--ok {
+    background: #e8f5e9;
+    color: #1b5e20;
+    border: 1px solid #a5d6a7;
+}
+
+.admin-broadcast-flash--err {
+    background: #ffebee;
+    color: #b71c1c;
+    border: 1px solid #ef9a9a;
+}
+
+body.admin-broadcast-modal-open {
+    overflow: hidden;
+}
+
+.admin-broadcast-modal[hidden] {
+    display: none !important;
+}
+
+.admin-broadcast-modal:not([hidden]) {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.admin-broadcast-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    cursor: pointer;
+}
+
+.admin-broadcast-modal__panel {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 480px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 24px 26px 22px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+}
+
+.admin-broadcast-modal__title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #333;
+}
+
+.admin-broadcast-modal__hint {
+    margin: 0 0 18px;
+    font-size: 13px;
+    color: #777;
+    line-height: 1.5;
+}
+
+.admin-broadcast-fieldset {
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 12px 14px 14px;
+    margin: 0 0 16px;
+}
+
+.admin-broadcast-legend {
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    padding: 0 6px;
+}
+
+.admin-broadcast-radio {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+}
+
+.admin-broadcast-radio input {
+    accent-color: #4A5BA8;
+}
+
+.admin-broadcast-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 8px;
+}
+
+.admin-broadcast-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-family: 'Sarabun', 'Prompt', sans-serif;
+    font-size: 14px;
+    resize: vertical;
+    min-height: 120px;
+}
+
+.admin-broadcast-textarea:focus {
+    outline: 2px solid rgba(74, 91, 168, 0.35);
+    border-color: #4A5BA8;
+}
+
+.admin-broadcast-modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.btn-broadcast-cancel {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    color: #555;
+}
+
+.btn-broadcast-submit {
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: none;
+    background: #4A5BA8;
+    color: #fff;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-broadcast-submit:hover {
+    background: #3d4d8f;
+}
+
 /* ======== Chart ======== */
 .chart-box {
     background: white;
@@ -268,6 +459,7 @@ body.admin-sidebar-page .dashboard {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
     gap: 20px;
+    align-items: start;
 }
 
 .section-box {
@@ -296,13 +488,27 @@ body.admin-sidebar-page .dashboard {
     font-weight: 500;
 }
 
-/* ======== Project List ======== */
-.proj-item {
-    padding: 12px 0;
-    border-bottom: 1px solid #f5f5f5;
+.section-link-btn {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
 }
 
-.proj-item:last-child { border-bottom: none; }
+.section-link--muted {
+    color: #94a3b8;
+    cursor: default;
+}
+
+/* ======== Project List ======== */
+.proj-item {
+    padding: 10px 0;
+}
+
+.proj-item:not(:last-child) {
+    border-bottom: 1px solid #f5f5f5;
+}
 
 .proj-name {
     font-size: 14px;
@@ -357,12 +563,42 @@ body.admin-sidebar-page .dashboard {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid #f5f5f5;
-    font-size: 13px;
+    padding: 8px 0;
+    font-size: 12px;
 }
 
-.don-item:last-child { border-bottom: none; }
+.don-item:not(:last-child) {
+    border-bottom: 1px solid #f5f5f5;
+}
+
+/* ปุ่มขยายรายการในแดชบอร์ด (โครงการ / บริจาคล่าสุด) */
+.admin-dash-more-wrap {
+    text-align: center;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.btn-dash-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 16px;
+    border-radius: 999px;
+    border: 1px solid #c7d4f7;
+    background: #f5f7ff;
+    color: #374151;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-dash-more:hover {
+    background: #e8edfc;
+    border-color: #a8b9ea;
+}
 
 .don-type {
     font-weight: 600;
@@ -434,6 +670,10 @@ body.admin-sidebar-page .dashboard {
      Responsive สำหรับ Mobile
      ============================= */
 @media (max-width: 600px) {
+    .pending-row--children-actions {
+        grid-template-columns: 1fr;
+    }
+    .pending-card--ghost { display: none; }
     .dashboard {
         padding: 0 2vw;
     }

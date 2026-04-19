@@ -13,3 +13,9 @@ Thumbs.db
 Desktop.ini
 
 .env
+
+# TCPDF — โฟลเดอร์ใหญ่ (ติดตั้งด้วย tools/install_tcpdf.ps1)
+lib/tcpdf/
+lib/tcpdf.zip
+lib/tcpdf_copy.zip
+lib/tcpdf_extract/

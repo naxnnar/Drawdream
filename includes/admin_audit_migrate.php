@@ -103,7 +103,13 @@ function drawdream_normalize_notif_type_to_th(?string $type): string
     if ($raw === 'อนุมัติ' || $raw === 'ไม่อนุมัติ' || $raw === 'กำลังรอดำเนินการ') {
         return $raw;
     }
+    if ($raw === 'ประกาศจากผู้ดูแลระบบ') {
+        return 'ประกาศจากผู้ดูแลระบบ';
+    }
     $t = strtolower($raw);
+    if ($t === 'admin_broadcast') {
+        return 'ประกาศจากผู้ดูแลระบบ';
+    }
     if (str_contains($t, 'reject')) {
         return 'ไม่อนุมัติ';
     }

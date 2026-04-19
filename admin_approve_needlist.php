@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 drawdream_log_admin_action($conn, $uid, $action_type, $item_id, $note, $fu > 0 ? $fu : null, $notifKind);
                 $msg = ($newStatus === 'approved') ? "อนุมัติรายการแล้ว" : "ปฏิเสธรายการแล้ว";
-                header("Location: admin_approve_needlist.php?msg=" . urlencode($msg));
+                header('Location: admin_notifications.php?done=need&msg=' . urlencode($msg) . '#admin-pending-needs');
                 exit();
             } else {
                 $error = "อัปเดตไม่สำเร็จ: " . $stmt->error;

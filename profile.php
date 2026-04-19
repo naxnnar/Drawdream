@@ -266,7 +266,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     <title>โปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/profile.css?v=12">
+    <link rel="stylesheet" href="css/profile.css?v=15">
 </head>
 <body>
 
@@ -295,8 +295,8 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
             </div>
 
         <?php elseif ($role === 'admin'): ?>
-            <div class="profile-image-placeholder">
-                <img src="img/user.png" alt="รูปโปรไฟล์แอดมิน">
+            <div class="profile-image-placeholder profile-image-placeholder--admin">
+                <img src="img/icoprofile.png" alt="">
             </div>
             <div class="profile-info profile-info--donor">
                 <h1><?= htmlspecialchars($profile['first_name'] . ' ' . $profile['last_name']) ?></h1>
@@ -332,7 +332,17 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     </div>
 
     <?php if ($role === 'foundation'): ?>
-        <?php if (!empty($profile['account_verified']) && empty($profile['bank_account_number'])): ?>
+        <?php if ((int)($profile['account_verified'] ?? 0) === 2): ?>
+            <div class="alert-bank alert-bank--foundation" style="background:#fff1f2;border-color:#fecdd3;color:#9f1239;">
+                โปรไฟล์มูลนิธิของคุณยังไม่ผ่านการอนุมัติ
+                <?php if (trim((string)($profile['review_note'] ?? '')) !== ''): ?>
+                    <div style="margin-top:6px;">
+                        <strong>เหตุผล:</strong> <?= nl2br(htmlspecialchars((string)$profile['review_note'])) ?>
+                    </div>
+                <?php endif; ?>
+                <div style="margin-top:8px;">กรุณาแก้ไขข้อมูล แล้วบันทึกเพื่อส่งตรวจสอบใหม่</div>
+            </div>
+        <?php elseif (!empty($profile['account_verified']) && empty($profile['bank_account_number'])): ?>
             <div class="alert-bank alert-bank--foundation">
                 บัญชีของคุณได้รับการยืนยันแล้ว กรุณาเพิ่มข้อมูลบัญชีธนาคารในหน้าแก้ไขโปรไฟล์เพื่อรับการโอนเงินบริจาค
             </div>
@@ -568,9 +578,10 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     <?php endif; ?>
 
     <?php if ($role === 'admin' && !empty($logs)): ?>
-        <div class="logs-section">
+        <?php $admin_log_total = count($logs); ?>
+        <div class="logs-section logs-section--admin-work">
             <h2>ประวัติการทำงาน</h2>
-            <?php foreach ($logs as $log): ?>
+            <?php foreach ($logs as $idx => $log): ?>
                 <?php
                     $nt = (string)($log['notif_type'] ?? '');
                     $ntBucket = drawdream_normalize_notif_type_to_th($nt);
@@ -578,22 +589,23 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                     $isReject  = ($ntBucket === 'ไม่อนุมัติ');
                     $class     = $isApprove ? 'approve' : ($isReject ? 'reject' : '');
                     $hasDetails = !empty($log['item_name']) || !empty($log['project_name']) || !empty($log['audit_foundation_name']);
+                    $log_is_extra = $idx >= 3;
                 ?>
-                <div class="log-item <?= $class ?>" <?= $hasDetails ? 'onclick="showModal(' . htmlspecialchars(json_encode($log)) . ')"' : '' ?>>
+                <div class="log-item<?= $class !== '' ? ' ' . $class : '' ?><?= $log_is_extra ? ' admin-log-item-extra' : '' ?>"<?= $log_is_extra ? ' hidden' : '' ?><?= $hasDetails ? ' onclick="showModal(' . htmlspecialchars(json_encode($log, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') . ')"' : '' ?>>
                     <div class="log-action"><?= htmlspecialchars(drawdream_admin_notif_type_label_th($nt)) ?></div>
                     <div class="log-details">
                         <?php if ($log['target_id']): ?>
                             <strong>รหัสอ้างอิง:</strong> #<?= $log['target_id'] ?>
-                            <?= $hasDetails ? ' <span style="color:#4A5BA8;">(คลิกดูรายละเอียด)</span>' : '' ?>
+                            <?= $hasDetails ? ' <span class="log-details-hint">(คลิกดูรายละเอียด)</span>' : '' ?>
                         <?php endif; ?>
                     </div>
                     <?php if (!empty($log['remark'])): ?>
                         <div class="log-remark">
-                            <strong>เหตุผล:</strong> <?= htmlspecialchars($log['remark']) ?>
+                            <strong>ข้อมูล:</strong> <?= htmlspecialchars($log['remark']) ?>
                         </div>
                     <?php endif; ?>
                     <?php if (!empty($log['notif_recipient_user_id'])): ?>
-                        <div class="log-details" style="font-size:0.9em;color:#555;">
+                        <div class="log-details log-details--notif">
                             แจ้งเตือนผู้ใช้ #<?= (int)$log['notif_recipient_user_id'] ?>
                             <?php if (!empty($log['notif_type'])): ?><span> — <?= htmlspecialchars(drawdream_admin_notif_type_label_th($nt)) ?></span><?php endif; ?>
                         </div>
@@ -601,6 +613,11 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                     <div class="log-time"><?= date('d/m/Y H:i:s', strtotime($log['action_at'])) ?></div>
                 </div>
             <?php endforeach; ?>
+            <?php if ($admin_log_total > 3): ?>
+            <div class="admin-log-more-wrap">
+                <button type="button" class="btn-admin-log-more" id="btnAdminLogMore">ดูทั้งหมด</button>
+            </div>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 </div>
@@ -702,6 +719,18 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
         yearFilter.addEventListener('change', applyFilter);
     }
     applyFilter();
+
+    (function() {
+        var btnAdminLog = document.getElementById('btnAdminLogMore');
+        if (!btnAdminLog) return;
+        btnAdminLog.addEventListener('click', function() {
+            [].slice.call(document.querySelectorAll('.admin-log-item-extra')).forEach(function(el) {
+                el.hidden = false;
+            });
+            var wrap = btnAdminLog.closest('.admin-log-more-wrap');
+            if (wrap) wrap.style.display = 'none';
+        });
+    })();
 
     var finMoreBtn = document.getElementById('btn-foundation-finance-more');
     if (finMoreBtn) {

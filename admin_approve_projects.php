@@ -99,6 +99,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $notifProjectsUrl = 'admin_notifications.php#admin-pending-projects';
+$projectsDirUrl = 'admin_projects_directory.php';
+
+/** @param array<string,mixed> $pr */
+function admin_appr_project_row_is_pending(array $pr): bool
+{
+    $t = strtolower(trim((string)($pr['project_status'] ?? '')));
+    if ($t === 'pending') {
+        return true;
+    }
+    $raw = trim((string)($pr['project_status'] ?? ''));
+
+    return in_array($raw, ['รอดำเนินการ', 'รอดำนิการ'], true);
+}
 
 // ไม่มีหน้ารายการ — ต้องมี ?id= มิฉะนั้น redirect ไปศูนย์แจ้งเตือน
 $pid = (int)($_GET['id'] ?? 0);
@@ -113,7 +126,7 @@ $sql = "
     FROM foundation_project p
     LEFT JOIN foundation_profile fp ON fp.foundation_id = p.foundation_id
     LEFT JOIN `user` u ON u.user_id = fp.user_id
-    WHERE p.project_id = ? AND {$pendExprP} AND p.deleted_at IS NULL
+    WHERE p.project_id = ? AND p.deleted_at IS NULL
     LIMIT 1
 ";
 $st = $conn->prepare($sql);
@@ -121,18 +134,21 @@ $st->bind_param('i', $pid);
 $st->execute();
 $row = $st->get_result()->fetch_assoc();
 if (!$row) {
-    header('Location: ' . $notifProjectsUrl);
+    header('Location: ' . $projectsDirUrl);
     exit();
 }
+
+$isPendingReview = admin_appr_project_row_is_pending($row);
+
+$projImgUrl = !empty($row['project_image'])
+    ? drawdream_project_image_url((string)$row['project_image'], 'uploads/')
+    : '';
 
 $goalAp = (float)($row['goal_amount'] ?? 0);
 $raisedAp = (float)($row['current_donate'] ?? 0);
 $pctAp = ($goalAp > 0) ? (int)min(100, round(($raisedAp / $goalAp) * 100)) : 0;
 $endStatRaw = admin_appr_project_format_date(isset($row['end_date']) ? (string)$row['end_date'] : '');
 $endStatLabel = ($endStatRaw === '—') ? '—' : $endStatRaw;
-$projImgUrl = !empty($row['project_image'])
-    ? drawdream_project_image_url((string)$row['project_image'], 'uploads/')
-    : '';
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -176,7 +192,7 @@ $projImgUrl = !empty($row['project_image'])
                             <span class="value"><?= (int)($row['project_id'] ?? 0) ?></span>
                         </div>
                         <div class="data-item">
-                            <span class="label">สถานะ (ขณะส่ง)</span>
+                            <span class="label"><?= $isPendingReview ? 'สถานะ (ขณะส่ง)' : 'สถานะ' ?></span>
                             <span class="value"><?= htmlspecialchars((string)($row['project_status'] ?? 'pending')) ?></span>
                         </div>
                         <div class="data-item full">
@@ -252,12 +268,12 @@ $projImgUrl = !empty($row['project_image'])
                         <div class="stats-row">
                             <div class="stat-box">
                                 <div class="stat-icon"><i class="bi bi-bullseye"></i></div>
-                                <div class="stat-num"><?= number_format($goalAp, 0) ?></div>
+                                <div class="stat-num"><?= number_format($goalAp, 0, '.', ',') ?></div>
                                 <div class="stat-label">เป้าหมาย (บาท)</div>
                             </div>
                             <div class="stat-box">
                                 <div class="stat-icon"><i class="bi bi-piggy-bank-fill"></i></div>
-                                <div class="stat-num"><?= number_format($raisedAp, 0) ?></div>
+                                <div class="stat-num"><?= number_format($raisedAp, 0, '.', ',') ?></div>
                                 <div class="stat-label">ยอดรับแล้ว (บาท)</div>
                             </div>
                             <div class="stat-box">
@@ -273,15 +289,20 @@ $projImgUrl = !empty($row['project_image'])
                         </div>
                     </div>
 
-                    <p class="text-muted small mb-2 text-center">การไม่อนุมัติจะอัปเดตสถานะโครงการในระบบ — มูลนิธิสามารถแก้ไขและส่งพิจารณาใหม่ได้</p>
-
-                    <form method="post" class="admin-actions">
-                        <input type="hidden" name="project_id" value="<?= (int)$row['project_id'] ?>">
-                        <textarea name="remark" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>
-                        <button type="submit" name="action" value="approve" class="btn btn-primary">อนุมัติ</button>
-                        <button type="submit" name="action" value="reject" class="btn btn-danger"
-                                onclick="return confirm('ยืนยันไม่อนุมัติโครงการนี้?');">ไม่อนุมัติ</button>
+                    <?php if ($isPendingReview): ?>
+                    <p class="admin-review-actions-note">การไม่อนุมัติจะอัปเดตสถานะโครงการในระบบ — มูลนิธิสามารถแก้ไขและส่งพิจารณาใหม่ได้</p>
+                    <form method="post" action="admin_approve_projects.php" class="admin-review-actions-form">
+                        <input type="hidden" name="project_id" value="<?= $pid ?>">
+                        <div class="admin-review-actions-grid">
+                            <textarea name="remark" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>
+                            <button type="submit" name="action" value="approve" class="btn btn-success admin-review-action-btn"
+                                    onclick="return confirm('ยืนยันอนุมัติโครงการนี้?');">อนุมัติ</button>
+                            <button type="submit" name="action" value="reject" class="btn btn-danger admin-review-action-btn"
+                                    onclick="var t=this.form.querySelector('[name=remark]');if(!t||!t.value.trim()){alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');if(t)t.focus();return false;}return confirm('ยืนยันไม่อนุมัติโครงการนี้?');">ไม่อนุมัติ</button>
+                        </div>
                     </form>
+                    <?php endif; ?>
+
                 </div>
             </div>
         </div>

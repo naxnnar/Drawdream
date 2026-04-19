@@ -81,6 +81,9 @@ if (isset($_GET['done'])) {
         $doneBanner = 'ดำเนินการโครงการแล้ว';
     } elseif ($_GET['done'] === 'foundation') {
         $doneBanner = 'ดำเนินการคำขอมูลนิธิแล้ว';
+    } elseif ($_GET['done'] === 'need') {
+        $m = isset($_GET['msg']) ? trim((string)$_GET['msg']) : '';
+        $doneBanner = $m !== '' ? $m : 'ดำเนินการรายการสิ่งของแล้ว';
     }
 }
 if (isset($_GET['err'])) {
@@ -204,6 +207,13 @@ if (isset($_GET['err'])) {
       font-size: .84rem;
       font-weight: 600;
     }
+    .admin-notif-item-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 6px;
+    }
     .admin-notif-empty {
       color: #6b7280;
       font-size: .93rem;
@@ -256,7 +266,9 @@ if (isset($_GET['err'])) {
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($f['foundation_name'] ?? 'ไม่ระบุชื่อมูลนิธิ'); ?></strong>
               <div class="admin-notif-meta">สมัครเมื่อ: <?php echo !empty($f['created_at']) ? date('d/m/Y H:i', strtotime($f['created_at'])) : '-'; ?></div>
-              <a class="admin-notif-link" href="admin_approve_foundation.php?id=<?php echo (int)$f['foundation_id']; ?>">ตรวจสอบ</a>
+              <div class="admin-notif-item-actions">
+                <a class="admin-notif-link" href="admin_approve_foundation.php?id=<?php echo (int)$f['foundation_id']; ?>">ตรวจสอบ</a>
+              </div>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>
@@ -276,7 +288,9 @@ if (isset($_GET['err'])) {
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($c['child_name'] ?? 'ไม่ระบุชื่อ'); ?></strong>
               <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($c['foundation_name'] ?? '-'); ?> | สถานะ: <?php echo htmlspecialchars($c['approve_profile'] ?? 'รอดำเนินการ'); ?></div>
-              <a class="admin-notif-link" href="children_donate.php?id=<?php echo (int)$c['child_id']; ?>">ตรวจสอบ</a>
+              <div class="admin-notif-item-actions">
+                <a class="admin-notif-link" href="children_donate.php?id=<?php echo (int)$c['child_id']; ?>">ตรวจสอบ</a>
+              </div>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>
@@ -296,7 +310,9 @@ if (isset($_GET['err'])) {
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($p['project_name'] ?? '-'); ?></strong>
               <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($p['foundation_name'] ?? '-'); ?> | ปิดรับ: <?php echo htmlspecialchars($p['end_date'] ?? '-'); ?></div>
-              <a class="admin-notif-link" href="admin_approve_projects.php?id=<?php echo (int)$p['project_id']; ?>">ตรวจสอบ</a>
+              <div class="admin-notif-item-actions">
+                <a class="admin-notif-link" href="admin_approve_projects.php?id=<?php echo (int)$p['project_id']; ?>">ตรวจสอบ</a>
+              </div>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>
@@ -315,8 +331,15 @@ if (isset($_GET['err'])) {
           <?php foreach ($needPendings as $n): ?>
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($n['item_name'] ?? '-'); ?></strong>
-              <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($n['foundation_name'] ?? '-'); ?><?php echo ((int)($n['urgent'] ?? 0) === 1) ? ' | ด่วน' : ''; ?></div>
-              <a class="admin-notif-link" href="admin_approve_needlist.php">ตรวจสอบ</a>
+              <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($n['foundation_name'] ?? '-'); ?><?php echo ((int)($n['urgent'] ?? 0) === 1) ? ' | ด่วน' : ''; ?><?php
+                $needCAt = trim((string)($n['created_at'] ?? ''));
+                if ($needCAt !== '' && $needCAt !== '0000-00-00 00:00:00') {
+                    echo ' | เสนอเมื่อ: ' . htmlspecialchars(date('d/m/Y H:i', strtotime($needCAt)));
+                }
+              ?></div>
+              <div class="admin-notif-item-actions">
+                <a class="admin-notif-link" href="admin_needlist_view.php?item_id=<?php echo (int)$n['item_id']; ?>">ตรวจสอบ</a>
+              </div>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>

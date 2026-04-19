@@ -289,15 +289,6 @@ if ($role === 'foundation') {
 <div class="admin-directory-page children-admin-directory">
     <div class="admin-directory-head">
         <h1 class="admin-directory-title">เด็กทั้งหมด</h1>
-        <p class="admin-directory-desc">
-            รายชื่อเด็กจากมูลนิธิ: สถานะโปรไฟล์ การอุปการะจริงในระบบ และลิงก์ไปหน้าบริจาคสาธารณะ
-            (ยอดรอบเดือนครบเกณฑ์หรือมีอุปการะรายรอบที่ active)
-        </p>
-    </div>
-    <div class="admin-directory-actions-hint">
-        <strong>แอดมินทำอะไรได้จากหน้านี้:</strong>
-        ตรวจสถานะอนุมัติโปรไฟล์ · เปิดโปรไฟล์เด็กเพื่อดูข้อมูลและยอดเงินที่แสดงต่อมูลนิธิ/แอดมิน ·
-        <a href="admin_notifications.php#admin-pending-children">ศูนย์คำขอรออนุมัติ</a> (ไอคอนกระดิ่ง)
     </div>
     <div class="admin-dir-table-wrap">
         <table class="admin-dir-table">
@@ -354,7 +345,7 @@ if ($role === 'foundation') {
                         <td>
                             <div class="admin-dir-actions">
                                 <a class="admin-dir-btn admin-dir-btn--primary"
-                                   href="children_donate.php?id=<?php echo $cid; ?>">โปรไฟล์เด็ก</a>
+                                   href="admin_view_child.php?id=<?php echo $cid; ?>">โปรไฟล์เด็ก</a>
                                 <a class="admin-dir-btn admin-dir-btn--ghost"
                                    href="admin_child_donations.php?child_id=<?php echo $cid; ?>">ยอดบริจาค</a>
                             </div>
@@ -407,7 +398,7 @@ if ($role === 'foundation') {
       ?>
       <div class="child-card-wrap<?php echo $blockBulkCheckbox ? ' child-card-wrap--bulk-protected' : ''; ?><?php echo $sponsoredLocked ? ' child-card-wrap--sponsored-lock' : ''; ?>">
         <div class="child-card<?php echo !empty($gridSection['sponsored']) ? ' child-card--sponsored' : ''; ?>"
-             data-view-url="children_donate.php?id=<?php echo (int)$child['child_id']; ?>"
+             data-view-url="admin_view_child.php?id=<?php echo (int)$child['child_id']; ?>"
              data-edit-url="<?php echo $foundationAccountVerified ? 'foundation_edit_child.php?id=' . (int)$child['child_id'] : ''; ?>"
              data-sponsored-locked="<?php echo $sponsoredLocked ? '1' : '0'; ?>"
              data-cycle-total="<?php echo htmlspecialchars((string)(float)($cycleTotals[(int)$child['child_id']] ?? 0)); ?>">

@@ -380,3 +380,80 @@ function drawdream_foundation_user_id_by_foundation_id(mysqli $conn, int $founda
     $row = $st->get_result()->fetch_assoc();
     return (int)($row['user_id'] ?? 0);
 }
+
+/**
+ * รวบรวม user_id สำหรับประกาศจากแอดมิน — $recipient: donors | foundations | both
+ *
+ * @return list<int>
+ */
+function drawdream_admin_broadcast_recipient_user_ids(mysqli $conn, string $recipient): array
+{
+    $recipient = strtolower(trim($recipient));
+    $ids = [];
+
+    if ($recipient === 'donors' || $recipient === 'both') {
+        $q = @$conn->query(
+            "SELECT DISTINCT d.user_id FROM donor d
+             INNER JOIN `user` u ON u.user_id = d.user_id
+             WHERE LOWER(TRIM(COALESCE(u.role, ''))) = 'donor' AND d.user_id > 0"
+        );
+        if ($q) {
+            while ($row = $q->fetch_assoc()) {
+                $ids[] = (int)($row['user_id'] ?? 0);
+            }
+        }
+    }
+
+    if ($recipient === 'foundations' || $recipient === 'both') {
+        $q2 = @$conn->query(
+            "SELECT DISTINCT fp.user_id FROM foundation_profile fp
+             INNER JOIN `user` u ON u.user_id = fp.user_id
+             WHERE LOWER(TRIM(COALESCE(u.role, ''))) = 'foundation' AND fp.user_id > 0"
+        );
+        if ($q2) {
+            while ($row = $q2->fetch_assoc()) {
+                $ids[] = (int)($row['user_id'] ?? 0);
+            }
+        }
+    }
+
+    $ids = array_values(array_unique(array_filter($ids, static fn (int $id): bool => $id > 0)));
+
+    return $ids;
+}
+
+/**
+ * ส่งแจ้งเตือน (กระดิ่ง) จากแอดมินไปยังผู้บริจาคและ/หรือมูลนิธิ
+ *
+ * @return array{sent:int, error:string}
+ */
+function drawdream_admin_broadcast_notifications(mysqli $conn, string $recipient, string $message): array
+{
+    $recipient = strtolower(trim($recipient));
+    if (!in_array($recipient, ['donors', 'foundations', 'both'], true)) {
+        return ['sent' => 0, 'error' => 'กรุณาเลือกกลุ่มผู้รับ'];
+    }
+    $message = trim($message);
+    if ($message === '') {
+        return ['sent' => 0, 'error' => 'กรุณากรอกข้อความ'];
+    }
+    if (strlen($message) > 4000) {
+        return ['sent' => 0, 'error' => 'ข้อความยาวเกิน 4,000 ตัวอักษร'];
+    }
+
+    $userIds = drawdream_admin_broadcast_recipient_user_ids($conn, $recipient);
+    if ($userIds === []) {
+        return ['sent' => 0, 'error' => 'ไม่พบบัญชีผู้รับในกลุ่มที่เลือก'];
+    }
+
+    $title = 'ประกาศจากผู้ดูแลระบบ';
+    $link = 'notifications.php';
+    $sent = 0;
+    foreach ($userIds as $uid) {
+        if (drawdream_send_notification($conn, $uid, 'admin_broadcast', $title, $message, $link)) {
+            ++$sent;
+        }
+    }
+
+    return ['sent' => $sent, 'error' => ''];
+}

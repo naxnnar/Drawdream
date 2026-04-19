@@ -190,14 +190,31 @@ $current_page = basename($_SERVER['PHP_SELF']);
 $adminDashboardActive = in_array($current_page, [
     'admin_dashboard.php',
     'admin_donors.php',
+    'admin_donor_email.php',
     'admin_foundations_overview.php',
     'admin_children_overview.php',
     'admin_notifications.php',
 ], true);
-$adminFoundationActive = in_array($current_page, ['admin_foundations_overview.php', 'admin_approve_foundation.php'], true);
+$adminFoundationActive = in_array($current_page, [
+    'admin_foundations_overview.php',
+    'admin_approve_foundation.php',
+    'admin_view_foundation.php',
+    'admin_foundation_totals.php',
+    'admin_foundation_analytics_pdf.php',
+], true);
 $adminChildrenActive = in_array($current_page, ['children_.php', 'children_donate.php', 'admin_approve_children.php', 'admin_children.php'], true);
-$adminProjectActive = in_array($current_page, ['admin_projects_directory.php', 'admin_approve_projects.php', 'admin_projects.php'], true);
-$adminNeedlistActive = in_array($current_page, ['admin_needlist_directory.php', 'admin_approve_needlist.php'], true);
+$adminProjectActive = in_array($current_page, [
+    'admin_projects_directory.php',
+    'admin_approve_projects.php',
+    'admin_project_totals.php',
+    'admin_projects.php',
+], true);
+$adminNeedlistActive = in_array($current_page, [
+    'admin_needlist_directory.php',
+    'admin_needlist_view.php',
+    'admin_needlist_totals.php',
+    'admin_approve_needlist.php',
+], true);
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
 <link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">

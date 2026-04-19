@@ -7,6 +7,7 @@ include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/admin_audit_migrate.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/payment_transaction_schema.php';
+require_once __DIR__ . '/../includes/escrow_funds_schema.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/../includes/donate_type.php';
@@ -208,6 +209,10 @@ function drawdream_finalize_project_donation(
             throw new RuntimeException('project bump');
         }
 
+        if (!drawdream_escrow_funds_try_insert_holding($conn, $project_id, $ptDonateId, $charge_id, $amountBaht)) {
+            throw new RuntimeException('escrow insert');
+        }
+
         $conn->commit();
 
         return true;
@@ -255,6 +260,9 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
 
             if (!drawdream_project_bump_and_maybe_complete($conn, $project_id, (float)$amount)) {
                 throw new RuntimeException('project bump');
+            }
+            if (!drawdream_escrow_funds_try_insert_holding($conn, $project_id, $receiptDonateId, $charge_id, (float)$amount)) {
+                throw new RuntimeException('escrow insert');
             }
             $conn->commit();
             unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);

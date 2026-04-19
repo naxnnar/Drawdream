@@ -62,18 +62,7 @@ function admin_needlist_status_pill_class(string $ap): string
 
 <div class="admin-directory-page children-admin-directory">
     <div class="admin-directory-head">
-        <a href="admin_dashboard.php" class="admin-directory-back">← กลับ Dashboard</a>
         <h1 class="admin-directory-title">รายการสิ่งของทั้งหมด</h1>
-        <p class="admin-directory-desc">
-            รายการสิ่งของจากมูลนิธิทั้งหมด — สถานะการอนุมัติ และลิงก์ไปหน้าสาธารณะ / คิวอนุมัติ
-        </p>
-    </div>
-
-    <div class="admin-directory-actions-hint">
-        <strong>คำขอรออนุมัติ:</strong> ดูที่ไอคอนกระดิ่ง
-        <a href="admin_notifications.php#admin-pending-needs">ศูนย์รวมคำขอ</a>
-        หรือไปที่
-        <a href="admin_approve_needlist.php">คิวอนุมัติสิ่งของ</a>
     </div>
 
     <div class="admin-dir-table-wrap">
@@ -96,7 +85,8 @@ function admin_needlist_status_pill_class(string $ap): string
                     $ap = (string)($r['approve_item'] ?? '');
                     $imgs = foundation_needlist_item_filenames_from_row($r);
                     $thumb = $imgs[0] ?? '';
-                    $isPending = $ap === 'pending';
+                    $detailUrl = 'admin_view_needlist.php?item_id=' . $iid;
+                    $totalsUrl = 'admin_needlist_totals.php?item_id=' . $iid;
                     ?>
                     <tr>
                         <td>
@@ -117,11 +107,8 @@ function admin_needlist_status_pill_class(string $ap): string
                         <td class="admin-dir-num"><?= number_format((float)($r['price_estimate'] ?? 0), 0) ?></td>
                         <td>
                             <div class="admin-dir-actions">
-                                <a class="admin-dir-btn admin-dir-btn--primary" href="foundation.php">หน้ามูลนิธิ</a>
-                                <?php if ($isPending): ?>
-                                    <a class="admin-dir-btn admin-dir-btn--ghost" href="admin_approve_needlist.php">คิวอนุมัติ</a>
-                                <?php endif; ?>
-                                <a class="admin-dir-btn admin-dir-btn--ghost" href="admin_dashboard.php">Dashboard</a>
+                                <a class="admin-dir-btn admin-dir-btn--primary" href="<?= htmlspecialchars($detailUrl) ?>">สิ่งของ</a>
+                                <a class="admin-dir-btn admin-dir-btn--ghost" href="<?= htmlspecialchars($totalsUrl) ?>">ยอดสิ่งของ</a>
                             </div>
                         </td>
                     </tr>
