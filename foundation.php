@@ -4,6 +4,8 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';
+require_once __DIR__ . '/includes/utf8_helpers.php';
+require_once __DIR__ . '/includes/foundation_account_verified.php';
 
 /**
  * หา path รูปในโฟลเดอร์ img/ เมื่อชื่อไฟล์ไม่มีนามสกุล (ลอง .jpg .jpeg .png .webp)
@@ -22,7 +24,7 @@ function drawdream_community_img(string $baseName): string {
     return $cache[$baseName] = 'img/' . $baseName . '.jpg';
 }
 
-$is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
+$is_verified = drawdream_foundation_account_is_verified($conn);
 
 // ถ้า foundation role ให้ดึงเฉพาะมูลนิธิของตัวเอง ถ้าไม่ใช่ให้ดึงทั้งหมด
 if (($_SESSION['role'] ?? '') === 'foundation') {
@@ -54,10 +56,18 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
 $myNeedlist = [];
+$myFoundationId = 0;
+$myNeedlistGoalMet = false;
 if (($_SESSION['role'] ?? '') === 'foundation') {
     // ดึง foundation_id จาก foundation_profile ก่อน
     $rowFp = mysqli_fetch_assoc(mysqli_query($conn, "SELECT foundation_id FROM foundation_profile WHERE user_id = $userId LIMIT 1"));
     $myFoundationId = (int)($rowFp['foundation_id'] ?? 0);
+
+    if ($myFoundationId > 0) {
+        $mc = $donationTotals[$myFoundationId] ?? 0;
+        $mg = $goalTotals[$myFoundationId] ?? 0;
+        $myNeedlistGoalMet = $mg > 0 && $mc >= $mg;
+    }
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
@@ -133,6 +143,7 @@ $hasAnySlides = !empty($foundationSlides);
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>มูลนิธิ | DrawDream</title>
@@ -140,7 +151,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=27">
+  <link rel="stylesheet" href="css/foundation.css?v=30">
 </head>
 <body class="foundation-page">
 
@@ -161,6 +172,9 @@ $hasAnySlides = !empty($foundationSlides);
                 <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอสิ่งของมูลนิธิได้</span>
               <?php endif; ?>
               <button type="button" id="toggleEditNeedBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขรายการสิ่งของ</button>
+              <?php if ($myNeedlistGoalMet && $is_verified): ?>
+                <a href="foundation_post_needlist_result.php" class="foundation-manage-btn foundation-manage-btn-primary">ผลลัพธ์ของมูลนิธิ (โพสต์)</a>
+              <?php endif; ?>
             </div>
           </div>
         </div>
@@ -189,11 +203,13 @@ $hasAnySlides = !empty($foundationSlides);
                 $nlPeriod = trim($pm[1]);
               }
               $statusLabel = ['pending' => 'รอการอนุมัติ', 'approved' => 'อนุมัติแล้ว', 'rejected' => 'ไม่อนุมัติ'][$status] ?? $status;
-              $statusClass = ['pending' => 'status-pending', 'approved' => 'status-approved', 'rejected' => 'status-rejected'][$status] ?? 'status-pending';
+              /* คลาสสอดคล้องกับ .foundation-status-pill ในโครงการ (project.css) */
+              $statusPillClass = ['pending' => 'st-pending', 'approved' => 'st-approved', 'rejected' => 'st-rejected'][$status] ?? 'st-pending';
               $dweRaw = trim((string)($nl['donate_window_end_at'] ?? ''));
               $donateWindowExpired = ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false && strtotime($dweRaw) < time());
             ?>
             <div class="need-card">
+              <a class="need-card-tap-link" href="foundation_need_view.php?id=<?= (int)($nl['item_id'] ?? 0) ?>" aria-label="ดูรายละเอียดรายการสิ่งของ"></a>
               <div class="need-card-img-wrap">
                 <div class="need-card-img-primary">
                   <?php if ($nlImg): ?>
@@ -204,13 +220,16 @@ $hasAnySlides = !empty($foundationSlides);
                   <?php if ((int)$nl['urgent'] === 1): ?>
                     <span class="need-urgent-badge">ต้องการด่วน</span>
                   <?php endif; ?>
+                  <div class="need-card-status-overlay">
+                    <span class="foundation-status-pill <?= htmlspecialchars($statusPillClass) ?>"><?= htmlspecialchars($statusLabel) ?></span>
+                    <?php if ($donateWindowExpired): ?>
+                      <span class="foundation-status-pill st-need-closed" title="ครบระยะเวลารับบริจาคแล้ว">ปิดรับบริจาคแล้ว</span>
+                    <?php endif; ?>
+                  </div>
                 </div>
               </div>
               <div class="need-card-body">
-                <span class="need-status-badge <?= $statusClass ?>"><?= $statusLabel ?></span>
-                <?php if ($donateWindowExpired): ?>
-                  <span class="need-status-badge status-closed-window" title="ครบระยะเวลารับบริจาคแล้ว">ปิดรับบริจาคแล้ว</span>
-                <?php elseif ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false): ?>
+                <?php if (!$donateWindowExpired && $status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false): ?>
                   <span class="need-window-hint" title="วันปิดรับบริจาค">ปิดรับ <?= htmlspecialchars(date('d/m/Y H:i', strtotime($dweRaw))) ?></span>
                 <?php endif; ?>
                 <div class="need-card-name"><?= htmlspecialchars($nl['item_name']) ?></div>
@@ -255,6 +274,7 @@ $hasAnySlides = !empty($foundationSlides);
           $current = $slide['current'];
           $goal = $slide['goal'];
           $percent = $slide['percent'];
+          $needGoalMet = $goal > 0 && $current >= $goal;
           $foundationImage = $f['foundation_image'] ?? '';
           $facebookUrl = $f['facebook_url'] ?? '';
           $heroProposalImage = '';
@@ -332,7 +352,11 @@ $hasAnySlides = !empty($foundationSlides);
               </div>
               <?php endif; ?>
             </div>
-            <a class="btn-donate" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
+            <?php if ($needGoalMet): ?>
+              <a class="btn-donate" href="needlist_result.php?fid=<?= $fid ?>">ผลลัพธ์ของมูลนิธิ</a>
+            <?php else: ?>
+              <a class="btn-donate" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
+            <?php endif; ?>
           </div>
           <div class="fc-right">
             <div class="fc-right-media">
@@ -370,12 +394,13 @@ $hasAnySlides = !empty($foundationSlides);
       <div class="fd-interest-grid">
         <?php foreach (array_slice($interestFoundations, 0, 3) as $inf):
           $ifid = (int)$inf['foundation_id'];
+          $icurrent = $donationTotals[$ifid] ?? 0;
+          $igoal = $goalTotals[$ifid] ?? 0;
+          $interestGoalMet = $igoal > 0 && $icurrent >= $igoal;
           $iImg = trim((string)($inf['foundation_image'] ?? ''));
           $iDesc = (string)($inf['foundation_desc'] ?? '');
-          $shortDesc = function_exists('mb_substr')
-            ? mb_substr($iDesc, 0, 200)
-            : substr($iDesc, 0, 200);
-          if (strlen($iDesc) > 200) {
+          $shortDesc = drawdream_utf8_substr($iDesc, 0, 200);
+          if (drawdream_utf8_strlen($iDesc) > 200) {
               $shortDesc .= '…';
           }
         ?>
@@ -386,7 +411,11 @@ $hasAnySlides = !empty($foundationSlides);
             <?php else: ?>
               <div class="fd-interest-cover fd-interest-cover--empty">ไม่มีรูป</div>
             <?php endif; ?>
-            <a class="fd-interest-pill-btn" href="payment/foundation_donate.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
+            <?php if ($interestGoalMet): ?>
+              <a class="fd-interest-pill-btn" href="needlist_result.php?fid=<?= $ifid ?>">ผลลัพธ์ของมูลนิธิ</a>
+            <?php else: ?>
+              <a class="fd-interest-pill-btn" href="payment/foundation_donate.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
+            <?php endif; ?>
           </div>
           <div class="fd-interest-body">
             <h3 class="fd-interest-name"><?= htmlspecialchars($inf['foundation_name'] ?? 'มูลนิธิ') ?></h3>

@@ -1,5 +1,5 @@
 <?php
-// payment/cron_child_subscription_charges.php — หักบัตรงวดถัดไปเมื่อ billing_mode = server_cron
+// payment/cron_child_subscription_charges.php — หักบัตรรอบถัดไป (แผน local_cron_* — customer/card อยู่ที่ตาราง donor)
 declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') {
@@ -19,6 +19,7 @@ require_once __DIR__ . '/config.php';
 require_once dirname(__DIR__) . '/includes/omise_api_client.php';
 require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
+require_once dirname(__DIR__) . '/includes/e_receipt.php';
 
 drawdream_child_omise_subscription_ensure_schema($conn);
 drawdream_child_sponsorship_ensure_columns($conn);
@@ -26,14 +27,18 @@ drawdream_child_sponsorship_ensure_columns($conn);
 $tz = new DateTimeZone('Asia/Bangkok');
 $nowSql = drawdream_subscription_now_bangkok_sql();
 $st = $conn->prepare(
-    'SELECT * FROM child_omise_subscription
-     WHERE status = ? AND billing_mode = ? AND next_charge_at IS NOT NULL AND next_charge_at <= ?
-     ORDER BY next_charge_at ASC
+    'SELECT d.*, dn.omise_customer_id, dn.omise_card_id
+     FROM donation d
+     INNER JOIN donor dn ON dn.user_id = d.donor_id
+     WHERE d.donate_type = \'child_subscription\'
+       AND d.recurring_status = ?
+       AND d.recurring_next_charge_at IS NOT NULL AND d.recurring_next_charge_at <= ?
+       AND d.recurring_schedule_id LIKE \'local_cron_%\'
+     ORDER BY d.recurring_next_charge_at ASC
      LIMIT 50'
 );
 $stAct = 'active';
-$stMode = 'server_cron';
-$st->bind_param('sss', $stAct, $stMode, $nowSql);
+$st->bind_param('ss', $stAct, $nowSql);
 $st->execute();
 $res = $st->get_result();
 
@@ -41,20 +46,21 @@ $processed = 0;
 $errors = [];
 
 while ($row = $res->fetch_assoc()) {
-    $subId = (int)($row['id'] ?? 0);
-    $childId = (int)($row['child_id'] ?? 0);
-    $donorUid = (int)($row['donor_user_id'] ?? 0);
+    $subId = (int)($row['donate_id'] ?? 0);
+    $childId = (int)($row['target_id'] ?? 0);
+    $donorUid = (int)($row['donor_id'] ?? 0);
     $custId = trim((string)($row['omise_customer_id'] ?? ''));
     $cardId = trim((string)($row['omise_card_id'] ?? ''));
-    $billDay = (int)($row['bill_day'] ?? 1);
+    $dueStr = trim((string)($row['recurring_next_charge_at'] ?? ''));
+    $billDay = drawdream_subscription_bill_day_from_datetime_sql($dueStr !== '' ? $dueStr : $nowSql);
     if ($subId <= 0 || $childId <= 0 || $donorUid <= 0 || $custId === '') {
         continue;
     }
     if ($cardId === '') {
-        $errors[] = 'sub ' . $subId . ': no card id';
+        $errors[] = 'sub ' . $subId . ': no card id on donor';
         continue;
     }
-    $planSpec = drawdream_child_subscription_plan((string)($row['plan_code'] ?? ''));
+    $planSpec = drawdream_child_subscription_plan((string)($row['recurring_plan_code'] ?? ''));
     if ($planSpec === null) {
         $errors[] = 'sub ' . $subId . ': bad plan';
         continue;
@@ -81,7 +87,7 @@ while ($row = $res->fetch_assoc()) {
             'app' => 'drawdream_child_subscription',
         ]
     );
-    if ($ch === null || ($ch['object'] ?? '') === 'error') {
+    if (($ch['object'] ?? '') === 'error') {
         $errors[] = 'sub ' . $subId . ': ' . (string)($ch['message'] ?? 'charge failed');
         continue;
     }
@@ -94,16 +100,20 @@ while ($row = $res->fetch_assoc()) {
     $amtSat = (int)($ch['amount'] ?? $planSpec['amount_satang']);
     $rec = drawdream_child_persist_subscription_paid_charge($conn, $chId, $amtSat, $childId, $donorUid);
     if (!$rec) {
-        $dup = $conn->prepare('SELECT 1 FROM omise_webhook_charge WHERE charge_id = ? LIMIT 1');
-        $dup->bind_param('s', $chId);
+        $dup = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
+        $done = 'completed';
+        $dup->bind_param('ss', $chId, $done);
         $dup->execute();
         if (!$dup->get_result()->fetch_row()) {
             $errors[] = 'sub ' . $subId . ': persist donation failed';
             continue;
         }
     }
+    $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $chId);
+    if ($receiptDonateId > 0) {
+        drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
+    }
 
-    $dueStr = trim((string)($row['next_charge_at'] ?? ''));
     $anchor = $dueStr !== ''
         ? DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $dueStr, $tz)
         : new DateTimeImmutable('now', $tz);
@@ -113,9 +123,9 @@ while ($row = $res->fetch_assoc()) {
     $nextAt = drawdream_subscription_next_charge_at($anchor, $planSpec, $billDay);
     $nextSql = $nextAt->format('Y-m-d H:i:s');
     $upd = $conn->prepare(
-        'UPDATE child_omise_subscription SET last_charge_at = ?, next_charge_at = ? WHERE id = ?'
+        'UPDATE donation SET recurring_next_charge_at = ? WHERE donate_id = ?'
     );
-    $upd->bind_param('ssi', $nowSql, $nextSql, $subId);
+    $upd->bind_param('si', $nextSql, $subId);
     $upd->execute();
     ++$processed;
 }

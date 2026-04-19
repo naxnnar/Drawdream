@@ -7,11 +7,15 @@ include 'config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/needlist_donate_window.php';
+require_once __DIR__ . '/../includes/payment_transaction_schema.php';
+require_once __DIR__ . '/../includes/e_receipt.php';
+require_once __DIR__ . '/../includes/donate_type.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
     exit();
 }
+drawdream_payment_transaction_ensure_schema($conn);
 
 $charge_id = $_GET['charge_id'] ?? '';
 $fid       = (int)($_GET['fid'] ?? 0);
@@ -38,7 +42,6 @@ if ($is_mock) {
     curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
     $response = curl_exec($ch);
-    curl_close($ch);
     $charge = json_decode($response, true) ?? [];
 }
 
@@ -56,6 +59,7 @@ $expires_at      = $charge['expires_at'] ?? '';
 $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
 
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
+$receiptDonateId = 0;
 
 if (!$is_mock && !$is_success && in_array($status, ['failed', 'expired'], true)) {
     drawdream_clear_pending_payment_session();
@@ -63,20 +67,13 @@ if (!$is_mock && !$is_success && in_array($status, ['failed', 'expired'], true))
 
 // กันบันทึกซ้ำ
 $already_processed = false;
-$dup = $conn->prepare("SELECT log_id FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1");
+$dup = $conn->prepare("SELECT donate_id FROM donation WHERE omise_charge_id = ? AND transaction_status = 'completed' LIMIT 1");
 $dup->bind_param("s", $charge_id);
 $dup->execute();
 $already_processed = (bool)$dup->get_result()->fetch_assoc();
 
 if ($is_success && !$already_processed && $fid > 0) {
     $amount = ($charge['amount'] ?? 0) / 100;
-
-    $tax_id = '';
-    $stmt = $conn->prepare("SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1");
-    $stmt->bind_param("i", $_SESSION['user_id']);
-    $stmt->execute();
-    $donor  = $stmt->get_result()->fetch_assoc();
-    $tax_id = $donor['tax_id'] ?? '';
 
     $category_id = drawdream_get_or_create_needitem_donate_category_id($conn);
     if ($category_id <= 0) {
@@ -85,20 +82,19 @@ if ($is_success && !$already_processed && $fid > 0) {
 
     $donor_uid = (int)$_SESSION['user_id'];
     if ($is_success) {
+    $completed = 'completed';
+    $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
+    $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
     $stmt = $conn->prepare("
-        INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-        VALUES (?, ?, ?, ?, 0, 'completed', NOW())
+        INSERT INTO donation (
+            category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+            omise_charge_id, transaction_status, donate_type, recurring_plan_code
+        ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
     ");
-    $stmt->bind_param("iiid", $category_id, $fid, $donor_uid, $amount);
+    $stmt->bind_param("iiidsssss", $category_id, $fid, $donor_uid, $amount, $completed, $charge_id, $completed, $dtNeed, $planOnce);
     $stmt->execute();
     $donate_id = $conn->insert_id;
-
-    $stmt = $conn->prepare("
-        INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
-        VALUES (?, ?, ?, 'completed')
-    ");
-    $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
-    $stmt->execute();
+    $receiptDonateId = (int)$donate_id;
 
     $needOpen = drawdream_needlist_sql_open_for_donation();
     $res = $conn->prepare("
@@ -139,6 +135,13 @@ if ($is_success && !$already_processed && $fid > 0) {
     }
 }
 
+if ($receiptDonateId <= 0 && $is_success && !$already_processed) {
+    $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+}
+if ($receiptDonateId > 0) {
+    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
+}
+
 // ถ้าเคยประมวลผลแล้ว ให้ดึงจำนวนเงินจาก charge
 if ($already_processed) {
     $is_success = true;
@@ -151,6 +154,7 @@ if ($is_success && $amount <= 0) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ผลการชำระเงิน | DrawDream</title>

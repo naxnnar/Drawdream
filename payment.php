@@ -5,7 +5,11 @@
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
+require_once __DIR__ . '/includes/donate_category_resolve.php';
+require_once __DIR__ . '/includes/payment_transaction_schema.php';
+require_once __DIR__ . '/includes/donate_type.php';
 drawdream_child_sponsorship_ensure_columns($conn);
+drawdream_payment_transaction_ensure_schema($conn);
 
 $child_id = (int)($_POST['child_id'] ?? $_GET['child_id'] ?? 0);
 $amount = (float)($_POST['amount'] ?? $_GET['amount'] ?? 0);
@@ -61,24 +65,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_paid'])) {
     $postedAmount = max(0, $postedAmount);
 
     if ($postedChildId > 0 && $postedAmount > 0) {
-        $conn->query("CREATE TABLE IF NOT EXISTS child_donations (
-      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-      child_id INT NOT NULL,
-      donor_user_id INT NULL,
-      amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-      donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      INDEX(child_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
+        $categoryId = drawdream_get_or_create_child_donate_category_id($conn);
         $donorUserId = isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 0;
-        if ($donorUserId > 0) {
-            $stmtIns = $conn->prepare('INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, ?, ?)');
-            $stmtIns->bind_param('iid', $postedChildId, $donorUserId, $postedAmount);
-        } else {
-            $stmtIns = $conn->prepare('INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, NULL, ?)');
-            $stmtIns->bind_param('id', $postedChildId, $postedAmount);
-        }
+        $completed = 'completed';
+        $dtOne = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
+        $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
+        $stmtIns = $conn->prepare(
+            "INSERT INTO donation (category_id, target_id, donor_id, amount, payment_status, transfer_datetime, transaction_status, donate_type, recurring_plan_code)
+             VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)"
+        );
+        $stmtIns->bind_param('iiidssss', $categoryId, $postedChildId, $donorUserId, $postedAmount, $completed, $completed, $dtOne, $planOnce);
         $stmtIns->execute();
+        drawdream_child_sync_sponsorship_status($conn, $postedChildId);
 
         header('Location: children_donate.php?id=' . $postedChildId . '&msg=' . urlencode('บันทึกยอดบริจาคเรียบร้อยแล้ว'));
         exit();
@@ -94,6 +92,7 @@ $amountDisplay = ($amount >= 20)
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>ชำระเงิน - DrawDream</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

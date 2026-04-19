@@ -42,6 +42,28 @@ if (!$profile) {
     die('ไม่พบข้อมูลโปรไฟล์');
 }
 
+function donor_ensure_receipt_schema(mysqli $conn): void
+{
+    $cols = [
+        'receipt_type' => "VARCHAR(20) NOT NULL DEFAULT 'individual'",
+        'receipt_email' => 'VARCHAR(191) NULL DEFAULT NULL',
+        'receipt_mobile' => 'VARCHAR(20) NULL DEFAULT NULL',
+        'receipt_company_name' => 'VARCHAR(255) NULL DEFAULT NULL',
+        'receipt_company_tax_id' => 'VARCHAR(32) NULL DEFAULT NULL',
+        'receipt_company_address' => 'TEXT NULL',
+        'receipt_company_email' => 'VARCHAR(191) NULL DEFAULT NULL',
+        'receipt_company_phone' => 'VARCHAR(20) NULL DEFAULT NULL',
+    ];
+    foreach ($cols as $name => $def) {
+        $chk = @$conn->query("SHOW COLUMNS FROM donor LIKE '" . $conn->real_escape_string($name) . "'");
+        if ($chk && $chk->num_rows === 0) {
+            @$conn->query("ALTER TABLE donor ADD COLUMN `{$name}` {$def}");
+        }
+    }
+}
+
+donor_ensure_receipt_schema($conn);
+
 $receiptSchemaOk = false;
 if ($chk = @$conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_type'")) {
     $receiptSchemaOk = $chk->num_rows > 0;
@@ -63,10 +85,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $receipt_mobile = preg_replace('/\s+/', '', trim($_POST['receipt_mobile'] ?? ''));
 
     $receipt_company_name = trim($_POST['receipt_company_name'] ?? '');
-    $receipt_company_tax_id = trim($_POST['receipt_company_tax_id'] ?? '');
+    $receipt_company_tax_id = preg_replace('/\D/', '', trim((string)($_POST['receipt_company_tax_id'] ?? '')));
     $receipt_company_address = trim($_POST['receipt_company_address'] ?? '');
     $receipt_company_email = trim($_POST['receipt_company_email'] ?? '');
     $receipt_company_phone = preg_replace('/\s+/', '', trim($_POST['receipt_company_phone'] ?? ''));
+
+    // โหมดบุคคล: อีเมลใบเสร็จต้องตามอีเมลบัญชีผู้บริจาคเสมอ (แก้ไขไม่ได้)
+    if ($receipt_type === 'individual') {
+        $receipt_email = trim((string)($profile['email'] ?? ''));
+    }
 
     if ($tax_id !== '' && strlen($tax_id) !== 13) {
         $error = 'เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก';
@@ -84,8 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
         } else {
             if ($receipt_company_name === '') {
                 $error = 'กรุณากรอกชื่อนิติบุคคล / บริษัท';
-            } elseif ($receipt_company_tax_id === '') {
-                $error = 'กรุณากรอกเลขทะเบียนนิติบุคคลหรือเลขผู้เสียภาษี';
+            } elseif ($receipt_company_tax_id === '' || strlen($receipt_company_tax_id) !== 13) {
+                $error = 'เลขทะเบียนนิติบุคคล / เลขผู้เสียภาษีต้องเป็นตัวเลขครบ 13 หลักเท่านั้น';
             } elseif ($receipt_company_address === '') {
                 $error = 'กรุณากรอกที่อยู่นิติบุคคล';
             } elseif ($receipt_company_email === '' || !filter_var($receipt_company_email, FILTER_VALIDATE_EMAIL)) {
@@ -152,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
                 profile_image=?
                 WHERE user_id=?');
             $stmt->bind_param(
-                'ssssssssssssi',
+                'sssssssssssssi',
                 $first_name,
                 $last_name,
                 $phone_save,
@@ -215,11 +242,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
 }
 
 $receiptType = $receiptSchemaOk && (($profile['receipt_type'] ?? 'individual') === 'juristic') ? 'juristic' : 'individual';
-$defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['email'] ?? '') : '';
+$juristicTaxIdDisplay = preg_replace('/\D/', '', (string)($profile['receipt_company_tax_id'] ?? ''));
+$juristicTaxIdDisplay = strlen($juristicTaxIdDisplay) > 13 ? substr($juristicTaxIdDisplay, 0, 13) : $juristicTaxIdDisplay;
+$lockedReceiptEmail = trim((string)($profile['email'] ?? ''));
+$defaultReceiptMobile = trim((string)($profile['receipt_mobile'] ?? ''));
+if ($defaultReceiptMobile === '') {
+    $defaultReceiptMobile = trim((string)($profile['phone'] ?? ''));
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>แก้ไขโปรไฟล์ | DrawDream</title>
@@ -317,12 +351,13 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
                     <div class="form-group form-group--compact">
                         <label class="form-label required">อีเมล</label>
                         <input type="email" name="receipt_email" class="form-input"
-                               value="<?= htmlspecialchars($defReceiptEmail) ?>" autocomplete="email">
+                               value="<?= htmlspecialchars($lockedReceiptEmail) ?>" autocomplete="email" readonly>
+                        <div class="form-help">อีเมลยึดตามบัญชีผู้บริจาค (ไม่สามารถแก้ไขได้)</div>
                     </div>
                     <div class="form-group form-group--compact">
                         <label class="form-label required">เบอร์มือถือ</label>
                         <input type="tel" name="receipt_mobile" class="form-input"
-                               value="<?= htmlspecialchars($profile['receipt_mobile'] ?? '') ?>"
+                               value="<?= htmlspecialchars($defaultReceiptMobile) ?>"
                                maxlength="10" inputmode="numeric" autocomplete="tel">
                     </div>
                 </div>
@@ -336,8 +371,11 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
                 </div>
                 <div class="form-group">
                     <label class="form-label required">เลขทะเบียน / เลขผู้เสียภาษี</label>
-                    <input type="text" name="receipt_company_tax_id" class="form-input"
-                           value="<?= htmlspecialchars($profile['receipt_company_tax_id'] ?? '') ?>">
+                    <input type="text" name="receipt_company_tax_id" id="receipt_company_tax_id" class="form-input"
+                           value="<?= htmlspecialchars($juristicTaxIdDisplay) ?>"
+                           inputmode="numeric" maxlength="13" pattern="\d{13}" autocomplete="off"
+                           title="ตัวเลข 13 หลัก">
+                    <div class="form-help">กรอกตัวเลข 13 หลักเท่านั้น</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label required">ที่อยู่</label>
@@ -405,6 +443,13 @@ $defReceiptEmail = $receiptSchemaOk ? ($profile['receipt_email'] ?? $profile['em
       if (pJur) pJur.classList.toggle('is-hidden', v !== 'juristic');
     });
   });
+
+  var jurTax = document.getElementById('receipt_company_tax_id');
+  if (jurTax) {
+    jurTax.addEventListener('input', function() {
+      jurTax.value = jurTax.value.replace(/\D/g, '').slice(0, 13);
+    });
+  }
 })();
 </script>
 

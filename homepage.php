@@ -3,10 +3,12 @@
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }
+$homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>หน้าหลัก | DrawDream</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,6 +21,10 @@ if (session_status() === PHP_SESSION_NONE) {
 <body>
 
 <?php include 'navbar.php'; ?>
+
+<?php if ($homeFlashMsg !== ''): ?>
+<div class="alert alert-warning text-center mb-0 rounded-0 border-0 py-3" role="alert" style="border-radius:0;"><?= htmlspecialchars($homeFlashMsg, ENT_QUOTES, 'UTF-8') ?></div>
+<?php endif; ?>
 
 <!-- ===== SECTION 1: HERO ===== -->
 <div class="home-section home-hero">
@@ -170,7 +176,7 @@ if (session_status() === PHP_SESSION_NONE) {
 </div>
 
 <!-- ===== SECTION 4: RIGHTS HOLDER ===== -->
-<div class="home-section home-contact-section">
+<div class="home-section home-contact-section" id="support">
   <div class="container py-5">
     <div class="row justify-content-center">
       <div class="col-lg-12">
@@ -179,7 +185,7 @@ if (session_status() === PHP_SESSION_NONE) {
             <h4>ร่วมสนับสนุนค่าบริหารจัดการระบบ </h4>
             <p>เพื่อเปลี่ยนระบบการช่วยเหลือให้เข้าถึงง่ายสำหรับทุกคน</p>
             <div class="rights-actions">
-              <a href="#" class="btn btn-success btn-lg btn-radis">บริจาค</a>
+              <a href="payment/system_donate.php" class="btn btn-success btn-lg btn-radis">บริจาค</a>
               <!-- <a href="#" class="btn btn-success btn-lg btn-radis">มูลนิธิ</a> -->
             </div>
           </div>

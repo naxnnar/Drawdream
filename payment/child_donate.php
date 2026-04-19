@@ -11,13 +11,9 @@ require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
 require_once dirname(__DIR__) . '/includes/qr_payment_abandon.php';
 drawdream_child_sponsorship_ensure_columns($conn);
 
-$ih = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'is_hidden'");
-if ($ih && $ih->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0");
-}
-
 if (!isset($_SESSION['user_id'])) {
-    header('Location: ../login.php');
+    $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
+    header('Location: ../login.php?page=login&error=' . $msg);
     exit;
 }
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'], true)) {
@@ -35,7 +31,7 @@ $stmt = $conn->prepare("
     SELECT c.*, COALESCE(NULLIF(c.foundation_name, ''), fp.foundation_name) AS display_foundation_name
     FROM foundation_children c
     LEFT JOIN foundation_profile fp ON c.foundation_id = fp.foundation_id
-    WHERE c.child_id = ? AND c.approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') AND COALESCE(c.is_hidden, 0) = 0 AND c.deleted_at IS NULL
+    WHERE c.child_id = ? AND c.approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') AND c.deleted_at IS NULL
     LIMIT 1
 ");
 $stmt->bind_param('i', $child_id);
@@ -58,30 +54,22 @@ if (!($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay']))) {
 }
 
 function omise_request(string $method, string $path, array $data = []): array {
-    $ch = curl_init(OMISE_API_URL . $path);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-    if ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    }
-    $response = curl_exec($ch);
-    $curl_error = curl_error($ch);
-    curl_close($ch);
+    $jsonBody = ($method === 'POST') ? json_encode($data) : null;
+    $http = drawdream_omise_http_raw(strtoupper($method), $path, $jsonBody);
 
-    if ($response === false || $response === '') {
-        if (defined('OMISE_ALLOW_LOCAL_MOCK') && OMISE_ALLOW_LOCAL_MOCK && strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) {
+    if (!$http['ok'] || $http['body'] === '') {
+        $isTestKey = strpos(OMISE_SECRET_KEY, 'skey_test_') === 0;
+        $mockOnFail = defined('OMISE_TEST_MOCK_WHEN_HTTPS_FAILS') && OMISE_TEST_MOCK_WHEN_HTTPS_FAILS;
+        if ($isTestKey && ((defined('OMISE_ALLOW_LOCAL_MOCK') && OMISE_ALLOW_LOCAL_MOCK) || $mockOnFail)) {
             return _omise_local_mock_child($path, $data);
         }
-        $msg = ($curl_error !== '') ? $curl_error : 'ไม่ได้รับตอบกลับจาก Omise (ตรวจสอบอินเทอร์เน็ต / PHP cURL / SSL)';
+        $msg = $http['err'] !== ''
+            ? $http['err']
+            : 'ไม่ได้รับตอบกลับจาก Omise (ตรวจสอบอินเทอร์เน็ต / PHP cURL หรือ allow_url_fopen / SSL)';
         return ['error' => 'curl_error', 'message' => $msg];
     }
 
-    $decoded = json_decode($response, true);
+    $decoded = json_decode($http['body'], true);
     if ($decoded === null) {
         return ['error' => 'json_error', 'message' => 'Invalid JSON response'];
     }
@@ -135,6 +123,10 @@ if ($amount < 20) {
 
 drawdream_abandon_all_pending_qr_for_donor($conn, (int)$_SESSION['user_id']);
 drawdream_clear_pending_payment_session();
+
+if (!function_exists('curl_init') && !extension_loaded('openssl')) {
+    $redirectBack('เซิร์ฟเวอร์ PHP ไม่มี cURL และไม่มี OpenSSL — เชื่อม Omise (HTTPS) ไม่ได้ กรุณาปิดเซิร์ฟเวอร์แล้วรันโปรเจกต์ด้วย .\\run_dev_server.ps1 (จะโหลด extension ให้อัตโนมัติ) หรือเปิด extension=curl / extension=openssl ใน php.ini แล้วรีสตาร์ท Apache/XAMPP');
+}
 
 $amount_satang = $amount * 100;
 $source_response = omise_request('POST', '/sources', [

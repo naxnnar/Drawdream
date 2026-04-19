@@ -9,14 +9,17 @@
     right: 0;
     top: calc(100% + 8px);
     width: 320px;
+    max-width: calc(100vw - 24px);
     background: white;
     border-radius: 14px;
     box-shadow: 0 8px 30px rgba(0,0,0,0.15);
     z-index: 9999;
     overflow: hidden;
+    flex-direction: column;
+    max-height: min(80vh, 520px);
 }
 
-.notif-wrap.open .notif-dropdown { display: block; }
+.notif-wrap.open .notif-dropdown { display: flex; }
 
 .notif-header {
     padding: 14px 16px;
@@ -26,6 +29,41 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.notif-header-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.notif-see-all-header {
+    font-size: 12px;
+    font-weight: 700;
+    color: #4A5BA8;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.notif-see-all-header:hover {
+    text-decoration: underline;
+}
+
+/* รายการแจ้งเตือนในกล่อง — เลื่อนได้ ลิงก์ดูทั้งหมดด้านล่างไม่ถูกดันออกจอ */
+.notif-body-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .notif-mark-all {
@@ -76,18 +114,6 @@
     color: #bbb;
     font-size: 13px;
 }
-.notif-see-all {
-    display: block;
-    text-align: center;
-    padding: 10px;
-    font-size: 13px;
-    color: #4A5BA8;
-    font-weight: 600;
-    text-decoration: none;
-    border-top: 1px solid #f0f0f0;
-    font-family: 'Prompt', sans-serif;
-}
-.notif-see-all:hover { background: #f5f5f5; }
 
 /**
  * ปุ่มกระดิ่ง / โปรไฟล์: ชนะ Bootstrap reboot และลำดับ stylesheet ทุกหน้า

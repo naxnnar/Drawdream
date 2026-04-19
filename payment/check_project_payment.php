@@ -8,6 +8,8 @@ require_once __DIR__ . '/../includes/admin_audit_migrate.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/payment_transaction_schema.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
+require_once __DIR__ . '/../includes/e_receipt.php';
+require_once __DIR__ . '/../includes/donate_type.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -41,7 +43,6 @@ if ($is_mock) {
     curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
     curl_setopt($ch, CURLOPT_TIMEOUT, 15);
     $response = curl_exec($ch);
-    curl_close($ch);
     $charge = json_decode($response, true) ?? [];
 }
 
@@ -62,7 +63,7 @@ $amount     = 0;
 
 // รายการเดิมที่สร้างตอนเปิด QR (pending) หรือ completed แล้ว
 $ptRow = null;
-$dup = $conn->prepare("SELECT log_id, donate_id, transaction_status FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1");
+$dup = $conn->prepare("SELECT donate_id, transaction_status FROM donation WHERE omise_charge_id = ? LIMIT 1");
 $dup->bind_param("s", $charge_id);
 $dup->execute();
 $ptRow = $dup->get_result()->fetch_assoc();
@@ -81,11 +82,31 @@ if (!$is_mock && $has_pending && !$already_completed && !$is_success
     }
 }
 
-function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id, float $amountBaht): void
+function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id, float $amountBaht): bool
 {
+    $sel = $conn->prepare('SELECT goal_amount, current_donate FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL FOR UPDATE');
+    $sel->bind_param('i', $project_id);
+    $sel->execute();
+    $row = $sel->get_result()->fetch_assoc();
+    if (!$row) {
+        return false;
+    }
+    $g = (float)($row['goal_amount'] ?? 0);
+    $r = (float)($row['current_donate'] ?? 0);
+    if ($g > 0) {
+        if ($r >= $g - 1e-9) {
+            return false;
+        }
+        if ($r + $amountBaht > $g + 1e-6) {
+            return false;
+        }
+    }
+
     $stmt = $conn->prepare('UPDATE foundation_project SET current_donate = current_donate + ? WHERE project_id = ? AND deleted_at IS NULL');
     $stmt->bind_param('di', $amountBaht, $project_id);
-    $stmt->execute();
+    if (!$stmt->execute() || $stmt->affected_rows < 1) {
+        return false;
+    }
 
     $check = $conn->prepare("
         SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
@@ -122,6 +143,8 @@ function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id
         $notif->bind_param('issss', $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
         $notif->execute();
     }
+
+    return true;
 }
 
 /**
@@ -139,8 +162,8 @@ function drawdream_finalize_project_donation(
 
     $pend = 'pending';
     $pt = $conn->prepare(
-        'SELECT log_id, donate_id, pending_category_id, pending_target_id, pending_amount, pending_donor_user_id
-         FROM payment_transaction WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
+        'SELECT donate_id, category_id, target_id, donor_id
+         FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
     );
     $pt->bind_param('ss', $charge_id, $pend);
     $pt->execute();
@@ -149,97 +172,41 @@ function drawdream_finalize_project_donation(
         return false;
     }
 
-    $logId = (int)$ptRow['log_id'];
     $ptDonateId = isset($ptRow['donate_id']) && $ptRow['donate_id'] !== null ? (int)$ptRow['donate_id'] : 0;
 
     if ($donate_id_param > 0 && $ptDonateId > 0 && $donate_id_param !== $ptDonateId) {
         return false;
     }
 
-    if ($ptDonateId > 0) {
-        $chk = $conn->prepare(
-            'SELECT donor_id, target_id, payment_status FROM donation WHERE donate_id = ? LIMIT 1'
-        );
-        $chk->bind_param('i', $ptDonateId);
-        $chk->execute();
-        $row = $chk->get_result()->fetch_assoc();
-        if (!$row
-            || (int)($row['donor_id'] ?? 0) !== $donor_user_id
-            || (int)($row['target_id'] ?? 0) !== $project_id
-            || (string)($row['payment_status'] ?? '') !== 'pending'
-        ) {
-            return false;
-        }
-
-        $service_fee = 0.0;
-        if (!$conn->begin_transaction()) {
-            return false;
-        }
-        try {
-            $stmt = $conn->prepare('
-                UPDATE donation
-                SET amount = ?, service_fee = ?, payment_status = \'completed\', transfer_datetime = NOW()
-                WHERE donate_id = ? AND payment_status = \'pending\'
-            ');
-            $stmt->bind_param('ddi', $amountBaht, $service_fee, $ptDonateId);
-            $stmt->execute();
-            if ($stmt->affected_rows < 1) {
-                throw new RuntimeException('update donation');
-            }
-
-            $stmt = $conn->prepare(
-                'UPDATE payment_transaction SET transaction_status = \'completed\' WHERE log_id = ? AND transaction_status = \'pending\''
-            );
-            $stmt->bind_param('i', $logId);
-            $stmt->execute();
-
-            drawdream_project_bump_and_maybe_complete($conn, $project_id, $amountBaht);
-
-            $conn->commit();
-
-            return true;
-        } catch (Throwable $e) {
-            $conn->rollback();
-
-            return false;
-        }
-    }
-
-    $pDonor = (int)($ptRow['pending_donor_user_id'] ?? 0);
-    $pTarget = (int)($ptRow['pending_target_id'] ?? 0);
-    $pCat = (int)($ptRow['pending_category_id'] ?? 0);
-    if ($pDonor !== $donor_user_id || $pTarget !== $project_id || $pCat <= 0) {
+    $pDonor = (int)($ptRow['donor_id'] ?? 0);
+    $pTarget = (int)($ptRow['target_id'] ?? 0);
+    $pCat = (int)($ptRow['category_id'] ?? 0);
+    if ($pDonor !== $donor_user_id || $pTarget !== $project_id || $pCat <= 0 || $ptDonateId <= 0) {
         return false;
     }
 
-    $service_fee = 0.0;
     if (!$conn->begin_transaction()) {
         return false;
     }
     try {
-        $ins = $conn->prepare('
-            INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-            VALUES (?, ?, ?, ?, ?, \'completed\', NOW())
-        ');
-        $ins->bind_param('iiidd', $pCat, $project_id, $donor_user_id, $amountBaht, $service_fee);
-        $ins->execute();
-        $newDonateId = (int)$conn->insert_id;
-        if ($newDonateId <= 0) {
-            throw new RuntimeException('no donate');
-        }
-
+        $completed = 'completed';
+        $dtProj = DRAWDREAM_DONATE_TYPE_PROJECT;
+        $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
         $upt = $conn->prepare(
-            'UPDATE payment_transaction SET donate_id = ?, transaction_status = \'completed\',
-             pending_category_id = NULL, pending_target_id = NULL, pending_amount = NULL, pending_donor_user_id = NULL
-             WHERE log_id = ? AND transaction_status = \'pending\''
+            'UPDATE donation
+             SET amount = ?, payment_status = ?, transaction_status = ?, transfer_datetime = NOW(), donate_type = ?,
+                 recurring_plan_code = ?
+             WHERE donate_id = ? AND transaction_status = ?'
         );
-        $upt->bind_param('ii', $newDonateId, $logId);
+        $upt->bind_param('dssssis', $amountBaht, $completed, $completed, $dtProj, $planOnce, $ptDonateId, $pend);
         $upt->execute();
         if ($upt->affected_rows < 1) {
-            throw new RuntimeException('pt');
+            throw new RuntimeException('update donation');
         }
 
-        drawdream_project_bump_and_maybe_complete($conn, $project_id, $amountBaht);
+        if (!drawdream_project_bump_and_maybe_complete($conn, $project_id, $amountBaht)) {
+            throw new RuntimeException('project bump');
+        }
 
         $conn->commit();
 
@@ -252,6 +219,7 @@ function drawdream_finalize_project_donation(
 }
 
 $finalized_this_request = false;
+$receiptDonateId = 0;
 if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
     $amount      = ($charge['amount'] ?? 0) / 100;
     if ($amount <= 0) {
@@ -260,42 +228,49 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
     $donate_id_from_pt = (int)($ptRow['donate_id'] ?? 0);
     if (drawdream_finalize_project_donation($conn, $project_id, $donate_id_from_pt, $charge_id, (float)$amount, $donor_uid)) {
         $finalized_this_request = true;
+        $receiptDonateId = $donate_id_from_pt;
         unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
     }
 } elseif ($is_success && !$ptRow && $project_id > 0) {
     // เส้นทางเก่า: ยังไม่มีแถว pending (สแกนจากลิงก์เก่า)
     $amount      = ($charge['amount'] ?? 0) / 100;
-    $service_fee = 0;
     $donor_id    = $_SESSION['user_id'];
     $target_id   = $project_id;
-    $tax_id = '';
-    $stmt = $conn->prepare("SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1");
-    $stmt->bind_param("i", $donor_id);
-    $stmt->execute();
-    $donor  = $stmt->get_result()->fetch_assoc();
-    $tax_id = $donor['tax_id'] ?? '';
 
     $category_id = drawdream_get_or_create_project_donate_category_id($conn);
 
-    $stmt = $conn->prepare("
-        INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-        VALUES (?, ?, ?, ?, ?, 'completed', NOW())
-    ");
-    $stmt->bind_param("iiidd", $category_id, $target_id, $donor_id, $amount, $service_fee);
-    $stmt->execute();
-    $donate_id = (int)$stmt->insert_id;
+    $dtProj = DRAWDREAM_DONATE_TYPE_PROJECT;
+    if ($conn->begin_transaction()) {
+        try {
+            $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
+            $stmt = $conn->prepare("
+                INSERT INTO donation (
+                    category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                    omise_charge_id, transaction_status, donate_type, recurring_plan_code
+                ) VALUES (?, ?, ?, ?, 'completed', NOW(), ?, 'completed', ?, ?)
+            ");
+            $stmt->bind_param('iiidsss', $category_id, $target_id, $donor_id, $amount, $charge_id, $dtProj, $planOnce);
+            $stmt->execute();
+            $receiptDonateId = (int)$conn->insert_id;
 
-    $stmt = $conn->prepare("
-        INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
-        VALUES (?, ?, ?, 'completed')
-    ");
-    $stmt->bind_param("iss", $donate_id, $tax_id, $charge_id);
-    $stmt->execute();
+            if (!drawdream_project_bump_and_maybe_complete($conn, $project_id, (float)$amount)) {
+                throw new RuntimeException('project bump');
+            }
+            $conn->commit();
+            unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
+            $finalized_this_request = true;
+        } catch (Throwable $e) {
+            $conn->rollback();
+            $receiptDonateId = 0;
+        }
+    }
+}
 
-    drawdream_project_bump_and_maybe_complete($conn, $project_id, (float)$amount);
-
-    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_project'], $_SESSION['pending_project_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
-    $finalized_this_request = true;
+if ($finalized_this_request && $receiptDonateId <= 0) {
+    $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+}
+if ($finalized_this_request && $receiptDonateId > 0) {
+    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
 }
 
 $already_processed = $finalized_this_request
@@ -315,6 +290,7 @@ if ($is_success && $amount <= 0) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ผลการชำระเงิน | DrawDream</title>

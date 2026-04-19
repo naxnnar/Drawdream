@@ -1,31 +1,31 @@
 <?php
-// admin_approve_foundation.php — แอดมินอนุมัติ/ปฏิเสธคำขอสมัครมูลนิธิ
+// admin_approve_foundation.php — แอดมินอนุมัติ/ปฏิเสธคำขอสมัครมูลนิธิ (ไม่มีหน้ารายการ — เข้าจากศูนย์แจ้งเตือนเท่านั้น)
 
-if (session_status() === PHP_SESSION_NONE) session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 include 'db.php';
 require_once __DIR__ . '/includes/notification_audit.php';
+require_once __DIR__ . '/includes/foundation_banks.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
-    header("Location: homepage.php");
+    header('Location: homepage.php');
     exit();
 }
 
-$success_msg = '';
-if (isset($_GET['success'])) {
-    $success_msg = $_GET['success'] === 'approved' ? '✅ อนุมัติมูลนิธิเรียบร้อยแล้ว' : '🗑️ ปฏิเสธและลบบัญชีเรียบร้อยแล้ว';
-}
+$notifFoundationUrl = 'admin_notifications.php#admin-pending-foundations';
 
 // ======== ประมวลผล POST ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $foundation_id = intval($_POST['foundation_id'] ?? 0);
+    $foundation_id = (int)($_POST['foundation_id'] ?? 0);
     $action = $_POST['action'] ?? '';
 
-    if ($foundation_id && in_array($action, ['approve', 'reject'])) {
-        $admin_id = $_SESSION['user_id']; // ใช้ user_id แทนเลย
+    if ($foundation_id && in_array($action, ['approve', 'reject'], true)) {
+        $admin_id = (int)$_SESSION['user_id'];
 
         if ($action === 'approve') {
-            $stmt = $conn->prepare("UPDATE foundation_profile SET account_verified = 1, verified_at = NOW(), verified_by = ? WHERE foundation_id = ?");
-            $stmt->bind_param("ii", $admin_id, $foundation_id);
+            $stmt = $conn->prepare('UPDATE foundation_profile SET account_verified = 1, verified_at = NOW(), verified_by = ? WHERE foundation_id = ? AND account_verified = 0');
+            $stmt->bind_param('ii', $admin_id, $foundation_id);
             $stmt->execute();
             $fu = drawdream_foundation_user_id_by_foundation_id($conn, $foundation_id);
             drawdream_send_notification(
@@ -37,11 +37,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'project.php?view=foundation',
                 'fdn_registration:' . $foundation_id
             );
-            drawdream_log_admin_action($conn, (int)$admin_id, 'Approve_Foundation', $foundation_id, '', $fu > 0 ? $fu : null, 'foundation_approved');
-            header("Location: admin_approve_foundation.php?success=approved");
-        } elseif ($action === 'reject') {
-            $stmt = $conn->prepare("SELECT user_id FROM foundation_profile WHERE foundation_id = ?");
-            $stmt->bind_param("i", $foundation_id);
+            drawdream_log_admin_action($conn, $admin_id, 'Approve_Foundation', $foundation_id, '', $fu > 0 ? $fu : null, 'foundation_approved');
+            header('Location: admin_notifications.php?done=foundation#admin-pending-foundations');
+            exit();
+        }
+        if ($action === 'reject') {
+            $stmt = $conn->prepare('SELECT user_id FROM foundation_profile WHERE foundation_id = ? AND account_verified = 0');
+            $stmt->bind_param('i', $foundation_id);
             $stmt->execute();
             $fp = $stmt->get_result()->fetch_assoc();
             if ($fp) {
@@ -55,38 +57,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     '',
                     'fdn_registration:' . $foundation_id
                 );
-                drawdream_log_admin_action($conn, (int)$admin_id, 'Reject_Foundation', $foundation_id, 'บัญชีถูกลบ', $rejectUid > 0 ? $rejectUid : null, 'foundation_rejected');
-                $stmt = $conn->prepare("DELETE FROM foundation_profile WHERE foundation_id = ?");
-                $stmt->bind_param("i", $foundation_id);
+                drawdream_log_admin_action($conn, $admin_id, 'Reject_Foundation', $foundation_id, 'บัญชีถูกลบ', $rejectUid > 0 ? $rejectUid : null, 'foundation_rejected');
+                $stmt = $conn->prepare('DELETE FROM foundation_profile WHERE foundation_id = ?');
+                $stmt->bind_param('i', $foundation_id);
                 $stmt->execute();
-                $stmt = $conn->prepare("DELETE FROM `user` WHERE user_id = ?");
-                $stmt->bind_param("i", $fp['user_id']);
+                $stmt = $conn->prepare('DELETE FROM `user` WHERE user_id = ?');
+                $stmt->bind_param('i', $fp['user_id']);
                 $stmt->execute();
             }
-            header("Location: admin_approve_foundation.php?success=rejected");
+            header('Location: admin_notifications.php?done=foundation#admin-pending-foundations');
+            exit();
         }
-        exit();
     }
+    header('Location: admin_notifications.php?err=foundation#admin-pending-foundations');
+    exit();
 }
 
-// ======== ดึงข้อมูล ========
-$view = isset($_GET['id']) ? 'detail' : 'list';
-
-if ($view === 'detail') {
-    $id = intval($_GET['id']);
-    $stmt = $conn->prepare("SELECT f.*, u.email FROM foundation_profile f JOIN `user` u ON f.user_id = u.user_id WHERE f.foundation_id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    if (!$row) { header("Location: admin_approve_foundation.php"); exit(); }
-} else {
-    $result = mysqli_query($conn, "SELECT f.*, u.email FROM foundation_profile f JOIN `user` u ON f.user_id = u.user_id WHERE f.account_verified = 0 ORDER BY f.created_at DESC");
-    $total = mysqli_num_rows($result);
+// ======== รายละเอียดเท่านั้น (ต้องมี ?id=) ========
+$id = (int)($_GET['id'] ?? 0);
+if ($id <= 0) {
+    header('Location: ' . $notifFoundationUrl);
+    exit();
 }
+
+$stmt = $conn->prepare(
+    'SELECT f.*, u.email FROM foundation_profile f JOIN `user` u ON f.user_id = u.user_id
+     WHERE f.foundation_id = ? AND f.account_verified = 0 LIMIT 1'
+);
+$stmt->bind_param('i', $id);
+$stmt->execute();
+$row = $stmt->get_result()->fetch_assoc();
+if (!$row) {
+    header('Location: ' . $notifFoundationUrl);
+    exit();
+}
+
+$bankKey = trim((string)($row['bank_name'] ?? ''));
+$bankList = drawdream_foundation_bank_list();
+$bankLabel = $bankKey !== '' ? ($bankList[$bankKey] ?? $bankKey) : '-';
+$createdAtRaw = trim((string)($row['created_at'] ?? ''));
+$createdAtLabel = $createdAtRaw !== '' ? date('d/m/Y H:i', strtotime($createdAtRaw)) : '-';
+$foundationImg = trim((string)($row['foundation_image'] ?? ''));
+$legacyProfileImg = trim((string)($row['profile_image'] ?? ''));
+$imgFile = $foundationImg !== '' ? $foundationImg : $legacyProfileImg;
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>อนุมัติมูลนิธิ | DrawDream</title>
@@ -97,50 +115,6 @@ if ($view === 'detail') {
 <?php include 'navbar.php'; ?>
 
 <div class="container">
-
-    <?php if ($success_msg): ?>
-        <div class="alert alert-success"><?= $success_msg ?></div>
-    <?php endif; ?>
-
-    <?php if ($view === 'list'): ?>
-
-        <div class="page-title">
-            คำขออนุมัติมูลนิธิ
-            <?php if ($total > 0): ?>
-                <span class="badge-pending"><?= $total ?> รายการ</span>
-            <?php endif; ?>
-        </div>
-        <div class="page-subtitle">ตรวจสอบและอนุมัติบัญชีมูลนิธิที่สมัครเข้ามา</div>
-
-        <div class="card-list">
-            <?php if ($total === 0): ?>
-                <div class="empty">
-                    <div class="empty-icon">✅</div>
-                    ไม่มีคำขออนุมัติในขณะนี้
-                </div>
-            <?php else: ?>
-                <?php while ($f = mysqli_fetch_assoc($result)): ?>
-                    <div class="card-item">
-                        <div class="item-left">
-                            <div class="item-icon">🏛️</div>
-                            <div>
-                                <div class="item-name">
-                                    มีคำขออนุมัติบัญชีจาก <?= htmlspecialchars($f['foundation_name']) ?>
-                                </div>
-                                <div class="item-meta">
-                                    สมัครเมื่อ <?= date('d/m/Y เวลา H:i', strtotime($f['created_at'])) ?>
-                                </div>
-                            </div>
-                        </div>
-                        <a href="?id=<?= $f['foundation_id'] ?>" class="btn-check">ตรวจสอบ</a>
-                    </div>
-                <?php endwhile; ?>
-            <?php endif; ?>
-        </div>
-
-    <?php else: ?>
-
-        <a href="admin_approve_foundation.php" class="back-link">← กลับรายการ</a>
 
         <div class="detail-card">
             <div class="detail-header">
@@ -153,35 +127,81 @@ if ($view === 'detail') {
 
             <div class="field-grid">
                 <div class="field">
+                    <label>วันที่สมัคร</label>
+                    <div class="field-value"><?= htmlspecialchars($createdAtLabel) ?></div>
+                </div>
+                <div class="field">
+                    <label>รหัส foundation_id</label>
+                    <div class="field-value"><?= (int)($row['foundation_id'] ?? 0) ?></div>
+                </div>
+                <div class="field">
                     <label>ชื่อมูลนิธิ</label>
-                    <div class="field-value"><?= htmlspecialchars($row['foundation_name']) ?></div>
+                    <div class="field-value"><?= htmlspecialchars((string)($row['foundation_name'] ?? '')) ?></div>
                 </div>
                 <div class="field">
-                    <label>email</label>
-                    <div class="field-value"><?= htmlspecialchars($row['email']) ?></div>
+                    <label>อีเมล (เข้าสู่ระบบ)</label>
+                    <div class="field-value"><?= htmlspecialchars((string)($row['email'] ?? '')) ?></div>
                 </div>
                 <div class="field">
-                    <label>เลขทะเบียนมูลนิธิ</label>
-                    <div class="field-value"><?= htmlspecialchars($row['registration_number'] ?: '-') ?></div>
+                    <label>เลขประจำตัวนิติบุคคล</label>
+                    <div class="field-value"><?= htmlspecialchars(trim((string)($row['registration_number'] ?? '')) !== '' ? (string)$row['registration_number'] : '-') ?></div>
                 </div>
                 <div class="field">
                     <label>เบอร์โทรศัพท์</label>
-                    <div class="field-value"><?= htmlspecialchars($row['phone'] ?: '-') ?></div>
+                    <div class="field-value"><?= htmlspecialchars(trim((string)($row['phone'] ?? '')) !== '' ? (string)$row['phone'] : '-') ?></div>
                 </div>
                 <div class="field field-full">
                     <label>ที่อยู่มูลนิธิ</label>
-                    <div class="field-value tall"><?= htmlspecialchars($row['address'] ?: '-') ?></div>
+                    <div class="field-value tall"><?= htmlspecialchars(trim((string)($row['address'] ?? '')) !== '' ? (string)$row['address'] : '-') ?></div>
                 </div>
+                <div class="field">
+                    <label>ชื่อธนาคาร</label>
+                    <div class="field-value"><?= htmlspecialchars($bankLabel) ?></div>
+                </div>
+                <div class="field">
+                    <label>เลขบัญชีธนาคาร</label>
+                    <div class="field-value"><?= htmlspecialchars(trim((string)($row['bank_account_number'] ?? '')) !== '' ? (string)$row['bank_account_number'] : '-') ?></div>
+                </div>
+                <div class="field field-full">
+                    <label>ชื่อบัญชีธนาคาร</label>
+                    <div class="field-value"><?= htmlspecialchars(trim((string)($row['bank_account_name'] ?? '')) !== '' ? (string)$row['bank_account_name'] : '-') ?></div>
+                </div>
+                <?php if (trim((string)($row['foundation_desc'] ?? '')) !== ''): ?>
+                <div class="field field-full">
+                    <label>คำอธิบายมูลนิธิ</label>
+                    <div class="field-value tall"><?= nl2br(htmlspecialchars((string)$row['foundation_desc'])) ?></div>
+                </div>
+                <?php endif; ?>
+                <?php if (trim((string)($row['website'] ?? '')) !== ''): ?>
+                <div class="field field-full">
+                    <label>เว็บไซต์</label>
+                    <div class="field-value"><?= htmlspecialchars((string)$row['website']) ?></div>
+                </div>
+                <?php endif; ?>
+                <?php if (trim((string)($row['facebook_url'] ?? '')) !== ''): ?>
+                <div class="field field-full">
+                    <label>Facebook / โซเชียล</label>
+                    <div class="field-value"><?= htmlspecialchars((string)$row['facebook_url']) ?></div>
+                </div>
+                <?php endif; ?>
+                <?php if ($imgFile !== ''): ?>
+                <div class="field field-full">
+                    <label>รูปโปรไฟล์มูลนิธิ</label>
+                    <div class="field-value">
+                        <img src="uploads/profiles/<?= htmlspecialchars($imgFile) ?>" alt="" class="approval-foundation-profile-img" width="200" height="200" loading="lazy" decoding="async" style="object-fit:cover;border-radius:12px;max-width:min(280px,100%);height:auto;aspect-ratio:1;border:1px solid #e5e7eb;">
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
 
             <div class="btn-row">
                 <form method="POST" class="btn-row__form">
-                    <input type="hidden" name="foundation_id" value="<?= $row['foundation_id'] ?>">
+                    <input type="hidden" name="foundation_id" value="<?= (int)$row['foundation_id'] ?>">
                     <input type="hidden" name="action" value="approve">
                     <button type="submit" class="btn-approve">อนุมัติ</button>
                 </form>
                 <form method="POST" class="btn-row__form">
-                    <input type="hidden" name="foundation_id" value="<?= $row['foundation_id'] ?>">
+                    <input type="hidden" name="foundation_id" value="<?= (int)$row['foundation_id'] ?>">
                     <input type="hidden" name="action" value="reject">
                     <button type="submit" class="btn-reject"
                         onclick="return confirm('ยืนยันไม่อนุมัติ? บัญชีนี้จะถูกลบออกจากระบบ')">
@@ -190,8 +210,6 @@ if ($view === 'detail') {
                 </form>
             </div>
         </div>
-
-    <?php endif; ?>
 </div>
 </body>
 </html>

@@ -10,6 +10,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     exit();
 }
 
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
+
 $uid = (int)($_SESSION['user_id'] ?? 0);
 $stmtFp = $conn->prepare('SELECT foundation_name, foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1');
 $stmtFp->bind_param('i', $uid);
@@ -123,6 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_merge'])) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>สมทบยอดบริจาคเข้าโครงการอื่น | DrawDream</title>

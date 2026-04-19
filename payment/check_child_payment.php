@@ -7,6 +7,10 @@ include 'config.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
 require_once dirname(__DIR__) . '/includes/qr_payment_abandon.php';
+require_once dirname(__DIR__) . '/includes/e_receipt.php';
+require_once dirname(__DIR__) . '/includes/donate_type.php';
+require_once __DIR__ . '/omise_helpers.php';
+drawdream_payment_transaction_ensure_schema($conn);
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -33,17 +37,8 @@ if ($is_mock) {
         'metadata' => ['child_id' => (int)($_SESSION['pending_child_id'] ?? $child_id)],
     ];
 } else {
-    $ch = curl_init(rtrim(OMISE_API_URL, '/') . '/charges/' . rawurlencode($charge_id) . '?expand[]=source');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_USERPWD => OMISE_SECRET_KEY . ':',
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_TIMEOUT => 15,
-    ]);
-    $response = curl_exec($ch);
-    curl_close($ch);
-    $charge = json_decode($response, true) ?? [];
+    $fetched = drawdream_omise_fetch_charge($charge_id);
+    $charge = is_array($fetched) ? $fetched : [];
 }
 
 // fallback child_id จาก metadata/session หากไม่มีใน URL
@@ -62,7 +57,7 @@ $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
 
 $ptRow = null;
-$dup = $conn->prepare('SELECT log_id, donate_id, transaction_status FROM payment_transaction WHERE omise_charge_id = ? LIMIT 1');
+$dup = $conn->prepare('SELECT donate_id, transaction_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
 $dup->bind_param('s', $charge_id);
 $dup->execute();
 $ptRow = $dup->get_result()->fetch_assoc();
@@ -82,6 +77,7 @@ if (!$is_mock && $has_pending && !$already_completed && !$is_success
 }
 
 $finalized_this_request = false;
+$receiptDonateId = 0;
 
 if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
     $amount = ($charge['amount'] ?? 0) / 100;
@@ -91,6 +87,7 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
     $donate_id_from_pt = (int)($ptRow['donate_id'] ?? 0);
     if (drawdream_finalize_child_donation($conn, $child_id, $donate_id_from_pt, $charge_id, (float)$amount, $donor_uid)) {
         $finalized_this_request = true;
+        $receiptDonateId = $donate_id_from_pt;
         unset(
             $_SESSION['pending_charge_id'],
             $_SESSION['pending_amount'],
@@ -104,57 +101,30 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
         $failure_message = 'ชำระเงินสำเร็จแล้ว แต่ระบบบันทึกรายการไม่สำเร็จ กรุณาติดต่อผู้ดูแลระบบพร้อมอ้างอิง Charge';
     }
 } elseif ($is_success && !$ptRow && $child_id > 0) {
-    // เส้นทางเก่า: สร้าง charge ก่อนมีแถว pending ในฐานข้อมูล
+    // เส้นทางเก่า: สร้าง completed ตรงลง donation (ยังไม่มี pending row)
     $amount = ($charge['amount'] ?? 0) / 100;
     if ($amount <= 0) {
         $amount = (float)($_SESSION['pending_amount'] ?? 0);
     }
 
-    $tax_id = '';
-    $stmt = $conn->prepare('SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1');
-    $stmt->bind_param('i', $_SESSION['user_id']);
-    $stmt->execute();
-    $donor_row = $stmt->get_result()->fetch_assoc();
-    $tax_id = $donor_row['tax_id'] ?? '';
-
     $category_id = drawdream_get_or_create_child_donate_category_id($conn);
-    $service_fee = 0.0;
     $donor_id = (int)$_SESSION['user_id'];
+    $completed = 'completed';
 
     $conn->begin_transaction();
     try {
         $stmt = $conn->prepare('
-            INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-            VALUES (?, ?, ?, ?, ?, \'completed\', NOW())
+            INSERT INTO donation (
+                category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                omise_charge_id, transaction_status, donate_type, recurring_plan_code
+            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
         ');
-        $stmt->bind_param('iiidd', $category_id, $child_id, $donor_id, $amount, $service_fee);
+        $donateType = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
+        $planDaily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
+        $stmt->bind_param('iiidsssss', $category_id, $child_id, $donor_id, $amount, $completed, $charge_id, $completed, $donateType, $planDaily);
         $stmt->execute();
         $donate_id = (int)$conn->insert_id;
-
-        $stmt = $conn->prepare('
-            INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
-            VALUES (?, ?, ?, \'completed\')
-        ');
-        $stmt->bind_param('iss', $donate_id, $tax_id, $charge_id);
-        $stmt->execute();
-
-        $conn->query(
-            "CREATE TABLE IF NOT EXISTS child_donations (
-                id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-                child_id INT NOT NULL,
-                donor_user_id INT NULL,
-                amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-                donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                INDEX(child_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
-
-        $stmt = $conn->prepare('
-            INSERT INTO child_donations (child_id, donor_user_id, amount)
-            VALUES (?, ?, ?)
-        ');
-        $stmt->bind_param('iid', $child_id, $_SESSION['user_id'], $amount);
-        $stmt->execute();
+        $receiptDonateId = $donate_id;
 
         drawdream_child_sync_sponsorship_status($conn, $child_id);
 
@@ -175,6 +145,13 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
     }
 }
 
+if ($finalized_this_request && $receiptDonateId <= 0) {
+    $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+}
+if ($finalized_this_request && $receiptDonateId > 0) {
+    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
+}
+
 $already_processed_display = $finalized_this_request
     || $already_completed
     || ($is_success && is_array($ptRow) && ($ptRow['transaction_status'] ?? '') === 'completed');
@@ -186,16 +163,7 @@ if ($already_processed_display && !$finalized_this_request) {
         $amount = (float)($_SESSION['pending_amount'] ?? 0);
     }
     if ($amount <= 0 && is_array($ptRow)) {
-        $did = (int)($ptRow['donate_id'] ?? 0);
-        if ($did > 0) {
-            $qa = $conn->prepare('SELECT amount FROM donation WHERE donate_id = ? LIMIT 1');
-            $qa->bind_param('i', $did);
-            $qa->execute();
-            $ar = $qa->get_result()->fetch_assoc();
-            if ($ar) {
-                $amount = (float)($ar['amount'] ?? 0);
-            }
-        }
+        $amount = (float)($ptRow['amount'] ?? 0);
     }
 }
 if ($is_success && $amount <= 0) {
@@ -215,6 +183,7 @@ if (empty($child_name) && $child_id > 0) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ผลการชำระเงิน | DrawDream</title>

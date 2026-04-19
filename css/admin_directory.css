@@ -142,22 +142,42 @@ body.admin-sidebar-page .admin-directory-page {
     font-size: 0.85rem;
 }
 
+/* ป้ายสถานะมาตรฐานแอดมิน (pill เขียว/เหลือง/แดง — ใช้ร่วมกับ .badge-verified เดิม) */
+.admin-pill,
 .badge-verified {
-    display: inline-block;
-    padding: 2px 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 600;
+    font-family: 'Prompt', sans-serif;
+    line-height: 1.25;
+    white-space: nowrap;
+    box-sizing: border-box;
 }
 
+.admin-pill--success,
 .badge-verified--yes {
     background: #d1fae5;
     color: #047857;
 }
 
+.admin-pill--warning,
 .badge-verified--no {
     background: #fef3c7;
     color: #b45309;
+}
+
+.admin-pill--danger {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.admin-pill--neutral {
+    background: #f3f4f6;
+    color: #4b5563;
 }
 
 .admin-dir-thumb {

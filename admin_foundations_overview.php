@@ -31,6 +31,7 @@ $rows = $conn->query($sql);
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>มูลนิธิทั้งหมด | Admin</title>
@@ -81,9 +82,9 @@ $rows = $conn->query($sql);
                         <td><?= htmlspecialchars($r['foundation_name'] ?? '') ?></td>
                         <td>
                             <?php if ($verified): ?>
-                                <span class="badge-verified badge-verified--yes">ยืนยันแล้ว</span>
+                                <span class="admin-pill admin-pill--success">ยืนยันแล้ว</span>
                             <?php else: ?>
-                                <span class="badge-verified badge-verified--no">รออนุมัติ</span>
+                                <span class="admin-pill admin-pill--warning">รออนุมัติ</span>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars((string)($r['owner_email'] ?? '')) ?></td>

@@ -1,31 +1,180 @@
 <?php
-// includes/child_sponsorship.php — อุปการะเด็กรายเดือน + child_donations
+// includes/child_sponsorship.php — อุปการะเด็กรายเดือน (ใช้ donation เป็นแหล่งข้อมูลเดียว)
 /**
  * อุปการะเด็กรายเดือน (ปฏิทิน Asia/Bangkok)
  *
- * - sum(child_donations) ในช่วง [max(วันที่ 1 เดือนนี้, first_approved_at), เดือนถัดไป)
- * - >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD (20_000 บ.) = อุปการะครบในรอบเดือน
- * - ไม่นับยอดก่อน first_approved_at / anchor
+ * - sum(donation หมวด child ที่ completed) ในช่วง [max(วันที่ 1 เดือนนี้, approve_at), เดือนถัดไป)
+ * - >= เป้าหมายรายรอบของเด็ก (อิงแพ็กเกจจริง 700/4200/8400) = อุปการะครบในรอบเดือน
+ * - ไม่นับยอดก่อน approve_at / anchor
  * - drawdream_child_can_receive_donation() หยุดรับเมื่อครบ threshold ในรอบนั้น
  *
  * @see docs/SYSTEM_PRESENTATION_GUIDE.md
  */
 
-const DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD = 20000.0;
+const DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT = 700.0;
+
+/** แมป plan_code -> จำนวนเงินต่อรอบตามแพ็กเกจ */
+function drawdream_child_plan_amount_by_code(string $planCode): ?float
+{
+    $plan = strtolower(trim($planCode));
+    if ($plan === 'monthly') {
+        return 700.0;
+    }
+    if ($plan === 'semiannual') {
+        return 4200.0;
+    }
+    if ($plan === 'yearly') {
+        return 8400.0;
+    }
+    return null;
+}
+
+function drawdream_child_plan_months_by_code(string $planCode): int
+{
+    $plan = strtolower(trim($planCode));
+    if ($plan === 'monthly') {
+        return 1;
+    }
+    if ($plan === 'semiannual') {
+        return 6;
+    }
+    if ($plan === 'yearly') {
+        return 12;
+    }
+    return 0;
+}
+
+/**
+ * คำนวณช่วงสิทธิ์อุปการะที่ถูก stack ตามแผน (จ่ายซ้ำในเดือนเดียวกัน -> สิทธิ์เลื่อนไปรอบถัดไป)
+ * คืนหน้าต่างสิทธิ์ล่าสุด [start, end) และบอกว่าตอนนี้ยังอยู่ในสิทธิ์หรือไม่
+ *
+ * @return array{current:bool,start:?DateTimeImmutable,end:?DateTimeImmutable,plan_code:string}
+ */
+function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
+{
+    $out = ['current' => false, 'start' => null, 'end' => null, 'plan_code' => ''];
+    if ($childId <= 0) {
+        return $out;
+    }
+    require_once __DIR__ . '/donate_category_resolve.php';
+    $catId = drawdream_get_or_create_child_donate_category_id($conn);
+    if ($catId <= 0) {
+        return $out;
+    }
+    $st = $conn->prepare(
+        "SELECT recurring_plan_code, transfer_datetime, donate_id
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'
+           AND recurring_plan_code IN ('monthly','semiannual','yearly')
+         ORDER BY transfer_datetime ASC, donate_id ASC"
+    );
+    if (!$st) {
+        return $out;
+    }
+    $st->bind_param('ii', $catId, $childId);
+    $st->execute();
+    $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+    if ($rows === []) {
+        return $out;
+    }
+    $tz = new DateTimeZone('Asia/Bangkok');
+    $now = new DateTimeImmutable('now', $tz);
+    $coverageStart = null;
+    $coverageEnd = null;
+    $activeNow = false;
+    $activeStart = null;
+    $activeEnd = null;
+    $activePlanCode = '';
+    foreach ($rows as $r) {
+        $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
+        $months = drawdream_child_plan_months_by_code($planCode);
+        if ($months <= 0) {
+            continue;
+        }
+        $dtRaw = trim((string)($r['transfer_datetime'] ?? ''));
+        if ($dtRaw === '') {
+            continue;
+        }
+        try {
+            $paidAt = new DateTimeImmutable($dtRaw, $tz);
+        } catch (Exception $e) {
+            continue;
+        }
+        $monthStart = $paidAt->modify('first day of this month')->setTime(0, 0, 0);
+        if ($coverageEnd === null || $monthStart >= $coverageEnd) {
+            $coverageStart = $monthStart;
+        } else {
+            $coverageStart = $coverageEnd;
+        }
+        $coverageEnd = $coverageStart->modify('+' . $months . ' months');
+        if ($now >= $coverageStart && $now < $coverageEnd) {
+            $activeNow = true;
+            $activeStart = $coverageStart;
+            $activeEnd = $coverageEnd;
+            $activePlanCode = $planCode;
+        }
+    }
+    if ($coverageStart !== null && $coverageEnd !== null && $activeStart === null) {
+        $activeStart = $coverageStart;
+        $activeEnd = $coverageEnd;
+        $activePlanCode = trim((string)($rows[count($rows) - 1]['recurring_plan_code'] ?? ''));
+    }
+    $out['current'] = $activeNow;
+    $out['start'] = $activeStart;
+    $out['end'] = $activeEnd;
+    $out['plan_code'] = $activePlanCode;
+    return $out;
+}
+
+function drawdream_child_has_plan_coverage_now(mysqli $conn, int $childId): bool
+{
+    $w = drawdream_child_plan_coverage_window($conn, $childId);
+    return (bool)($w['current'] ?? false);
+}
+
+/**
+ * เป้าหมายยอดรอบปัจจุบันของเด็ก:
+ * - ใช้แพ็กเกจล่าสุดของเด็กจาก donation.recurring_* (active/cancelled/paused)
+ * - ถ้าไม่มีประวัติแพ็กเกจ ใช้ค่าเริ่มต้นรายเดือน 700 บาท
+ */
+function drawdream_child_cycle_target_amount(mysqli $conn, int $childId): float
+{
+    if ($childId <= 0) {
+        return DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT;
+    }
+    require_once __DIR__ . '/child_omise_subscription.php';
+    drawdream_child_omise_subscription_ensure_schema($conn);
+    $st = $conn->prepare(
+        "SELECT recurring_plan_code AS plan_code
+         FROM donation
+         WHERE target_id = ?
+           AND donate_type = 'child_subscription'
+           AND recurring_status IN ('active', 'paused', 'cancelled')
+         ORDER BY
+            CASE WHEN recurring_status = 'active' THEN 0 WHEN recurring_status = 'paused' THEN 1 ELSE 2 END,
+            COALESCE(recurring_next_charge_at, transfer_datetime) DESC,
+            donate_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT;
+    }
+    $st->bind_param('i', $childId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    if (!$row) {
+        return DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT;
+    }
+    $mapped = drawdream_child_plan_amount_by_code((string)($row['plan_code'] ?? ''));
+    if ($mapped !== null) {
+        return $mapped;
+    }
+    return DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT;
+}
 
 function drawdream_child_sponsorship_ensure_columns(mysqli $conn): void
 {
-    $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'first_approved_at'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query("ALTER TABLE foundation_children ADD COLUMN first_approved_at DATETIME NULL AFTER reviewed_at");
-    }
-    $conn->query("
-        UPDATE foundation_children
-        SET first_approved_at = reviewed_at
-        WHERE first_approved_at IS NULL
-          AND reviewed_at IS NOT NULL
-          AND COALESCE(approve_profile, '') IN ('อนุมัติ', 'กำลังดำเนินการ')
-    ");
+    // foundation_children ใช้ approve_at ตามสคีมาปัจจุบัน — ไม่สร้างคอลัมน์เสริม
 }
 
 /**
@@ -62,12 +211,8 @@ function drawdream_child_current_cycle_bounds(?string $anchorSql): ?array
 
 function drawdream_child_anchor_datetime(array $childRow): ?string
 {
-    $fa = trim((string)($childRow['first_approved_at'] ?? ''));
-    if ($fa !== '') {
-        return $fa;
-    }
-    $rv = trim((string)($childRow['reviewed_at'] ?? ''));
-    return $rv !== '' ? $rv : null;
+    $ap = trim((string)($childRow['approve_at'] ?? ''));
+    return $ap !== '' ? $ap : null;
 }
 
 /** ยอดบริจาคในเดือนปฏิทินปัจจุบัน (หลัง anchor ตาม effectiveStart) */
@@ -83,30 +228,59 @@ function drawdream_child_cycle_total(mysqli $conn, int $childId, array $childRow
         return 0.0;
     }
     [$effectiveStart, $monthEnd] = $bounds;
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS child_donations (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            child_id INT NOT NULL,
-            donor_user_id INT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX(child_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
+    require_once __DIR__ . '/donate_category_resolve.php';
+    $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
+    if ($childCategoryId <= 0) {
+        return 0.0;
+    }
     $startStr = $effectiveStart->format('Y-m-d H:i:s');
     $endStr = $monthEnd->format('Y-m-d H:i:s');
     $stmt = $conn->prepare(
-        'SELECT COALESCE(SUM(amount), 0) AS t FROM child_donations
-         WHERE child_id = ? AND donated_at >= ? AND donated_at < ?'
+        'SELECT COALESCE(SUM(amount), 0) AS t
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND payment_status = \'completed\'
+           AND transfer_datetime >= ? AND transfer_datetime < ?'
     );
-    $stmt->bind_param('iss', $childId, $startStr, $endStr);
+    $stmt->bind_param('iiss', $childCategoryId, $childId, $startStr, $endStr);
     $stmt->execute();
     $r = $stmt->get_result()->fetch_assoc();
     return (float)($r['t'] ?? 0);
 }
 
 /**
- * @param list<array<string,mixed>> $rows แต่ละแถวต้องมี child_id (+ first_approved_at / reviewed_at)
+ * ยอดสะสม “ทุนการศึกษา”: ส่วนของบริจาครายวัน (PromptPay ครั้งเดียว) ที่เกิน 700 บาทต่อครั้ง — คำนวณจาก amount (ไม่ใช้คอลัมน์แยก)
+ * ใช้แสดงให้มูลนิธิเท่านั้น — ไม่แสดงให้ผู้บริจาค
+ */
+function drawdream_child_education_fund_total_thb(mysqli $conn, int $childId): float
+{
+    if ($childId <= 0) {
+        return 0.0;
+    }
+    require_once __DIR__ . '/payment_transaction_schema.php';
+    drawdream_payment_transaction_ensure_schema($conn);
+    require_once __DIR__ . '/donate_category_resolve.php';
+    $categoryId = drawdream_get_or_create_child_donate_category_id($conn);
+    if ($categoryId <= 0) {
+        return 0.0;
+    }
+    $st = $conn->prepare(
+        'SELECT COALESCE(SUM(CASE WHEN amount > 700 THEN amount - 700 ELSE 0 END), 0) AS t
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND payment_status = \'completed\'
+           AND COALESCE(donate_type, \'\') NOT IN (\'child_subscription\', \'child_subscription_charge\')'
+    );
+    if (!$st) {
+        return 0.0;
+    }
+    $st->bind_param('ii', $categoryId, $childId);
+    $st->execute();
+    $r = $st->get_result()->fetch_assoc();
+
+    return (float)($r['t'] ?? 0);
+}
+
+/**
+ * @param list<array<string,mixed>> $rows แต่ละแถวต้องมี child_id (+ approve_at เมื่อมี)
  * @return array<int,float> child_id => ยอดในรอบปัจจุบัน
  */
 function drawdream_child_cycle_totals_batch(mysqli $conn, array $rows): array
@@ -115,74 +289,25 @@ function drawdream_child_cycle_totals_batch(mysqli $conn, array $rows): array
     if ($rows === []) {
         return [];
     }
-    $childIds = [];
-    foreach ($rows as $row) {
-        $id = (int)($row['child_id'] ?? 0);
-        if ($id > 0) {
-            $childIds[] = $id;
-        }
-    }
-    $childIds = array_values(array_unique($childIds));
-    if ($childIds === []) {
-        return [];
-    }
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS child_donations (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            child_id INT NOT NULL,
-            donor_user_id INT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX(child_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $placeholders = implode(',', array_fill(0, count($childIds), '?'));
-    $types = str_repeat('i', count($childIds));
-    $sql = "SELECT child_id, amount, donated_at FROM child_donations WHERE child_id IN ($placeholders)";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param($types, ...$childIds);
-    $stmt->execute();
-    $res = $stmt->get_result();
-
-    $byChild = [];
-    while ($r = $res->fetch_assoc()) {
-        $cid = (int)$r['child_id'];
-        if (!isset($byChild[$cid])) {
-            $byChild[$cid] = [];
-        }
-        $byChild[$cid][] = $r;
-    }
-
     $out = [];
     foreach ($rows as $row) {
         $cid = (int)($row['child_id'] ?? 0);
         if ($cid <= 0 || array_key_exists($cid, $out)) {
             continue;
         }
-        $anchor = drawdream_child_anchor_datetime($row);
-        $bounds = $anchor !== null ? drawdream_child_current_cycle_bounds($anchor) : null;
-        $sum = 0.0;
-        if ($bounds !== null && isset($byChild[$cid])) {
-            [$effectiveStart, $monthEnd] = $bounds;
-            foreach ($byChild[$cid] as $d) {
-                try {
-                    $dt = new DateTimeImmutable((string)$d['donated_at'], new DateTimeZone('Asia/Bangkok'));
-                } catch (Exception $e) {
-                    continue;
-                }
-                if ($dt >= $effectiveStart && $dt < $monthEnd) {
-                    $sum += (float)$d['amount'];
-                }
-            }
-        }
-        $out[$cid] = $sum;
+        $out[$cid] = drawdream_child_cycle_total($conn, $cid, $row);
     }
     return $out;
 }
 
 function drawdream_child_is_cycle_sponsored(mysqli $conn, int $childId, array $childRow): bool
 {
-    return drawdream_child_cycle_total($conn, $childId, $childRow) >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD;
+    /* ยกเลิกแผนแล้วยังอยู่ในช่วงสิทธิ์ที่จ่ายไปแล้ว (รายเดือน / 6 เดือน / รายปี) ยังถือว่ามีอุปการะครบรอบ */
+    if (drawdream_child_has_plan_coverage_now($conn, $childId)) {
+        return true;
+    }
+    $target = drawdream_child_cycle_target_amount($conn, $childId);
+    return drawdream_child_cycle_total($conn, $childId, $childRow) >= $target;
 }
 
 /** @deprecated ใช้ drawdream_child_is_cycle_sponsored */
@@ -206,9 +331,6 @@ function drawdream_child_can_receive_donation(mysqli $conn, int $childId, array 
     if (!in_array($ap, ['อนุมัติ', 'กำลังดำเนินการ'], true)) {
         return false;
     }
-    if (!empty($childRow['is_hidden'])) {
-        return false;
-    }
     require_once __DIR__ . '/child_omise_subscription.php';
     if (drawdream_child_has_any_active_subscription($conn, $childId)) {
         return false;
@@ -227,7 +349,10 @@ function drawdream_child_is_monthly_fully_sponsored(mysqli $conn, int $childId, 
 }
 
 /**
- * เด็กอยู่ในโซน "มีผู้อุปการะ" สาธารณะ: ครบยอดรอบเดือน หรือมีสมาชิกอุปการะแบบรายงวด (Omise) อย่างน้อย 1 ราย
+ * เด็กอยู่ในโซน "มีผู้อุปการะ" สาธารณะ:
+ * - มีแผน Omise (รายเดือน / 6 เดือน / รายปี) ที่ recurring_status = active หรือ
+ * - แผนถูกยกเลิกแล้วแต่ยังอยู่ในช่วงสิทธิ์ตามระยะที่จ่ายไปแล้ว (คำนวณจาก drawdream_child_plan_coverage_window)
+ * ไม่นับแค่บริจาคครั้งเดียว (รายวัน PromptPay) ที่ครบเกณฑ์รอบเดือนโดยไม่มีแผนรายรอบ
  *
  * @param array<int, true> $planSponsoredMap จาก drawdream_child_ids_with_active_plan_sponsorship()
  */
@@ -245,27 +370,158 @@ function drawdream_child_is_showcase_sponsored(
     if (!empty($planSponsoredMap[$childId])) {
         return true;
     }
-    return $cycleAmountInMonth >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD;
+    return drawdream_child_has_plan_coverage_now($conn, $childId);
+}
+
+/**
+ * รายชื่อผู้อุปการะแบบรายรอบ (Omise: รายเดือน / 6 เดือน / รายปี) เท่านั้น — ไม่รวมบริจาคครั้งเดียว
+ * ยกเลิกแล้วยังแสดงชื่อ พร้อมป้าย "เคยอุปการะ"
+ *
+ * @return array{rows: list<array{name:string,status:string,status_label:string,detail_line:string,sort_ts:int}>, active_recurring_count:int}
+ */
+function drawdream_child_foundation_sponsor_display_list(mysqli $conn, int $childId, int $childCategoryId): array
+{
+    if ($childId <= 0 || $childCategoryId <= 0) {
+        return ['rows' => [], 'active_recurring_count' => 0];
+    }
+
+    $planLabels = [
+        'monthly' => 'รายเดือน',
+        'semiannual' => 'ราย 6 เดือน',
+        'yearly' => 'รายปี',
+    ];
+
+    $latestSubByDonor = [];
+    $st = $conn->prepare(
+        'SELECT donor_id, recurring_status, recurring_plan_code, donate_id, transfer_datetime, recurring_next_charge_at
+         FROM donation
+         WHERE target_id = ? AND donate_type = \'child_subscription\' AND donor_id IS NOT NULL
+         ORDER BY donate_id DESC'
+    );
+    if ($st) {
+        $st->bind_param('i', $childId);
+        $st->execute();
+        $rs = $st->get_result();
+        while ($row = $rs->fetch_assoc()) {
+            $uid = (int)($row['donor_id'] ?? 0);
+            if ($uid <= 0) {
+                continue;
+            }
+            if (!isset($latestSubByDonor[$uid])) {
+                $latestSubByDonor[$uid] = $row;
+            }
+        }
+    }
+
+    $allIds = array_keys($latestSubByDonor);
+    sort($allIds);
+    if ($allIds === []) {
+        return ['rows' => [], 'active_recurring_count' => 0];
+    }
+
+    $nameMap = [];
+    $ph = implode(',', array_fill(0, count($allIds), '?'));
+    $types = str_repeat('i', count($allIds));
+    $stn = $conn->prepare("SELECT user_id, first_name, last_name FROM donor WHERE user_id IN ($ph)");
+    if ($stn) {
+        $stn->bind_param($types, ...$allIds);
+        $stn->execute();
+        $rn = $stn->get_result();
+        while ($dn = $rn->fetch_assoc()) {
+            $uid = (int)($dn['user_id'] ?? 0);
+            $nameMap[$uid] = trim((string)($dn['first_name'] ?? '') . ' ' . (string)($dn['last_name'] ?? ''));
+        }
+    }
+
+    $activeRecurring = 0;
+    $rows = [];
+    foreach ($allIds as $uid) {
+        if ($uid <= 0) {
+            continue;
+        }
+        $name = trim((string)($nameMap[$uid] ?? ''));
+        if ($name === '') {
+            $name = 'ผู้บริจาค (ไม่ระบุชื่อ)';
+        }
+
+        $subRow = $latestSubByDonor[$uid] ?? null;
+
+        $subTs = 0;
+        if (is_array($subRow)) {
+            $raw = trim((string)($subRow['recurring_next_charge_at'] ?? ''));
+            if ($raw === '') {
+                $raw = trim((string)($subRow['transfer_datetime'] ?? ''));
+            }
+            if ($raw !== '') {
+                $ts = strtotime($raw);
+                $subTs = $ts !== false ? $ts : 0;
+            }
+        }
+        $sortTs = $subTs;
+
+        $status = 'other';
+        $statusLabel = '';
+        $detailLine = '';
+
+        if (is_array($subRow)) {
+            $rs = (string)($subRow['recurring_status'] ?? '');
+            $pc = strtolower(trim((string)($subRow['recurring_plan_code'] ?? '')));
+            $planText = $planLabels[$pc] ?? ($pc !== '' ? $pc : 'รายรอบ');
+
+            if ($rs === 'active') {
+                $status = 'active';
+                $activeRecurring++;
+                $statusLabel = 'กำลังอุปการะ — ' . $planText;
+                $detailLine = $subTs > 0 ? ('อัปเดตแผนล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
+            } elseif ($rs === 'paused') {
+                $status = 'paused';
+                $statusLabel = 'กำลังอุปการะ — พักชำระชั่วคราว — ' . $planText;
+                $detailLine = $subTs > 0 ? ('อัปเดตล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
+            } elseif ($rs === 'cancelled') {
+                $status = 'cancelled';
+                $statusLabel = 'เคยอุปการะ — ' . $planText . ' · ยกเลิกแล้ว';
+                $detailLine = $subTs > 0 ? ('อัปเดตสถานะล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
+            } else {
+                $status = 'other';
+                $statusLabel = 'แผนอุปการะ (' . $rs . ') — ' . $planText;
+                $detailLine = $subTs > 0 ? ('อัปเดตล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
+            }
+        }
+
+        $rows[] = [
+            'name' => $name,
+            'status' => $status,
+            'status_label' => $statusLabel,
+            'detail_line' => $detailLine,
+            'sort_ts' => $sortTs,
+        ];
+    }
+
+    usort(
+        $rows,
+        static function (array $a, array $b): int {
+            $cmp = ($b['sort_ts'] <=> $a['sort_ts']);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+
+            return strcmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+        }
+    );
+
+    return [
+        'rows' => $rows,
+        'active_recurring_count' => $activeRecurring,
+    ];
 }
 
 function drawdream_child_outcome_ensure_columns(mysqli $conn): void
 {
-    $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'sponsor_outcome_text'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query('ALTER TABLE foundation_children ADD COLUMN sponsor_outcome_text LONGTEXT NULL');
-    }
-    $chk2 = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'sponsor_outcome_updated_at'");
-    if ($chk2 && $chk2->num_rows === 0) {
-        $conn->query('ALTER TABLE foundation_children ADD COLUMN sponsor_outcome_updated_at DATETIME NULL');
-    }
-    $chk3 = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'sponsor_outcome_images'");
-    if ($chk3 && $chk3->num_rows === 0) {
-        $conn->query('ALTER TABLE foundation_children ADD COLUMN sponsor_outcome_images LONGTEXT NULL');
-    }
+    // ผลลัพธ์เด็ก: update_text, update_images, update_at
 }
 
 /**
- * @return list<string> ชื่อไฟล์ใน uploads/Children/outcomes/ (basename เท่านั้น)
+ * @return list<string> ชื่อไฟล์รูปผลลัพธ์เด็ก (basename เท่านั้น)
  */
 function drawdream_child_outcome_images_parse(?string $raw): array
 {
@@ -305,6 +561,18 @@ function drawdream_child_outcome_images_json(array $basenames): string
     return json_encode($clean, JSON_UNESCAPED_UNICODE);
 }
 
+function drawdream_child_outcome_image_url(string $filename): string
+{
+    $safe = basename($filename);
+    if ($safe === '') {
+        return '';
+    }
+    if (is_file(__DIR__ . '/../uploads/evidence/' . $safe)) {
+        return 'uploads/evidence/' . $safe;
+    }
+    return 'uploads/childern/' . $safe;
+}
+
 /**
  * HTML แกลเลอรีรูปผลลัพธ์ (path สัมพันธ์จากรากเว็บ)
  *
@@ -318,8 +586,9 @@ function drawdream_child_outcome_images_html(array $basenames): string
     $html = '<div class="child-outcome-public__gallery">';
     foreach ($basenames as $fn) {
         $safe = htmlspecialchars($fn, ENT_QUOTES, 'UTF-8');
-        $html .= '<a class="child-outcome-public__gallery-item" href="uploads/Children/outcomes/' . $safe . '" target="_blank" rel="noopener">';
-        $html .= '<img src="uploads/Children/outcomes/' . $safe . '" alt="" loading="lazy" decoding="async">';
+        $imgUrl = htmlspecialchars(drawdream_child_outcome_image_url($fn), ENT_QUOTES, 'UTF-8');
+        $html .= '<a class="child-outcome-public__gallery-item" href="' . $imgUrl . '" target="_blank" rel="noopener">';
+        $html .= '<img src="' . $imgUrl . '" alt="" loading="lazy" decoding="async">';
         $html .= '</a>';
     }
     $html .= '</div>';
@@ -329,25 +598,24 @@ function drawdream_child_outcome_images_html(array $basenames): string
 
 function drawdream_child_total_donations(mysqli $conn, int $childId): float
 {
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS child_donations (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            child_id INT NOT NULL,
-            donor_user_id INT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX(child_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $stmt = $conn->prepare('SELECT COALESCE(SUM(amount), 0) AS t FROM child_donations WHERE child_id = ?');
-    $stmt->bind_param('i', $childId);
+    require_once __DIR__ . '/donate_category_resolve.php';
+    $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
+    if ($childCategoryId <= 0) {
+        return 0.0;
+    }
+    $stmt = $conn->prepare(
+        'SELECT COALESCE(SUM(amount), 0) AS t
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND payment_status = \'completed\''
+    );
+    $stmt->bind_param('ii', $childCategoryId, $childId);
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     return (float)($row['t'] ?? 0);
 }
 
 /**
- * ยอดรวม child_donations หลาย child_id (ใช้หน้ารายการมูลนิธิ)
+ * ยอดรวม donation หมวด child หลาย child_id (ใช้หน้ารายการมูลนิธิ)
  *
  * @param list<int> $childIds
  * @return array<int,float>
@@ -362,25 +630,24 @@ function drawdream_child_donation_totals_batch(mysqli $conn, array $childIds): a
     if ($ids === []) {
         return $out;
     }
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS child_donations (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            child_id INT NOT NULL,
-            donor_user_id INT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX(child_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
+    require_once __DIR__ . '/donate_category_resolve.php';
+    $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
+    if ($childCategoryId <= 0) {
+        return $out;
+    }
     $ph = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
     $stmt = $conn->prepare(
-        "SELECT child_id, COALESCE(SUM(amount), 0) AS t FROM child_donations WHERE child_id IN ($ph) GROUP BY child_id"
+        "SELECT target_id AS child_id, COALESCE(SUM(amount), 0) AS t
+         FROM donation
+         WHERE category_id = ? AND payment_status = 'completed' AND target_id IN ($ph)
+         GROUP BY target_id"
     );
     if (!$stmt) {
         return $out;
     }
-    $stmt->bind_param($types, ...$ids);
+    $bindTypes = 'i' . $types;
+    $stmt->bind_param($bindTypes, $childCategoryId, ...$ids);
     $stmt->execute();
     $res = $stmt->get_result();
     while ($row = $res->fetch_assoc()) {
@@ -403,7 +670,8 @@ function drawdream_child_sync_sponsorship_status(mysqli $conn, int $childId): vo
         return;
     }
     $cycle = drawdream_child_cycle_total($conn, $childId, $row);
-    $status = $cycle >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD ? 'อุปการะแล้ว' : 'รออุปการะ';
+    $target = drawdream_child_cycle_target_amount($conn, $childId);
+    $status = $cycle >= $target ? 'อุปการะแล้ว' : 'รออุปการะ';
     $stmt = $conn->prepare('UPDATE foundation_children SET status = ? WHERE child_id = ?');
     $stmt->bind_param('si', $status, $childId);
     $stmt->execute();
@@ -411,7 +679,7 @@ function drawdream_child_sync_sponsorship_status(mysqli $conn, int $childId): vo
 
 /**
  * ลบข้อมูลที่อ้างอิง child_id ก่อนลบแถว foundation_children
- * (child_donations, donation+payment_transaction ทุกหมวดที่ child_donate ไม่ว่าง, admin audit, notifications ที่ลิงก์ถึงเด็ก)
+ * (donation ทุกหมวดที่ child_donate ไม่ว่าง, admin audit, notifications ที่ลิงก์ถึงเด็ก)
  *
  * หมายเหตุ: AUTO_INCREMENT ของแต่ละตารางใน MySQL จะนับต่อจากค่าสูงสุดที่เคยมี — ไม่มีการรีใบเลขย้อนเติมช่องว่าง (เป็นมาตรฐานที่ปลอดภัย)
  */
@@ -419,12 +687,6 @@ function drawdream_purge_child_related_data(mysqli $conn, int $childId): void
 {
     if ($childId <= 0) {
         return;
-    }
-
-    $stmtCd = $conn->prepare('DELETE FROM child_donations WHERE child_id = ?');
-    if ($stmtCd) {
-        $stmtCd->bind_param('i', $childId);
-        $stmtCd->execute();
     }
 
     $dq = $conn->prepare(
@@ -440,11 +702,6 @@ function drawdream_purge_child_related_data(mysqli $conn, int $childId): void
             $did = (int)($dr['donate_id'] ?? 0);
             if ($did <= 0) {
                 continue;
-            }
-            $pt = $conn->prepare('DELETE FROM payment_transaction WHERE donate_id = ?');
-            if ($pt) {
-                $pt->bind_param('i', $did);
-                $pt->execute();
             }
             $dd = $conn->prepare('DELETE FROM donation WHERE donate_id = ?');
             if ($dd) {
@@ -502,10 +759,10 @@ function drawdream_purge_child_related_data(mysqli $conn, int $childId): void
     }
 }
 
-/** ลบไฟล์รูปใน uploads/Children/ หลังลบโปรไฟล์ (ชื่อไฟล์จากฐานข้อมูล) */
+/** ลบไฟล์รูปใน uploads/childern/ หลังลบโปรไฟล์ (ชื่อไฟล์จากฐานข้อมูล) */
 function drawdream_delete_child_upload_files(?string $photoChild, ?string $qrImage): void
 {
-    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'Children' . DIRECTORY_SEPARATOR;
+    $dir = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'childern' . DIRECTORY_SEPARATOR;
     foreach ([$photoChild, $qrImage] as $raw) {
         $fn = basename(trim((string)$raw));
         if ($fn === '' || $fn === '.' || $fn === '..') {

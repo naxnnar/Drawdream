@@ -68,6 +68,41 @@ body.admin-sidebar-page.donation-page {
     font-family: 'Sarabun', sans-serif;
 }
 
+.foundation-outcome-notice {
+    margin-top: 12px;
+    background: #fff6e7;
+    border: 1px solid #f0c87a;
+    color: #6b4b11;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.foundation-outcome-notice__list {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.foundation-outcome-notice__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    color: #2e3f7f;
+    background: #ffffff;
+    border: 1px solid #dfc28a;
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 0.93rem;
+    font-weight: 700;
+}
+
+.foundation-outcome-notice__item:hover {
+    background: #f4f7ff;
+}
+
 .donation-shell .container {
     max-width: 100% !important;
     margin: 0;
@@ -133,10 +168,12 @@ body.admin-sidebar-page.donation-page {
     border-radius: 10px;
     font-weight: 800;
     padding: 12px 20px;
+    min-height: 46px;
     font-size: 1.05rem;
     text-decoration: none;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
 }
 
@@ -147,12 +184,49 @@ body.admin-sidebar-page.donation-page {
     border-radius: 10px;
     font-weight: 800;
     padding: 12px 20px;
+    min-height: 46px;
     font-size: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-delete-selected:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+.btn-update-outcome {
+    background: #597D57;
+    color: #fff;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    padding: 12px 20px;
+    min-height: 46px;
+    font-size: 1.05rem;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 10px 20px rgba(89, 125, 87, 0.28);
+    transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
+}
+
+.btn-update-outcome:hover {
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 12px 22px rgba(89, 125, 87, 0.35);
+    filter: brightness(1.03);
+}
+
+.btn-update-outcome--disabled {
+    background: #9ca3af;
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.8;
+    pointer-events: none;
 }
 
 .btn-toggle-edit {
@@ -162,7 +236,11 @@ body.admin-sidebar-page.donation-page {
     border-radius: 10px;
     font-weight: 800;
     padding: 12px 20px;
+    min-height: 46px;
     font-size: 1.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* ── Grid การ์ดเด็ก ─── */
@@ -257,6 +335,7 @@ body.mode-delete .child-card-wrap--bulk-protected {
 }
 body.mode-delete .child-status-pill { display: none; }
 body.mode-edit   .child-status-pill { display: none; }
+body.mode-outcome .child-status-pill { display: none; }
 
 /* ── edit pill ─── */
 .edit-pill-wrap { display: none; margin-top: 8px; }
@@ -421,16 +500,15 @@ body.mode-delete .inline-delete-actions {
     aspect-ratio: 1 / 1;
     border-radius: 16px;
     overflow: hidden;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
+    display: block;
+    position: relative;
 }
 
 .donation-grid .card-img img {
-    width: auto;
+    width: 100%;
     height: 100%;
-    max-width: 100%;
-    object-fit: contain;
+    object-fit: cover;
+    object-position: center top;
     display: block;
 }
 
@@ -497,112 +575,6 @@ body.mode-delete .inline-delete-actions {
 .child-status-pill.status-approved { background: linear-gradient(135deg, #799677, #597D57); color: #fff; }
 .child-status-pill.status-pending  { background: linear-gradient(135deg, #f7cc47, #e8b923); color: #3b2f09; }
 .child-status-pill.status-rejected { background: #CC583F; color: #fff; }
-
-/* ── Reason Bottom Sheet ─── */
-.reason-sheet-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 1055;
-    background: rgba(0,0,0,0.45);
-    align-items: flex-end;
-    justify-content: center;
-}
-
-.reason-sheet-overlay.open { display: flex; }
-
-.reason-sheet-panel {
-    background: #fff;
-    width: 100%;
-    max-width: 560px;
-    border-radius: 24px 24px 0 0;
-    padding: 24px 20px 28px;
-    animation: sheetSlideUp 0.28s ease;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-@keyframes sheetSlideUp {
-    from { transform: translateY(100%); }
-    to   { transform: translateY(0); }
-}
-
-.reason-sheet-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 6px;
-}
-
-.reason-sheet-title    { font-size: 1.12rem; font-weight: 800; color: #13213a; }
-.reason-sheet-subtitle { font-size: 0.86rem; color: #6b7280; margin-top: 2px; }
-.reason-sheet-close    { background: none; border: none; font-size: 1.4rem; line-height: 1; color: #9ca3af; cursor: pointer; padding: 0 4px; }
-.reason-sheet-prompt   { font-size: 0.9rem; color: #374151; font-weight: 600; margin-bottom: 14px; }
-
-.reason-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 16px;
-}
-
-.reason-option {
-    background: #f9fafb;
-    border: 2px solid #e5e7eb;
-    border-radius: 16px;
-    padding: 14px 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-    text-align: center;
-}
-
-.reason-option:hover,
-.reason-option.selected                        { border-color: #CC583F; background: #fff5f3; }
-.reason-option-hide:hover,
-.reason-option-hide.selected                   { border-color: #6b7280 !important; background: #f3f4f6 !important; }
-
-.reason-icon {
-    width: 54px;
-    height: 54px;
-    border-radius: 14px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.45rem;
-}
-
-.reason-label { font-size: 0.80rem; font-weight: 700; color: #374151; line-height: 1.3; }
-
-.reason-sheet-footer { display: flex; gap: 10px; margin-top: 4px; }
-
-.reason-confirm-btn {
-    flex: 1;
-    background: #CC583F;
-    color: #fff;
-    border: 0;
-    border-radius: 999px;
-    padding: 12px;
-    font-size: 0.96rem;
-    font-weight: 800;
-    transition: background 0.15s;
-}
-
-.reason-confirm-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.reason-cancel-btn {
-    flex: 1;
-    background: #fff;
-    color: #374151;
-    border: 1.5px solid #d1d5db;
-    border-radius: 999px;
-    padding: 12px;
-    font-size: 0.96rem;
-    font-weight: 700;
-}
 
 /* Responsive — children grid */
 @media (max-width: 1199.98px) { .donation-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
@@ -786,12 +758,13 @@ main.child-profile-main {
 
 /* donation stats panel */
 .donation-stats-panel { width: 100%; margin-top: 18px; margin-bottom: 18px; }
-.stats-row { display: flex; gap: 16px; margin-bottom: 10px; }
+.stats-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 10px; }
 
-.stat-box { flex: 1; border-radius: 12px; padding: 16px 12px; text-align: center; }
+.stat-box { flex: 1; min-width: 140px; border-radius: 12px; padding: 16px 12px; text-align: center; }
 .stats-row .stat-box:nth-child(1) { background: #d7eef8; }
 .stats-row .stat-box:nth-child(2) { background: #f8d8e5; }
 .stats-row .stat-box:nth-child(3) { background: #f8dca8; }
+.stats-row .stat-box:nth-child(4) { background: #e8f5e9; }
 
 .stat-box .stat-num   { font-size: 2rem;  font-weight: 900; color: #1a1f3a; line-height: 1; }
 .stat-box .stat-label { font-size: 1rem;  color: #4b5563;   font-weight: 800; margin-top: 6px; }
@@ -808,6 +781,29 @@ main.child-profile-main {
 .stats-row .stat-box:nth-child(3) .stat-num,
 .stats-row .stat-box:nth-child(3) .stat-label { color: #CC583F; }
 
+.stats-row .stat-box:nth-child(4) .stat-icon,
+.stats-row .stat-box:nth-child(4) .stat-num,
+.stats-row .stat-box:nth-child(4) .stat-label { color: #2e7d32; }
+
+.foundation-sponsors-details { margin-top: 8px; }
+.foundation-sponsors-details__summary {
+    cursor: pointer;
+    list-style: none;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #3C5099;
+    user-select: none;
+}
+.foundation-sponsors-details__summary::-webkit-details-marker { display: none; }
+.foundation-sponsors-details__body {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(60, 80, 153, 0.15);
+    font-size: 0.95rem;
+    color: #374151;
+    line-height: 1.5;
+}
+
 .stat-icon {
     display: inline-flex;
     align-items: center;
@@ -818,6 +814,166 @@ main.child-profile-main {
     font-size: 34px;
     background: transparent;
     line-height: 1;
+}
+
+/* admin_approve_projects.php — ตรวจสอบโครงการ (รูปแบบเดียวกับตรวจสอบเด็ก) */
+body.admin-approve-projects-page {
+    background: #f5f0e8;
+    min-height: 100vh;
+}
+
+.admin-project-review .admin-review-layout {
+    max-width: 1100px;
+}
+
+.admin-project-review .admin-details-col .data-grid {
+    max-width: 100%;
+}
+
+.admin-project-review .admin-image-col {
+    align-items: flex-start;
+}
+
+.admin-project-cover {
+    width: 100%;
+    max-width: 320px;
+    max-height: 360px;
+    object-fit: cover;
+    border-radius: 14px;
+    background: #f3f3f3;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    display: block;
+}
+
+.admin-project-cover--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: #9ca3af;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.admin-project-review .admin-actions textarea[name="remark"] {
+    min-width: 280px;
+    min-height: 96px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    padding: 10px 12px;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.admin-project-review .stat-num--date {
+    font-size: 1.35rem;
+    line-height: 1.15;
+}
+
+.foundation-sponsors-list {
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.58);
+    border: 1px solid rgba(60, 80, 153, 0.18);
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-align: left;
+    color: #1f2b46;
+}
+
+.foundation-sponsors-list strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 0.98rem;
+}
+
+.foundation-sponsors-list p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.foundation-sponsors-latest {
+    margin: 0 0 6px;
+    font-size: 0.92rem;
+    color: #2f3f7a;
+    font-weight: 600;
+}
+
+.foundation-sponsors-latest__name {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: #edf2ff;
+    border: 1px solid #cfd9ff;
+    color: #1f2b46;
+    font-weight: 700;
+}
+
+.foundation-sponsors-latest__time {
+    margin-left: 6px;
+    color: #516080;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.foundation-sponsors-status-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.foundation-sponsors-status-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(60, 80, 153, 0.12);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+.foundation-sponsors-status-item:last-child { border-bottom: 0; }
+.foundation-sponsors-status-item__name {
+    font-weight: 700;
+    color: #1f2b46;
+}
+.foundation-sponsors-status-item__detail {
+    width: 100%;
+    font-size: 0.85rem;
+    color: #516080;
+}
+.foundation-sponsor-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border: 1px solid transparent;
+    white-space: normal;
+}
+.foundation-sponsor-badge--active {
+    background: #e8f5e9;
+    border-color: #81c784;
+    color: #1b5e20;
+}
+.foundation-sponsor-badge--paused {
+    background: #fff8e1;
+    border-color: #ffcc80;
+    color: #e65100;
+}
+.foundation-sponsor-badge--cancelled {
+    background: #fce4ec;
+    border-color: #f48fb1;
+    color: #880e4f;
+}
+.foundation-sponsor-badge--onetime {
+    background: #e3f2fd;
+    border-color: #90caf9;
+    color: #0d47a1;
+}
+.foundation-sponsor-badge--other {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+    color: #374151;
 }
 
 /* foundation contact info */
@@ -835,15 +991,28 @@ main.child-profile-main {
     margin: auto;
 }
 
-.profile-label {
+.profile-labels {
     position: absolute;
     top: -44px;
     left: 50px;
-    background-color: #F8CE32;
-    padding: 10px 28px;
+    display: flex;
+    gap: 8px;
+}
+.profile-label-tab {
+    background-color: #e7c84d;
+    padding: 10px 24px;
     border-radius: 18px 18px 0 0;
     font-weight: 700;
     font-size: 1rem;
+    color: #6f6030;
+    text-decoration: none;
+}
+.profile-label-tab.is-active {
+    background-color: #F8CE32;
+    color: #333;
+}
+.profile-label-tab:hover {
+    text-decoration: none;
     color: #333;
 }
 
@@ -867,6 +1036,9 @@ main.child-profile-main {
 .child-details { margin-top: 18px; color: #333; font-size: 1.25rem; line-height: 2.1; }
 .child-details p { margin: 0; }
 .child-details strong { font-size: 1.25rem; }
+.child-cancel-below-wish-form {
+    margin-top: 12px;
+}
 
 .col-right { flex: 1; display: flex; flex-direction: column; align-items: stretch; text-align: center; min-width: 0; }
 
@@ -990,7 +1162,7 @@ main.child-profile-main {
 
 .payment-method-option.active .pm-check { opacity: 1; }
 
-/* อุปการะรายงวด Omise (children_donate) — เต็มความกว้างคอลัมน์ขวา ให้แถวปุ่มกับ summary/ปุ่มบริจาคเสมอกัน */
+/* อุปการะรายรอบ Omise (children_donate) — เต็มความกว้างคอลัมน์ขวา ให้แถวปุ่มกับ summary/ปุ่มบริจาคเสมอกัน */
 .child-subscription-box {
     width: 100%;
     max-width: none;
@@ -1004,6 +1176,34 @@ main.child-profile-main {
     border: 1px solid #b9d9b8;
     font-size: 1rem;
     line-height: 1.5;
+}
+.child-sub-cancelled-notice {
+    margin: 12px 0 16px;
+    padding: 14px 16px;
+    background: #f5f7ff;
+    border-radius: 14px;
+    border: 1px solid #c7d1f7;
+}
+.child-sub-cancelled-notice__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 800;
+    color: #21327b;
+    margin-bottom: 6px;
+}
+.child-sub-cancelled-notice__meta,
+.child-sub-cancelled-notice__progress,
+.child-sub-cancelled-notice__hint {
+    color: #223;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+.child-sub-cancelled-notice__hint {
+    margin-top: 4px;
+    font-weight: 700;
+    color: #1f2b63;
 }
 /* แถวปุ่มแพ็ก — เต็มแถว ปุ่มใหญ่สมส่วนกับกล่องเหลือง */
 .sub-plan-grid {
@@ -1150,6 +1350,12 @@ main.child-profile-main {
 .child-daily-form {
     width: 100%;
     box-sizing: border-box;
+}
+.sub-daily-limit-note {
+    font-size: 0.86rem;
+    color: #374151;
+    margin: 4px 0 10px;
+    font-weight: 600;
 }
 /* การ์ด PromptPay — ให้ตรงกับ payment_project.php + css/payment.css */
 .child-daily-payment-method {
@@ -1874,6 +2080,41 @@ body.admin-children-page button:hover { background: #d4b13a; }
     box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
     border: 1px solid rgba(60, 80, 153, 0.12);
 }
+.child-outcome-public--tab {
+    max-width: 100%;
+    margin-top: 0;
+}
+.child-outcome-tab-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+.child-outcome-tab-layout__media {
+    flex: 0 0 280px;
+    max-width: 46%;
+}
+.child-outcome-tab-layout__img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+}
+.child-outcome-tab-layout__content {
+    flex: 1;
+    min-width: 0;
+}
+@media (max-width: 768px) {
+    .child-outcome-tab-layout {
+        flex-direction: column;
+    }
+    .child-outcome-tab-layout__media {
+        max-width: 100%;
+        width: 100%;
+        flex-basis: auto;
+    }
+}
 .child-outcome-public__label {
     font-weight: 800;
     font-size: 1.05rem;
@@ -1935,14 +2176,14 @@ body.admin-children-page button:hover { background: #d4b13a; }
 }
 .child-impression-card__body {
     display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 20px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
 }
 .child-impression-card__photo-wrap {
     flex: 0 0 auto;
-    width: min(200px, 38vw);
-    max-width: 42%;
+    width: min(360px, 48vw);
+    max-width: 50%;
 }
 .child-impression-card__photo {
     display: block;
@@ -1959,14 +2200,14 @@ body.admin-children-page button:hover { background: #d4b13a; }
     min-width: 0;
 }
 .child-impression-card__quote {
-    font-size: 1.2rem;
-    color: #111827;
-    line-height: 1.65;
+    font-size: 1.3rem;
+    color: #111111;
+    line-height: 1.75;
     font-weight: 700;
 }
 .child-impression-card__empty-inline {
     font-size: 1.1rem;
-    color: #4b5563;
+    color: #111111;
     line-height: 1.6;
 }
 .child-impression-card__text-col .child-outcome-public__gallery {
@@ -1977,14 +2218,50 @@ body.admin-children-page button:hover { background: #d4b13a; }
 .child-impression-card__attribution {
     margin: 14px 0 0;
     font-size: 1rem;
-    color: #4b5563;
+    color: #1f1f1f;
     line-height: 1.45;
 }
 .child-impression-card__meta {
     margin: 10px 0 0;
     font-size: 0.95rem;
-    color: #6b7280;
+    color: #1f1f1f;
 }
+.child-impression-slider { position: relative; }
+.child-impression-slide { display: none; margin: 0; }
+.child-impression-slide.active { display: block; }
+.child-impression-slider__btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.96);
+    color: #374151;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.2);
+}
+.child-impression-slider__btn.prev { left: 8px; }
+.child-impression-slider__btn.next { right: 8px; }
+.child-impression-slider__dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+}
+.child-impression-slider__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.65);
+}
+.child-impression-slider__dot.active { background: #fff; }
 .child-impression-card__empty {
     font-size: 1.1rem;
     color: #4b5563;
@@ -2002,6 +2279,44 @@ body.admin-children-page button:hover { background: #d4b13a; }
     margin: 0;
     padding-top: 0;
     border-top: none;
+}
+.child-subscription-manage {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    align-items: flex-end;
+}
+.child-subscription-manage__meta {
+    font-size: 0.96rem;
+    color: #374151;
+    line-height: 1.5;
+}
+.child-subscription-manage__form {
+    margin: 0;
+}
+.btn-subscription-cancel {
+    border: 1px solid #ef9a9a;
+    background: #fff3f3;
+    color: #b71c1c;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 0.92rem;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: background-color 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+}
+.btn-subscription-cancel--large {
+    min-height: 46px;
+    padding: 10px 18px;
+    font-size: 1.02rem;
+    font-weight: 800;
+}
+.btn-subscription-cancel:hover {
+    background: #ffe5e5;
+    border-color: #e57373;
+    transform: translateY(-1px);
 }
 @media (max-width: 480px) {
     .child-impression-card__body {
@@ -2078,6 +2393,40 @@ body.admin-children-page button:hover { background: #d4b13a; }
 body.mode-delete .foundation-outcome-pill-wrap,
 body.mode-edit .foundation-outcome-pill-wrap { display: none; }
 
+.child-card-outcome-actions {
+    margin-top: 8px;
+    display: none;
+}
+
+.btn-card-outcome {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-decoration: none;
+    color: #fff !important;
+    background: linear-gradient(135deg, #799677, #597D57);
+    box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+}
+
+.btn-card-outcome:hover {
+    color: #fff !important;
+    filter: brightness(1.05);
+}
+
+.btn-card-outcome.is-done {
+    background: linear-gradient(135deg, #6d8e6b, #4f6f4d);
+}
+
+body.mode-outcome .child-card-outcome-actions {
+    display: block;
+}
+
 /* หน้า foundation_child_outcome.php — พื้นหลังครีม + โทนแบรนด์ #3C5099 หัวการ์ดฝันดาว/สายรุ้ง/เด็ก */
 body.outcome-form-page {
     background: #F7ECDE;
@@ -2092,15 +2441,16 @@ body.outcome-form-page {
 .outcome-back-link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
     font-weight: 700;
     color: #3C5099;
     text-decoration: none;
     margin-bottom: 18px;
-    font-size: 0.98rem;
+    font-size: 1.9rem;
+    line-height: 1;
 }
 .outcome-back-link:hover {
-    text-decoration: underline;
+    text-decoration: none;
     color: #2e407f;
 }
 .outcome-hero-card {
@@ -2152,40 +2502,146 @@ body.outcome-form-page {
 .outcome-dream-rainbow {
     position: absolute;
     left: 50%;
-    bottom: -6px;
+    bottom: 8px;
     transform: translateX(-50%);
-    width: 118%;
+    width: 124%;
     max-width: 520px;
-    height: 72px;
+    height: 92px;
     pointer-events: none;
-    opacity: 0.92;
+    opacity: 1;
+    animation: outcome-rainbow-breathe 4.4s ease-in-out infinite;
 }
 .outcome-rainbow-svg {
     width: 100%;
     height: 100%;
     display: block;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.12));
+    filter: drop-shadow(0 4px 10px rgba(60, 80, 153, 0.22));
 }
-.outcome-dream-kids {
+.outcome-rainbow-svg path {
+    stroke-dasharray: none;
+    animation: none;
+}
+@keyframes outcome-rainbow-breathe {
+    0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+    50% { transform: translateX(-50%) translateY(-2px) scale(1.02); }
+}
+.outcome-dream-clouds {
     position: absolute;
-    left: 50%;
-    bottom: 10px;
-    transform: translateX(-50%);
-    width: 132px;
-    height: 52px;
+    inset: 0;
     pointer-events: none;
-    z-index: 2;
-    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15));
-    animation: outcome-kids-bob 3.5s ease-in-out infinite;
+    z-index: 1;
 }
-.outcome-kids-svg {
-    width: 100%;
-    height: 100%;
-    display: block;
+
+.outcome-dream-cloud {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 999px;
+    box-shadow: 0 6px 14px rgba(12, 22, 52, 0.12);
 }
-@keyframes outcome-kids-bob {
-    0%, 100% { transform: translateX(-50%) translateY(0); }
-    50% { transform: translateX(-50%) translateY(-3px); }
+
+.outcome-dream-cloud::before,
+.outcome-dream-cloud::after {
+    content: "";
+    position: absolute;
+    background: inherit;
+    border-radius: 50%;
+}
+
+.outcome-dream-cloud--a {
+    width: 70px;
+    height: 24px;
+    left: 4%;
+    bottom: 18px;
+    animation: outcome-cloud-drift-a 5.4s ease-in-out infinite;
+}
+.outcome-dream-cloud--a::before {
+    width: 28px;
+    height: 24px;
+    left: 8px;
+    top: -12px;
+}
+.outcome-dream-cloud--a::after {
+    width: 22px;
+    height: 18px;
+    right: 10px;
+    top: -8px;
+}
+
+.outcome-dream-cloud--b {
+    width: 60px;
+    height: 22px;
+    left: 18%;
+    top: 16px;
+    animation: outcome-cloud-drift-b 6s ease-in-out infinite;
+}
+.outcome-dream-cloud--b::before {
+    width: 24px;
+    height: 20px;
+    left: 7px;
+    top: -10px;
+}
+.outcome-dream-cloud--b::after {
+    width: 18px;
+    height: 15px;
+    right: 8px;
+    top: -7px;
+}
+
+.outcome-dream-cloud--c {
+    width: 76px;
+    height: 27px;
+    right: 12%;
+    top: 26px;
+    animation: outcome-cloud-drift-c 5.8s ease-in-out infinite;
+}
+.outcome-dream-cloud--c::before {
+    width: 30px;
+    height: 24px;
+    left: 12px;
+    top: -12px;
+}
+.outcome-dream-cloud--c::after {
+    width: 20px;
+    height: 17px;
+    right: 11px;
+    top: -7px;
+}
+
+.outcome-dream-cloud--d {
+    width: 54px;
+    height: 20px;
+    right: 5%;
+    bottom: 16px;
+    animation: outcome-cloud-drift-d 6.4s ease-in-out infinite;
+}
+.outcome-dream-cloud--d::before {
+    width: 20px;
+    height: 16px;
+    left: 6px;
+    top: -8px;
+}
+.outcome-dream-cloud--d::after {
+    width: 16px;
+    height: 13px;
+    right: 6px;
+    top: -6px;
+}
+
+@keyframes outcome-cloud-drift-a {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-3px) translateX(3px); }
+}
+@keyframes outcome-cloud-drift-b {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-2px) translateX(-3px); }
+}
+@keyframes outcome-cloud-drift-c {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-4px) translateX(2px); }
+}
+@keyframes outcome-cloud-drift-d {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-2px) translateX(-2px); }
 }
 .outcome-hero-card__cloud {
     position: absolute;

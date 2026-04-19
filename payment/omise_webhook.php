@@ -1,5 +1,5 @@
 <?php
-// payment/omise_webhook.php — รับ event จาก Omise (เช่น charge.complete) บันทึก child_donations จากอุปการะรายงวด
+// payment/omise_webhook.php — รับ event จาก Omise (เช่น charge.complete) บันทึก child_donations จากอุปการะรายรอบ
 /**
  * ตั้งค่า: Omise Dashboard (Test/Live) → Webhooks → ใส่ URL แบบ HTTPS ที่เข้าถึงได้จากอินเทอร์เน็ต
  * (บน localhost ใช้ ngrok ชี้มาที่ https://xxxx.ngrok.io/drawdream/payment/omise_webhook.php)
@@ -14,6 +14,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
+require_once dirname(__DIR__) . '/includes/e_receipt.php';
 
 $raw = file_get_contents('php://input');
 $payload = json_decode($raw ?: '[]', true);
@@ -64,8 +65,9 @@ if (!$paid) {
 }
 
 drawdream_child_omise_subscription_ensure_schema($conn);
-$dupChk = $conn->prepare('SELECT 1 FROM omise_webhook_charge WHERE charge_id = ? LIMIT 1');
-$dupChk->bind_param('s', $chargeId);
+$dupChk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
+$done = 'completed';
+$dupChk->bind_param('ss', $chargeId, $done);
 $dupChk->execute();
 if ($dupChk->get_result()->fetch_row()) {
     echo json_encode(['received' => true, 'duplicate' => true]);
@@ -83,6 +85,11 @@ $rec = drawdream_child_persist_subscription_paid_charge(
 if (!$rec) {
     echo json_encode(['received' => true, 'recorded' => false]);
     exit;
+}
+
+$receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $chargeId);
+if ($receiptDonateId > 0) {
+    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
 }
 
 echo json_encode(['received' => true, 'recorded' => true, 'child_id' => $childId]);

@@ -31,6 +31,7 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title><?php echo $story['name']; ?> - DrawDream</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -38,11 +39,43 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <!-- link css -->
+  <style>
+    body {
+      background: #efefef;
+    }
+    .story-shell {
+      padding: 28px;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+    .story-card {
+      background: #f3ecdf;
+      border: 1px solid #e1d7c7;
+      padding: 34px 26px 28px;
+    }
+    .story-close-btn {
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: 0;
+      background: #f2d34f;
+      color: #222;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+    }
+    .story-close-btn:hover {
+      color: #000;
+      background: #e6c540;
+    }
+  </style>
 </head>
 <body>
 
 <?php include 'navbar.php'; ?>
-  
+<div class="container-fluid story-shell">
+<div class="story-card">
 <div class="row align-items-center py-5">
   <div class="row">
     <div class="col-md-1"></div>
@@ -50,8 +83,8 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
       <img src="<?php echo $story['image']; ?>" alt="<?php echo $story['name']; ?>" class="img-fluid" style="margin-left: 20%; width: 80%;">
       
       <!-- ปุ่มปิด: วางตรงมุมบนขวาของรูป -->
-      <a href="homepage.php" class="btn btn-lg position-absolute" style="margin-left: 85%; margin-top: -4%;">
-        <i class="bi bi-x-square-fill fs-2"></i>
+      <a href="homepage.php#stories" onclick="if (window.history.length > 1) { history.back(); return false; }" class="position-absolute story-close-btn" style="margin-left: 85%; margin-top: -4%;">
+        <i class="bi bi-x-lg"></i>
       </a>
     </div>
     <div class="col-md-5">
@@ -75,6 +108,8 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
       <p class="text-center"><?php echo $story['story']; ?></p>
     </div>
   </div>
+</div>
+</div>
 </div>
 
 

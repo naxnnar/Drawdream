@@ -15,6 +15,8 @@ if (!$readonly) {
         header("Location: login.php");
         exit();
     }
+    require_once __DIR__ . '/includes/foundation_account_verified.php';
+    drawdream_foundation_require_account_verified($conn);
 }
 
 
@@ -35,6 +37,42 @@ if (!$readonly) {
     $fid = 0;
 }
 
+/**
+ * โครงการที่อนุญาตให้อัปเดตผลลัพธ์ (ให้ตรงกับเงื่อนไขใน project.php)
+ * - completed/done/purchasing: อัปเดตได้ทันที
+ * - approved: ต้องถึงเป้าและเลยวันปิดรับแล้ว
+ */
+function drawdream_project_allow_outcome_update(array $project): bool {
+    $status = strtolower(trim((string)($project['project_status'] ?? '')));
+    if (in_array($status, ['completed', 'done', 'purchasing'], true)) {
+        return true;
+    }
+
+    if ($status !== 'approved') {
+        return false;
+    }
+
+    $goal = (float)($project['goal_amount'] ?? 0);
+    $raised = (float)($project['current_donate'] ?? 0);
+    if ($goal <= 0 || $raised < $goal) {
+        return false;
+    }
+
+    $endRaw = (string)($project['end_date'] ?? '');
+    if ($endRaw === '') {
+        return false;
+    }
+
+    try {
+        $tz = new DateTimeZone('Asia/Bangkok');
+        $endDate = new DateTimeImmutable(substr($endRaw, 0, 10), $tz);
+        $today = new DateTimeImmutable('now', $tz);
+        return $endDate->format('Y-m-d') <= $today->format('Y-m-d');
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
 // ✅ รับ project_id จาก URL (มาจากแจ้งเตือน)
 $locked_project_id = (int)($_GET['project_id'] ?? 0);
 $locked_project    = null;
@@ -43,9 +81,9 @@ if ($locked_project_id > 0) {
     if (!$readonly) {
         // เฉพาะ foundation: ตรวจสอบว่าเป็นของตัวเอง
         $lk = $conn->prepare("
-            SELECT project_id, project_name, current_donate, goal_amount, project_status
+            SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
             FROM foundation_project 
-            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('completed','done') AND deleted_at IS NULL
+            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('approved','completed','done','purchasing') AND deleted_at IS NULL
             LIMIT 1
         ");
         $lk->bind_param("is", $locked_project_id, $foundation['foundation_name']);
@@ -54,14 +92,17 @@ if ($locked_project_id > 0) {
     } else {
         // readonly: ดึง project เฉย ๆ
         $lk = $conn->prepare("
-            SELECT project_id, project_name, current_donate, goal_amount, project_status
+            SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
             FROM foundation_project 
-            WHERE project_id = ? AND project_status IN ('completed','done') AND deleted_at IS NULL
+            WHERE project_id = ? AND project_status IN ('approved','completed','done','purchasing') AND deleted_at IS NULL
             LIMIT 1
         ");
         $lk->bind_param("i", $locked_project_id);
         $lk->execute();
         $locked_project = $lk->get_result()->fetch_assoc();
+    }
+    if ($locked_project && !drawdream_project_allow_outcome_update($locked_project)) {
+        $locked_project = null;
     }
 }
 
@@ -72,14 +113,19 @@ if ($locked_project_id > 0 && $locked_project) {
     $projects[] = $locked_project;
 } else {
     $stmt2 = $conn->prepare("
-        SELECT project_id, project_name, current_donate, goal_amount, project_status
+        SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
         FROM foundation_project 
-        WHERE foundation_id = ? AND project_status IN ('completed', 'done') AND deleted_at IS NULL
+        WHERE foundation_id = ? AND project_status IN ('approved','completed','done','purchasing') AND deleted_at IS NULL
         ORDER BY project_id DESC
     ");
     $stmt2->bind_param("i", $fid);
     $stmt2->execute();
-    $projects = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
+    $allProjects = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
+    foreach ($allProjects as $projectRow) {
+        if (drawdream_project_allow_outcome_update($projectRow)) {
+            $projects[] = $projectRow;
+        }
+    }
 }
 
 $success = "";
@@ -88,69 +134,90 @@ $error   = "";
 // ======== POST: บันทึก update ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
     $project_id  = (int)($_POST['project_id'] ?? 0);
-    $title       = trim($_POST['title'] ?? '');
     $description = trim($_POST['description'] ?? '');
-    $image_name  = '';
+    $newImageNames = [];
 
     // ตรวจสอบว่าโครงการนี้เป็นของมูลนิธินี้จริง (ใช้ foundation_name แทน foundation_id)
-    $chk = $conn->prepare("SELECT project_id, project_name FROM foundation_project WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL");
+    $chk = $conn->prepare("
+        SELECT project_id, project_name, goal_amount, current_donate, project_status, end_date, update_images
+        FROM foundation_project
+        WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL
+    ");
     $chk->bind_param("is", $project_id, $foundation['foundation_name']);
     $chk->execute();
     $proj_row = $chk->get_result()->fetch_assoc();
 
     if (!$proj_row) {
         $error = "ไม่พบโครงการนี้";
-    } elseif (empty($title)) {
-        $error = "กรุณากรอกหัวข้อ";
-    } elseif (empty($description)) {
+    } elseif (!drawdream_project_allow_outcome_update($proj_row)) {
+        $error = "โครงการนี้ยังไม่พร้อมอัปเดตผลลัพธ์";
+    } elseif ($description === '') {
         $error = "กรุณากรอกคำอธิบาย";
     } else {
-        // อัปโหลดรูป
-        if (isset($_FILES['update_image']) && $_FILES['update_image']['error'] === 0) {
-            $uploadDir = "uploads/updates/";
+        // อัปโหลดรูป (รองรับหลายภาพ)
+        if (isset($_FILES['update_images']['name']) && is_array($_FILES['update_images']['name'])) {
+            $uploadDir = "uploads/evidence/";
             if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
-            $ext     = strtolower(pathinfo($_FILES['update_image']['name'], PATHINFO_EXTENSION));
             $allowed = ['jpg','jpeg','png','gif','webp'];
-            if (in_array($ext, $allowed)) {
-                $newName = time() . "_" . uniqid() . "." . $ext;
-                if (move_uploaded_file($_FILES['update_image']['tmp_name'], $uploadDir . $newName)) {
-                    $image_name = $newName;
+            $names = $_FILES['update_images']['name'];
+            $tmpNames = $_FILES['update_images']['tmp_name'];
+            $errors = $_FILES['update_images']['error'];
+            $countFiles = count($names);
+            for ($i = 0; $i < $countFiles; $i++) {
+                if (($errors[$i] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                    continue;
                 }
-            } else {
-                $error = "อนุญาตเฉพาะไฟล์รูปเท่านั้น";
+                $ext = strtolower(pathinfo((string)$names[$i], PATHINFO_EXTENSION));
+                if (!in_array($ext, $allowed, true)) {
+                    $error = "อนุญาตเฉพาะไฟล์รูปเท่านั้น";
+                    break;
+                }
+                $newName = "project_" . $project_id . "_" . time() . "_" . $i . "_" . bin2hex(random_bytes(4)) . "." . $ext;
+                if (move_uploaded_file((string)$tmpNames[$i], $uploadDir . $newName)) {
+                    $newImageNames[] = $newName;
+                }
             }
         }
 
         if (!$error) {
-            // บันทึก project_updates
-            $stmt3 = $conn->prepare("
-                INSERT INTO project_updates (project_id, title, description, update_image)
-                VALUES (?, ?, ?, ?)
-            ");
-            $stmt3->bind_param("isss", $project_id, $title, $description, $image_name);
-            $stmt3->execute();
-            $update_id = $conn->insert_id;
-
-            // สรุปให้ผู้บริจาคเห็นในหน้าชำระเงิน/รายละเอียดโครงการ (คอลัมน์ update_info — ไม่ใช้ในฟอร์มเสนอโครงการ)
-            $donorSummary = $title . "\n\n" . $description;
-            $stmtUi = $conn->prepare(
-                "UPDATE foundation_project SET update_info = ? WHERE project_id = ? AND foundation_name = ? AND LOWER(TRIM(COALESCE(project_status,''))) IN ('completed','done') AND deleted_at IS NULL"
-            );
-            if ($stmtUi) {
-                $stmtUi->bind_param("sis", $donorSummary, $project_id, $foundation['foundation_name']);
-                $stmtUi->execute();
+            $existingImages = [];
+            $rawImages = trim((string)($proj_row['update_images'] ?? ''));
+            if ($rawImages !== '') {
+                $arr = json_decode($rawImages, true);
+                if (is_array($arr)) {
+                    foreach ($arr as $img) {
+                        $bn = basename((string)$img);
+                        if ($bn !== '') {
+                            $existingImages[] = $bn;
+                        }
+                    }
+                }
             }
+
+            $finalImages = $newImageNames !== [] ? $newImageNames : $existingImages;
+            $finalImagesJson = json_encode(array_values(array_unique($finalImages)), JSON_UNESCAPED_UNICODE);
+
+            $stmt3 = $conn->prepare("
+                UPDATE foundation_project
+                SET update_text = ?, update_at = NOW(), update_images = ?
+                WHERE project_id = ? AND foundation_name = ?
+                  AND LOWER(TRIM(COALESCE(project_status,''))) IN ('approved','completed','done','purchasing')
+                  AND deleted_at IS NULL
+                LIMIT 1
+            ");
+            $stmt3->bind_param("ssis", $description, $finalImagesJson, $project_id, $foundation['foundation_name']);
+            $stmt3->execute();
 
             // ===== แจ้งเตือน donor ที่บริจาคให้โครงการนี้โดยตรง =====
             $donors_q = $conn->prepare("
                 SELECT DISTINCT dn.user_id
                 FROM donation d
                 JOIN donate_category dc ON d.category_id = dc.category_id
-                JOIN payment_transaction pt ON pt.donate_id = d.donate_id
-                JOIN donor dn ON pt.tax_id = dn.tax_id
+                JOIN donor dn ON dn.user_id = d.donor_id
                 WHERE TRIM(COALESCE(dc.project_donate, '')) NOT IN ('', '-')
                 AND d.payment_status = 'completed'
                 AND d.target_id = ?
+                AND dn.tax_id IS NOT NULL AND TRIM(dn.tax_id) != ''
             ");
             $donors_q->bind_param('i', $project_id);
             $donors_q->execute();
@@ -163,7 +230,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
                     VALUES (?, ?, ?, ?, ?)
                 ');
                 $notif_title = "อัปเดตโครงการ: " . $proj_row['project_name'];
-                $notif_msg   = $foundation['foundation_name'] . " อัปเดตผลลัพธ์: " . $title;
+                $notif_snip = mb_strlen($description) > 160 ? mb_substr($description, 0, 160) . '…' : $description;
+                $notif_msg   = $foundation['foundation_name'] . " อัปเดตผลลัพธ์: " . $notif_snip;
                 $notif_link  = "project.php";
                 $notif_stmt->bind_param("issss", $du['user_id'], $notif_type_th, $notif_title, $notif_msg, $notif_link);
                 $notif_stmt->execute();
@@ -187,37 +255,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
 }
 
 
-// ดึง updates เฉพาะของโครงการนี้ (ถ้าเลือก project_id)
-$updates_list = [];
-if ($locked_project_id > 0 && $locked_project) {
-    $prev_updates = $conn->prepare("
-        SELECT pu.*, p.project_name 
-        FROM project_updates pu
-        JOIN foundation_project p ON p.project_id = pu.project_id AND p.deleted_at IS NULL
-        WHERE pu.project_id = ?
-        ORDER BY pu.update_id DESC
-        LIMIT 20
-    ");
-    $prev_updates->bind_param("i", $locked_project_id);
-    $prev_updates->execute();
-    $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
-} else if (!$readonly) {
-    $prev_updates = $conn->prepare("
-        SELECT pu.*, p.project_name 
-        FROM project_updates pu
-        JOIN foundation_project p ON p.project_id = pu.project_id AND p.deleted_at IS NULL
-        WHERE p.foundation_id = ?
-        ORDER BY pu.update_id DESC
-        LIMIT 20
-    ");
-    $prev_updates->bind_param("i", $fid);
-    $prev_updates->execute();
-    $updates_list = $prev_updates->get_result()->fetch_all(MYSQLI_ASSOC);
-}
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>อัปเดตโครงการ | DrawDream</title>
@@ -228,7 +270,7 @@ if ($locked_project_id > 0 && $locked_project) {
 <?php include 'navbar.php'; ?>
 
 <div class="wrap">
-    <a href="profile.php" class="back-link">← กลับหน้าโปรไฟล์</a>
+    <a href="profile.php" class="back-link" aria-label="ย้อนกลับ" title="ย้อนกลับ" onclick="if (window.history.length > 1) { event.preventDefault(); history.back(); }">←</a>
     <div class="page-title">📢 อัปเดตผลลัพธ์โครงการ</div>
 
     <?php if ($success): ?>
@@ -240,19 +282,44 @@ if ($locked_project_id > 0 && $locked_project) {
 
     <?php if (empty($projects)): ?>
         <div class="no-project">
-            ยังไม่มีโครงการที่สำเร็จและพร้อมอัปเดต<br>
-            <small style="color:#bbb;">โครงการจะปรากฏที่นี่เมื่อได้รับเงินครบหรือหมดระยะเวลาระดมทุน</small>
+            ยังไม่มีโครงการที่พร้อมอัปเดตผลลัพธ์<br>
+            <small style="color:#bbb;">โครงการจะปรากฏเมื่อสถานะเป็นเสร็จสิ้น หรือระดมทุนครบและเลยวันปิดรับแล้ว</small>
         </div>
     <?php else: ?>
+        <?php
+        $prefillDesc = '';
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $prefillDesc = (string)($_POST['description'] ?? '');
+        } elseif ($locked_project) {
+            $prefillDesc = (string)($locked_project['update_text'] ?? '');
+        } else {
+            $selPid = (int)($_POST['project_id'] ?? 0);
+            foreach ($projects as $p) {
+                if ($selPid > 0 && (int)$p['project_id'] === $selPid) {
+                    $prefillDesc = (string)($p['update_text'] ?? '');
+                    break;
+                }
+            }
+        }
+        ?>
         <?php if (!$readonly): ?>
         <div class="form-box">
+            <div class="outcome-rainbow-strip" aria-hidden="true">
+                <svg class="outcome-rainbow-strip__svg" viewBox="0 -26 320 124" overflow="hidden" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+                    <!-- cubic สมมาตรรอบ x=160; ปลายนอก viewBox แกน X ถูกตัด; viewBox รวม y ติดลบเพื่อไม่ตัดยอดโค้ง -->
+                    <path d="M-40 90 C58 -13 262 -13 360 90" fill="none" stroke="#CC583F" stroke-width="11" stroke-linecap="butt" stroke-linejoin="round" opacity="0.98"/>
+                    <path d="M-40 90 C58 -2 262 -2 360 90" fill="none" stroke="#F1CF54" stroke-width="10" stroke-linecap="butt" stroke-linejoin="round" opacity="0.98"/>
+                    <path d="M-40 90 C58 9 262 9 360 90" fill="none" stroke="#6FA06C" stroke-width="9" stroke-linecap="butt" stroke-linejoin="round" opacity="0.98"/>
+                    <path d="M-40 90 C58 20 262 20 360 90" fill="none" stroke="#6D86D6" stroke-width="8" stroke-linecap="butt" stroke-linejoin="round" opacity="0.96"/>
+                    <path d="M-40 90 C58 31 262 31 360 90" fill="none" stroke="#3C5099" stroke-width="7" stroke-linecap="butt" stroke-linejoin="round" opacity="0.96"/>
+                </svg>
+            </div>
             <h2>โพสต์ผลลัพธ์ใหม่</h2>
             <?php if ($locked_project): ?>
-                <!-- มาจากการแจ้งเตือน: แสดงชื่อโครงการ lock ไว้เลย -->
-                <div style="background:#f0f4ff; border-radius:10px; padding:14px 18px; margin-bottom:20px; border-left:4px solid #4A5BA8;">
-                    <div style="font-size:13px; color:#4A5BA8; font-weight:600; margin-bottom:4px;">โครงการที่ต้องอัปเดต</div>
-                    <div style="font-size:16px; font-weight:700; color:#222;"><?= htmlspecialchars($locked_project['project_name']) ?></div>
-                    <div style="font-size:13px; color:#666; margin-top:4px;">
+                <div class="outcome-target-card">
+                    <div class="outcome-target-card__label">โครงการที่ต้องอัปเดต</div>
+                    <div class="outcome-target-card__name"><?= htmlspecialchars($locked_project['project_name']) ?></div>
+                    <div class="outcome-target-card__meta">
                         ได้รับเงิน <?= number_format((float)$locked_project['current_donate'], 0) ?> / <?= number_format((float)$locked_project['goal_amount'], 0) ?> บาท
                     </div>
                 </div>
@@ -276,37 +343,17 @@ if ($locked_project_id > 0 && $locked_project) {
                 </div>
                 <?php endif; ?>
                 <div class="form-group">
-                    <label>หัวข้อ *</label>
-                    <input type="text" name="title" placeholder="เช่น: ได้รับเงินและเริ่มดำเนินการแล้ว" value="<?= htmlspecialchars($_POST['title'] ?? '') ?>" required>
-                </div>
-                <div class="form-group">
                     <label>คำอธิบายผลลัพธ์ *</label>
-                    <textarea name="description" placeholder="อธิบายสิ่งที่ดำเนินการไปแล้ว เงินถูกนำไปใช้ยังไง ฯลฯ" required><?= htmlspecialchars($_POST['description'] ?? '') ?></textarea>
+                    <textarea name="description" placeholder="อธิบายสิ่งที่ดำเนินการไปแล้ว เงินถูกนำไปใช้ยังไง ฯลฯ" required><?= htmlspecialchars($prefillDesc) ?></textarea>
                 </div>
                 <div class="form-group">
                     <label>รูปภาพ (ถ้ามี)</label>
-                    <input type="file" name="update_image" accept="image/*">
+                    <input type="file" name="update_images[]" accept="image/*" multiple>
                 </div>
                 <button type="submit" class="btn-submit">โพสต์ผลลัพธ์</button>
             </form>
         </div>
         <?php endif; ?>
-    <?php endif; ?>
-
-    <!-- updates ที่เคยโพสต์แล้ว -->
-    <?php if (!empty($updates_list)): ?>
-        <div class="updates-title">ผลลัพธ์ที่โพสต์ไปแล้ว</div>
-        <?php foreach ($updates_list as $u): ?>
-            <div class="update-card">
-                <div class="update-proj"><?= htmlspecialchars($u['project_name']) ?></div>
-                <div class="update-title"><?= htmlspecialchars($u['title']) ?></div>
-                <?php if (!empty($u['update_image'])): ?>
-                    <img src="uploads/updates/<?= htmlspecialchars($u['update_image']) ?>" class="update-img" alt="">
-                <?php endif; ?>
-                <div class="update-desc"><?= nl2br(htmlspecialchars($u['description'])) ?></div>
-                <div class="update-date">โพสต์เมื่อ: <?= !empty($u['created_at']) ? date('d/m/Y H:i', strtotime($u['created_at'])) : '-' ?></div>
-            </div>
-        <?php endforeach; ?>
     <?php endif; ?>
 </div>
 

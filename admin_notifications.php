@@ -74,13 +74,26 @@ if ($qNeeds) {
 }
 
 $totalAll = count($foundationPendings) + count($childrenPendings) + count($projectPendings) + count($needPendings);
+
+$doneBanner = '';
+if (isset($_GET['done'])) {
+    if ($_GET['done'] === 'project') {
+        $doneBanner = 'ดำเนินการโครงการแล้ว';
+    } elseif ($_GET['done'] === 'foundation') {
+        $doneBanner = 'ดำเนินการคำขอมูลนิธิแล้ว';
+    }
+}
+if (isset($_GET['err'])) {
+    $doneBanner = 'ไม่สามารถดำเนินการได้ หรือรายการถูกจัดการแล้ว';
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>แจ้งเตือนแอดมิน | DrawDream</title>
+  <title>คำขอรออนุมัติ | DrawDream Admin</title>
   <link rel="stylesheet" href="css/navbar.css">
   <style>
     .admin-notif-wrap {
@@ -196,6 +209,25 @@ $totalAll = count($foundationPendings) + count($childrenPendings) + count($proje
       font-size: .93rem;
       padding: 16px 12px;
     }
+    .admin-notif-card[id] {
+      scroll-margin-top: 88px;
+    }
+    .admin-notif-done-banner {
+      max-width: 1200px;
+      margin: 0 auto 14px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+      font-size: .95rem;
+      font-weight: 600;
+    }
+    .admin-notif-done-banner--err {
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
   </style>
 </head>
 <body>
@@ -203,12 +235,15 @@ $totalAll = count($foundationPendings) + count($childrenPendings) + count($proje
 
 <div class="admin-notif-wrap">
   <div class="admin-notif-head">
-    <h1 class="admin-notif-title">🔔 การแจ้งเตือนรวมทุกฟีเจอร์</h1>
+    <h1 class="admin-notif-title">🔔 คำขอรออนุมัติ</h1>
     <span class="admin-notif-total">ทั้งหมด <?php echo (int)$totalAll; ?> รายการ</span>
   </div>
+  <?php if ($doneBanner !== ''): ?>
+    <div class="admin-notif-done-banner<?= isset($_GET['err']) ? ' admin-notif-done-banner--err' : '' ?>"><?= htmlspecialchars($doneBanner) ?></div>
+  <?php endif; ?>
 
   <div class="admin-notif-grid">
-    <section class="admin-notif-card">
+    <section class="admin-notif-card" id="admin-pending-foundations">
       <div class="admin-notif-card-head">
         <h2 class="admin-notif-card-title">🏡 มูลนิธิ / มูลนิธิโปรไฟล์</h2>
         <span class="admin-notif-count"><?php echo count($foundationPendings); ?></span>
@@ -221,14 +256,14 @@ $totalAll = count($foundationPendings) + count($childrenPendings) + count($proje
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($f['foundation_name'] ?? 'ไม่ระบุชื่อมูลนิธิ'); ?></strong>
               <div class="admin-notif-meta">สมัครเมื่อ: <?php echo !empty($f['created_at']) ? date('d/m/Y H:i', strtotime($f['created_at'])) : '-'; ?></div>
-              <a class="admin-notif-link" href="admin_approve_foundation.php?id=<?php echo (int)$f['foundation_id']; ?>">เปิดหน้าตรวจสอบ</a>
+              <a class="admin-notif-link" href="admin_approve_foundation.php?id=<?php echo (int)$f['foundation_id']; ?>">ตรวจสอบ</a>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>
       </ul>
     </section>
 
-    <section class="admin-notif-card">
+    <section class="admin-notif-card" id="admin-pending-children">
       <div class="admin-notif-card-head">
         <h2 class="admin-notif-card-title">🧒 โปรไฟล์เด็ก</h2>
         <span class="admin-notif-count"><?php echo count($childrenPendings); ?></span>
@@ -241,14 +276,14 @@ $totalAll = count($foundationPendings) + count($childrenPendings) + count($proje
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($c['child_name'] ?? 'ไม่ระบุชื่อ'); ?></strong>
               <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($c['foundation_name'] ?? '-'); ?> | สถานะ: <?php echo htmlspecialchars($c['approve_profile'] ?? 'รอดำเนินการ'); ?></div>
-              <a class="admin-notif-link" href="children_donate.php?id=<?php echo (int)$c['child_id']; ?>">เปิดหน้าตรวจสอบ</a>
+              <a class="admin-notif-link" href="children_donate.php?id=<?php echo (int)$c['child_id']; ?>">ตรวจสอบ</a>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>
       </ul>
     </section>
 
-    <section class="admin-notif-card">
+    <section class="admin-notif-card" id="admin-pending-projects">
       <div class="admin-notif-card-head">
         <h2 class="admin-notif-card-title">📚 โครงการ</h2>
         <span class="admin-notif-count"><?php echo count($projectPendings); ?></span>
@@ -261,14 +296,14 @@ $totalAll = count($foundationPendings) + count($childrenPendings) + count($proje
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($p['project_name'] ?? '-'); ?></strong>
               <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($p['foundation_name'] ?? '-'); ?> | ปิดรับ: <?php echo htmlspecialchars($p['end_date'] ?? '-'); ?></div>
-              <a class="admin-notif-link" href="admin_approve_projects.php">เปิดหน้าตรวจสอบ</a>
+              <a class="admin-notif-link" href="admin_approve_projects.php?id=<?php echo (int)$p['project_id']; ?>">ตรวจสอบ</a>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>
       </ul>
     </section>
 
-    <section class="admin-notif-card">
+    <section class="admin-notif-card" id="admin-pending-needs">
       <div class="admin-notif-card-head">
         <h2 class="admin-notif-card-title">🎁 มูลนิธิสิ่งของที่ต้องการ</h2>
         <span class="admin-notif-count"><?php echo count($needPendings); ?></span>
@@ -281,7 +316,7 @@ $totalAll = count($foundationPendings) + count($childrenPendings) + count($proje
             <li class="admin-notif-item">
               <strong><?php echo htmlspecialchars($n['item_name'] ?? '-'); ?></strong>
               <div class="admin-notif-meta">มูลนิธิ: <?php echo htmlspecialchars($n['foundation_name'] ?? '-'); ?><?php echo ((int)($n['urgent'] ?? 0) === 1) ? ' | ด่วน' : ''; ?></div>
-              <a class="admin-notif-link" href="admin_approve_needlist.php">เปิดหน้าตรวจสอบ</a>
+              <a class="admin-notif-link" href="admin_approve_needlist.php">ตรวจสอบ</a>
             </li>
           <?php endforeach; ?>
         <?php endif; ?>

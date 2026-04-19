@@ -15,9 +15,14 @@ function drawdream_ensure_soft_delete_columns(mysqli $conn): void
     if ($chk && $chk->num_rows === 0) {
         $conn->query('ALTER TABLE foundation_children ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL');
     }
-    $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'profile_delete_reason'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query('ALTER TABLE foundation_children ADD COLUMN profile_delete_reason TEXT NULL DEFAULT NULL');
+    $chkNew = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'delete_reason'");
+    $chkOld = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'profile_delete_reason'");
+    if ($chkNew && $chkNew->num_rows === 0) {
+        if ($chkOld && $chkOld->num_rows > 0) {
+            @$conn->query('ALTER TABLE foundation_children CHANGE COLUMN profile_delete_reason delete_reason TEXT NULL DEFAULT NULL');
+        } else {
+            @$conn->query('ALTER TABLE foundation_children ADD COLUMN delete_reason TEXT NULL DEFAULT NULL');
+        }
     }
     $chk = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'deleted_at'");
     if ($chk && $chk->num_rows === 0) {

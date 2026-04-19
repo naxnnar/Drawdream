@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $conn->query("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = $project_id");
             $title   = "ยอดบริจาคโครงการครบแล้ว!";
             $message = "โครงการ \"{$proj['project_name']}\" ได้รับยอดบริจาคครบแล้ว กรุณาอัปเดตความคืบหน้าของโครงการ";
-            $link    = "foundation_notifications.php";
+            $link    = "notifications.php";
             $type_th = drawdream_normalize_notif_type_to_th('project_funded');
             $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
             $stmt->bind_param("issss", $proj['user_id'], $type_th, $title, $message, $link);
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($need) {
                 $title   = "จัดส่งสิ่งของเรียบร้อยแล้ว!";
                 $message = "รายการ \"{$need['item_name']}\" ถูกจัดซื้อและจัดส่งให้มูลนิธิเรียบร้อยแล้ว";
-                $link    = "foundation_notifications.php";
+                $link    = "notifications.php";
                 $type_nd = drawdream_normalize_notif_type_to_th('needlist_done');
                 $stmt3 = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
                 $stmt3->bind_param("issss", $need['user_id'], $type_nd, $title, $message, $link);
@@ -159,6 +159,7 @@ $escrow_need_total = mysqli_fetch_assoc(mysqli_query($conn,
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escrow | DrawDream</title>

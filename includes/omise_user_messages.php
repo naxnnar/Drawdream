@@ -51,6 +51,21 @@ function drawdream_omise_error_message_for_user(?array $res, string $fallbackTha
     }
 
     $code = (string)($res['code'] ?? '');
+    if ($code === 'curl') {
+        $http = (int)($res['http_code'] ?? 0);
+        $detail = $msg;
+        $sslHint = '';
+        if (str_contains($lower, 'ssl') || str_contains($lower, 'certificate') || str_contains($lower, 'unable to get local issuer')) {
+            $sslHint = ' บน Windows/เครื่อง dev มักต้องใส่ไฟล์ CA: ดาวน์โหลด cacert.pem จาก https://curl.se/ca/cacert.pem แล้ววางที่ config/cacert.pem ในโปรเจกต์ หรือตั้ง curl.cainfo / openssl.cafile ใน php.ini ให้ชี้ไฟล์นั้น';
+        }
+        $tail = $detail !== '' ? (' — ' . $detail) : '';
+        $httpPart = $http > 0 ? (' (HTTP ' . $http . ')') : '';
+
+        return 'เชื่อมต่อ Omise ไม่สำเร็จ' . $httpPart . $tail . $sslHint;
+    }
+    if ($code === 'invalid_json') {
+        return 'ได้รับคำตอบจาก Omise ที่อ่านไม่ได้ — ลองใหม่หรือตรวจเครือข่าย' . ($msg !== '' ? (' — ' . $msg) : '');
+    }
     if ($code === 'not_found' || str_contains($lower, 'not found') || str_contains($lower, 'was not found')) {
         return 'Omise แจ้งว่าไม่พบข้อมูล (Resource not found) — มักเกิดจากรหัสลูกค้า/บัตรในฐานข้อมูลไม่ตรงกับบัญชี Omise ปัจจุบัน '
             . 'หรือโทเค็นบัตรใช้ได้ครั้งเดียวแล้วหมดอายุ ถ้าคุณเพิ่งสมัคร Schedule ระบบได้เคลียร์รหัสลูกค้าเก่าในระบบแล้ว — กรุณากด «บริจาค» อีกครั้งเพื่อสร้างโทเค็นใหม่ '

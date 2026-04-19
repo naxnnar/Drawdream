@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>เกี่ยวกับเรา | DrawDream </title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -47,26 +48,26 @@ if (session_status() === PHP_SESSION_NONE) {
 </section>
 
 <!-- ===== งานของเรา ===== -->
-<section class="py-5 page-section">
+<section class="py-5 page-section work-section">
   <div class="container">
     <h2 class="text-center fw-bold mb-5">งานของเรา</h2>
     <div class="row g-4 justify-content-center">
       <div class="col-md-4">
-        <div class="about-work-card text-center h-100" style="background-color:#f5c518;">
+        <div class="about-work-card about-work-card--yellow text-center h-100" style="background-color:#f5c518;">
           <i class="bi-person-hearts mb-3" style="font-size:2rem;"></i>
           <h5 class="fw-bold">สิทธิเด็ก</h5>
           <p>เราสนับสนุนสิทธิเด็ก และส่งเสริมให้เด็กมีส่วนร่วมในการแสดงความคิดเห็นที่สะท้อนความสนใจและความฝันของเด็ก</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="about-work-card text-center h-100" style="background-color:#c0392b; color:#fff;">
+        <div class="about-work-card about-work-card--red text-center h-100" style="background-color:#c0392b; color:#fff;">
           <i class="bi-heart-fill mb-3" style="font-size:2rem;"></i>
           <h5 class="fw-bold">คุณค่าที่สัมผัสได้</h5>
           <p>เราต้องการให้เด็กได้รับความรัก และให้เขารู้ว่าเขาเป็นคนที่มีคุณค่า ผ่านการบริจาคแบบรายบุคคลแบบ1ต่อ1</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="about-work-card text-center h-100" style="background-color:#7a9e7e; color:#fff;">
+        <div class="about-work-card about-work-card--green text-center h-100" style="background-color:#7a9e7e; color:#fff;">
           <i class="bi-book-fill mb-3" style="font-size:2rem;"></i>
           <h5 class="fw-bold">การศึกษา</h5>
           <p>เราเพิ่มโอกาสในการเข้าถึงการศึกษาที่มีคุณภาพและเครื่องมือที่จำเป็น ทำให้พวกเขาได้รับการศึกษาที่มีคุณภาพ</p>
@@ -107,13 +108,13 @@ if (session_status() === PHP_SESSION_NONE) {
 
       <div class="accordion-item border-0 rounded-4 overflow-hidden" style="background-color:#f5c518;">
         <h2 class="accordion-header">
-          <button class="accordion-button fw-bold fs-5 rounded-4" type="button"
+          <button class="accordion-button fw-bold rounded-4" type="button"
             data-bs-toggle="collapse" data-bs-target="#faq1"
             style="background-color:#f5c518; color:#222; box-shadow:none;">
             1.การลดหย่อนภาษี?
           </button>
         </h2>
-        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+        <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
           <div class="accordion-body pt-0" style="color:#333; line-height:2;">
             1 มกราคม 2569 เป็นต้นไป จากมาตรการใหม่ของสรรพากร จะลดหย่อนภาษีได้ต้องบริจาคผ่านการบริจาคทางอิเล็กทรอนิกส์<br>
             บุคคลธรรมดา ไม่เกิน 10% ของจำนวนเงินได้<br>
@@ -131,7 +132,10 @@ if (session_status() === PHP_SESSION_NONE) {
           </button>
         </h2>
         <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-          <div class="accordion-body" style="color:#333;">เนื้อหาคำตอบข้อ 2</div>
+          <div class="accordion-body" style="color:#333; line-height:2;">
+            สามารถเลือกสนับสนุนเป็นรายเดือนหรือรายปีก็ได้ ถ้าช่วงไหนพี่ๆ ไม่สะดวกดูแลต่อ
+            แจ้งระบบล่วงหน้าเพื่อให้มีเวลาหาผู้อุปการะใจดีท่านใหม่มาช่วยดูแลน้องได้อย่างต่อเนื่อง
+          </div>
         </div>
       </div>
 
@@ -144,7 +148,10 @@ if (session_status() === PHP_SESSION_NONE) {
           </button>
         </h2>
         <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-          <div class="accordion-body" style="color:#333;">เนื้อหาคำตอบข้อ 3</div>
+          <div class="accordion-body" style="color:#333; line-height:2;">
+            ได้เลย พี่ๆ สามารถเลือกอุปการะน้องกี่คนก็ได้ตามที่ไหวเลย โดยในระบบจะมีหน้าผลลัพธ์
+            ไว้ให้พี่ๆ เข้ามาดูอัปเดตของน้องๆ ทุกคน
+          </div>
         </div>
       </div>
 

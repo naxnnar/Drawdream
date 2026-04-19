@@ -156,6 +156,37 @@ h2 {
     box-shadow: 0 8px 20px rgba(192, 57, 43, 0.35);
 }
 
+.google-login-wrap {
+    margin-top: 10px;
+}
+
+.btn-google-login {
+    width: 100%;
+    display: block;
+    text-decoration: none;
+    text-align: center;
+    padding: 12px;
+    border-radius: 20px;
+    background: #ffffff;
+    color: #1f1f1f;
+    border: 1px solid #d0d0d0;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.25s;
+}
+
+.btn-google-login:hover {
+    background: #f6f6f6;
+    border-color: #b8b8b8;
+}
+
+.google-login-note {
+    margin-top: 6px;
+    color: #888;
+    font-size: 12px;
+    font-family: 'Sarabun', sans-serif;
+}
+
 /* ========== Alerts ========== */
 
 .alert {

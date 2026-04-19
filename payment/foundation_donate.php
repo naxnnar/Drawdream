@@ -6,7 +6,11 @@ include 'config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/needlist_donate_window.php';
 
-if (!isset($_SESSION['user_id'])) { header("Location: ../login.php"); exit(); }
+if (!isset($_SESSION['user_id'])) {
+    $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
+    header("Location: ../login.php?page=login&error={$msg}");
+    exit();
+}
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'])) { header("Location: ../foundation.php"); exit(); }
 
 $fid = (int)($_GET['fid'] ?? 0);
@@ -30,6 +34,11 @@ $stmt3->execute();
 $current = (float)($stmt3->get_result()->fetch_assoc()['current'] ?? 0);
 
 $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
+
+if ($goal > 0 && $current >= $goal) {
+    header('Location: ../needlist_result.php?fid=' . $fid);
+    exit();
+}
 
 $items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND $needOpen ORDER BY urgent DESC, item_id DESC");
 $items_stmt->bind_param("i", $fid);
@@ -91,7 +100,7 @@ function omise_request($method, $path, $data = []) {
         CURLOPT_SSL_VERIFYPEER => true, CURLOPT_SSL_VERIFYHOST => 2, CURLOPT_TIMEOUT => 30,
     ]);
     if ($method === 'POST') { curl_setopt($ch, CURLOPT_POST, true); curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data)); }
-    $response = curl_exec($ch); $curl_error = curl_error($ch); curl_close($ch);
+    $response = curl_exec($ch); $curl_error = curl_error($ch);
     if ($response === false || $response === '') {
         if (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0) return _omise_local_mock($path, $data);
         return ['error' => 'curl_error', 'message' => $curl_error];
@@ -136,6 +145,7 @@ function _omise_local_mock(string $path, array $data): array {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>บริจาครายการสิ่งของ | DrawDream</title>

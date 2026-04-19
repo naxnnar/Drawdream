@@ -63,6 +63,50 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
         $user_notif_count = count(array_filter($user_notifs, fn($n) => !$n['is_read']));
       }
     }
+
+    // แจ้งเตือนเสริมสำหรับมูลนิธิ: เด็กมีผู้อุปการะแล้ว แต่ยังไม่อัปเดตผลลัพธ์ให้ผู้บริจาค
+    if (($_SESSION['role'] ?? '') === 'foundation') {
+      require_once __DIR__ . '/includes/donate_category_resolve.php';
+      require_once __DIR__ . '/includes/payment_transaction_schema.php';
+      drawdream_payment_transaction_ensure_schema($conn);
+      $stmtFid = $conn->prepare("SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1");
+      if ($stmtFid) {
+        $stmtFid->bind_param("i", $uid);
+        $stmtFid->execute();
+        $fidRow = $stmtFid->get_result()->fetch_assoc();
+        $fid = (int)($fidRow['foundation_id'] ?? 0);
+        if ($fid > 0) {
+            $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
+            $existExpr = "(EXISTS (SELECT 1 FROM donation d WHERE d.category_id = {$childCategoryId} AND d.target_id = c.child_id AND d.payment_status = 'completed' AND d.donor_id IS NOT NULL)
+              OR EXISTS (SELECT 1 FROM donation ds WHERE ds.target_id = c.child_id AND ds.donate_type = 'child_subscription' AND ds.recurring_status IN ('active','paused') AND ds.donor_id IS NOT NULL))";
+            $stmtPending = $conn->prepare("
+              SELECT COUNT(*) AS cnt
+              FROM foundation_children c
+              WHERE c.foundation_id = ?
+                AND c.deleted_at IS NULL
+                AND ({$existExpr})
+                AND COALESCE(TRIM(c.update_text), '') = ''
+                AND COALESCE(NULLIF(c.update_images, ''), '[]') IN ('[]', '')
+            ");
+          if ($stmtPending) {
+            $stmtPending->bind_param("i", $fid);
+            $stmtPending->execute();
+            $pendingCnt = (int)(($stmtPending->get_result()->fetch_assoc()['cnt'] ?? 0));
+            if ($pendingCnt > 0) {
+              array_unshift($user_notifs, [
+                'notif_id' => 0,
+                'title' => 'อัปเดตผลลัพธ์เด็ก',
+                'message' => "มีเด็กที่มีผู้อุปการะแล้ว {$pendingCnt} รายการ รออัปเดตผลลัพธ์",
+                'link' => 'children_.php',
+                'is_read' => 0,
+                'created_at' => date('Y-m-d H:i:s'),
+              ]);
+              $user_notif_count += 1;
+            }
+          }
+        }
+      }
+    }
   } catch (Throwable $e) {
     $user_notifs = [];
     $user_notif_count = 0;
@@ -116,12 +160,31 @@ if (isset($_GET['preview_mode'])) {
     $_SESSION['role']      = $_SESSION['real_role'];
     unset($_SESSION['real_role']);
   }
-  $redirect = strtok($_SERVER['REQUEST_URI'], '?');
-  header("Location: $redirect");
+  $redirect = strtok((string)($_SERVER['REQUEST_URI'] ?? ''), '?') ?: '/';
+  while (ob_get_level() > 0) {
+    ob_end_clean();
+  }
+  if (!headers_sent()) {
+    header('Location: ' . $redirect);
+    exit();
+  }
+  // หน้าที่ส่ง HTML ก่อน include navbar (เช่น about.php) — redirect ฝั่ง client (อย่าใส่ DOCTYPE ซ้ำ)
+  $loc = htmlspecialchars($redirect, ENT_QUOTES, 'UTF-8');
+  $json = json_encode($redirect, JSON_UNESCAPED_SLASHES);
+  if ($json === false) {
+    $json = '"/"';
+  }
+  echo '<meta http-equiv="refresh" content="0;url=' . $loc . '"><script>location.replace(' . $json . ');</script>';
   exit();
 }
 
 $is_donor_preview = isset($_SESSION['real_role']) && $_SESSION['real_role'] === 'foundation';
+$foundation_account_pending = false;
+if (isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'foundation') {
+  include_once __DIR__ . '/db.php';
+  require_once __DIR__ . '/includes/foundation_account_verified.php';
+  $foundation_account_pending = !drawdream_foundation_account_is_verified($conn);
+}
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin';
 $current_page = basename($_SERVER['PHP_SELF']);
 $adminDashboardActive = in_array($current_page, [
@@ -129,22 +192,23 @@ $adminDashboardActive = in_array($current_page, [
     'admin_donors.php',
     'admin_foundations_overview.php',
     'admin_children_overview.php',
+    'admin_notifications.php',
 ], true);
-$adminFoundationActive = in_array($current_page, ['admin_approve_foundation.php'], true);
+$adminFoundationActive = in_array($current_page, ['admin_foundations_overview.php', 'admin_approve_foundation.php'], true);
 $adminChildrenActive = in_array($current_page, ['children_.php', 'children_donate.php', 'admin_approve_children.php', 'admin_children.php'], true);
-$adminProjectActive = in_array($current_page, ['admin_approve_projects.php', 'admin_projects.php'], true);
-$adminNeedlistActive = in_array($current_page, ['admin_approve_needlist.php', 'foundation.php', 'foundation_add_need.php'], true);
+$adminProjectActive = in_array($current_page, ['admin_projects_directory.php', 'admin_approve_projects.php', 'admin_projects.php'], true);
+$adminNeedlistActive = in_array($current_page, ['admin_needlist_directory.php', 'admin_approve_needlist.php'], true);
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
 <link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
-<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=2">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=3">
 <?php if ($is_admin_mode): ?>
 <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 <button type="button" class="admin-sidebar-show-btn" id="adminSidebarShowBtn" aria-label="แสดงเมนูแอดมิน">☰</button>
 <aside class="admin-sidebar-nav">
   <div class="admin-sidebar-head-actions">
     <button type="button" class="admin-sidebar-toggle" id="adminSidebarToggle" aria-label="ซ่อนเมนูแอดมิน">✕</button>
-    <a href="<?= $_nav_base ?>admin_notifications.php" class="admin-sidebar-notif" title="รายการแจ้งเตือนแอดมิน">
+    <a href="<?= $_nav_base ?>admin_notifications.php" class="admin-sidebar-notif" title="คำขอรออนุมัติ — ศูนย์รวมคิว">
       <span class="admin-nav-emoji"><iconify-icon icon="solar:bell-bold-duotone"></iconify-icon></span>
       <?php if ($total_pending > 0): ?><span class="admin-nav-badge"><?= $total_pending ?></span><?php endif; ?>
     </a>
@@ -163,19 +227,19 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
       <span class="admin-nav-emoji"><iconify-icon icon="solar:home-2-bold-duotone"></iconify-icon></span>
       <span class="admin-nav-label">Dashboard</span>
     </a>
-    <a href="<?= $_nav_base ?>admin_approve_foundation.php" class="admin-nav-link<?= $adminFoundationActive ? ' active' : '' ?>">
+    <a href="<?= $_nav_base ?>admin_foundations_overview.php" class="admin-nav-link<?= $adminFoundationActive ? ' active' : '' ?>">
       <span class="admin-nav-emoji"><iconify-icon icon="solar:buildings-2-bold-duotone"></iconify-icon></span>
       <span class="admin-nav-label">Foundation</span>
     </a>
     <a href="<?= $_nav_base ?>children_.php" class="admin-nav-link<?= $adminChildrenActive ? ' active' : '' ?>">
       <span class="admin-nav-emoji"><iconify-icon icon="solar:users-group-two-rounded-bold-duotone"></iconify-icon></span>
-      <span class="admin-nav-label">Profilechildren</span>
+      <span class="admin-nav-label">Children</span>
     </a>
-    <a href="<?= $_nav_base ?>admin_approve_projects.php" class="admin-nav-link<?= $adminProjectActive ? ' active' : '' ?>">
+    <a href="<?= $_nav_base ?>admin_projects_directory.php" class="admin-nav-link<?= $adminProjectActive ? ' active' : '' ?>">
       <span class="admin-nav-emoji"><iconify-icon icon="solar:book-bookmark-bold-duotone"></iconify-icon></span>
       <span class="admin-nav-label">Project</span>
     </a>
-    <a href="<?= $_nav_base ?>admin_approve_needlist.php" class="admin-nav-link<?= $adminNeedlistActive ? ' active' : '' ?>">
+    <a href="<?= $_nav_base ?>admin_needlist_directory.php" class="admin-nav-link<?= $adminNeedlistActive ? ' active' : '' ?>">
       <span class="admin-nav-emoji"><iconify-icon icon="solar:gift-bold-duotone"></iconify-icon></span>
       <span class="admin-nav-label">Needlist</span>
     </a>
@@ -227,15 +291,20 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
   <a href="?preview_mode=exit" class="donor-preview-exit">✕ ออกจากโหมดดูตัวอย่าง</a>
 </div>
 <?php endif; ?>
+<?php if (!empty($foundation_account_pending)): ?>
+<div class="foundation-pending-account-banner" role="status">
+  <span>บัญชีมูลนิธิของคุณยังรอการตรวจสอบจากผู้ดูแลระบบ — จึงยังไม่สามารถสร้างหรือจัดการโปรไฟล์ โครงการ หรือรายการสิ่งของได้จนกว่าจะได้รับการอนุมัติ</span>
+</div>
+<?php endif; ?>
 <nav class="navbar">
 
   <div class="nav-left">
     <?php if ($is_admin_mode): ?>
       <a href="<?= $_nav_base ?>admin_dashboard.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? 'class="active"' : '' ?>>Dashboard</a>
-      <a href="<?= $_nav_base ?>admin_approve_foundation.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_foundation.php' ? 'class="active"' : '' ?>>
+      <a href="<?= $_nav_base ?>admin_notifications.php#admin-pending-foundations" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_foundation.php' ? 'class="active"' : '' ?>>
         อนุมัติมูลนิธิ<?php if ($pending_count > 0): ?> <span class="menu-badge"><?= $pending_count ?></span><?php endif; ?>
       </a>
-      <a href="<?= $_nav_base ?>admin_approve_projects.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_projects.php' ? 'class="active"' : '' ?>>
+      <a href="<?= $_nav_base ?>admin_notifications.php#admin-pending-projects" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_projects.php' ? 'class="active"' : '' ?>>
         อนุมัติโครงการ<?php if ($pending_projects > 0): ?> <span class="menu-badge"><?= $pending_projects ?></span><?php endif; ?>
       </a>
       <a href="<?= $_nav_base ?>admin_approve_needlist.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_needlist.php' ? 'class="active"' : '' ?>>
@@ -278,28 +347,39 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
           </button>
           <div class="notif-dropdown" id="notifDropdown">
             <div class="notif-header">
-              การแจ้งเตือน
-              <?php if ($user_notif_count > 0): ?>
-                <a href="<?= $_nav_base ?>mark_notif_read.php?all=1" class="notif-mark-all">อ่านทั้งหมด</a>
-              <?php endif; ?>
+              <span class="notif-header-title">การแจ้งเตือน</span>
+              <div class="notif-header-actions">
+                <?php if ($user_notif_count > 0): ?>
+                  <a href="<?= $_nav_base ?>mark_notif_read.php?all=1" class="notif-mark-all">อ่านทั้งหมด</a>
+                <?php endif; ?>
+                <?php if (in_array(($_SESSION['role'] ?? ''), ['foundation', 'donor'], true)): ?>
+                  <a href="<?= $_nav_base ?>notifications.php" class="notif-see-all-header">ดูทั้งหมด</a>
+                <?php endif; ?>
+              </div>
             </div>
+            <div class="notif-body-scroll">
             <?php if (empty($user_notifs)): ?>
               <div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>
             <?php else: ?>
               <?php foreach ($user_notifs as $n): ?>
-                <a href="<?= $_nav_base . htmlspecialchars($n['link'] ?? 'profile.php') ?>"
+                <?php
+                  $rawNotifLink = (string)($n['link'] ?? 'profile.php');
+                  if (($n['title'] ?? '') === 'อัปเดตผลลัพธ์เด็กที่คุณอุปการะ'
+                      && preg_match('#^children_donate\.php\?#', $rawNotifLink)
+                      && strpos($rawNotifLink, 'view=outcome') === false) {
+                      $rawNotifLink .= (str_contains($rawNotifLink, '?') ? '&' : '?') . 'view=outcome';
+                  }
+                ?>
+                <a href="<?= htmlspecialchars($_nav_base . $rawNotifLink, ENT_QUOTES, 'UTF-8') ?>"
                    class="notif-item <?= $n['is_read'] ? '' : 'unread' ?>"
-                   onclick="markRead(<?= $n['notif_id'] ?>)">
+                   onclick="<?php echo ((int)($n['notif_id'] ?? 0) > 0) ? 'markRead(' . (int)$n['notif_id'] . ')' : ''; ?>">
                   <div class="notif-item-title"><?= htmlspecialchars($n['title']) ?></div>
                   <div class="notif-item-msg"><?= htmlspecialchars($n['message']) ?></div>
                   <div class="notif-item-time"><?= date('d/m/Y H:i', strtotime($n['created_at'])) ?></div>
                 </a>
               <?php endforeach; ?>
             <?php endif; ?>
-            <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
-              <a href="<?= $_nav_base ?>foundation_notifications.php" 
-                 class="notif-see-all">ดูการแจ้งเตือนทั้งหมด →</a>
-            <?php endif; ?>
+            </div>
           </div>
         </div>
       <?php endif; ?>

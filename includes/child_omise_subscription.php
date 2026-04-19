@@ -1,6 +1,9 @@
 <?php
-// includes/child_omise_subscription.php — ตาราง Omise subscription ผูกเด็ก x ผู้บริจาค + คอลัมน์ donor.omise_customer_id
+// includes/child_omise_subscription.php — เก็บสถานะอุปการะใน donation.recurring_*
 declare(strict_types=1);
+
+require_once __DIR__ . '/payment_transaction_schema.php';
+require_once __DIR__ . '/donate_category_resolve.php';
 
 function drawdream_child_omise_subscription_ensure_schema(mysqli $conn): void
 {
@@ -8,65 +11,29 @@ function drawdream_child_omise_subscription_ensure_schema(mysqli $conn): void
     if ($chk && $chk->num_rows === 0) {
         $conn->query('ALTER TABLE donor ADD COLUMN omise_customer_id VARCHAR(64) NULL DEFAULT NULL');
     }
-
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS child_omise_subscription (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            child_id INT NOT NULL,
-            donor_user_id INT NOT NULL,
-            omise_schedule_id VARCHAR(64) NOT NULL,
-            omise_customer_id VARCHAR(64) NOT NULL,
-            omise_card_id VARCHAR(64) NULL,
-            plan_code VARCHAR(24) NOT NULL,
-            every_n INT NOT NULL,
-            period_unit VARCHAR(12) NOT NULL,
-            amount_thb DECIMAL(10,2) NOT NULL,
-            bill_day TINYINT UNSIGNED NOT NULL,
-            status VARCHAR(20) NOT NULL DEFAULT 'active',
-            billing_mode VARCHAR(24) NOT NULL DEFAULT 'omise_schedule',
-            next_charge_at DATETIME NULL,
-            last_charge_at DATETIME NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_schedule (omise_schedule_id),
-            KEY idx_child_donor (child_id, donor_user_id),
-            KEY idx_donor (donor_user_id),
-            KEY idx_status (status),
-            KEY idx_billing_next (billing_mode, status, next_charge_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    $c1 = $conn->query("SHOW COLUMNS FROM child_omise_subscription LIKE 'billing_mode'");
-    if ($c1 && $c1->num_rows === 0) {
-        $conn->query("ALTER TABLE child_omise_subscription ADD COLUMN billing_mode VARCHAR(24) NOT NULL DEFAULT 'omise_schedule' AFTER status");
+    $chkCard = $conn->query("SHOW COLUMNS FROM donor LIKE 'omise_card_id'");
+    if ($chkCard && $chkCard->num_rows === 0) {
+        $conn->query('ALTER TABLE donor ADD COLUMN omise_card_id VARCHAR(64) NULL DEFAULT NULL');
     }
-    $c2 = $conn->query("SHOW COLUMNS FROM child_omise_subscription LIKE 'next_charge_at'");
-    if ($c2 && $c2->num_rows === 0) {
-        $conn->query('ALTER TABLE child_omise_subscription ADD COLUMN next_charge_at DATETIME NULL DEFAULT NULL AFTER billing_mode');
-    }
-    $c3 = $conn->query("SHOW COLUMNS FROM child_omise_subscription LIKE 'last_charge_at'");
-    if ($c3 && $c3->num_rows === 0) {
-        $conn->query('ALTER TABLE child_omise_subscription ADD COLUMN last_charge_at DATETIME NULL DEFAULT NULL AFTER next_charge_at');
-    }
-
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS omise_webhook_charge (
-            charge_id VARCHAR(80) NOT NULL PRIMARY KEY,
-            processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
+    drawdream_payment_transaction_ensure_schema($conn);
 }
 
-/** เวลาปัจจุบันใน Asia/Bangkok รูปแบบ SQL (ไม่มี timezone ใน DB) */
+/** วันที่รอบถัดไปจาก DB → ใช้เป็นวันตัด (1–28) สำหรับ cron */
+function drawdream_subscription_bill_day_from_datetime_sql(string $sql): int
+{
+    $ts = strtotime($sql);
+    if ($ts === false) {
+        return 15;
+    }
+
+    return min(28, max(1, (int) date('j', $ts)));
+}
+
 function drawdream_subscription_now_bangkok_sql(): string
 {
     return (new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok')))->format('Y-m-d H:i:s');
 }
 
-/**
- * คำนวณวันที่หักงวดถัดไป หลังจุดอ้างอิง (Bangkok 08:00)
- *
- * @param array{every:int, period:string} $planSpec
- */
 function drawdream_subscription_next_charge_at(
     DateTimeImmutable $afterBangkok,
     array $planSpec,
@@ -80,16 +47,9 @@ function drawdream_subscription_next_charge_at(
     $firstOfMonth = new DateTimeImmutable(sprintf('%04d-%02d-01', $y, $m), $tz);
     $lastDom = (int)$firstOfMonth->format('t');
     $d = min(max(1, $billDay), $lastDom);
-
     return new DateTimeImmutable(sprintf('%04d-%02d-%02d 08:00:00', $y, $m, $d), $tz);
 }
 
-/**
- * บันทึก charge ที่ชำระแล้วเข้า child_donations + donation + payment_transaction
- * (dedupe ด้วย omise_webhook_charge) — ให้ประวัติผู้บริจาคใน profile.php เห็นรายการตามเด็ก
- *
- * ใช้ร่วมกับ omise_webhook.php / งวดแรกแบบ server_cron / cron
- */
 function drawdream_child_persist_subscription_paid_charge(
     mysqli $conn,
     string $chargeId,
@@ -97,121 +57,114 @@ function drawdream_child_persist_subscription_paid_charge(
     int $childId,
     int $donorUserId
 ): bool {
-    if ($chargeId === '' || strpos($chargeId, 'chrg_') !== 0) {
-        return false;
-    }
-    if ($childId <= 0 || $donorUserId <= 0) {
+    if ($chargeId === '' || strpos($chargeId, 'chrg_') !== 0 || $childId <= 0 || $donorUserId <= 0) {
         return false;
     }
     drawdream_child_omise_subscription_ensure_schema($conn);
-
-    $chk = $conn->prepare('SELECT 1 FROM omise_webhook_charge WHERE charge_id = ? LIMIT 1');
-    $chk->bind_param('s', $chargeId);
+    $chk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
+    if (!$chk) {
+        return false;
+    }
+    $completed = 'completed';
+    $chk->bind_param('ss', $chargeId, $completed);
     $chk->execute();
     if ($chk->get_result()->fetch_row()) {
         return false;
     }
-
     $amountBaht = $amountSatang / 100.0;
-
-    require_once __DIR__ . '/donate_category_resolve.php';
-    require_once __DIR__ . '/payment_transaction_schema.php';
-    drawdream_payment_transaction_ensure_schema($conn);
-
     $categoryId = drawdream_get_or_create_child_donate_category_id($conn);
     if ($categoryId <= 0) {
         return false;
     }
+    // ใช้แถว subscription ที่มีอยู่เป็นแถวแรกของการชำระ (กันเกิดแถวซ้ำจากการสมัครครั้งแรก)
+    $seed = $conn->prepare(
+        "SELECT donate_id
+         FROM donation
+         WHERE target_id = ? AND donor_id = ?
+           AND donate_type = 'child_subscription'
+           AND recurring_status IN ('active', 'paused')
+           AND (omise_charge_id IS NULL OR omise_charge_id = '')
+         ORDER BY donate_id DESC
+         LIMIT 1"
+    );
+    $seedId = 0;
+    if ($seed) {
+        $seed->bind_param('ii', $childId, $donorUserId);
+        $seed->execute();
+        $seedRow = $seed->get_result()->fetch_assoc();
+        $seedId = (int)($seedRow['donate_id'] ?? 0);
+    }
 
-    $taxId = '';
-    $stTax = $conn->prepare('SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1');
-    if ($stTax) {
-        $stTax->bind_param('i', $donorUserId);
-        $stTax->execute();
-        $rowT = $stTax->get_result()->fetch_assoc();
-        if ($rowT) {
-            $taxId = (string)($rowT['tax_id'] ?? '');
+    if ($seedId > 0) {
+        $up = $conn->prepare(
+            "UPDATE donation
+             SET amount = ?, payment_status = ?, transfer_datetime = NOW(),
+                 omise_charge_id = ?, transaction_status = ?
+             WHERE donate_id = ?"
+        );
+        if (!$up) {
+            return false;
         }
-    }
-
-    $conn->query("
-        CREATE TABLE IF NOT EXISTS child_donations (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            child_id INT NOT NULL,
-            donor_user_id INT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
-            donated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX(child_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    if (!$conn->begin_transaction()) {
-        return false;
-    }
-    try {
-        $ins = $conn->prepare('INSERT INTO omise_webhook_charge (charge_id) VALUES (?)');
+        $up->bind_param('dsssi', $amountBaht, $completed, $chargeId, $completed, $seedId);
+        $ok = $up->execute() && $up->affected_rows >= 1;
+    } else {
+        $planCode = '';
+        $nextAt = null;
+        $scheduleId = null;
+        $sMeta = $conn->prepare(
+            "SELECT recurring_plan_code, recurring_next_charge_at, recurring_schedule_id
+             FROM donation
+             WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription'
+             ORDER BY donate_id DESC
+             LIMIT 1"
+        );
+        if ($sMeta) {
+            $sMeta->bind_param('ii', $childId, $donorUserId);
+            $sMeta->execute();
+            $m = $sMeta->get_result()->fetch_assoc() ?: null;
+            if (is_array($m)) {
+                $planCode = (string)($m['recurring_plan_code'] ?? '');
+                $nextAt = ($m['recurring_next_charge_at'] ?? null) !== null ? (string)$m['recurring_next_charge_at'] : null;
+                $scheduleId = ($m['recurring_schedule_id'] ?? null) !== null ? (string)$m['recurring_schedule_id'] : null;
+            }
+        }
+        $ins = $conn->prepare(
+            'INSERT INTO donation (
+                category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                omise_charge_id, transaction_status,
+                donate_type, recurring_status, recurring_plan_code,
+                recurring_next_charge_at, recurring_schedule_id
+            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)'
+        );
         if (!$ins) {
-            throw new RuntimeException('prepare webhook charge');
+            return false;
         }
-        $ins->bind_param('s', $chargeId);
-        if (!$ins->execute()) {
-            throw new RuntimeException('insert webhook charge');
-        }
-
-        $insD = $conn->prepare(
-            'INSERT INTO child_donations (child_id, donor_user_id, amount) VALUES (?, ?, ?)'
+        $rType = DRAWDREAM_DONATE_TYPE_CHILD_SUBSCRIPTION_CHARGE;
+        $rStatus = 'charged';
+        $ins->bind_param(
+            'iiiddssssssss',
+            $categoryId,
+            $childId,
+            $donorUserId,
+            $amountBaht,
+            $completed,
+            $chargeId,
+            $completed,
+            $rType,
+            $rStatus,
+            $planCode,
+            $nextAt,
+            $scheduleId
         );
-        if (!$insD) {
-            throw new RuntimeException('prepare child_donations');
-        }
-        $insD->bind_param('iid', $childId, $donorUserId, $amountBaht);
-        if (!$insD->execute()) {
-            throw new RuntimeException('insert child_donations');
-        }
-
-        $serviceFee = 0.0;
-        $insDon = $conn->prepare(
-            'INSERT INTO donation (category_id, target_id, donor_id, amount, service_fee, payment_status, transfer_datetime)
-             VALUES (?, ?, ?, ?, ?, \'completed\', NOW())'
-        );
-        if (!$insDon) {
-            throw new RuntimeException('prepare donation');
-        }
-        $insDon->bind_param('iiidd', $categoryId, $childId, $donorUserId, $amountBaht, $serviceFee);
-        if (!$insDon->execute()) {
-            throw new RuntimeException('insert donation');
-        }
-        $donateId = (int)$conn->insert_id;
-        if ($donateId <= 0) {
-            throw new RuntimeException('donate_id');
-        }
-
-        $insPt = $conn->prepare(
-            'INSERT INTO payment_transaction (donate_id, tax_id, omise_charge_id, transaction_status)
-             VALUES (?, ?, ?, \'completed\')'
-        );
-        if (!$insPt) {
-            throw new RuntimeException('prepare payment_transaction');
-        }
-        $insPt->bind_param('iss', $donateId, $taxId, $chargeId);
-        if (!$insPt->execute()) {
-            throw new RuntimeException('insert payment_transaction');
-        }
-
-        if (!function_exists('drawdream_child_sync_sponsorship_status')) {
-            require_once __DIR__ . '/child_sponsorship.php';
-        }
-        if (function_exists('drawdream_child_sync_sponsorship_status')) {
-            drawdream_child_sync_sponsorship_status($conn, $childId);
-        }
-
-        $conn->commit();
-        return true;
-    } catch (Throwable $e) {
-        $conn->rollback();
-
-        return false;
+        $ok = $ins->execute();
     }
+    if ($ok && !function_exists('drawdream_child_sync_sponsorship_status')) {
+        require_once __DIR__ . '/child_sponsorship.php';
+    }
+    if ($ok && function_exists('drawdream_child_sync_sponsorship_status')) {
+        drawdream_child_sync_sponsorship_status($conn, $childId);
+    }
+    return $ok;
 }
 
 function drawdream_child_has_active_omise_subscription(mysqli $conn, int $childId, int $donorUserId): bool
@@ -220,41 +173,43 @@ function drawdream_child_has_active_omise_subscription(mysqli $conn, int $childI
         return false;
     }
     drawdream_child_omise_subscription_ensure_schema($conn);
+    $active = 'active';
+    $type = 'child_subscription';
     $st = $conn->prepare(
-        'SELECT id FROM child_omise_subscription
-         WHERE child_id = ? AND donor_user_id = ? AND status = ? LIMIT 1'
+        'SELECT 1 FROM donation
+         WHERE target_id = ? AND donor_id = ? AND donate_type = ? AND recurring_status = ? LIMIT 1'
     );
     if (!$st) {
         return false;
     }
-    $active = 'active';
-    $st->bind_param('iis', $childId, $donorUserId, $active);
+    $st->bind_param('iiss', $childId, $donorUserId, $type, $active);
     $st->execute();
-    return (bool)$st->get_result()->fetch_assoc();
+    return (bool)$st->get_result()->fetch_row();
 }
 
-/** มีผู้สมัครอุปการะรายเดือน/รายปี (หรืองวด Omise) กับเด็กคนนี้อย่างน้อย 1 รายการที่ยัง active */
 function drawdream_child_has_any_active_subscription(mysqli $conn, int $childId): bool
 {
     if ($childId <= 0) {
         return false;
     }
     drawdream_child_omise_subscription_ensure_schema($conn);
+    $active = 'active';
+    $type = 'child_subscription';
     $st = $conn->prepare(
-        'SELECT 1 FROM child_omise_subscription WHERE child_id = ? AND status = ? LIMIT 1'
+        'SELECT 1 FROM donation
+         WHERE target_id = ? AND donate_type = ? AND recurring_status = ? LIMIT 1'
     );
     if (!$st) {
         return false;
     }
-    $active = 'active';
-    $st->bind_param('is', $childId, $active);
+    $st->bind_param('iss', $childId, $type, $active);
     $st->execute();
     return (bool)$st->get_result()->fetch_row();
 }
 
 /**
  * @param list<int> $childIds
- * @return array<int, true> child_id ที่มี subscription active
+ * @return array<int, true>
  */
 function drawdream_child_ids_with_active_plan_sponsorship(mysqli $conn, array $childIds): array
 {
@@ -265,14 +220,17 @@ function drawdream_child_ids_with_active_plan_sponsorship(mysqli $conn, array $c
     drawdream_child_omise_subscription_ensure_schema($conn);
     $ph = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
-    $sql = "SELECT DISTINCT child_id FROM child_omise_subscription WHERE status = ? AND child_id IN ($ph)";
+    $active = 'active';
+    $type = 'child_subscription';
+    $sql = "SELECT DISTINCT target_id AS child_id
+            FROM donation
+            WHERE donate_type = ? AND recurring_status = ? AND target_id IN ($ph)";
     $st = $conn->prepare($sql);
     if (!$st) {
         return [];
     }
-    $active = 'active';
-    $bindTypes = 's' . $types;
-    $st->bind_param($bindTypes, $active, ...$ids);
+    $bindTypes = 'ss' . $types;
+    $st->bind_param($bindTypes, $type, $active, ...$ids);
     $st->execute();
     $res = $st->get_result();
     $out = [];
@@ -282,16 +240,12 @@ function drawdream_child_ids_with_active_plan_sponsorship(mysqli $conn, array $c
     return $out;
 }
 
-/** Omise รองรับ days_of_month เฉพาะ 1–28 สำหรับรายเดือน */
 function drawdream_subscription_safe_bill_day(DateTimeImmutable $bangkokNow): int
 {
     $d = (int)$bangkokNow->format('j');
     return min(28, max(1, $d));
 }
 
-/**
- * @return array{every:int, period:string, amount_thb:float, amount_satang:int, plan_code:string}|null
- */
 function drawdream_child_subscription_plan(string $plan): ?array
 {
     $plan = strtolower(trim($plan));
@@ -319,12 +273,11 @@ function drawdream_child_can_start_omise_subscription(mysqli $conn, int $childId
     if (!in_array($ap, ['อนุมัติ', 'กำลังดำเนินการ'], true)) {
         return false;
     }
-    if (!empty($childRow['is_hidden'])) {
-        return false;
-    }
     drawdream_child_omise_subscription_ensure_schema($conn);
-    if (drawdream_child_has_any_active_subscription($conn, $childId)) {
+    require_once __DIR__ . '/child_sponsorship.php';
+    if (!drawdream_child_can_receive_donation($conn, $childId, $childRow)) {
         return false;
     }
+
     return !drawdream_child_has_active_omise_subscription($conn, $childId, $donorUserId);
 }

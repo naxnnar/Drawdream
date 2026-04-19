@@ -767,6 +767,18 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
     color: #fff;
 }
 
+/* มูลนิธิรอแอดมินอนุมัติบัญชี (account_verified) */
+.foundation-pending-account-banner {
+    background: #FEF3C7;
+    color: #92400E;
+    text-align: center;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    border-bottom: 1px solid #F59E0B;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+}
+
 /* แถบโหมดดูตัวอย่างอยู่เหนือ navbar — เลื่อน navbar ลงมา + เพิ่ม padding เนื้อหา */
 body:has(.donor-preview-banner):not(.admin-sidebar-page) {
     padding-top: calc(82px + 48px) !important;

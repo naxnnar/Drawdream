@@ -10,6 +10,8 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     exit();
 }
 
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
 
 $sql = "SELECT * FROM `foundation_profile` WHERE `user_id` = ?";
 $stmtFP = $conn->prepare($sql);
@@ -93,7 +95,7 @@ if (isset($_POST['submit'])) {
 
     $newName = "child_" . time() . "." . $ext;
 
-    if (!move_uploaded_file($tmpName, "uploads/Children/" . $newName)) {
+    if (!move_uploaded_file($tmpName, "uploads/childern/" . $newName)) {
         echo "<script>alert('อัปโหลดรูปไม่สำเร็จ'); history.back();</script>";
         exit();
     }
@@ -139,6 +141,7 @@ if (isset($_POST['submit'])) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
 <title>เพิ่มข้อมูลเด็ก - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">

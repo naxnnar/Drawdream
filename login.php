@@ -6,6 +6,8 @@ session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
+require_once __DIR__ . '/includes/google_oauth.php';
+require_once __DIR__ . '/includes/utf8_helpers.php';
 
 // ถ้า login แล้ว ไป homepage
 if (isset($_SESSION['user_id'])) {
@@ -25,6 +27,11 @@ $success = "";
 $page = $_GET['page'] ?? 'home';
 $step = $_GET['step'] ?? 'choose';
 $role = $_GET['role'] ?? '';
+$googleLoginEnabled = drawdream_google_oauth_is_ready();
+
+if ($error === '' && isset($_GET['error'])) {
+    $error = trim((string)$_GET['error']);
+}
 
 // ======== ประมวลผล Register ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
@@ -39,6 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 
         if (empty($first_name) || empty($last_name) || empty($email) || empty($password)) {
             $error = "กรุณากรอกข้อมูลให้ครบถ้วน";
+        } elseif (drawdream_utf8_strlen($password) !== 10) {
+            $error = "รหัสผ่านต้องมีความยาว 10 ตัวอักษรเท่านั้น";
         } elseif ($password !== $confirm_password) {
             $error = "รหัสผ่านไม่ตรงกัน";
         } else {
@@ -71,9 +80,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
         }
     } elseif ($role === 'foundation') {
         $foundation_name = trim($_POST['foundation_name']);
-        $registration_number = trim($_POST['registration_number']);
+        $registration_number = preg_replace('/\D/', '', trim($_POST['registration_number'] ?? ''));
         $email = trim($_POST['email']);
-        $phone = trim($_POST['phone']);
+        $phone = preg_replace('/\D/', '', trim((string)($_POST['phone'] ?? '')));
         $address = drawdream_merge_foundation_address_from_post($_POST);
         $password = $_POST['password'];
         $confirm_password = $_POST['confirm_password'];
@@ -83,8 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 
         if (empty($foundation_name) || empty($email) || empty($password)) {
             $error = "กรุณากรอกข้อมูลให้ครบถ้วน";
+        } elseif (strlen($registration_number) !== 13) {
+            $error = "เลขประจำตัวนิติบุคคลต้องเป็นตัวเลข 13 หลัก";
+        } elseif (strlen($phone) !== 10) {
+            $error = "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก";
         } elseif ($address === '') {
             $error = "กรุณาเลือกจังหวัด อำเภอ ตำบล และรหัสไปรษณีย์ให้ครบ";
+        } elseif (drawdream_utf8_strlen($password) !== 10) {
+            $error = "รหัสผ่านต้องมีความยาว 10 ตัวอักษรเท่านั้น";
         } elseif ($password !== $confirm_password) {
             $error = "รหัสผ่านไม่ตรงกัน";
         } elseif ($bank_name !== '' && !in_array($bank_name, array_keys(drawdream_foundation_bank_list()), true)) {
@@ -112,6 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'foundation';
+                    $_SESSION['account_verified'] = 0;
                     $_SESSION['show_welcome'] = true;
                     header("refresh:2;url=welcome.php");
                 } else {
@@ -126,10 +142,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     $email = trim($_POST['email']);
     $password = $_POST['password'];
-    $role = $_POST['role'];
 
     if (empty($email) || empty($password)) {
         $error = "กรุณากรอกอีเมลและรหัสผ่าน";
+    } elseif (drawdream_utf8_strlen($password) !== 10) {
+        $error = "รหัสผ่านต้องมีความยาว 10 ตัวอักษรเท่านั้น";
     } else {
         // ดึงข้อมูล user จาก email ก่อน ไม่ filter role
         $stmt = $conn->prepare("SELECT * FROM `user` WHERE email = ?");
@@ -138,36 +155,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         $row = $stmt->get_result()->fetch_assoc();
 
         if ($row && password_verify($password, $row['password'])) {
-            $actual_role    = $row['role'];       // role จริงใน DB
-            $selected_role  = $role;              // role ที่ user เลือกในหน้า login
+            $_SESSION['user_id'] = $row['user_id'];
+            $_SESSION['email']   = $row['email'];
+            $_SESSION['role']    = $row['role'];
 
-            // ✅ กฎ: admin เข้าได้ทุกช่อง, donor/foundation ต้องตรงกับ role จริงเท่านั้น
-            $allowed = false;
-            if ($actual_role === 'admin') {
-                $allowed = true; // admin เข้าช่องไหนก็ได้
-            } elseif ($actual_role === $selected_role) {
-                $allowed = true; // donor เข้าช่อง donor, foundation เข้าช่อง foundation
+            if ($row['role'] === 'foundation') {
+                $stmt2 = $conn->prepare("SELECT account_verified FROM foundation_profile WHERE user_id = ?");
+                $stmt2->bind_param("i", $row['user_id']);
+                $stmt2->execute();
+                $fp = $stmt2->get_result()->fetch_assoc();
+                $_SESSION['account_verified'] = $fp['account_verified'];
             }
 
-            if ($allowed) {
-                $_SESSION['user_id'] = $row['user_id'];
-                $_SESSION['email']   = $row['email'];
-                $_SESSION['role']    = $row['role'];
-
-                if ($row['role'] === 'foundation') {
-                    $stmt2 = $conn->prepare("SELECT account_verified FROM foundation_profile WHERE user_id = ?");
-                    $stmt2->bind_param("i", $row['user_id']);
-                    $stmt2->execute();
-                    $fp = $stmt2->get_result()->fetch_assoc();
-                    $_SESSION['account_verified'] = $fp['account_verified'];
-                }
-
-                $_SESSION['show_welcome'] = true;
-                header("Location: welcome.php");
-                exit();
-            } else {
-                $error = "บัญชีนี้ไม่ใช่ประเภท " . ($selected_role === 'donor' ? 'ผู้บริจาค' : 'มูลนิธิ') . " กรุณาเลือกประเภทบัญชีให้ถูกต้อง";
-            }
+            $_SESSION['show_welcome'] = true;
+            header("Location: welcome.php");
+            exit();
         } elseif ($row) {
             $error = "รหัสผ่านไม่ถูกต้อง";
         } else {
@@ -180,6 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 <html lang="th">
 
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $page === 'home' ? 'DrawDream' : ($page === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก') ?> | DrawDream</title>
@@ -205,40 +208,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <p class="subtitle">เลือกเพื่อเริ่มต้นใช้งาน DrawDream</p>
             <div class="role-buttons">
                 <a href="login.php?page=register&step=choose" class="role-btn">สมัครสมาชิก</a>
-                <a href="login.php?page=login&step=choose" class="role-btn role-btn-outline">เข้าสู่ระบบ (มีบัญชีอยู่แล้ว)</a>
+                <a href="login.php?page=login" class="role-btn role-btn-outline">เข้าสู่ระบบ (มีบัญชีอยู่แล้ว)</a>
             </div>
 
         <?php elseif ($page === 'login'): ?>
-            <?php if ($step === 'choose'): ?>
-                <h2>คุณเป็นใคร?</h2>
-                <p class="subtitle">เลือกประเภทบัญชีเพื่อเข้าสู่ระบบ</p>
-                <div class="role-buttons">
-                    <a href="login.php?page=login&step=form&role=donor" class="role-btn">ผู้บริจาค</a>
-                    <a href="login.php?page=login&step=form&role=foundation" class="role-btn">มูลนิธิ</a>
+            <h2>เข้าสู่ระบบ</h2>
+            <p class="subtitle">ยินดีต้อนรับกลับมา!</p>
+            <form method="POST">
+                <div class="form-group">
+                    <input type="email" name="email" placeholder="อีเมล" required autofocus>
                 </div>
-                <a href="login.php" class="back-link">← ย้อนกลับ</a>
-            <?php else: ?>
-                <h2>เข้าสู่ระบบ (<?= $role === 'donor' ? 'ผู้บริจาค' : 'มูลนิธิ' ?>)</h2>
-                <p class="subtitle">ยินดีต้อนรับกลับมา!</p>
-                <form method="POST">
-                    <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
-                    <div class="form-group">
-                        <input type="email" name="email" placeholder="อีเมล" required autofocus>
+                <div class="form-group">
+                    <div style="position:relative;">
+                        <input type="password" name="password" placeholder="รหัสผ่าน (10 ตัวอักษร)" required minlength="10" maxlength="10" class="password-input">
+                        <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
+                        <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                     </div>
-                    <div class="form-group">
-                        <div style="position:relative;">
-                            <input type="password" name="password" placeholder="รหัสผ่าน" required class="password-input">
-                            <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
-                            <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
-                        </div>
-                    </div>
-                    <button type="submit" name="login" class="btn-submit">เข้าสู่ระบบ</button>
-                </form>
-                <a href="login.php?page=login&step=choose" class="back-link">← เปลี่ยนประเภทบัญชี</a>
-                <div class="register-link">
-                    ยังไม่มีบัญชี? <a href="login.php?page=register&step=choose">สมัครสมาชิก</a>
                 </div>
-            <?php endif; ?>
+                <button type="submit" name="login" class="btn-submit">เข้าสู่ระบบ</button>
+            </form>
+            <div class="google-login-wrap">
+                <?php if ($googleLoginEnabled): ?>
+                    <a href="auth/google_start.php" class="btn-google-login">เข้าสู่ระบบด้วย Google</a>
+                <?php else: ?>
+                    <div class="google-login-note">Google Login ยังไม่พร้อม: ตั้งค่า `config/google_oauth.local.php` ก่อน</div>
+                <?php endif; ?>
+            </div>
+            <a href="login.php" class="back-link">← ย้อนกลับ</a>
+            <div class="register-link">
+                ยังไม่มีบัญชี? <a href="login.php?page=register&step=choose">สมัครสมาชิก</a>
+            </div>
 
         <?php elseif ($page === 'register'): ?>
             <?php if ($step === 'choose'): ?>
@@ -266,14 +265,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" required minlength="6" class="password-input">
+                                <input type="password" name="password" placeholder="รหัสผ่าน (10 ตัวอักษรเท่านั้น)" required minlength="10" maxlength="10" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required minlength="6" class="password-input">
+                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน (10 ตัวอักษร)" required minlength="10" maxlength="10" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
@@ -289,13 +288,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                             <input type="text" name="foundation_name" placeholder="ชื่อมูลนิธิ" required>
                         </div>
                         <div class="form-group">
-                            <input type="text" name="registration_number" placeholder="เลขทะเบียนมูลนิธิ">
+                            <input type="text" name="registration_number" placeholder="เลขประจำตัวนิติบุคคล (13 หลัก)" required inputmode="numeric" autocomplete="off" maxlength="13" pattern="\d{13}">
                         </div>
                         <div class="form-group">
                             <input type="email" name="email" placeholder="อีเมล" required>
                         </div>
                         <div class="form-group">
-                            <input type="tel" name="phone" placeholder="เบอร์โทรศัพท์">
+                            <input type="tel" name="phone" placeholder="เบอร์โทรศัพท์ (10 หลัก)" required inputmode="numeric" autocomplete="tel" maxlength="10" minlength="10" pattern="\d{10}" title="กรอกตัวเลข 10 หลัก">
                         </div>
                         <?php
                         $thai_address_options = ['require' => true];
@@ -315,19 +314,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                             <input type="text" name="bank_account_number" id="foundation_reg_bank_account" inputmode="numeric" autocomplete="off" maxlength="10" pattern="\d{10}" class="form-input" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #D1D5DB;">
                         </div>
                         <div class="form-group">
-                            <label for="foundation_reg_bank_holder" class="form-label" style="display:block;margin-bottom:6px;font-weight:600;">ชื่อบัญชี</label>
+                            <label for="foundation_reg_bank_holder" class="form-label" style="display:block;margin-bottom:6px;font-weight:600;">ชื่อบัญชีธนาคาร</label>
                             <input type="text" name="bank_account_name" id="foundation_reg_bank_holder" placeholder="ชื่อบัญชี (ถ้ามี)" class="form-input" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #D1D5DB;">
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)" required minlength="6" class="password-input">
+                                <input type="password" name="password" placeholder="รหัสผ่าน (10 ตัวอักษรเท่านั้น)" required minlength="10" maxlength="10" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน" required minlength="6" class="password-input">
+                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน (10 ตัวอักษร)" required minlength="10" maxlength="10" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
@@ -337,7 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 <?php endif; ?>
                 <a href="login.php?page=register&step=choose" class="back-link">← เปลี่ยนประเภทบัญชี</a>
                 <div class="register-link">
-                    มีบัญชีอยู่แล้ว? <a href="login.php?page=login&step=choose">เข้าสู่ระบบ</a>
+                    มีบัญชีอยู่แล้ว? <a href="login.php?page=login">เข้าสู่ระบบ</a>
                 </div>
             <?php endif; ?>
         <?php endif; ?>

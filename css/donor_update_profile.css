@@ -314,12 +314,13 @@ textarea {
 }
 
 .receipt-tab.is-active {
-    background: #F4A261;
-    color: #1a1a1a;
+    background: #597D57;
+    color: #fff;
 }
 
 .receipt-tab:not(.is-active):hover {
-    background: #f0f0f0;
+    background: rgba(89, 125, 87, 0.12);
+    color: #1f2b46;
 }
 
 .receipt-panel.is-hidden {

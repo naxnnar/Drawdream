@@ -1,6 +1,6 @@
 <?php
 // includes/qr_payment_abandon.php — ล้าง session QR payment ค้าง
-// ยกเลิก QR ที่ยังไม่ชำระ: ลบ payment_transaction (และแถว donation แบบ pending ถ้ามีจากเวอร์ชันเก่า)
+// ยกเลิก QR ที่ยังไม่ชำระ: ใช้ donation ตารางเดียว
 
 declare(strict_types=1);
 
@@ -45,7 +45,8 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
     drawdream_payment_transaction_ensure_schema($conn);
 
     $st = $conn->prepare(
-        'SELECT log_id, donate_id, pending_donor_user_id FROM payment_transaction
+        'SELECT donate_id, donor_id
+         FROM donation
          WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
     );
     $pend = 'pending';
@@ -56,50 +57,16 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
         return 0;
     }
 
-    $logId = (int)$row['log_id'];
     $donateId = isset($row['donate_id']) && $row['donate_id'] !== null ? (int)$row['donate_id'] : 0;
-    $pDonor = isset($row['pending_donor_user_id']) && $row['pending_donor_user_id'] !== null
-        ? (int)$row['pending_donor_user_id'] : 0;
+    $rowDonorId = (int)($row['donor_id'] ?? 0);
 
-    if ($donateId <= 0) {
-        if ($pDonor !== $donorUserId) {
-            return 0;
-        }
-        $del = $conn->prepare('DELETE FROM payment_transaction WHERE log_id = ?');
-        $del->bind_param('i', $logId);
-        $del->execute();
-
-        return $del->affected_rows > 0 ? 1 : 0;
-    }
-
-    $chk = $conn->prepare(
-        'SELECT donate_id FROM donation WHERE donate_id = ? AND donor_id = ? AND payment_status = ? LIMIT 1'
-    );
-    $ps = 'pending';
-    $chk->bind_param('iis', $donateId, $donorUserId, $ps);
-    $chk->execute();
-    if (!$chk->get_result()->fetch_row()) {
+    if ($rowDonorId !== $donorUserId) {
         return 0;
     }
-
-    if (!$conn->begin_transaction()) {
-        return 0;
-    }
-    try {
-        $delPt = $conn->prepare('DELETE FROM payment_transaction WHERE log_id = ?');
-        $delPt->bind_param('i', $logId);
-        $delPt->execute();
-        $delD = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND payment_status = ?');
-        $delD->bind_param('is', $donateId, $ps);
-        $delD->execute();
-        $conn->commit();
-
-        return 1;
-    } catch (Throwable $e) {
-        $conn->rollback();
-
-        return 0;
-    }
+    $del = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND transaction_status = ?');
+    $del->bind_param('is', $donateId, $pend);
+    $del->execute();
+    return $del->affected_rows > 0 ? 1 : 0;
 }
 
 /**
@@ -112,46 +79,14 @@ function drawdream_abandon_all_pending_qr_for_donor(mysqli $conn, int $donorUser
     }
     drawdream_payment_transaction_ensure_schema($conn);
 
-    $n = 0;
-
     $st1 = $conn->prepare(
-        'DELETE FROM payment_transaction
-         WHERE transaction_status = ? AND pending_donor_user_id = ? AND donate_id IS NULL'
+        'DELETE FROM donation
+         WHERE transaction_status = ? AND donor_id = ?'
     );
     $pend = 'pending';
     $st1->bind_param('si', $pend, $donorUserId);
     $st1->execute();
-    $n += $st1->affected_rows;
-
-    $st2 = $conn->prepare(
-        'SELECT pt.log_id, pt.donate_id FROM payment_transaction pt
-         INNER JOIN donation d ON d.donate_id = pt.donate_id
-         WHERE pt.transaction_status = ? AND d.payment_status = ? AND d.donor_id = ?'
-    );
-    $st2->bind_param('ssi', $pend, $pend, $donorUserId);
-    $st2->execute();
-    $res = $st2->get_result();
-    while ($r = $res->fetch_assoc()) {
-        $lid = (int)$r['log_id'];
-        $did = (int)$r['donate_id'];
-        if (!$conn->begin_transaction()) {
-            continue;
-        }
-        try {
-            $dp = $conn->prepare('DELETE FROM payment_transaction WHERE log_id = ?');
-            $dp->bind_param('i', $lid);
-            $dp->execute();
-            $dd = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND payment_status = ?');
-            $dd->bind_param('is', $did, $pend);
-            $dd->execute();
-            $conn->commit();
-            ++$n;
-        } catch (Throwable $e) {
-            $conn->rollback();
-        }
-    }
-
-    return $n;
+    return (int)$st1->affected_rows;
 }
 
 /**

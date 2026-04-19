@@ -5,15 +5,11 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/project_donation_dates.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
+require_once __DIR__ . '/includes/foundation_account_verified.php';
 
-$is_verified = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && isset($_SESSION['account_verified']) && $_SESSION['account_verified'] == 1);
+$is_verified = drawdream_foundation_account_is_verified($conn);
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
-
-$role    = $_SESSION['role'] ?? 'donor';
+$role    = $_SESSION['role'] ?? 'guest';
 $viewMode = $_GET['view'] ?? (($role === 'foundation') ? 'foundation' : 'donor');
 if ($role !== 'foundation') $viewMode = 'donor';
 $isFoundationOwnView = ($role === 'foundation' && $viewMode === 'foundation');
@@ -32,6 +28,10 @@ if ($role === 'foundation' && isset($_SESSION['user_id'])) {
 }
 
 if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
+    if (!$is_verified) {
+        header('Location: homepage.php?' . http_build_query(['msg' => 'บัญชีมูลนิธิของคุณยังรอการตรวจสอบจากผู้ดูแลระบบ จึงยังไม่สามารถใช้ฟีเจอร์นี้ได้']));
+        exit();
+    }
     $deleteProjectId = (int)($_POST['delete_project_id'] ?? 0);
     if ($deleteProjectId > 0 && $foundationName !== '') {
         mysqli_begin_transaction($conn);
@@ -159,6 +159,19 @@ function projectStatusThai($status) {
         'rejected' => ['label' => 'ไม่ผ่านการอนุมัติ', 'class' => 'st-rejected'],
     ];
     return $map[$status] ?? ['label' => (string)$status, 'class' => 'st-pending'];
+}
+
+/** มีข้อมูลผลลัพธ์ใน foundation_project (update_text / update_images) แล้วหรือไม่ */
+function foundation_project_has_outcome_posted(array $row): bool {
+    if (trim((string)($row['update_text'] ?? '')) !== '') {
+        return true;
+    }
+    $raw = trim((string)($row['update_images'] ?? ''));
+    if ($raw === '') {
+        return false;
+    }
+    $arr = json_decode($raw, true);
+    return is_array($arr) && count($arr) > 0;
 }
 
 /**
@@ -290,7 +303,7 @@ $types  = "";
 $where  = [];
 $where[] = 'p.deleted_at IS NULL';
 
-$publicDonorStyle = (!$isFoundationOwnView && in_array($role, ['donor', 'foundation'], true));
+$publicDonorStyle = (!$isFoundationOwnView && in_array($role, ['donor', 'foundation', 'guest'], true));
 
 // ปรับให้ค้นหาเฉพาะชื่อโครงการ (project_name) เท่านั้น
 $kwLike = "%{$keyword}%";
@@ -421,12 +434,13 @@ if ($isFoundationOwnView) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=28">
+    <link rel="stylesheet" href="css/project.css?v=39">
 
 </head>
 <body class="projects-page">
@@ -448,6 +462,7 @@ if ($isFoundationOwnView) {
                 <?php endif; ?>
                 <button type="button" id="toggleEditProjectBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขโครงการ</button>
                 <button type="button" id="toggleDeleteProjectBtn" class="foundation-manage-btn foundation-manage-btn-danger">ลบโครงการ</button>
+                <button type="button" id="toggleOutcomeProjectBtn" class="foundation-manage-btn foundation-manage-btn-outcome">อัปเดตผลลัพธ์โครงการ</button>
             </div>
         </div>
     </div>
@@ -456,7 +471,7 @@ if ($isFoundationOwnView) {
         <?php if (!empty($projects)): ?>
             <?php foreach ($projects as $row): ?>
                 <?php
-                    $goal = !empty($row['goal_amount']) ? floatval($row['goal_amount']) : 100000;
+                    $goal = (float)($row['goal_amount'] ?? 0);
                     $raised = (float)($row['current_donate'] ?? 0);
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                     $statusMeta = projectStatusThai($row['project_status'] ?? 'pending');
@@ -472,25 +487,32 @@ if ($isFoundationOwnView) {
                     }
                 ?>
                 <article class="foundation-project-item <?= htmlspecialchars($statusMeta['class']) ?>">
-                    <?php if (!empty($row['project_image'])): ?>
-                        <img class="foundation-project-thumb" src="uploads/<?= htmlspecialchars($row['project_image']) ?>" alt="<?= htmlspecialchars($row['project_name']) ?>">
-                    <?php else: ?>
-                        <div class="foundation-project-thumb empty"></div>
-                    <?php endif; ?>
+                    <a href="foundation_project_view.php?id=<?= (int)$row['project_id'] ?>"
+                       class="foundation-project-item-overlay"
+                       aria-label="ดูรายละเอียดโครงการ"
+                       title="ดูรายละเอียดโครงการ"></a>
+                    <div class="foundation-project-card-top">
+                        <?php if (!empty($row['project_image'])): ?>
+                            <img class="foundation-project-thumb" src="<?= htmlspecialchars(drawdream_project_image_url((string)($row['project_image'] ?? ''), 'uploads/'), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($row['project_name']) ?>">
+                        <?php else: ?>
+                            <div class="foundation-project-thumb empty" aria-hidden="true"></div>
+                        <?php endif; ?>
+                    </div>
 
                     <div class="foundation-project-body">
-                        <h3><?= htmlspecialchars($row['project_name']) ?></h3>
                         <span class="foundation-status-pill <?= htmlspecialchars($statusMeta['class']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span>
                         <?php
-                        $isCompleted = in_array($row['project_status'], ['completed', 'done', 'purchasing'], true);
-                        $isOwner = (isset($_SESSION['role']) && $_SESSION['role'] === 'foundation' && $row['foundation_name'] === $foundationName);
+                            $endShow = trim((string)($row['end_date'] ?? ''));
+                            if ($endShow !== '') {
+                                $tsEnd = strtotime($endShow);
+                                if ($tsEnd !== false) {
+                                    echo '<p class="foundation-project-date-line">ปิดรับ ' . htmlspecialchars(date('d/m/Y H:i', $tsEnd)) . '</p>';
+                                }
+                            }
                         ?>
-                        <?php if ($isCompleted): ?>
-                            <?php if ($isOwner): ?>
-                                <a href="foundation_post_update.php?project_id=<?= (int)$row['project_id'] ?>" class="foundation-manage-btn" style="background:#597D57;color:#fff;margin-left:8px;">อัปเดตผลลัพธ์โครงการ</a>
-                            <?php else: ?>
-                                <a href="foundation_post_update.php?project_id=<?= (int)$row['project_id'] ?>" class="foundation-manage-btn" style="background:#597D57;color:#fff;margin-left:8px;">ดูผลลัพธ์โครงการ</a>
-                            <?php endif; ?>
+                        <h3 class="foundation-project-title"><?= htmlspecialchars($row['project_name']) ?></h3>
+                        <?php if (trim((string)($row['category'] ?? '')) !== ''): ?>
+                            <p class="foundation-project-cat-line"><?= htmlspecialchars(trim((string)$row['category'])) ?></p>
                         <?php endif; ?>
                         <?php if (($row['project_status'] ?? '') === 'pending'): ?>
                             <div class="foundation-status-alert st-pending">โครงการนี้รอแอดมินตรวจสอบ</div>
@@ -521,7 +543,7 @@ if ($isFoundationOwnView) {
                             if (!empty($endRaw)) {
                                 try {
                                     $endD = new DateTimeImmutable(substr((string)$endRaw, 0, 10), $tzB);
-                                    $ended = $endD->format('Y-m-d') < (new DateTimeImmutable('now', $tzB))->format('Y-m-d');
+                                    $ended = $endD->format('Y-m-d') <= (new DateTimeImmutable('now', $tzB))->format('Y-m-d');
                                 } catch (Exception $e) {
                                     $ended = false;
                                 }
@@ -529,6 +551,12 @@ if ($isFoundationOwnView) {
                             $halfGoal = ($goal > 0) ? ($goal * 0.5) : 0.0;
                             $mergedIntoId = (int)($row['merged_into_project_id'] ?? 0);
                             $canMergeFunds = ($pst === 'approved' && $ended && $goal > 0 && $raised > 0 && $raised < $halfGoal && $mergedIntoId <= 0);
+                            // อนุญาตอัปเดตผลลัพธ์ได้ทันทีเมื่อโครงการอยู่สถานะเสร็จสิ้นแล้ว
+                            // และยังคงรองรับเคสโครงการระดมทุนที่ครบเงื่อนไข (ถึงเป้า + เลยวันปิดรับ)
+                            $isCompletedStatus = in_array($pst, ['completed', 'done', 'purchasing'], true);
+                            $qualifiedFundraising = ($pst === 'approved' && $goal > 0 && $raised >= $goal && $ended);
+                            $allowOutcomeCard = ($isCompletedStatus || $qualifiedFundraising);
+                            $hasOutcomePosted = foundation_project_has_outcome_posted($row);
                         ?>
                         <?php if ($mergedIntoId > 0): ?>
                             <div class="foundation-merge-hint" style="background:#ecfdf5;">
@@ -552,6 +580,9 @@ if ($isFoundationOwnView) {
                                     <button type="button" class="foundation-pill-cancel-delete">ยกเลิก</button>
                                 </div>
                             </form>
+                        </div>
+                        <div class="project-outcome-wrap" data-allow-outcome="<?= $allowOutcomeCard ? '1' : '0' ?>">
+                            <a class="foundation-project-pill-outcome<?= $hasOutcomePosted ? ' foundation-project-pill-outcome--posted' : '' ?>" href="foundation_post_update.php?project_id=<?= (int)$row['project_id'] ?>"><?= $hasOutcomePosted ? 'อัปเดตแล้ว' : 'อัปเดตผลลัพธ์โครงการ' ?></a>
                         </div>
                     </div>
                 </article>
@@ -665,7 +696,7 @@ if ($isFoundationOwnView) {
 if ($role === 'admin'): 
 ?>
 <div class="top-actions">
-    <a href="admin_approve_projects.php" class="btn-mini btn-admin">อนุมัติโครงการ</a>
+    <a href="admin_notifications.php#admin-pending-projects" class="btn-mini btn-admin">อนุมัติโครงการ</a>
 </div>
 <?php endif; ?>
 
@@ -686,7 +717,7 @@ if ($role === 'admin'):
                         if (!donorProjectShowInDonorLatestStrip($latest)) {
                             continue;
                         }
-                        $latestGoal = !empty($latest['goal_amount']) ? floatval($latest['goal_amount']) : 100000;
+                        $latestGoal = (float)($latest['goal_amount'] ?? 0);
                         $latestRaised = (float)($latest['current_donate'] ?? 0);
                         $latestProgress = donorProjectProgressPct($latest);
                         $latestBlurb = trim((string)($latest['project_quote'] ?? ''));
@@ -717,7 +748,7 @@ if ($role === 'admin'):
                     ?>
                     <article class="project-card latest-card clickable-card<?= $latestShowResults ? ' project-card--completed' : '' ?>" data-href="<?= htmlspecialchars($latestCardLink) ?>">
                         <div class="project-card-media">
-                            <img src="uploads/<?= htmlspecialchars($latest['project_image']) ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
+                            <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($latest['project_image'] ?? ''), 'uploads/'), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
                         </div>
                         <span class="latest-badge"><?= htmlspecialchars(formatTimeAgoThai($latest['start_date'] ?? null)) ?></span>
                         <div class="project-card-title-row project-card-title-row--latest">
@@ -780,7 +811,7 @@ if ($role === 'admin'):
         <?php if (!empty($projects)): ?>
             <?php foreach ($projects as $row): ?>
                 <?php
-                    $goal = !empty($row['goal_amount']) ? floatval($row['goal_amount']) : 100000;
+                    $goalAmountDb = (float)($row['goal_amount'] ?? 0);
                     $raised = (float)($row['current_donate'] ?? 0);
                     $progress = donorProjectProgressPct($row);
                     $effState = donorProjectEffectiveState($row);
@@ -811,7 +842,7 @@ if ($role === 'admin'):
                 ?>
                 <div class="project-card clickable-card<?= $showResults ? ' project-card--completed' : '' ?>" data-href="<?= htmlspecialchars($cardLink) ?>">
                     <div class="project-card-media">
-                        <img src="uploads/<?= htmlspecialchars($row['project_image']) ?>"
+                        <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($row['project_image'] ?? ''), 'uploads/'), ENT_QUOTES, 'UTF-8') ?>"
                              alt="<?= htmlspecialchars($row['project_name']) ?>">
                     </div>
 
@@ -860,7 +891,7 @@ if ($role === 'admin'):
                                     <span class="progress-sublabel progress-sublabel-dim">&nbsp;</span>
                                     <span class="progress-goal">
                                         <svg class="goal-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                                        <?= number_format($goal, 0) ?> THB
+                                        <?= number_format($goalAmountDb, 0) ?> THB
                                     </span>
                                 </div>
                             </div>
@@ -896,16 +927,19 @@ if ($role === 'admin'):
 (function() {
     const editBtn = document.getElementById('toggleEditProjectBtn');
     const deleteBtn = document.getElementById('toggleDeleteProjectBtn');
-    if (!editBtn || !deleteBtn) return;
+    const outcomeBtn = document.getElementById('toggleOutcomeProjectBtn');
+    if (!editBtn || !deleteBtn || !outcomeBtn) return;
 
     function syncToolbarActive() {
         editBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-edit-project'));
         deleteBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-delete-project'));
+        outcomeBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-outcome-project'));
     }
 
     editBtn.addEventListener('click', function() {
         const turnOn = !document.body.classList.contains('mode-edit-project');
         document.body.classList.remove('mode-delete-project');
+        document.body.classList.remove('mode-outcome-project');
         document.body.classList.toggle('mode-edit-project', turnOn);
         syncToolbarActive();
     });
@@ -913,7 +947,16 @@ if ($role === 'admin'):
     deleteBtn.addEventListener('click', function() {
         const turnOn = !document.body.classList.contains('mode-delete-project');
         document.body.classList.remove('mode-edit-project');
+        document.body.classList.remove('mode-outcome-project');
         document.body.classList.toggle('mode-delete-project', turnOn);
+        syncToolbarActive();
+    });
+
+    outcomeBtn.addEventListener('click', function() {
+        const turnOn = !document.body.classList.contains('mode-outcome-project');
+        document.body.classList.remove('mode-edit-project');
+        document.body.classList.remove('mode-delete-project');
+        document.body.classList.toggle('mode-outcome-project', turnOn);
         syncToolbarActive();
     });
 

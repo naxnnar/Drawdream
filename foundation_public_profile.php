@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
+require_once __DIR__ . '/includes/utf8_helpers.php';
 
 $fid = (int)($_GET['id'] ?? $_GET['fid'] ?? 0);
 if ($fid <= 0) {
@@ -67,8 +68,8 @@ if ($parsed && ($parsed['province'] ?? '') !== '') {
 } else {
     $addr = trim((string)($fp['address'] ?? ''));
     if ($addr !== '') {
-        $province = function_exists('mb_strlen') && function_exists('mb_substr') && mb_strlen($addr) > 48
-            ? mb_substr($addr, 0, 48) . '…'
+        $province = drawdream_utf8_strlen($addr) > 48
+            ? drawdream_utf8_substr($addr, 0, 48) . '…'
             : $addr;
     }
 }
@@ -83,6 +84,7 @@ $pageTitle = htmlspecialchars($foundationName !== '' ? $foundationName : 'มู
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $pageTitle ?></title>

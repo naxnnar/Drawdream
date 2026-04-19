@@ -11,9 +11,8 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 // หมายเหตุ: การไม่อนุมัติเป็นการ UPDATE สถานะเท่านั้น ไม่มีการลบแถวจาก foundation_children
 $needCols = [
     'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL AFTER approve_profile",
-    'reviewed_at' => "ALTER TABLE foundation_children ADD COLUMN reviewed_at DATETIME NULL AFTER reject_reason",
     'pending_edit_json' => "ALTER TABLE foundation_children ADD COLUMN pending_edit_json LONGTEXT NULL AFTER approve_profile",
-    'first_approved_at' => "ALTER TABLE foundation_children ADD COLUMN first_approved_at DATETIME NULL AFTER reviewed_at",
+    'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL AFTER reject_reason",
 ];
 foreach ($needCols as $col => $ddl) {
     $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
@@ -21,20 +20,21 @@ foreach ($needCols as $col => $ddl) {
         $conn->query($ddl);
     }
 }
-$conn->query("
-    UPDATE foundation_children
-    SET first_approved_at = reviewed_at
-    WHERE first_approved_at IS NULL
-      AND reviewed_at IS NOT NULL
-      AND COALESCE(approve_profile, '') IN ('อนุมัติ', 'กำลังดำเนินการ')
-");
 
 $child_id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
 $action = $_POST['action'] ?? $_GET['action'] ?? 'approve';
 $rejectReason = trim($_POST['reject_reason'] ?? '');
-$returnUrl = $_POST['return'] ?? $_GET['return'] ?? 'children_.php';
-if (!preg_match('/^[a-zA-Z0-9_\.\-]+(\?[a-zA-Z0-9_=&\-]*)?$/', $returnUrl)) {
-    $returnUrl = 'children_.php';
+$returnUrl = $_POST['return'] ?? $_GET['return'] ?? 'admin_notifications.php#admin-pending-children';
+if (!is_string($returnUrl) || $returnUrl === '') {
+    $returnUrl = 'admin_notifications.php#admin-pending-children';
+} elseif (preg_match('/[<>"\']/', $returnUrl)) {
+    $returnUrl = 'admin_notifications.php#admin-pending-children';
+} elseif (
+    strpos($returnUrl, 'admin_notifications.php') !== 0
+    && strpos($returnUrl, 'children_donate.php') !== 0
+    && strpos($returnUrl, 'children_.php') !== 0
+) {
+    $returnUrl = 'admin_notifications.php#admin-pending-children';
 }
 
 if ($child_id <= 0) {
@@ -82,13 +82,12 @@ if ($action === 'approve') {
         $wc = (string)($p['wish_cat'] ?? $c['wish_cat'] ?? '');
         $bn = (string)($p['bank_name'] ?? $c['bank_name'] ?? '');
         $cb = (string)($p['child_bank'] ?? $c['child_bank'] ?? '');
-        $qr = (string)($p['qr_account_image'] ?? $c['qr_account_image'] ?? '');
         $ph = (string)($p['photo_child'] ?? $c['photo_child'] ?? '');
 
-        $sql = "UPDATE foundation_children SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?, pending_edit_json=NULL, approve_profile='อนุมัติ', reject_reason=NULL, reviewed_at=NOW() WHERE child_id=?";
+        $sql = "UPDATE foundation_children SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, photo_child=?, pending_edit_json=NULL, approve_profile='อนุมัติ', reject_reason=NULL, approve_at=NOW() WHERE child_id=?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param(
-            'ssisssssssssi',
+            'ssissssssssi',
             $cn,
             $bd,
             $ag,
@@ -99,7 +98,6 @@ if ($action === 'approve') {
             $wc,
             $bn,
             $cb,
-            $qr,
             $ph,
             $child_id
         );
@@ -108,7 +106,7 @@ if ($action === 'approve') {
     } else {
         $new_status = 'อนุมัติ';
         $reasonToSave = null;
-        $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, reviewed_at = NOW(), first_approved_at = COALESCE(first_approved_at, NOW()) WHERE child_id = ?";
+        $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ssi", $new_status, $reasonToSave, $child_id);
         $ok = $stmt->execute();
@@ -116,14 +114,14 @@ if ($action === 'approve') {
     }
 } else {
     if ($pendingRaw !== '') {
-        $sql = "UPDATE foundation_children SET pending_edit_json=NULL, approve_profile='อนุมัติ', reject_reason=?, reviewed_at=NOW() WHERE child_id=?";
+        $sql = "UPDATE foundation_children SET pending_edit_json=NULL, approve_profile='อนุมัติ', reject_reason=?, approve_at=NOW() WHERE child_id=?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("si", $rejectReason, $child_id);
         $ok = $stmt->execute();
         $alert_msg = $ok ? 'ไม่อนุมัติการแก้ไข — ข้อมูลที่แสดงต่อสาธารณะยังเป็นชุดเดิม' : 'เกิดข้อผิดพลาด';
     } else {
         $new_status = 'ไม่อนุมัติ';
-        $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, reviewed_at = NOW() WHERE child_id = ?";
+        $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("ssi", $new_status, $rejectReason, $child_id);
         $ok = $stmt->execute();

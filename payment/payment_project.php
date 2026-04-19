@@ -14,10 +14,12 @@ require_once __DIR__ . '/../includes/project_donation_dates.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/payment_transaction_schema.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
+require_once __DIR__ . '/../includes/donate_type.php';
 
 // ต้อง login ก่อน
 if (!isset($_SESSION['user_id'])) {
-    header("Location: ../login.php");
+    $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
+    header("Location: ../login.php?page=login&error={$msg}");
     exit();
 }
 
@@ -97,9 +99,9 @@ function drawdream_sdg_icon_web_path(int $sdgNum): string
 }
 
 /**
- * บันทึก payment_transaction สถานะ pending (ไม่สร้างแถว donation จนกว่าจะชำระสำเร็จ)
+ * บันทึก donation สถานะ pending ตาม charge_id
  *
- * @return int log_id ของ payment_transaction หรือ 0 ถ้าล้มเหลว
+ * @return int donate_id หรือ 0 ถ้าล้มเหลว
  */
 function drawdream_insert_pending_project_donation(
     mysqli $conn,
@@ -111,36 +113,29 @@ function drawdream_insert_pending_project_donation(
 ): int {
     drawdream_payment_transaction_ensure_schema($conn);
 
-    $taxId = '';
-    $stTax = $conn->prepare('SELECT tax_id FROM donor WHERE user_id = ? LIMIT 1');
-    if ($stTax) {
-        $stTax->bind_param('i', $donorUserId);
-        $stTax->execute();
-        $rowT = $stTax->get_result()->fetch_assoc();
-        if ($rowT) {
-            $taxId = (string)($rowT['tax_id'] ?? '');
-        }
-    }
-
     $pending = 'pending';
     $insP = $conn->prepare(
-        'INSERT INTO payment_transaction (
-            donate_id, tax_id, omise_charge_id, transaction_status,
-            pending_category_id, pending_target_id, pending_amount, pending_donor_user_id
-        ) VALUES (NULL, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO donation (
+            category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+            omise_charge_id, transaction_status, donate_type, recurring_plan_code
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)'
     );
     if (!$insP) {
         return 0;
     }
+    $dtProj = DRAWDREAM_DONATE_TYPE_PROJECT;
+    $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
     $insP->bind_param(
-        'sssiiid',
-        $taxId,
-        $omiseChargeId,
-        $pending,
+        'iiidsssss',
         $categoryId,
         $targetProjectId,
+        $donorUserId,
         $amountBaht,
-        $donorUserId
+        $pending,
+        $omiseChargeId,
+        $pending,
+        $dtProj,
+        $planOnce
     );
     if (!$insP->execute()) {
         return 0;
@@ -156,6 +151,22 @@ $projectArea = $locText !== '' ? $locText : ($addrFallback !== '' ? $addrFallbac
 $sdgDetails = mapCategoryToSdgDetails((string)($project['category'] ?? ''));
 $sdgGoal = $sdgDetails['title'];
 $beneficiaryGroup = trim((string)($project['target_group'] ?? '')) !== '' ? (string)$project['target_group'] : '-';
+
+$goalProj = !empty($project['goal_amount']) ? (float)$project['goal_amount'] : 0.0;
+$raisedProj = (float)($project['current_donate'] ?? 0);
+$progressProj = ($goalProj > 0) ? min(100.0, ($raisedProj / $goalProj) * 100.0) : 0.0;
+$remainingProj = ($goalProj > 0) ? max(0.0, $goalProj - $raisedProj) : 0.0;
+/** ยอดบริจาคสูงสุดต่อครั้ง (บาท) เมื่อมีเป้าหมาย — 0 = ไม่จำกัด (ไม่ได้ตั้งเป้าเป็นยอดเงิน) */
+$maxDonatePerChargeBaht = ($goalProj > 0) ? (int)max(0, (int)floor($remainingProj + 1e-9)) : 0;
+
+if ($goalProj > 0 && $remainingProj <= 0) {
+    header('Location: ../project.php?msg=' . rawurlencode('โครงการนี้ระดมทุนครบตามเป้าหมายแล้ว ไม่สามารถบริจาคเพิ่มได้'));
+    exit();
+}
+if ($goalProj > 0 && $remainingProj > 0 && $remainingProj < 20) {
+    header('Location: ../project.php?msg=' . rawurlencode('ยอดที่เหลือจะครบเป้าหมายไม่ถึงขั้นต่ำการบริจาค 20 บาท — ไม่สามารถบริจาคเพิ่มได้'));
+    exit();
+}
 
 $donationOptions = [];
 
@@ -184,6 +195,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     } elseif ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
+        $stFresh = $conn->prepare('SELECT goal_amount, current_donate FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1');
+        $stFresh->bind_param('i', $project_id);
+        $stFresh->execute();
+        $rowFresh = $stFresh->get_result()->fetch_assoc();
+        $gFresh = (float)($rowFresh['goal_amount'] ?? 0);
+        $rFresh = (float)($rowFresh['current_donate'] ?? 0);
+        $remFresh = ($gFresh > 0) ? max(0.0, $gFresh - $rFresh) : 0.0;
+        if ($gFresh > 0) {
+            if ($remFresh <= 0) {
+                $error = 'โครงการนี้ระดมทุนครบตามเป้าหมายแล้ว ไม่สามารถบริจาคเพิ่มได้';
+            } elseif ($amount > $remFresh + 1e-6) {
+                $error = 'จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' . number_format($remFresh, 0, '.', ',') . ' บาท)';
+            } elseif ($remFresh < 20) {
+                $error = 'ยอดที่เหลือจะครบเป้าหมายไม่ถึงขั้นต่ำการบริจาค 20 บาท — ไม่สามารถบริจาคเพิ่มได้';
+            }
+        }
+    }
+
+    if ($error === '') {
         // ปิดรายการ QR เก่าที่ไม่สำเร็จค้างในระบบ แล้วเริ่มรายการสแกนใหม่
         drawdream_abandon_all_pending_qr_for_donor($conn, (int)$_SESSION['user_id']);
         drawdream_clear_pending_payment_session();
@@ -279,7 +309,6 @@ function omise_request($method, $path, $data = []) {
 
     $response   = curl_exec($ch);
     $curl_error = curl_error($ch);
-    curl_close($ch);
 
     // API ไม่สามารถเข้าถึงได้ → mock เฉพาะเมื่อเปิด OMISE_ALLOW_LOCAL_MOCK และใช้ test key
     if ($response === false || $response === '') {
@@ -335,10 +364,11 @@ function _omise_local_mock(string $path, array $data): array {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ชำระเงิน | DrawDream</title>
-        <link rel="stylesheet" href="../css/payment.css?v=2">
+        <link rel="stylesheet" href="../css/payment.css?v=4">
         <style>
         .project-sdgs-benefit-wrap {
             display: flex;
@@ -429,7 +459,7 @@ function _omise_local_mock(string $path, array $data): array {
                 <span style="font-size:1.5em;color:#3C5099;">←</span>
             </a>
             <?php if (!empty($project['project_image'])): ?>
-                <img src="../uploads/<?= htmlspecialchars($project['project_image']) ?>" class="project-img" alt="" style="margin-top:0;padding-top:0;display:block;border-top-left-radius:24px;border-top-right-radius:0;">
+                <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($project['project_image'] ?? ''), '../uploads/'), ENT_QUOTES, 'UTF-8') ?>" class="project-img" alt="" style="margin-top:0;padding-top:0;display:block;border-top-left-radius:24px;border-top-right-radius:0;">
             <?php endif; ?>
         </div>
         <div class="project-info-inner">
@@ -480,7 +510,26 @@ function _omise_local_mock(string $path, array $data): array {
                 </a>
                 <?php endif; ?>
             </div>
-                        <div class="goal-info">🎯 เป้าหมาย <?= number_format($project['goal_amount'], 0) ?> บาท</div>
+                        <div class="project-donate-progress" aria-label="ความคืบหน้าการระดมทุน">
+                            <?php if ($goalProj > 0): ?>
+                                <div class="project-donate-progress-meta">
+                                    <span>ได้รับ <?= number_format($raisedProj, 0) ?> บาท</span>
+                                    <span>เป้าหมาย <?= number_format($goalProj, 0) ?> บาท (<?= (int)round($progressProj) ?>%)</span>
+                                </div>
+                                <?php if ($remainingProj > 0): ?>
+                                    <p class="project-donate-progress-remaining">เหลืออีก <?= number_format($remainingProj, 0) ?> บาทจะครบเป้าหมาย</p>
+                                <?php else: ?>
+                                    <p class="project-donate-progress-remaining project-donate-progress-remaining--done">ครบเป้าหมายตามยอดที่ตั้งไว้แล้ว</p>
+                                <?php endif; ?>
+                                <div class="project-donate-progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= (int)round($progressProj) ?>">
+                                    <div class="project-donate-progress-fill" style="width: <?= (float)$progressProj ?>%"></div>
+                                </div>
+                            <?php else: ?>
+                                <div class="project-donate-progress-meta project-donate-progress-meta--single">
+                                    <span>ได้รับ <?= number_format($raisedProj, 0) ?> บาท</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
 
                         <!-- SDG Image Row -->
                         <?php
@@ -510,11 +559,17 @@ function _omise_local_mock(string $path, array $data): array {
             <?php if (!empty($project['need_info'])): ?>
                 <div class="detail-row"><strong>กิจกรรมมูลนิธิ</strong> <?= htmlspecialchars($project['need_info']) ?></div>
             <?php endif; ?>
-            <?php if (!empty($project['update_info'])): ?>
-                <div class="detail-row"><strong>สรุปผลลัพธ์ล่าสุดจากมูลนิธิ</strong> <?= nl2br(htmlspecialchars($project['update_info'])) ?></div>
+            <?php if (!empty($project['update_text'])): ?>
+                <div class="detail-row"><strong>สรุปผลลัพธ์ล่าสุดจากมูลนิธิ</strong> <?= nl2br(htmlspecialchars($project['update_text'])) ?></div>
             <?php endif; ?>
         </div>
         <h3 style="margin-top:18px;">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
+        <?php if ($goalProj > 0 && $maxDonatePerChargeBaht > 0): ?>
+        <p class="project-donate-cap-hint" style="margin:0 0 12px;font-size:0.95rem;color:#334155;font-weight:600;font-family:'Sarabun',sans-serif;">
+            บริจาคได้สูงสุดครั้งละไม่เกิน <?= number_format($maxDonatePerChargeBaht, 0, '.', ',') ?> บาท (ยอดที่เหลือจะครบเป้าหมาย)
+        </p>
+        <input type="hidden" id="maxDonateBaht" value="<?= (int)$maxDonatePerChargeBaht ?>">
+        <?php endif; ?>
         <form method="POST" id="projectDonateForm">
             <div class="amount-presets-grid">
                 <button type="button" class="preset-btn" data-amt="2000" onclick="selectPreset(2000)">2,000 บาท</button>
@@ -579,20 +634,50 @@ function _omise_local_mock(string $path, array $data): array {
             var x = parseFloat(s);
             return isNaN(x) ? NaN : Math.round(x);
         }
+        function getMaxDonateBaht() {
+            var el = document.getElementById('maxDonateBaht');
+            if (!el || el.value === '') return null;
+            var m = parseInt(el.value, 10);
+            return (isNaN(m) || m <= 0) ? null : m;
+        }
         function selectPreset(amt) {
+            var maxB = getMaxDonateBaht();
+            var useAmt = amt;
+            if (maxB !== null && amt > maxB) {
+                useAmt = maxB;
+            }
             var inp = document.getElementById('amountInput');
             if (inp) {
-                inp.value = String(amt);
+                inp.value = String(useAmt);
             }
             document.querySelectorAll('.amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
                 var v = parseInt(b.getAttribute('data-amt'), 10);
-                b.classList.toggle('preset-selected', v === amt);
+                b.classList.toggle('preset-selected', v === useAmt);
             });
         }
+        document.addEventListener('DOMContentLoaded', function () {
+            var maxB = getMaxDonateBaht();
+            if (maxB === null) return;
+            document.querySelectorAll('.amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+                var v = parseInt(b.getAttribute('data-amt'), 10);
+                if (v > maxB) {
+                    b.disabled = true;
+                    b.style.opacity = '0.45';
+                    b.title = 'เกินยอดที่เหลือจะครบเป้าหมาย';
+                }
+            });
+        });
         document.getElementById('projectDonateForm').addEventListener('submit', function (e) {
             var inp = document.getElementById('amountInput');
             var n = inp ? parseBahtAmount(inp.value) : NaN;
+            var maxB = getMaxDonateBaht();
             if (inp && !isNaN(n) && n >= 20) {
+                if (maxB !== null && n > maxB) {
+                    e.preventDefault();
+                    alert('จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' + maxB.toLocaleString('th-TH') + ' บาท)');
+                    inp.focus();
+                    return;
+                }
                 inp.value = String(n);
                 return;
             }

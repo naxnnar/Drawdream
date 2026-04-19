@@ -9,6 +9,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     exit();
 }
 
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
+
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 $foundationId = 0;
 $stmtFP = $conn->prepare('SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1');
@@ -46,7 +49,7 @@ if ($chkPend && $chkPend->num_rows === 0) {
 if (!empty($child['pending_edit_json'])) {
     $pj = json_decode((string)$child['pending_edit_json'], true);
     if (is_array($pj)) {
-        foreach (['child_name', 'birth_date', 'age', 'education', 'dream', 'likes', 'wish', 'wish_cat', 'bank_name', 'child_bank', 'photo_child', 'qr_account_image'] as $k) {
+        foreach (['child_name', 'birth_date', 'age', 'education', 'dream', 'likes', 'wish', 'wish_cat', 'bank_name', 'child_bank', 'photo_child'] as $k) {
             if (array_key_exists($k, $pj)) {
                 $child[$k] = $pj[$k];
             }
@@ -57,8 +60,9 @@ if (!empty($child['pending_edit_json'])) {
 require_once __DIR__ . '/includes/child_sponsorship.php';
 $lockAp = (string)($child['approve_profile'] ?? '');
 $lockCycle = drawdream_child_cycle_total($conn, $childId, $child);
+$lockTarget = drawdream_child_cycle_target_amount($conn, $childId);
 if (in_array($lockAp, ['อนุมัติ', 'กำลังดำเนินการ'], true)
-    && $lockCycle >= DRAWDREAM_CHILD_MONTH_SPONSOR_THRESHOLD) {
+    && $lockCycle >= $lockTarget) {
     header('Location: children_.php?msg=' . rawurlencode('เด็กที่ได้รับการอุปการะครบยอดในเดือนนี้ ไม่สามารถแก้ไขโปรไฟล์ได้'));
     exit;
 }
@@ -104,7 +108,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $allowed = ['jpg','jpeg','png','gif','webp'];
     $photoName = $child['photo_child'] ?? null;
-    $qrName = $child['qr_account_image'] ?? null;
 
     if ($error === '' && isset($_FILES['photo_child']) && $_FILES['photo_child']['error'] !== UPLOAD_ERR_NO_FILE) {
         if ($_FILES['photo_child']['error'] !== 0) {
@@ -115,29 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = 'รูปเด็กต้องเป็นไฟล์รูปภาพเท่านั้น';
             } else {
                 $photoName = 'child_' . time() . '_' . mt_rand(1000,9999) . '.' . $ext;
-                if (!move_uploaded_file($_FILES['photo_child']['tmp_name'], 'uploads/Children/' . $photoName)) {
+                if (!move_uploaded_file($_FILES['photo_child']['tmp_name'], 'uploads/childern/' . $photoName)) {
                     $error = 'บันทึกรูปเด็กไม่สำเร็จ';
-                }
-            }
-        }
-    }
-
-    $hasQrUpload = isset($_FILES['qr_account_image']) && $_FILES['qr_account_image']['error'] !== UPLOAD_ERR_NO_FILE;
-    if ($error === '' && $age >= 15 && !$hasQrUpload && empty($qrName)) {
-        $error = 'เด็กอายุ 15-18 ปี ต้องมีภาพ QR';
-    }
-
-    if ($error === '' && $hasQrUpload) {
-        if ($_FILES['qr_account_image']['error'] !== 0) {
-            $error = 'อัปโหลดภาพ QR ไม่สำเร็จ';
-        } else {
-            $ext = strtolower(pathinfo($_FILES['qr_account_image']['name'], PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowed, true)) {
-                $error = 'ภาพ QR ต้องเป็นไฟล์รูปภาพเท่านั้น';
-            } else {
-                $qrName = 'qr_' . time() . '_' . mt_rand(1000,9999) . '.' . $ext;
-                if (!move_uploaded_file($_FILES['qr_account_image']['tmp_name'], 'uploads/Children/' . $qrName)) {
-                    $error = 'บันทึกภาพ QR ไม่สำเร็จ';
                 }
             }
         }
@@ -160,7 +142,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'bank_name' => $bank_name,
                 'child_bank' => $child_bank,
                 'photo_child' => $photoName,
-                'qr_account_image' => $qrName,
             ];
             $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
             $sqlUpd = "UPDATE foundation_children SET pending_edit_json=?, approve_profile='กำลังดำเนินการ', reject_reason=NULL WHERE child_id=? AND foundation_id=?";
@@ -173,12 +154,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล';
         } else {
             $sqlUpd = "UPDATE foundation_children
-                       SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, qr_account_image=?, photo_child=?,
+                       SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, photo_child=?,
                            approve_profile='รอดำเนินการ', reject_reason=NULL, pending_edit_json=NULL
                        WHERE child_id=? AND foundation_id=?";
             $stmtUpd = $conn->prepare($sqlUpd);
             $stmtUpd->bind_param(
-                'ssisssssssssii',
+                'ssissssssssii',
                 $child_name,
                 $birth_date,
                 $age,
@@ -189,7 +170,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $wish_cat,
                 $bank_name,
                 $child_bank,
-                $qrName,
                 $photoName,
                 $childId,
                 $foundationId
@@ -213,13 +193,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $child['wish_cat'] = $wish_cat;
     $child['bank_name'] = $bank_name;
     $child['child_bank'] = $child_bank;
-    $child['qr_account_image'] = $qrName;
     $child['photo_child'] = $photoName;
 }
 ?>
 <!doctype html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>แก้ไขโปรไฟล์เด็ก</title>
@@ -280,11 +260,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <div class="group">
         <label>เปลี่ยนรูปภาพเด็ก (ถ้ามี)</label>
         <input type="file" name="photo_child" accept="image/*">
-      </div>
-      <div class="group">
-        <label>ภาพ QR (อายุ 15-18 ต้องมี)</label>
-        <input type="file" name="qr_account_image" accept="image/*">
-        <div class="note">หากไม่อัปใหม่ จะใช้รูปเดิม</div>
       </div>
     </div>
 

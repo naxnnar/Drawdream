@@ -67,6 +67,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     exit();
 }
 
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
+
 $uid = (int)($_SESSION['user_id'] ?? 0);
 $stmtFp = $conn->prepare("SELECT fp.*, u.email FROM foundation_profile fp JOIN `user` u ON u.user_id = fp.user_id WHERE fp.user_id = ? LIMIT 1");
 $stmtFp->bind_param("i", $uid);
@@ -224,7 +227,12 @@ if (isset($_POST['submit'])) {
             exit();
         }
 
-        $newName = time() . "_" . preg_replace("/[^a-zA-Z0-9\._-]/", "", $imageName);
+        $uploadDir = "uploads/project/";
+        if (!is_dir($uploadDir)) {
+            @mkdir($uploadDir, 0755, true);
+        }
+
+        $newName = "project/project_" . time() . "_" . bin2hex(random_bytes(5)) . "." . $ext;
         if (!move_uploaded_file($tmpName, "uploads/" . $newName)) {
             echo "<script>alert('อัปโหลดรูปไม่สำเร็จ'); history.back();</script>";
             exit();
@@ -328,7 +336,7 @@ if (isset($_POST['submit'])) {
                     'admin_project_pending',
                     'มีโครงการรออนุมัติ',
                     'มูลนิธิส่งคำขอโครงการ: ' . $name,
-                    'admin_approve_projects.php',
+                    'admin_approve_projects.php?id=' . $projectId,
                     'adm_pending_project:' . $projectId
                 );
             }
@@ -355,6 +363,7 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $isEditMode ? 'แก้ไขโครงการ' : 'เสนอโครงการ' ?> | DrawDream</title>
@@ -379,7 +388,7 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
         <h2><?= $isEditMode ? 'แก้ไขโครงการ' : 'เสนอโครงการ' ?></h2>
         <p class="left-foundation-name">มูลนิธิ <?= htmlspecialchars($foundationName) ?></p>
 
-        <div class="upload-box" id="imagePreviewBox"<?php if (!empty($editingProject['project_image'])): ?> style="background-image:url('uploads/<?= htmlspecialchars($editingProject['project_image']) ?>');"<?php endif; ?>>
+        <div class="upload-box" id="imagePreviewBox"<?php if (!empty($editingProject['project_image'])): ?> style="background-image:url('<?= htmlspecialchars(drawdream_project_image_url((string)$editingProject['project_image'], 'uploads/'), ENT_QUOTES, 'UTF-8') ?>');"<?php endif; ?>>
             <?= empty($editingProject['project_image']) ? 'ตัวอย่างรูปภาพโครงการ' : '' ?>
         </div>
 

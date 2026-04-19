@@ -20,7 +20,12 @@ $pending_foundations = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) A
 $pendingProjExprDash = drawdream_sql_project_is_pending('project_status');
 $pending_projects  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_project WHERE {$pendingProjExprDash} AND deleted_at IS NULL"))['cnt'];
 $pending_needs     = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE approve_item='pending'"))['cnt'];
-$escrow_total      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM escrow_funds WHERE status='holding'"))['total'];
+$pending_children_dash = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ') AND deleted_at IS NULL"))['cnt'] ?? 0);
+// ยอดเงินพักโครงการ (สอดคล้อง admin_escrow.php — ไม่ใช้ตาราง escrow_funds)
+$escrow_total = mysqli_fetch_assoc(mysqli_query($conn,
+    "SELECT COALESCE(SUM(current_donate),0) AS total FROM foundation_project
+     WHERE project_status IN ('completed','purchasing') AND deleted_at IS NULL"
+))['total'];
 
 $active_projects = mysqli_query($conn, "
     SELECT * FROM foundation_project
@@ -30,10 +35,9 @@ $active_projects = mysqli_query($conn, "
 ");
 
 $recent_donations = mysqli_query($conn, "
-    SELECT d.*, dc.project_donate, dc.needitem_donate, dc.child_donate, pt.omise_charge_id
+    SELECT d.*, dc.project_donate, dc.needitem_donate, dc.child_donate
     FROM donation d
     JOIN donate_category dc ON d.category_id = dc.category_id
-    LEFT JOIN payment_transaction pt ON pt.donate_id = d.donate_id
     WHERE d.payment_status = 'completed'
     ORDER BY d.transfer_datetime DESC
     LIMIT 15
@@ -67,6 +71,7 @@ for ($i = 29; $i >= 0; $i--) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard | DrawDream</title>
@@ -152,28 +157,37 @@ for ($i = 29; $i >= 0; $i--) {
         </div>
     </div>
 
-    <!-- รายการรออนุมัติ -->
+    <!-- คำขอรออนุมัติ — ศูนย์รวมที่ไอคอนกระดิ่ง -->
     <div class="pending-row">
-        <a href="admin_approve_foundation.php" class="pending-card">
+        <a href="admin_notifications.php#admin-pending-foundations" class="pending-card">
             <div>
                 <div class="pending-label">มูลนิธิรออนุมัติ</div>
-                <div class="pending-sub">คลิกเพื่อตรวจสอบ</div>
+                <div class="pending-sub">เปิดจากกระดิ่ง / คลิกที่นี่</div>
             </div>
             <div class="pending-count <?= $pending_foundations == 0 ? 'zero' : '' ?>"><?= $pending_foundations ?></div>
         </a>
-        <a href="admin_approve_projects.php" class="pending-card">
+        <a href="admin_notifications.php#admin-pending-projects" class="pending-card">
             <div>
                 <div class="pending-label">โครงการรออนุมัติ</div>
-                <div class="pending-sub">คลิกเพื่อตรวจสอบ</div>
+                <div class="pending-sub">เปิดจากกระดิ่ง / คลิกที่นี่</div>
             </div>
             <div class="pending-count <?= $pending_projects == 0 ? 'zero' : '' ?>"><?= $pending_projects ?></div>
         </a>
-        <a href="admin_approve_needlist.php" class="pending-card">
+        <a href="admin_notifications.php#admin-pending-needs" class="pending-card">
             <div>
                 <div class="pending-label">สิ่งของรออนุมัติ</div>
-                <div class="pending-sub">คลิกเพื่อตรวจสอบ</div>
+                <div class="pending-sub">เปิดจากกระดิ่ง / คลิกที่นี่</div>
             </div>
             <div class="pending-count <?= $pending_needs == 0 ? 'zero' : '' ?>"><?= $pending_needs ?></div>
+        </a>
+    </div>
+    <div class="pending-row" style="margin-top:10px;">
+        <a href="admin_notifications.php#admin-pending-children" class="pending-card" style="flex:1;max-width:100%;">
+            <div>
+                <div class="pending-label">โปรไฟล์เด็กรออนุมัติ</div>
+                <div class="pending-sub">ศูนย์รวมคำขอ — ไอคอนกระดิ่งมุมข้างบน</div>
+            </div>
+            <div class="pending-count <?= $pending_children_dash === 0 ? 'zero' : '' ?>"><?= $pending_children_dash ?></div>
         </a>
     </div>
 
@@ -203,7 +217,12 @@ for ($i = 29; $i >= 0; $i--) {
                     <div class="proj-item">
                         <div class="proj-name">
                             <?= htmlspecialchars($proj['project_name']) ?>
-                            <span class="status-badge status-<?= $st ?>">
+                            <?php
+                            $projPillClass = ($st === 'approved')
+                                ? 'admin-pill admin-pill--success'
+                                : 'admin-pill admin-pill--neutral';
+                            ?>
+                            <span class="<?= htmlspecialchars($projPillClass) ?>">
                                 <?= $st === 'approved' ? 'กำลังระดม' : 'สำเร็จแล้ว' ?>
                             </span>
                         </div>

@@ -273,7 +273,7 @@ textarea {
     padding: 0 44px 0 16px;
     font-size: 20px;
     font-weight: 700;
-    color: #ff6b2d;
+    color: #111827;
     cursor: pointer;
 }
 .donor-year-filter-wrap::after {
@@ -978,7 +978,7 @@ textarea {
 
 .project-amount strong { color: #4A5BA8; }
 
-/* โปรไฟล์ผู้บริจาค — เด็กที่สมัครอุปการะงวด (profile.php) */
+/* โปรไฟล์ผู้บริจาค — เด็กที่สมัครอุปการะรอบ (profile.php) */
 .donor-sponsorship-active-banner {
     margin: 0 0 18px;
     padding: 14px 16px;
@@ -1001,9 +1001,57 @@ textarea {
     color: #14532d;
     line-height: 1.55;
 }
+.donor-sponsorship-active-banner__list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 136px;
+    align-items: center;
+    column-gap: 12px;
+    margin-bottom: 8px;
+}
+.donor-sponsorship-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
 .donor-sponsorship-active-banner__meta {
+    display: block;
+    margin-top: 2px;
     font-weight: 600;
     color: #15803d;
+}
+.donor-sponsorship-child-link {
+    color: #0f3b2c;
+    text-decoration: none;
+}
+.donor-sponsorship-child-link:hover {
+    text-decoration: underline;
+}
+.donor-sponsorship-cancel-form {
+    display: inline-block;
+    margin-left: 0;
+    min-width: 136px;
+    justify-self: end;
+}
+.donor-sponsorship-cancel-btn {
+    border: 1px solid #b91c1c;
+    background: #fff;
+    color: #b91c1c;
+    border-radius: 999px;
+    min-width: 136px;
+    height: 36px;
+    padding: 0 14px;
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+.donor-sponsorship-cancel-btn:hover {
+    background: #b91c1c;
+    color: #fff;
 }
 .donor-history-hint {
     margin: 0 0 12px;

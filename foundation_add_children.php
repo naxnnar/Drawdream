@@ -10,6 +10,8 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     exit();
 }
 
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
 
 $sql = "SELECT * FROM `foundation_profile` WHERE `user_id` = ?";
 $stmtFP = $conn->prepare($sql);
@@ -40,13 +42,16 @@ $needed_columns = [
     'wish_cat' => "ALTER TABLE foundation_children ADD COLUMN wish_cat VARCHAR(100) NULL",
     'bank_name' => "ALTER TABLE foundation_children ADD COLUMN bank_name VARCHAR(100) NULL",
     'child_bank' => "ALTER TABLE foundation_children ADD COLUMN child_bank VARCHAR(100) NULL",
-    'qr_account_image' => "ALTER TABLE foundation_children ADD COLUMN qr_account_image VARCHAR(255) NULL",
     'status' => "ALTER TABLE foundation_children ADD COLUMN status VARCHAR(100) NULL",
     'photo_child' => "ALTER TABLE foundation_children ADD COLUMN photo_child VARCHAR(255) NULL",
     'approve_profile' => "ALTER TABLE foundation_children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
-    'is_hidden' => "ALTER TABLE foundation_children ADD COLUMN is_hidden TINYINT(1) NOT NULL DEFAULT 0",
     'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL",
-    'reviewed_at' => "ALTER TABLE foundation_children ADD COLUMN reviewed_at DATETIME NULL",
+    'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL",
+    'update_text' => "ALTER TABLE foundation_children ADD COLUMN update_text LONGTEXT NULL",
+    'update_at' => "ALTER TABLE foundation_children ADD COLUMN update_at DATETIME NULL",
+    'update_images' => "ALTER TABLE foundation_children ADD COLUMN update_images LONGTEXT NULL",
+    'deleted_at' => "ALTER TABLE foundation_children ADD COLUMN deleted_at DATETIME NULL",
+    'delete_reason' => "ALTER TABLE foundation_children ADD COLUMN delete_reason TEXT NULL",
 ];
 foreach ($needed_columns as $col => $ddl) {
     $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
@@ -133,48 +138,18 @@ if (isset($_POST['submit'])) {
 
     $newName = "child_" . time() . "." . $ext;
 
-    if (!move_uploaded_file($tmpName, "uploads/Children/" . $newName)) {
+    if (!move_uploaded_file($tmpName, "uploads/childern/" . $newName)) {
         echo "<script>alert('อัปโหลดรูปไม่สำเร็จ'); history.back();</script>";
         exit();
     }
 
-    // จัดการไฟล์รูป QR บัญชีเด็ก (อายุ 15-18 บังคับ, 6-14 ไม่บังคับ)
-    $newQrName = null;
-    $hasQrUpload = isset($_FILES['qr_account_image']) && $_FILES['qr_account_image']['error'] !== UPLOAD_ERR_NO_FILE;
-
-    if ($age >= 15 && !$hasQrUpload) {
-        echo "<script>alert('เด็กอายุ 15-18 ปี ต้องอัปโหลดภาพสแกน QR บัญชีเด็ก'); history.back();</script>";
-        exit();
-    }
-
-    if ($hasQrUpload) {
-        if ($_FILES['qr_account_image']['error'] !== 0) {
-            echo "<script>alert('อัปโหลดภาพ QR ไม่สำเร็จ'); history.back();</script>";
-            exit();
-        }
-        $qrImageName = $_FILES['qr_account_image']['name'];
-        $qrTmpName   = $_FILES['qr_account_image']['tmp_name'];
-        $qrExt       = strtolower(pathinfo($qrImageName, PATHINFO_EXTENSION));
-        if (!in_array($qrExt, $allowed)) {
-            echo "<script>alert('ไฟล์ QR ต้องเป็นไฟล์รูปภาพเท่านั้น'); history.back();</script>";
-            exit();
-        }
-        $newQrName = "qr_" . time() . "_" . mt_rand(1000, 9999) . "." . $qrExt;
-        if (!move_uploaded_file($qrTmpName, "uploads/Children/" . $newQrName)) {
-            echo "<script>alert('อัปโหลดภาพ QR ไม่สำเร็จ'); history.back();</script>";
-            exit();
-        }
-    }
-
-
     if ($has_birth_date_column) {
-        // i=foundation_id, s values include child fields + qr image + status/photo/approve
-        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, qr_account_image, status, photo_child, approve_profile) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, status, photo_child, approve_profile) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
-        // foundation_id(i), birth_date before age(i), then string fields
+        // 15 params: i + sss + i + 10 strings (education … approve_profile)
         $stmt->bind_param(
-            "isssisssssssssss",
+            'isssi' . str_repeat('s', 10),
             $f_id,
             $f_name,
             $child_name,
@@ -187,17 +162,16 @@ if (isset($_POST['submit'])) {
             $wish_cat,
             $bank_name,
             $child_bank,
-            $newQrName,
             $status,
             $newName,
             $approve_status
         );
     } else {
-        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, qr_account_image, status, photo_child, approve_profile) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, status, photo_child, approve_profile) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
-        // i,s,s,i then string fields including qr image
-        $stmt->bind_param("ississsssssssss", $f_id, $f_name, $child_name, $age, $education, $dream, $likes, $wish, $wish_cat, $bank_name, $child_bank, $newQrName, $status, $newName, $approve_status);
+        // 14 params: i + ss + i + 10 strings
+        $stmt->bind_param('issi' . str_repeat('s', 10), $f_id, $f_name, $child_name, $age, $education, $dream, $likes, $wish, $wish_cat, $bank_name, $child_bank, $status, $newName, $approve_status);
     }
 
     if ($stmt->execute()) {
@@ -219,6 +193,7 @@ if (isset($_POST['submit'])) {
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
 <title>สร้างโปรไฟล์เด็ก - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
@@ -388,13 +363,6 @@ if (isset($_POST['submit'])) {
                 <div class="field-group">
                     <label>เลขบัญชีธนาคาร</label>
                     <input type="text" id="child_bank_input" name="child_bank" placeholder="ตัวเลข 10 หลัก" inputmode="numeric" maxlength="10" pattern="\d{10}" required>
-                </div>
-
-                <!-- อัปโหลดรูป QR บัญชีเด็ก -->
-                <div class="field-group full-width">
-                    <label>ภาพสแกนคิวอาร์โค้ดบัญชีเด็ก</label>
-                    <input type="file" id="qr_account_input" name="qr_account_image" accept="image/*" style="display:block;">
-                    <small id="qr_age_rule_note">อายุ 6-14 ปี: ไม่อัปโหลดก็ได้ | อายุ 15-18 ปี: ต้องอัปโหลดภาพ QR</small>
                 </div>
 
             </div><!-- end grid -->
@@ -600,12 +568,12 @@ function syncAgeAndEducation() {
     const ageEl = document.getElementById('age');
     const edu   = document.getElementById('education');
     const disp  = document.getElementById('birth_date_display');
-    if (!bd.value) { ageEl.value = ''; updateQrRequirement(); return; }
+    if (!bd.value) { ageEl.value = ''; return; }
     const today = new Date(), dob = new Date(bd.value + 'T00:00:00');
     let age = today.getFullYear() - dob.getFullYear();
     const m = today.getMonth() - dob.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
-    if (age < 0) { ageEl.value = ''; updateQrRequirement(); return; }
+    if (age < 0) { ageEl.value = ''; return; }
     if (age < 6 || age > 18) {
         showTopAlert(`อายุ ${age} ปี ไม่อยู่ในเกณฑ์ที่รับได้ (6–18 ปี) กรุณาตรวจสอบวันเกิด`);
         bd.value = '';
@@ -613,31 +581,11 @@ function syncAgeAndEducation() {
         disp.value = '';
         disp.closest('.field-group').classList.add('has-error');
         ageEl.value = '';
-        updateQrRequirement();
         return;
     }
     disp.closest('.field-group').classList.remove('has-error');
     ageEl.value = age;
     if (!educationManuallyEdited || !edu.value.trim()) edu.value = getSuggestedEducation(age);
-    updateQrRequirement(age);
-}
-
-function updateQrRequirement(ageValue = null) {
-    const qrInput = document.getElementById('qr_account_input');
-    const noteEl  = document.getElementById('qr_age_rule_note');
-    const ageEl   = document.getElementById('age');
-    const age = ageValue === null ? parseInt(ageEl.value || '', 10) : parseInt(ageValue, 10);
-
-    const requiresQr = Number.isFinite(age) && age >= 15;
-    qrInput.required = requiresQr;
-
-    if (noteEl) {
-        noteEl.textContent = requiresQr
-            ? 'อายุ 15-18 ปี: ต้องอัปโหลดภาพ QR'
-            : 'อายุ 6-14 ปี: ไม่อัปโหลดก็ได้';
-        noteEl.style.color = requiresQr ? '#CE573F' : '#5f6f87';
-        noteEl.style.fontWeight = requiresQr ? '700' : '500';
-    }
 }
 
 // ── Bank logo preview ──────────────────────────────────
@@ -877,14 +825,6 @@ function validateForm() {
         customErrorMessage = 'เลขบัญชีต้องเป็นตัวเลข 10 หลัก';
     }
 
-    // รูป QR บัญชีเด็ก (อายุ 15-18 บังคับ)
-    const ageValue = parseInt(document.getElementById('age').value || '', 10);
-    const qrInput = document.getElementById('qr_account_input');
-    if (Number.isFinite(ageValue) && ageValue >= 15 && (!qrInput.files || qrInput.files.length === 0)) {
-        mark(qrInput);
-        customErrorMessage = 'เด็กอายุ 15-18 ปี ต้องอัปโหลดภาพสแกน QR';
-    }
-
     // รูปภาพ
     const photoInput = document.getElementById('photo_child_input');
     if (!photoInput.files || photoInput.files.length === 0) mark(photoInput);
@@ -946,7 +886,6 @@ document.getElementById('bank-logo').addEventListener('error', function() {
 });
 
 toggleDreamOther();
-updateQrRequirement();
 
 document.addEventListener('DOMContentLoaded', function () {
   var openBtn = document.getElementById('openPolicyModal');
