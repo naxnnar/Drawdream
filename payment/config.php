@@ -1,5 +1,6 @@
 <?php
 // payment/config.php — คีย์ Omise + endpoint (Test/Live)
+// สรุปสั้น: คอนฟิกกลางของระบบชำระเงิน (คีย์ Omise, endpoint, โหมดทดสอบ/ทำงานจริง)
 /**
  * Omise — คีย์ API และ endpoint
  *

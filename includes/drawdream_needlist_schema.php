@@ -1,6 +1,7 @@
 <?php
 
 // includes/drawdream_needlist_schema.php — Schema/migration รายการสิ่งของ
+// สรุปสั้น: ตรวจและปรับ schema ตาราง needlist ให้รองรับฟีเจอร์ปัจจุบัน
 declare(strict_types=1);
 
 /**

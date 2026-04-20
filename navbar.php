@@ -1,6 +1,8 @@
 <?php
 // navbar.php — แถบนำทางร่วมทุกหน้า
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน navbar
+
 if (session_status() === PHP_SESSION_NONE) {
   @session_start();
 }

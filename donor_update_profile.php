@@ -1,5 +1,6 @@
 <?php
 // donor_update_profile.php — แก้ไขโปรไฟล์ผู้บริจาค + อัปโหลดรูป + ข้อมูลใบเสร็จ
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donor update profile
 session_start();
 include 'db.php';
 

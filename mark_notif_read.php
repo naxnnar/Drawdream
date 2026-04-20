@@ -1,5 +1,6 @@
 <?php
 // mark_notif_read.php — ทำเครื่องหมายแจ้งเตือนอ่านแล้ว
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน mark notif read
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 

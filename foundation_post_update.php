@@ -1,6 +1,8 @@
 <?php
 // foundation_post_update.php — โพสต์อัปเดตความคืบหน้าโครงการ
 
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post update
+
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';

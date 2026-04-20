@@ -1,6 +1,8 @@
 <?php
 // foundation_add_project.php — มูลนิธิเสนอ/แก้ไขโครงการ
 
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add project
+
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';

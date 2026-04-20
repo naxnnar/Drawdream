@@ -1,6 +1,8 @@
 <?php
 // foundation.php — หน้ามูลนิธิ + รายการสิ่งของ (สาธารณะ/จัดการ)
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน foundation
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';

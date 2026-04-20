@@ -1,6 +1,7 @@
 <?php
 // foundation_merge_project.php — รวม/จัดการโครงการ
 // มูลนิธิ: สมทบยอดบริจาคจากโครงการที่ปิดแล้วแต่ได้ไม่ถึง 50% เข้าโครงการอื่น
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน merge project
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';

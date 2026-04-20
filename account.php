@@ -1,6 +1,7 @@
 <?php
 // account.php — หน้าจัดการข้อมูลบัญชีผู้ใช้
 // Backend: ตัดสินใจปลายทางหลังล็อกอินตาม role
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน account
 session_start();
 
 if (!isset($_SESSION['email'])) {

@@ -1,5 +1,6 @@
 <?php
 // includes/payment_transaction_schema.php — คอลัมน์ donation ตามสคีมาปัจจุบัน (ไม่เพิ่มคอลัมน์ที่ลบออกจากตารางแล้ว)
+// สรุปสั้น: ตรวจ/เพิ่มคอลัมน์ธุรกรรม donation ให้ตรง schema ที่ payment flow ต้องใช้
 declare(strict_types=1);
 
 require_once __DIR__ . '/donate_type.php';

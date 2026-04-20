@@ -1,5 +1,6 @@
 <?php
 // homepage.php — หน้าแรก
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน homepage
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }

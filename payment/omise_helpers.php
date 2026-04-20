@@ -1,5 +1,16 @@
 <?php
 // payment/omise_helpers.php — ดึง charge / URI ภาพ PromptPay จาก Omise (ใช้ร่วมกับ payment_project, scan_qr)
+// สรุปสั้น: helper กลางเรียก Omise API และจัดการ fallback เครือข่ายหลายรูปแบบ
+/**
+ * ไฟล์รวม helper เชื่อม Omise
+ * พยายามยิง API ตามลำดับ:
+ * 1) cURL
+ * 2) SSL socket
+ * 3) file_get_contents
+ * เพื่อให้รันได้แม้เครื่อง dev แต่ละคน config ไม่เหมือนกัน
+ *
+ * ทุกฟังก์ชันคืนผลแบบ ok/error เพื่อให้หน้าเรียกใช้งาน handle ง่าย
+ */
 
 /**
  * ไฟล์ CA bundle (Mozilla) — วางที่ payment/cacert.pem (เช่น ดาวน์โหลดจาก https://curl.se/ca/cacert.pem )
@@ -176,6 +187,7 @@ function drawdream_omise_http_raw(string $method, string $path, ?string $jsonBod
     $url = rtrim(OMISE_API_URL, '/') . $path;
 
     if (function_exists('curl_init')) {
+        // ทางหลัก (เสถียรสุด): cURL
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
@@ -206,6 +218,7 @@ function drawdream_omise_http_raw(string $method, string $path, ?string $jsonBod
         return ['ok' => true, 'body' => (string) $response, 'err' => ''];
     }
 
+    // fallback 1: SSL socket (มักช่วยเคส local/windows)
     $sock = drawdream_omise_http_via_ssl_socket($method, $path, $jsonBody);
     if ($sock['ok']) {
         return $sock;
@@ -229,6 +242,7 @@ function drawdream_omise_http_raw(string $method, string $path, ?string $jsonBod
         $content = $jsonBody ?? '{}';
     }
 
+    // fallback 2: file_get_contents
     $opts = [
         'http' => [
             'method' => $method,

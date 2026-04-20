@@ -1,5 +1,6 @@
 <?php
 // includes/thai_address_fields.php — Partial select จังหวัด→ตำบล
+// สรุปสั้น: partial ฟอร์มที่อยู่ไทย (จังหวัด/อำเภอ/ตำบล/รหัสไปรษณีย์) สำหรับ include ซ้ำหลายหน้า
 /**
  * Partial HTML: จังหวัด → อำเภอ → ตำบล → รหัสไปรษณีย์ (4 select)
  *

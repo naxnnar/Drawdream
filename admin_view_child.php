@@ -1,6 +1,8 @@
 <?php
 // admin_view_child.php — ดูข้อมูลโปรไฟล์เด็ก (จากไดเรกทอรี — ไม่มีอนุมัติ/ไม่อนุมัติ)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view child
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

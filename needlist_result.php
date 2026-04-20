@@ -1,6 +1,8 @@
 <?php
 // needlist_result.php — ผลลัพธ์การระดมสิ่งของมูลนิธิ (หลังครบเป้าหมาย) — UI เดียวกับ project_result.php
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน needlist result
+
 declare(strict_types=1);
 
 include 'db.php';

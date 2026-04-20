@@ -1,5 +1,6 @@
 <?php
 // payment/check_needlist_payment.php — ยืนยันการชำระรายการสิ่งของ
+// สรุปสั้น: ตรวจผลการจ่าย needlist แล้วอัปเดต donation/foundation_needlist ให้เป็นสถานะล่าสุด
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';

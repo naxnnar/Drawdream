@@ -2,6 +2,8 @@
 // login.php — เข้าสู่ระบบ / เลือกบทบาท
 // ล็อกอินสำเร็จ: ตั้ง show_welcome → welcome.php (ทุก role รวม admin; ไม่ใช้ admin_welcome)
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน login
+
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';

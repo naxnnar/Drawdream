@@ -1,5 +1,14 @@
 <?php
 // payment/check_child_payment.php — ยืนยันการชำระบริจาคเด็ก
+// สรุปสั้น: ปิดธุรกรรมบริจาคเด็กหลังจ่าย (pending -> completed/failed) และออกแจ้งเตือนใบเสร็จ
+/**
+ * ภาพรวมแบบง่าย:
+ * 1) รับ charge_id แล้วถามสถานะจาก Omise (หรือ mock ใน local)
+ * 2) หา pending donation ที่ผูกกับ charge เดียวกัน
+ * 3) ถ้าสำเร็จ -> เปลี่ยน pending เป็น completed (กันบันทึกซ้ำ)
+ * 4) ถ้าล้มเหลว/หมดอายุ -> ปิด pending เป็น failed เพื่อล้างรายการค้าง
+ * 5) ส่งแจ้งเตือนใบเสร็จอิเล็กทรอนิกส์เมื่อปิดรายการสำเร็จ
+ */
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
@@ -68,6 +77,7 @@ $donor_uid = (int)$_SESSION['user_id'];
 
 if (!$is_mock && $has_pending && !$already_completed && !$is_success
     && in_array($status, ['failed', 'expired'], true)) {
+    // เส้นทาง "จบแบบไม่สำเร็จ" ของ QR: ปิดรายการค้างทันทีเพื่อลดความสับสนของผู้ใช้
     drawdream_abandon_pending_donation_by_charge($conn, $donor_uid, $charge_id);
     drawdream_clear_pending_payment_session();
     $has_pending = false;
@@ -80,6 +90,7 @@ $finalized_this_request = false;
 $receiptDonateId = 0;
 
 if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
+    // เส้นทางหลัก: มี pending row อยู่แล้ว -> finalize row เดิมเป็น completed
     $amount = ($charge['amount'] ?? 0) / 100;
     if ($amount <= 0) {
         $amount = (float)($_SESSION['pending_amount'] ?? 0);
@@ -97,11 +108,12 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
             $_SESSION['qr_image']
         );
     } else {
+        // กัน false success: จ่ายจริงแต่ finalize ไม่ผ่าน ให้โชว์ข้อความพิเศษเพื่อให้ติดต่อแอดมินได้
         $is_success = false;
         $failure_message = 'ชำระเงินสำเร็จแล้ว แต่ระบบบันทึกรายการไม่สำเร็จ กรุณาติดต่อผู้ดูแลระบบพร้อมอ้างอิง Charge';
     }
 } elseif ($is_success && !$ptRow && $child_id > 0) {
-    // เส้นทางเก่า: สร้าง completed ตรงลง donation (ยังไม่มี pending row)
+    // เส้นทางย้อนหลัง (legacy compatibility): ยังไม่มี pending row -> สร้าง completed ตรง
     $amount = ($charge['amount'] ?? 0) / 100;
     if ($amount <= 0) {
         $amount = (float)($_SESSION['pending_amount'] ?? 0);

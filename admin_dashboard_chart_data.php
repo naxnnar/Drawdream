@@ -1,5 +1,6 @@
 <?php
 // admin_dashboard_chart_data.php — JSON ข้อมูลกราฟยอดบริจาครายวันตามช่วงวันที่ (เฉพาะแอดมิน)
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน dashboard chart data
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

@@ -1,6 +1,8 @@
 <?php
 // policy_consent.php — หน้าความยินยอมและนโยบาย
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน policy consent
+
 ?>
 <!DOCTYPE html>
 <html lang="th">

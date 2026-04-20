@@ -1,5 +1,6 @@
 <?php
 // includes/site_footer.php — HTML footer เว็บไซต์
+// สรุปสั้น: footer กลางที่ include ซ้ำหลายหน้าเพื่อให้ข้อความและโครงสร้างตรงกัน
 // ฟุตเตอร์กลางเว็บไซต์ (ใช้ร่วมกับ foundation.php และหน้าอื่นที่ต้องการให้สอดคล้องกับ homepage)
 $footerBase = $footer_base_path ?? '';
 ?>

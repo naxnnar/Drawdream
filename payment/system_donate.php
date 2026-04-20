@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+// สรุปสั้น: ฟอร์มบริจาคผ่านระบบแบบทั่วไป แล้วส่งต่อไปหน้า QR ตามจำนวนเงินที่กรอก
 
 $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 20;
 $amount = max(0, $amount);

@@ -1,5 +1,6 @@
 <?php
 // payment/cron_child_subscription_charges.php — หักบัตรรอบถัดไป (แผน local_cron_* — customer/card อยู่ที่ตาราง donor)
+// สรุปสั้น: สคริปต์ cron สำหรับเก็บเงินรอบใหม่ของแผนอุปการะเด็กอัตโนมัติ
 declare(strict_types=1);
 
 if (PHP_SAPI !== 'cli') {

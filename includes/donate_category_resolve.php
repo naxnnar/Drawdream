@@ -1,6 +1,15 @@
 <?php
 // includes/donate_category_resolve.php — หมวดบริจาคจาก donate_category (คอลัมน์ที่ไม่ใช้มักเป็น '-' ซึ่งยัง IS NOT NULL อยู่)
+// สรุปสั้น: หา/สร้าง category_id ของเด็ก-โครงการ-สิ่งของให้ใช้ร่วมกันทั้งระบบ
 declare(strict_types=1);
+/**
+ * จุดประสงค์:
+ * - หา category_id ที่ผูกกับเด็ก/โครงการ/สิ่งของ ให้แม่นยำและใช้ซ้ำได้ทั้งระบบ
+ * - รองรับฐานข้อมูลเก่าที่อาจยังไม่มีบางคอลัมน์/บางแถว ด้วย get_or_create helpers
+ *
+ * เหตุผลที่เช็ก NOT IN ('', '-') เพราะ schema เดิมใช้ '-' เป็น placeholder
+ * ทำให้แค่ IS NOT NULL ไม่พอ ต้องกรองค่า placeholder ออกด้วย
+ */
 
 /** ค่าที่ถือว่าเป็นหมวดที่ «ใช้งานจริง» (ไม่ใช่ placeholder) */
 function drawdream_donate_cat_label_is_active(?string $v): bool
@@ -66,6 +75,7 @@ function drawdream_get_or_create_child_donate_category_id(mysqli $conn): int
     }
     $col = @$conn->query("SHOW COLUMNS FROM donate_category LIKE 'child_donate'");
     if ($col && $col->num_rows === 0) {
+        // defensive migration: เพิ่มคอลัมน์ให้ระบบทำงานได้แม้ DB ยังไม่อัปเดตครบ
         @$conn->query('ALTER TABLE donate_category ADD COLUMN child_donate VARCHAR(100) NULL');
     }
     if ($conn->query("INSERT INTO donate_category (child_donate) VALUES ('บริจาคให้เด็ก')")) {

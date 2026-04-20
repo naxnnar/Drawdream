@@ -1,6 +1,8 @@
 <?php
 // admin_approve_needlist.php — แอดมินอนุมัติรายการสิ่งของมูลนิธิ
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve needlist
+
 session_start();
 include 'db.php';
 

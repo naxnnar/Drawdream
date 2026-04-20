@@ -1,12 +1,19 @@
 <?php
 // includes/drawdream_project_status.php — มาตรฐานสถานะโครงการ + normalize DB
+// สรุปสั้น: รวมกติกาแปลงและตรวจสถานะโครงการให้ทุกหน้าตีความตรงกัน
 // โครงการบางแถวเก็บสถานะภาษาไทย (เช่น รอดำเนินการ) แต่โค้ดส่วนใหญ่ใช้ pending/approved/rejected — ปรับค่าและเงื่อนไขให้สอดคล้องกัน
+/**
+ * ไฟล์นี้เป็น "ศูนย์กลางเรื่องสถานะโครงการ"
+ * เพื่อแก้ปัญหาในระบบจริงที่เคยมีทั้งสถานะไทย/อังกฤษปะปนกัน
+ * แล้วทำให้เงื่อนไข filter หน้า donor/admin เพี้ยน
+ */
 
 declare(strict_types=1);
 
 /** อัปเดตค่าเก่าในตารางให้ใช้รหัสภาษาอังกฤษ (รันได้ซ้ำ ไม่กระทบแถวที่ถูกต้องแล้ว) */
 function drawdream_normalize_foundation_project_statuses(mysqli $conn): void
 {
+    // mapping นี้ตั้งใจให้เรียกซ้ำได้ปลอดภัย (idempotent)
     $conn->query(
         "UPDATE foundation_project SET project_status = 'pending'
          WHERE TRIM(COALESCE(project_status,'')) IN ('รอดำเนินการ','รอดำนิการ','Pending','PENDING')

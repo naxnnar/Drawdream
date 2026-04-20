@@ -1,5 +1,6 @@
 <?php
 // welcome.php — หน้าต้อนรับหลัง login (แอนิเมชัน + redirect)
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน welcome
 /**
  * Welcome — ครั้งเดียวหลัง login สำหรับทุก role รวม admin (login.php ตั้ง $_SESSION['show_welcome'])
  * ปุ่ม/redirect: admin → admin_dashboard.php | อื่นๆ → homepage.php

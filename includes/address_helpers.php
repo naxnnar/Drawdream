@@ -1,6 +1,15 @@
 <?php
 
 // includes/address_helpers.php — แปลง/รวมข้อความที่อยู่ไทยจาก POST
+// สรุปสั้น: แปลงข้อมูลที่อยู่ไทยระหว่างรูปแบบฟอร์มกับข้อความที่เก็บในฐานข้อมูล
+/**
+ * รูปแบบที่ระบบใช้เก็บ address string:
+ * "ต.<ตำบล> อ.<อำเภอ> จ.<จังหวัด> <รหัสไปรษณีย์>"
+ *
+ * ไฟล์นี้ช่วยแปลงไป-กลับระหว่าง:
+ * - string เดียวในฐานข้อมูล
+ * - field แยกในฟอร์ม (province/amphoe/tambon/zip)
+ */
 /**
  * @return array{tambon: string, amphoe: string, province: string, zip: string}|null
  */
@@ -29,6 +38,8 @@ function drawdream_merge_foundation_address_from_post(array $post): string
     $z = trim((string)($post['addr_zip'] ?? ''));
 
     if ($tRaw !== '' && strpos($tRaw, "\x1E") !== false) {
+        // บางฟอร์มส่งค่า tambon มาแบบ "<zip><RS><tambon>"
+        // (ASCII RS = 0x1E) จึงต้องแยกก่อนประกอบ address
         $parts = explode("\x1E", $tRaw, 2);
         if ($z === '' && $parts[0] !== '') {
             $z = $parts[0];

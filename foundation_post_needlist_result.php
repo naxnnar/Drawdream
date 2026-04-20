@@ -1,6 +1,8 @@
 <?php
 // foundation_post_needlist_result.php — มูลนิธิโพสต์ผลลัพธ์การระดมสิ่งของ (หลังครบเป้าหมาย)
 
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post needlist result
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

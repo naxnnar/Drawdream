@@ -1,6 +1,8 @@
 <?php
 // project.php — รายการโครงการ
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/project_donation_dates.php';

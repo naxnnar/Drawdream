@@ -1,5 +1,6 @@
 <?php
 // admin_foundation_analytics_view.php — ดูรายงานเชิงวิเคราะห์ / บันทึก PDF / ส่งให้มูลนิธิผ่านแจ้งเตือน
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundation analytics view
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

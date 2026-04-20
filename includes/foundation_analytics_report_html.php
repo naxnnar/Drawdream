@@ -1,5 +1,6 @@
 <?php
 // includes/foundation_analytics_report_html.php — HTML เนื้อหารายงานเชิงวิเคราะห์มูลนิธิ (ใช้ร่วมแอดมิน PDF / หน้าดู / มูลนิธิ)
+// สรุปสั้น: สร้าง HTML รายงาน analytics กลาง เพื่อ reuse ได้ทั้งหน้าเว็บและไฟล์ PDF
 declare(strict_types=1);
 
 require_once __DIR__ . '/foundation_analytics.php';

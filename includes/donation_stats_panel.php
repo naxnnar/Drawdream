@@ -1,5 +1,6 @@
 <?php
 // includes/donation_stats_panel.php — ตัวเลขสำหรับแผง donation-stats-panel (ผู้อุปการะ / สะสม / เดือนปฏิทิน / ทุนการศึกษา)
+// สรุปสั้น: คำนวณยอดสถิติบริจาคเพื่อแสดงในการ์ดสรุปหน้าเด็ก/โปรไฟล์
 declare(strict_types=1);
 
 /**

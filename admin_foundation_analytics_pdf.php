@@ -1,5 +1,6 @@
 <?php
 // admin_foundation_analytics_pdf.php — รายงานเชิงวิเคราะห์มูลนิธิ (PDF A4 / พิมพ์ HTML หากไม่มี TCPDF)
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundation analytics pdf
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

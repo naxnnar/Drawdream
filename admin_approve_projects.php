@@ -1,6 +1,8 @@
 <?php
 // admin_approve_projects.php — ตรวจสอบ/อนุมัติโครงการ (UI เดียวกับตรวจสอบโปรไฟล์เด็กใน children_donate.php)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve projects
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

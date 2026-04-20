@@ -1,5 +1,6 @@
 <?php
 // payment/omise_webhook.php — รับ event จาก Omise (เช่น charge.complete) บันทึก child_donations จากอุปการะรายรอบ
+// สรุปสั้น: endpoint webhook สำหรับอัปเดตข้อมูลธุรกรรมที่ Omise แจ้งเข้ามาแบบ server-to-server
 /**
  * ตั้งค่า: Omise Dashboard (Test/Live) → Webhooks → ใส่ URL แบบ HTTPS ที่เข้าถึงได้จากอินเทอร์เน็ต
  * (บน localhost ใช้ ngrok ชี้มาที่ https://xxxx.ngrok.io/drawdream/payment/omise_webhook.php)

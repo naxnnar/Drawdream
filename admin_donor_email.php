@@ -1,6 +1,8 @@
 <?php
 // admin_donor_email.php — หน้าเตรียมส่งอีเมลถึงผู้บริจาค (เปิดโปรแกรมอีเมลของเครื่อง)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน donor email
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

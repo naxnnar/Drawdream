@@ -1,6 +1,8 @@
 <?php
 // children_donate.php — อุปการะเด็กแบบรายรอบ (Omise Charge Schedule) + Omise.js Token
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน children donate
+
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';

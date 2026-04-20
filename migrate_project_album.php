@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+// สรุปสั้น: ไฟล์นี้ใช้ย้ายหรือปรับโครงสร้างข้อมูลส่วน project album
 require_once __DIR__ . '/db.php';
 
 $uploadsRoot = __DIR__ . '/uploads';

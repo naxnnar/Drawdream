@@ -1,6 +1,8 @@
 <?php
 // foundation_edit_child.php — มูลนิธิแก้ไขโปรไฟล์เด็ก
 
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน edit child
+
 session_start();
 include 'db.php';
 

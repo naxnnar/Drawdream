@@ -1,6 +1,8 @@
 <?php
 // foundation_add_children.php — มูลนิธิเพิ่มโปรไฟล์เด็ก
 
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add children
+
 session_start();
 include 'db.php';
 

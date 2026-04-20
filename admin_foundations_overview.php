@@ -1,6 +1,7 @@
 <?php
 // admin_foundations_overview.php — ภาพรวมมูลนิธิ
 // รายการมูลนิธิทั้งหมด — มุมมองแอดมิน
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundations overview
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

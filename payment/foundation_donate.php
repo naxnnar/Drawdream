@@ -1,5 +1,6 @@
 <?php
 // payment/foundation_donate.php — บริจาคมูลนิธิ (need list) + Omise
+// สรุปสั้น: หน้าเริ่มบริจาคมูลนิธิ สร้าง charge และเตรียมรายการ pending ก่อนแสดง QR
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';

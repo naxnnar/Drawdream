@@ -1,6 +1,7 @@
 <?php
 
 // foundation_edit_profile.php — มูลนิธิแก้ไขโปรไฟล์องค์กร
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน edit profile
 declare(strict_types=1);
 
 /**

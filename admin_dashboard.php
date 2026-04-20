@@ -1,6 +1,8 @@
 <?php
 // admin_dashboard.php — แดชบอร์ดแอดมิน
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน dashboard
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+// สรุปสั้น: ไฟล์นี้รับผลลัพธ์การล็อกอิน Google และจัดการสถานะผู้ใช้
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

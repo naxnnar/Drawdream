@@ -1,6 +1,8 @@
 <?php
 // update_profile.php — อัปเดตโปรไฟล์ (ทั่วไป)
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน update profile
+
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 

@@ -1,5 +1,6 @@
 <?php
 // payment/child_donate.php — รับ POST สร้าง Omise charge แล้วไป scan_qr.php (PromptPay จริงจาก Omise test/live)
+// สรุปสั้น: รับจำนวนเงินบริจาคเด็ก สร้าง charge และบันทึกรายการ pending ก่อนพาไปหน้า QR
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

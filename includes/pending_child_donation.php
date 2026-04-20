@@ -1,6 +1,17 @@
 <?php
 // includes/pending_child_donation.php — ใช้ donation ตารางเดียว (pending -> completed) — คอลัมน์หลักเท่านั้น
+// สรุปสั้น: บริหารรายการบริจาคเด็กแบบ pending -> completed ให้ปลอดภัยและไม่ซ้ำ
 declare(strict_types=1);
+/**
+ * โมดูลนี้ดูแล lifecycle ของ "บริจาคเด็กแบบ one-time ผ่าน QR"
+ * โดยใช้แนวคิด 2 เฟส:
+ * - insert pending ตอนสร้าง charge
+ * - finalize เป็น completed ตอน callback/check สำเร็จ
+ *
+ * จุดสำคัญ:
+ * - finalize จะยืนยัน donor/target/category ตรงกับ pending row ก่อนเสมอ
+ * - ใช้ transaction เพื่อกันข้อมูลค้างครึ่งทาง
+ */
 
 require_once __DIR__ . '/payment_transaction_schema.php';
 require_once __DIR__ . '/donate_category_resolve.php';
@@ -81,12 +92,14 @@ function drawdream_finalize_child_donation(
     }
     $rowDonateId = (int)($row['donate_id'] ?? 0);
     if ($donateId > 0 && $donateId !== $rowDonateId) {
+        // ป้องกัน finalize ผิดแถว หาก caller ส่ง donateId ที่ไม่ match กับ charge
         return false;
     }
     $pDonor = (int)($row['donor_id'] ?? 0);
     $pTarget = (int)($row['target_id'] ?? 0);
     $pCat = (int)($row['category_id'] ?? 0);
     if ($pDonor !== $donorUserId || $pTarget !== $childId || $pCat <= 0) {
+        // ตรวจความถูกต้องของเจ้าของรายการและปลายทางบริจาค
         return false;
     }
     $completed = 'completed';

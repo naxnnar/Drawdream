@@ -1,5 +1,6 @@
 <?php
 // admin_project_totals.php — แอดมิน: ยอดบริจาคและประวัติรายการต่อโครงการ
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน project totals
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

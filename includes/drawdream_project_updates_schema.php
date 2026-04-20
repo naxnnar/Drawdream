@@ -1,6 +1,7 @@
 <?php
 
 // includes/drawdream_project_updates_schema.php — คอลัมน์อัปเดตผลลัพธ์บน foundation_project
+// สรุปสั้น: เพิ่ม/ตรวจคอลัมน์ที่ใช้เก็บข้อความและรูปผลลัพธ์โครงการ
 declare(strict_types=1);
 
 /**

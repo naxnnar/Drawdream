@@ -1,6 +1,20 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * donation_receipt.php
+ * หน้าแสดงใบเสร็จอิเล็กทรอนิกส์ "1 รายการ"
+ * เปิดได้เฉพาะ:
+ * - เจ้าของรายการบริจาค
+ * - admin
+ *
+ * รองรับใบเสร็จ 2 แบบ:
+ * - บุคคลธรรมดา
+ * - นิติบุคคล
+ */
+
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donation receipt
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -21,6 +35,7 @@ if ($donateId <= 0) {
     exit;
 }
 
+// ดึงเฉพาะรายการที่จ่ายสำเร็จแล้วเท่านั้น
 $st = $conn->prepare(
     "SELECT d.donate_id, d.category_id, d.target_id, d.donor_id, d.amount, d.transfer_datetime, d.omise_charge_id, dn.tax_id,
             dc.project_donate, dc.needitem_donate, dc.child_donate
@@ -45,6 +60,7 @@ if (!$receipt) {
 }
 
 $ownerDonorId = (int)($receipt['donor_id'] ?? 0);
+// ความปลอดภัย: donor เห็นได้แค่ของตัวเอง, admin เห็นได้ทุกใบ
 if ($viewerRole !== 'admin' && $viewerId !== $ownerDonorId) {
     http_response_code(403);
     echo 'คุณไม่มีสิทธิ์เข้าถึงใบเสร็จนี้';
@@ -65,6 +81,7 @@ $hasReceiptType = false;
 $hasReceiptCompanyName = false;
 $hasReceiptCompanyTaxId = false;
 $hasReceiptCompanyAddress = false;
+// ตรวจคอลัมน์ donor แบบ runtime (กันบางเครื่อง migrate schema ยังไม่ครบ)
 $colChk = $conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_type'");
 if ($colChk && $colChk->num_rows > 0) {
     $hasReceiptType = true;

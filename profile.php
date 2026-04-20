@@ -1,6 +1,8 @@
 <?php
 // profile.php — โปรไฟล์ผู้ใช้และประวัติบริจาค
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน profile
+
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
@@ -678,6 +680,9 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
         });
     }
 
+    // ประวัติบริจาค:
+    // - เริ่มต้นแสดง 5 รายการแรกของปีที่เลือก
+    // - กด "ดูรายการทั้งหมด" แล้วค่อยแสดงครบทุกรายการของปีนั้น
     var yearFilter = document.getElementById('donation-year-filter');
     var showAllBtn = document.getElementById('btn-donation-all');
     var items = [].slice.call(document.querySelectorAll('.log-item--donation'));
@@ -706,6 +711,7 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
     }
     if (showAllBtn) {
         showAllBtn.addEventListener('click', function() {
+            // กดแล้วขยายรายการทั้งหมดของปีที่เลือก
             expandedAll = true;
             applyFilter();
             showAllBtn.style.display = 'none';
@@ -713,6 +719,7 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
     }
     if (yearFilter) {
         yearFilter.addEventListener('change', function() {
+            // เปลี่ยนปีให้กลับไปโหมดเริ่มต้น (เห็น 5 รายการก่อน)
             expandedAll = false;
             applyFilter();
         });

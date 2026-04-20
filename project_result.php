@@ -1,6 +1,7 @@
 <?php
 // project_result.php — แสดงผลลัพธ์โครงการที่เสร็จสิ้น
 // แสดงผลลัพธ์โครงการที่เสร็จสิ้น (สำหรับผู้บริจาค/บุคคลทั่วไป)
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project result
 include 'db.php';
 session_start();
 
@@ -22,6 +23,7 @@ if (!$project) {
 
 $projectGoalAmount = max(0.0, (float)($project['goal_amount'] ?? 0));
 $projectRaisedAmount = max(0.0, (float)($project['current_donate'] ?? 0));
+// กันยอดโชว์เกินเป้าหมาย: UI ควรสะท้อนกติกา "ไม่รับเกิน goal"
 if ($projectGoalAmount > 0 && $projectRaisedAmount > $projectGoalAmount) {
     $projectRaisedAmount = $projectGoalAmount;
 }

@@ -1,5 +1,6 @@
 <?php
 // admin_needlist_totals.php — แอดมิน: ยอดบริจาคสิ่งของ (รายการเดียว — แสดงรายการชำระระดับมูลนิธิที่แบ่งยอดเข้ารายการนี้)
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน needlist totals
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

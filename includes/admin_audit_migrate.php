@@ -1,5 +1,6 @@
 <?php
 // includes/admin_audit_migrate.php — Migration ตาราง audit แอดมิน + helpers
+// สรุปสั้น: จัดการโครงสร้างตาราง audit ฝั่งแอดมินให้พร้อมก่อนใช้งาน
 // ตาราง admin แบบย่อ: id, admin_id, target_id, target_entity, remark, notif_*, action_at
 // ไม่ใช้คอลัมน์ action_type / actor_user_id — ใช้ notif_type ระบุเหตุการณ์แทน
 

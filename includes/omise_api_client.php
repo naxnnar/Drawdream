@@ -1,5 +1,6 @@
 <?php
 // includes/omise_api_client.php — HTTP POST แบบ form-urlencoded ไป Omise (customer / schedules)
+// สรุปสั้น: client กลางสำหรับคุยกับ Omise API แบบปลอดภัยและรองรับ SSL บนหลายเครื่อง
 declare(strict_types=1);
 
 /**

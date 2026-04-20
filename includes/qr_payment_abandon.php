@@ -1,5 +1,6 @@
 <?php
 // includes/qr_payment_abandon.php — ล้าง session QR payment ค้าง
+// สรุปสั้น: ปิด/ยกเลิกรายการ QR ที่ค้าง เพื่อไม่ให้ยอด pending สะสมผิด
 // ยกเลิก QR ที่ยังไม่ชำระ: ใช้ donation ตารางเดียว
 
 declare(strict_types=1);

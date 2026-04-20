@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+// สรุปสั้น: ยกเลิกแผนอุปการะเด็กรายรอบ (subscription) และอัปเดตสถานะให้ตรงกับฐานข้อมูล
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

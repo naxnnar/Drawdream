@@ -1,5 +1,6 @@
 <?php
 // foundation_donate_info.php — หน้าข้อมูลบัญชี/ติดต่อมูลนิธิก่อนเข้าหน้าบริจาค
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน donate info
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

@@ -1,5 +1,13 @@
 <?php
 // payment/check_project_payment.php — ยืนยันการชำระโครงการ (หลัง Omise)
+// สรุปสั้น: ปิดธุรกรรมบริจาคโครงการและเพิ่มยอดโครงการโดยไม่ให้เกินเป้าหมาย
+/**
+ * ไฟล์นี้ใช้ "ปิดรายการจ่ายเงินบริจาคโครงการ" หลังจากผู้ใช้ชำระ:
+ * - ยืนยันสถานะ charge
+ * - เปลี่ยน donation จาก pending -> completed
+ * - เพิ่มยอดโครงการโดยห้ามเกินเป้าหมาย (DB guard)
+ * - ส่งแจ้งเตือนใบเสร็จอิเล็กทรอนิกส์
+ */
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 include __DIR__ . '/../db.php';
@@ -75,6 +83,7 @@ $donor_uid = (int)$_SESSION['user_id'];
 // Omise แจ้งว่ารายการถึงที่สุดแล้ว (ไม่สำเร็จ/หมดอายุ) → อัปเดตฐานข้อมูลเป็น failed ไม่ค้าง pending
 if (!$is_mock && $has_pending && !$already_completed && !$is_success
     && in_array($status, ['failed', 'expired'], true)) {
+    // ถ้า Omise ตอบว่า fail/expired ให้ปิดรายการ pending ทันที
     drawdream_abandon_pending_donation_by_charge($conn, $donor_uid, $charge_id);
     drawdream_clear_pending_payment_session();
     $has_pending = false;
@@ -85,6 +94,7 @@ if (!$is_mock && $has_pending && !$already_completed && !$is_success
 
 function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id, float $amountBaht): bool
 {
+    // lock แถวโครงการนี้ก่อน (กันยอดเพี้ยนเมื่อมีคนจ่ายพร้อมกันหลายคน)
     $sel = $conn->prepare('SELECT goal_amount, current_donate FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL FOR UPDATE');
     $sel->bind_param('i', $project_id);
     $sel->execute();
@@ -96,9 +106,11 @@ function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id
     $r = (float)($row['current_donate'] ?? 0);
     if ($g > 0) {
         if ($r >= $g - 1e-9) {
+            // ถ้าครบเป้าแล้ว ไม่ให้เพิ่มยอดต่อ
             return false;
         }
         if ($r + $amountBaht > $g + 1e-6) {
+            // ถ้าเพิ่มแล้วเกินเป้า ให้หยุดทันที
             return false;
         }
     }

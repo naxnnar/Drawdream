@@ -1,6 +1,8 @@
 <?php
 // admin_escrow.php — จัดการเงินค้ำ / escrow
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน escrow
+
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';

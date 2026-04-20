@@ -1,5 +1,6 @@
 <?php
 // includes/donate_type.php — รหัสประเภทบริจาค (donation.donate_type) + ป้ายกำกับภาษาไทยสำหรับแสดงผล
+// สรุปสั้น: รวม constant ประเภทการบริจาคและชื่อแสดงผลที่ใช้ทั้งระบบ
 declare(strict_types=1);
 
 /** อุปการะเด็กแบบหักรายรอบ (แถวหลักของแผน / subscription row) */

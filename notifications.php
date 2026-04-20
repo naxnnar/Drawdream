@@ -1,6 +1,8 @@
 <?php
 // notifications.php — ประวัติการแจ้งเตือนทั้งหมด (ผู้บริจาค + มูลนิธิ)
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน notifications
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

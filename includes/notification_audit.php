@@ -1,5 +1,6 @@
 <?php
 // includes/notification_audit.php — แจ้งเตือน notifications + audit แอดมิน
+// สรุปสั้น: ส่งแจ้งเตือนผู้ใช้และบันทึก audit คิวงานฝั่งแอดมินในจุดเดียว
 /**
  * แจ้งเตือน (notifications) + บันทึกคิว/audit ฝั่งแอดมิน (ตาราง admin)
  *

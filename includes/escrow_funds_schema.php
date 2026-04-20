@@ -1,5 +1,6 @@
 <?php
 // includes/escrow_funds_schema.php — ตาราง escrow_funds + helper สำหรับโครงการ
+// สรุปสั้น: ตรวจ/สร้างตาราง escrow_funds และ helper การอัปเดตยอดฝั่ง escrow
 
 declare(strict_types=1);
 

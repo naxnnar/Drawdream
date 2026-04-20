@@ -1,5 +1,6 @@
 <?php
 // payment/abandon_qr.php — ยกเลิกสถานะ QR / payment ค้าง
+// สรุปสั้น: ยกเลิกรายการชำระที่ค้างอยู่และล้าง session pending ของผู้ใช้
 // POST: ยกเลิกรายการสแกน QR ที่ยังไม่ชำระ — ตั้งสถานะเป็น failed ไม่ใช้ pending ค้าง
 declare(strict_types=1);
 if (session_status() === PHP_SESSION_NONE) {

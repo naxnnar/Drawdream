@@ -1,5 +1,6 @@
 <?php
 // includes/omise_user_messages.php — ข้อความภาษาไทยจาก error ของ Omise API
+// สรุปสั้น: แปล/แมป error จาก Omise ให้เป็นข้อความที่ผู้ใช้เข้าใจง่าย
 declare(strict_types=1);
 
 /** Omise บล็อก POST /schedules (มักหลังยังไม่ verify หรือบัญชียังไม่เปิดฟีเจอร์) */

@@ -1,5 +1,6 @@
 <?php
 // db.php — เชื่อมต่อ MySQL + bootstrap migration
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน db
 /**
  * db.php — จุดเชื่อมต่อ MySQL กลางของ DrawDream
  *

@@ -1,5 +1,6 @@
 <?php
 // admin_foundation_totals.php — แอดมิน: ยอดบริจาครวมของมูลนิธิ (เด็ก / โครงการ / สิ่งของ) + ประวัติรายการ
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundation totals
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

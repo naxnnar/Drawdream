@@ -1,6 +1,14 @@
 <?php
 // foundation_analytics_report.php — มูลนิธิดูรายงานเชิงวิเคราะห์ (จากแจ้งเตือนหรือลิงก์ตรง)
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน analytics report
 declare(strict_types=1);
+/**
+ * หน้านี้เป็น "viewer" ของรายงานเชิงวิเคราะห์ฝั่งมูลนิธิ:
+ * - บังคับสิทธิ์ role=foundation
+ * - โหลด foundation_id จาก user session ปัจจุบันเท่านั้น
+ * - ใช้ HTML fragment กลางจาก includes/foundation_analytics_report_html.php
+ * - ถ้ามี TCPDF จะแสดงปุ่มดาวน์โหลด PDF, ถ้าไม่มีให้ใช้ print fallback
+ */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -10,6 +18,7 @@ require_once __DIR__ . '/includes/foundation_analytics.php';
 require_once __DIR__ . '/includes/foundation_analytics_report_html.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') {
+    // กันผู้ใช้ทั่วไป/แอดมินเข้าหน้านี้โดยตรง
     header('Location: index.php');
     exit();
 }
@@ -33,6 +42,7 @@ if ($foundationId <= 0) {
 
 $htmlBody = drawdream_foundation_analytics_report_html_fragment($conn, $foundationId);
 if ($htmlBody === null) {
+    // ไม่มีข้อมูลรายงานพอให้ render (เช่น ไม่พบ foundation profile)
     header('Location: foundation.php');
     exit();
 }

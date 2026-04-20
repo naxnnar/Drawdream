@@ -1,4 +1,5 @@
 <?php
+// สรุปสั้น: include meta/favicon กลาง เพื่อให้ทุกหน้าใช้ไอคอนเว็บชุดเดียวกัน
 /**
  * Favicon — ใส่ใน <head> หลังเปิดแท็ก head (ทุกหน้า)
  * require_once __DIR__ . '/includes/favicon_meta.php';  // จากไฟล์ในรากโปรเจกต์

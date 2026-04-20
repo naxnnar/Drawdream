@@ -1,6 +1,8 @@
 <?php
 // admin_view_foundation.php — ดูข้อมูลมูลนิธิ (จากไดเรกทอรี — ไม่มีอนุมัติ/ไม่อนุมัติ)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view foundation
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

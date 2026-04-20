@@ -1,6 +1,8 @@
 <?php
 // children_.php — รายชื่อเด็ก (สาธารณะ / มุมมองมูลนิธิ)
 
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน children 
+
 // ------------------------------
 // Session and database bootstrap
 // ------------------------------
@@ -395,6 +397,9 @@ if ($role === 'foundation') {
         $maySoftDeleteCard = ($totalDonCard <= 0) && !$hasActiveSubscriptionCard;
         $blockBulkCheckbox = ($role === 'foundation')
           && (!$foundationAccountVerified || !$maySoftDeleteCard);
+        // ตั้งปลายทางตอนกดการ์ดเด็ก:
+        // - admin -> หน้าโปรไฟล์ตรวจสอบของแอดมิน
+        // - คนทั่วไป/ผู้บริจาค -> หน้าบริจาคเด็ก
         $cardViewUrl = ($role === 'admin')
           ? ('admin_view_child.php?id=' . (int)$child['child_id'])
           : ('children_donate.php?id=' . (int)$child['child_id']);

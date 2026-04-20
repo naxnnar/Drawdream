@@ -1,5 +1,6 @@
 <?php
 // about.php — เกี่ยวกับเรา / FAQ
+// สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน about
 if (session_status() === PHP_SESSION_NONE) {
   session_start();
 }

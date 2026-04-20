@@ -1,6 +1,14 @@
 <?php
 // foundation_analytics_report_pdf.php — ดาวน์โหลด PDF รายงานเชิงวิเคราะห์ (มูลนิธิ — เฉพาะของตนเอง)
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน analytics report pdf
 declare(strict_types=1);
+/**
+ * endpoint สำหรับ generate+download PDF
+ * ข้อกำหนด:
+ * - foundation role เท่านั้น
+ * - export ได้เฉพาะข้อมูลของ foundation ที่ผูกกับ user session ปัจจุบัน
+ * - ถ้าไม่มี TCPDF จะ redirect กลับหน้า view แทน
+ */
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -10,6 +18,7 @@ require_once __DIR__ . '/includes/foundation_analytics.php';
 require_once __DIR__ . '/includes/foundation_analytics_report_html.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') {
+    // กันการเดา URL จาก role อื่น
     header('Location: index.php');
     exit();
 }
@@ -39,6 +48,7 @@ if ($htmlBody === null) {
 
 $tcpdfPath = __DIR__ . '/lib/tcpdf/tcpdf.php';
 if (!is_file($tcpdfPath)) {
+    // ไม่มี library -> ให้ fallback กลับหน้า HTML report
     header('Location: foundation_analytics_report.php');
     exit();
 }
@@ -59,6 +69,7 @@ foreach ([
     'C:\\Windows\\Fonts\\LeelawUI.ttf',
     'C:\\Windows\\Fonts\\tahoma.ttf',
 ] as $winFontPath) {
+    // พยายามหา font ไทยที่เครื่องมีอยู่จริง ก่อน fallback เป็น dejavu
     if (!is_file($winFontPath)) {
         continue;
     }

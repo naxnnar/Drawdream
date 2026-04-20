@@ -1,6 +1,8 @@
 <?php
 // admin_needlist_view.php — แอดมิน: ตรวจสอบรายการสิ่งของ (อนุมัติ/ไม่อนุมัติที่หน้านี้เมื่อสถานะ pending)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน needlist view
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

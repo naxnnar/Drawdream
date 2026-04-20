@@ -1,5 +1,6 @@
 <?php
 // donate_qr.php — แสดง QR และข้อมูลบัญชี DrawDream (เลย์เอาต์การ์ดสีน้ำเงิน)
+// สรุปสั้น: หน้าแสดง QR code สำหรับโอนเงินพร้อมยอดที่ผู้ใช้เลือก
 $amount = isset($_GET['amount']) ? max(0, (float)$_GET['amount']) : 0;
 
 /** @return string path จาก payment/ ไปยังรูป ../img/qr-code.{ext} */

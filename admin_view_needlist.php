@@ -1,6 +1,8 @@
 <?php
 // admin_view_needlist.php — ดูข้อมูลรายการสิ่งของ (จากไดเรกทอรี — ไม่มีอนุมัติ/ไม่อนุมัติ)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view needlist
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

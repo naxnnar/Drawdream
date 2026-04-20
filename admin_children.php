@@ -1,6 +1,8 @@
 <?php
 // admin_children.php — แอดมินจัดการโปรไฟล์เด็ก
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน children
+
 session_start();
 include 'db.php';
 

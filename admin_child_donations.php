@@ -1,5 +1,6 @@
 <?php
 // admin_child_donations.php — ตรวจสอบยอดและประวัติการรับบริจาคของเด็ก (ฝั่งแอดมิน)
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน child donations
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

@@ -1,6 +1,8 @@
 <?php
 // foundation_add_need.php — มูลนิธิเสนอรายการสิ่งของ
 
+// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add need
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);

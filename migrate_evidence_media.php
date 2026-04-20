@@ -5,6 +5,8 @@ declare(strict_types=1);
 // - project_updates.update_image      => project_<project_id>_...
 // - foundation_children outcome imgs => children_<child_id>_...
 
+// สรุปสั้น: ไฟล์นี้ใช้ย้ายหรือปรับโครงสร้างข้อมูลส่วน evidence media
+
 require_once __DIR__ . '/db.php';
 
 mysqli_report(MYSQLI_REPORT_OFF);

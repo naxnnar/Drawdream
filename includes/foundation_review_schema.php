@@ -1,5 +1,6 @@
 <?php
 // includes/foundation_review_schema.php — คอลัมน์สถานะรีวิวโปรไฟล์มูลนิธิ
+// สรุปสั้น: ตรวจ/เพิ่มคอลัมน์ที่ใช้เก็บผลการรีวิวโปรไฟล์มูลนิธิ
 declare(strict_types=1);
 
 function drawdream_foundation_review_ensure_schema(mysqli $conn): void

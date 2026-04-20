@@ -1,6 +1,8 @@
 <?php
 // admin_projects_directory.php — โครงการทั้งหมด (มุมมองแอดมิน)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน projects directory
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

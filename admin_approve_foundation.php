@@ -1,6 +1,8 @@
 <?php
 // admin_approve_foundation.php — แอดมิน: ตรวจสอบโปรไฟล์มูลนิธิ (อ่านอย่างเดียว — อนุมัติ/ไม่อนุมัติที่ศูนย์แจ้งเตือน)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve foundation
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

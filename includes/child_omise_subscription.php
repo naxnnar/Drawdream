@@ -1,5 +1,6 @@
 <?php
 // includes/child_omise_subscription.php — เก็บสถานะอุปการะใน donation.recurring_*
+// สรุปสั้น: จัดการข้อมูล subscription ของเด็กและการเชื่อมกับ Omise (customer/card/schedule)
 declare(strict_types=1);
 
 require_once __DIR__ . '/payment_transaction_schema.php';

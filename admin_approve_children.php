@@ -1,6 +1,8 @@
 <?php
 // admin_approve_children.php — แอดมินอนุมัติ/ปฏิเสธโปรไฟล์เด็ก
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve children
+
 session_start();
 include 'db.php';
 

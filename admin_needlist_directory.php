@@ -1,6 +1,8 @@
 <?php
 // admin_needlist_directory.php — รายการสิ่งของทั้งหมด (มุมมองแอดมิน)
 
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน needlist directory
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

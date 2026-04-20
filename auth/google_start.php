@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+// สรุปสั้น: ไฟล์นี้เริ่มขั้นตอนล็อกอินด้วย Google OAuth
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

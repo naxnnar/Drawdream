@@ -1,5 +1,6 @@
 <?php
 // admin_children_overview.php — redirect: รายชื่อเด็กแอดมินรวมอยู่ที่ children_.php (ตารางเดียวกับเมนู Profilechildren)
+// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน children overview
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }

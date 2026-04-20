@@ -1,5 +1,6 @@
 <?php
 // includes/foundation_analytics.php — ข้อมูลรายงานเชิงวิเคราะห์ต่อมูลนิธิ (แอดมิน)
+// สรุปสั้น: คำนวณข้อมูลสถิติที่ใช้สร้างรายงาน analytics ของมูลนิธิ
 declare(strict_types=1);
 
 require_once __DIR__ . '/donate_category_resolve.php';

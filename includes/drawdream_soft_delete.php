@@ -1,6 +1,7 @@
 <?php
 
 // includes/drawdream_soft_delete.php — คอลัมน์ soft delete เด็ก/โครงการ
+// สรุปสั้น: ดูแลคอลัมน์ deleted_at เพื่อซ่อนข้อมูลแทนการลบถาวร
 declare(strict_types=1);
 
 /**

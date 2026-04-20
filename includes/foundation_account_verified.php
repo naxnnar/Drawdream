@@ -1,5 +1,6 @@
 <?php
 // includes/foundation_account_verified.php — มูลนิธิต้องผ่าน account_verified ก่อนใช้งานฟีเจอร์จัดการ
+// สรุปสั้น: helper เช็กและซิงก์สถานะอนุมัติบัญชีมูลนิธิจากฐานข้อมูลเข้า session
 declare(strict_types=1);
 
 /**

@@ -1,5 +1,6 @@
 <?php
 // payment/child_subscription_create.php — Omise Token→Customer→Charge Schedule (อุปการะเด็กรายรอบ)
+// สรุปสั้น: สร้างแผนอุปการะเด็กรายรอบผ่าน Omise และบันทึกข้อมูลแผนลงระบบ
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {

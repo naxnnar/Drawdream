@@ -1,5 +1,6 @@
 <?php
 // payment/payment_project.php — หน้าชำระเงินโครงการ + Omise PromptPay
+// สรุปสั้น: หน้าเริ่มบริจาคโครงการ สร้าง charge และบันทึกรายการ pending ก่อนพาไป QR
 /**
  * ชำระเงินโครงการ: Omise PromptPay (source + charge) แล้วไป scan_qr.php
  * mock ใช้ได้เฉพาะเมื่อ OMISE_ALLOW_LOCAL_MOCK=true (ค่าเริ่มต้น false → QR จาก Omise test จริง)
