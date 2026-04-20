@@ -108,7 +108,7 @@ function admin_project_status_pill_class(string $st): string
                         <td class="admin-dir-num"><?= number_format($cur, 0) ?></td>
                         <td><?= htmlspecialchars($endStr) ?></td>
                         <td>
-                            <div class="admin-dir-actions">
+                            <div class="admin-dir-actions admin-dir-actions--pair">
                                 <a class="admin-dir-btn admin-dir-btn--primary" href="<?= htmlspecialchars($detailUrl) ?>">โครงการ</a>
                                 <a class="admin-dir-btn admin-dir-btn--ghost" href="<?= htmlspecialchars($totalsUrl) ?>">ยอดโครงการ</a>
                             </div>

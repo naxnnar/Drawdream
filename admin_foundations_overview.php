@@ -86,13 +86,13 @@ $rows = $conn->query($sql);
                         <td class="admin-dir-num"><?= (int)($r['need_cnt'] ?? 0) ?></td>
                         <td><?= htmlspecialchars($createdStr) ?></td>
                         <td>
-                            <div class="admin-dir-actions">
+                            <div class="admin-dir-actions admin-dir-actions--foundation">
                                 <a class="admin-dir-btn admin-dir-btn--primary"
                                    href="<?= htmlspecialchars($foundationDetailHref, ENT_QUOTES, 'UTF-8') ?>">มูลนิธิ</a>
                                 <a class="admin-dir-btn admin-dir-btn--ghost"
                                    href="admin_foundation_totals.php?foundation_id=<?= $fid ?>">ยอดมูลนิธิ</a>
                                 <a class="admin-dir-btn admin-dir-btn--analytics"
-                                   href="admin_foundation_analytics_pdf.php?foundation_id=<?= $fid ?>">รายงานเชิงวิเคราะห์</a>
+                                   href="admin_foundation_analytics_view.php?foundation_id=<?= $fid ?>">รายงานเชิงวิเคราะห์</a>
                             </div>
                         </td>
                     </tr>

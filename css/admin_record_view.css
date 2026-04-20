@@ -45,14 +45,14 @@ body.admin-record-view-page {
 
 .admin-record-sheet__head h1 {
     margin: 0;
-    font-size: 1.22rem;
+    font-size: 1.32rem;
     font-weight: 800;
     letter-spacing: 0.02em;
 }
 
 .admin-record-sheet__sub {
     margin: 8px 0 0;
-    font-size: 0.95rem;
+    font-size: 1.05rem;
     opacity: 0.94;
     font-weight: 600;
 }
@@ -85,7 +85,7 @@ body.admin-record-view-page {
 }
 
 .admin-record-field .admin-record-k {
-    font-size: 0.76rem;
+    font-size: 0.82rem;
     font-weight: 800;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -94,7 +94,7 @@ body.admin-record-view-page {
 }
 
 .admin-record-field .admin-record-v {
-    font-size: 0.96rem;
+    font-size: 1.05rem;
     font-weight: 650;
     color: #0f172a;
     line-height: 1.45;

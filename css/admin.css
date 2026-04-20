@@ -27,13 +27,14 @@ body.admin-approve-projects-page table {
     background: #fff;
     border-radius: 12px;
     overflow: hidden;
+    font-size: 1.05rem;
 }
 
 body.admin-projects-page th,
 body.admin-projects-page td,
 body.admin-approve-projects-page th,
 body.admin-approve-projects-page td {
-    padding: 12px;
+    padding: 14px 16px;
     border-bottom: 1px solid #eee;
     vertical-align: top;
 }
@@ -55,7 +56,8 @@ body.admin-approve-projects-page .thumb {
 
 body.admin-projects-page .btn,
 body.admin-approve-projects-page .btn {
-    padding: 8px 12px;
+    padding: 10px 16px;
+    font-size: 0.95rem;
     border: none;
     border-radius: 10px;
     cursor: pointer;
@@ -126,11 +128,12 @@ body.admin-approve-needlist-page .admin-table {
     background: #fff;
     border-radius: 12px;
     overflow: hidden;
+    font-size: 1.05rem;
 }
 
 body.admin-approve-needlist-page .admin-table th,
 body.admin-approve-needlist-page .admin-table td {
-    padding: 12px;
+    padding: 14px 16px;
     border-bottom: 1px solid #eee;
     vertical-align: top;
 }
@@ -194,11 +197,12 @@ body.admin-approve-needlist-page .admin-actions {
 }
 
 body.admin-approve-needlist-page .admin-btn {
-    padding: 8px 12px;
+    padding: 10px 16px;
     border: none;
     border-radius: 10px;
     cursor: pointer;
     font-weight: 800;
+    font-size: 0.95rem;
 }
 
 body.admin-approve-needlist-page .admin-btn.approve {

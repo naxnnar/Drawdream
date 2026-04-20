@@ -395,10 +395,13 @@ if ($role === 'foundation') {
         $maySoftDeleteCard = ($totalDonCard <= 0) && !$hasActiveSubscriptionCard;
         $blockBulkCheckbox = ($role === 'foundation')
           && (!$foundationAccountVerified || !$maySoftDeleteCard);
+        $cardViewUrl = ($role === 'admin')
+          ? ('admin_view_child.php?id=' . (int)$child['child_id'])
+          : ('children_donate.php?id=' . (int)$child['child_id']);
       ?>
       <div class="child-card-wrap<?php echo $blockBulkCheckbox ? ' child-card-wrap--bulk-protected' : ''; ?><?php echo $sponsoredLocked ? ' child-card-wrap--sponsored-lock' : ''; ?>">
         <div class="child-card<?php echo !empty($gridSection['sponsored']) ? ' child-card--sponsored' : ''; ?>"
-             data-view-url="admin_view_child.php?id=<?php echo (int)$child['child_id']; ?>"
+             data-view-url="<?php echo htmlspecialchars($cardViewUrl, ENT_QUOTES, 'UTF-8'); ?>"
              data-edit-url="<?php echo $foundationAccountVerified ? 'foundation_edit_child.php?id=' . (int)$child['child_id'] : ''; ?>"
              data-sponsored-locked="<?php echo $sponsoredLocked ? '1' : '0'; ?>"
              data-cycle-total="<?php echo htmlspecialchars((string)(float)($cycleTotals[(int)$child['child_id']] ?? 0)); ?>">

@@ -8,6 +8,7 @@ body {
     background: #F7ECDE;
     font-family: 'Prompt', 'Sarabun', sans-serif;
     margin: 0;
+    font-size: 1.05rem;
 }
 
 .escrow-wrap {
@@ -17,7 +18,7 @@ body {
 }
 
 .page-title {
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 700;
     color: #333;
     margin-bottom: 20px;
@@ -28,7 +29,7 @@ body {
     padding: 15px 20px;
     border-radius: 10px;
     margin-bottom: 20px;
-    font-size: 14px;
+    font-size: 15px;
 }
 
 .alert-success {
@@ -63,7 +64,7 @@ body {
 
 /* ======== Section Title ======== */
 .section-title {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 700;
     color: #333;
     margin-bottom: 15px;

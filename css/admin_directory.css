@@ -1,4 +1,5 @@
-/* รายการภาพรวมผู้บริจาค / มูลนิธิ / เด็ก — จากแดชบอร์ดแอดมิน */
+/* รายการภาพรวมผู้บริจาค / มูลนิธิ / เด็ก — จากแดชบอร์ดแอดมิน
+ * สเกลตัวอักษร/ปุ่มใช้ร่วมกันทุกหน้าไดเรกทอรีแอดมิน (มูลนิธิ เด็ก โครงการ สิ่งของ ฯลฯ) */
 .admin-directory-page {
     max-width: 1280px;
     margin: 24px auto;
@@ -20,7 +21,7 @@ body.admin-sidebar-page .admin-directory-page {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.9rem;
+    font-size: 1rem;
     color: #4A5BA8;
     text-decoration: none;
     margin-bottom: 10px;
@@ -32,7 +33,7 @@ body.admin-sidebar-page .admin-directory-page {
 
 .admin-directory-title {
     font-family: 'Prompt', sans-serif;
-    font-size: 1.55rem;
+    font-size: 1.72rem;
     font-weight: 700;
     color: #1f2937;
     margin: 0 0 6px;
@@ -41,7 +42,7 @@ body.admin-sidebar-page .admin-directory-page {
 .admin-directory-desc {
     font-family: 'Sarabun', sans-serif;
     color: #6b7280;
-    font-size: 0.95rem;
+    font-size: 1.05rem;
     line-height: 1.5;
     margin: 0 0 16px;
     max-width: 720px;
@@ -52,7 +53,7 @@ body.admin-sidebar-page .admin-directory-page {
     border: 1px solid #c7d4f7;
     border-radius: 10px;
     padding: 12px 14px;
-    font-size: 0.88rem;
+    font-size: 0.98rem;
     color: #374151;
     margin-bottom: 20px;
 }
@@ -72,12 +73,12 @@ body.admin-sidebar-page .admin-directory-page {
     width: 100%;
     border-collapse: collapse;
     font-family: 'Sarabun', sans-serif;
-    font-size: 0.9rem;
+    font-size: 1.05rem;
 }
 
 .admin-dir-table th,
 .admin-dir-table td {
-    padding: 12px 14px;
+    padding: 14px 16px;
     text-align: left;
     border-bottom: 1px solid #eef0f4;
     vertical-align: middle;
@@ -103,15 +104,55 @@ body.admin-sidebar-page .admin-directory-page {
 .admin-dir-actions {
     display: flex;
     flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* หน้ามูลนิธิ: จัดปุ่มให้ขนาด/ตำแหน่งเท่ากัน ไม่เยื้อง */
+.admin-dir-actions--foundation {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
     gap: 8px;
+    width: 100%;
+    max-width: 280px;
+}
+
+.admin-dir-actions--foundation .admin-dir-btn {
+    width: 100%;
+    min-height: 40px;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.admin-dir-actions--foundation .admin-dir-btn--analytics {
+    grid-column: 1 / -1;
+}
+
+/* ปุ่มคู่ในตารางโครงการ/สิ่งของ: ขนาดเท่ากันและวางข้างกัน */
+.admin-dir-actions--pair {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    width: auto;
+    max-width: none;
+}
+
+.admin-dir-actions--pair .admin-dir-btn {
+    justify-content: center;
+    width: auto;
+    min-height: 0;
+    white-space: nowrap;
+    padding: 9px 15px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 400;
 }
 
 .admin-dir-btn {
     display: inline-flex;
     align-items: center;
-    padding: 6px 11px;
-    border-radius: 8px;
-    font-size: 0.82rem;
+    padding: 9px 15px;
+    border-radius: 10px;
+    font-size: 0.95rem;
     text-decoration: none;
     border: none;
     cursor: pointer;
@@ -150,7 +191,7 @@ body.admin-sidebar-page .admin-directory-page {
 
 .b--muted {
     color: #9ca3af;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
 }
 
 /* ป้ายสถานะมาตรฐานแอดมิน (pill เขียว/เหลือง/แดง — ใช้ร่วมกับ .badge-verified เดิม) */
@@ -159,9 +200,9 @@ body.admin-sidebar-page .admin-directory-page {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 4px 12px;
+    padding: 6px 14px;
     border-radius: 999px;
-    font-size: 0.75rem;
+    font-size: 0.88rem;
     font-weight: 600;
     font-family: 'Prompt', sans-serif;
     line-height: 1.25;
@@ -192,8 +233,8 @@ body.admin-sidebar-page .admin-directory-page {
 }
 
 .admin-dir-thumb {
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     object-fit: cover;
     border-radius: 8px;
     background: #e5e7eb;
@@ -213,8 +254,7 @@ body.admin-sidebar-page .admin-directory-page {
 }
 
 .admin-stat-card-wrap:focus {
-    outline: 2px solid #4A5BA8;
-    outline-offset: 2px;
+    outline: none;
 }
 
 .admin-stat-card-wrap .stat-card {

@@ -245,11 +245,24 @@ function donorProjectShowInDonorLatestStrip(array $row): bool
 
 function donorProjectProgressPct(array $row): float {
     $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
-    $raised = (float)($row['current_donate'] ?? 0);
+    $raised = projectRaisedForDisplay($row);
     if ($goal <= 0) {
         return 0.0;
     }
     return min(100.0, ($raised / $goal) * 100.0);
+}
+
+/**
+ * ยอดที่ใช้แสดงผลฝั่ง UI: ไม่ให้เกินเป้าหมายโครงการ
+ * (กันเคสยอดใน DB สูงกว่าเป้าหมายจาก race condition/การปัดยอด)
+ */
+function projectRaisedForDisplay(array $row): float {
+    $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
+    $raised = max(0.0, (float)($row['current_donate'] ?? 0));
+    if ($goal > 0 && $raised > $goal) {
+        return $goal;
+    }
+    return $raised;
 }
 
 /** @param list<array<string,mixed>> $rows */
@@ -472,7 +485,7 @@ if ($isFoundationOwnView) {
             <?php foreach ($projects as $row): ?>
                 <?php
                     $goal = (float)($row['goal_amount'] ?? 0);
-                    $raised = (float)($row['current_donate'] ?? 0);
+                    $raised = projectRaisedForDisplay($row);
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
                     $statusMeta = projectStatusThai($row['project_status'] ?? 'pending');
                     // ดึง remark กรณีถูกปฏิเสธ (ถ้ามี)
@@ -718,7 +731,7 @@ if ($role === 'admin'):
                             continue;
                         }
                         $latestGoal = (float)($latest['goal_amount'] ?? 0);
-                        $latestRaised = (float)($latest['current_donate'] ?? 0);
+                        $latestRaised = projectRaisedForDisplay($latest);
                         $latestProgress = donorProjectProgressPct($latest);
                         $latestBlurb = trim((string)($latest['project_quote'] ?? ''));
                         if ($latestBlurb === '') {
@@ -812,7 +825,7 @@ if ($role === 'admin'):
             <?php foreach ($projects as $row): ?>
                 <?php
                     $goalAmountDb = (float)($row['goal_amount'] ?? 0);
-                    $raised = (float)($row['current_donate'] ?? 0);
+                    $raised = projectRaisedForDisplay($row);
                     $progress = donorProjectProgressPct($row);
                     $effState = donorProjectEffectiveState($row);
                     $showResults = ($effState === 'completed');

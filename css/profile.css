@@ -225,8 +225,17 @@ textarea {
 }
 
 .donor-history-panel .log-item--donation {
-    background: #fcfcff;
-    border-left-width: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    background: #fff;
+    border: 1px solid #eceff5;
+    border-left: 0;
+    border-radius: 0;
+    margin: 0;
+    padding: 12px 14px;
+    box-shadow: none;
 }
 
 .log-item--donation {
@@ -238,14 +247,64 @@ textarea {
     box-shadow: none;
 }
 
+.log-item--donation[hidden] {
+    display: none !important;
+}
+
 .donation-amount-num {
     color: #E74C3C;
     font-weight: 700;
 }
 
-.log-item--donation .log-ref {
-    font-size: 12px;
-    color: #999;
+.donor-donation-main {
+    min-width: 0;
+}
+
+.donor-donation-meta {
+    margin-top: 2px;
+    color: #6b7280;
+    font-size: 1.08rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.log-receipt-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 18px;
+    border-radius: 999px;
+    border: 1px solid #d7deef;
+    background: #f7f9ff;
+    color: #2f4b93;
+    font-size: 1.05rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+    .donor-history-panel .log-item--donation {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .donor-donation-meta {
+        font-size: 0.96rem;
+    }
+
+    .log-receipt-link {
+        width: 100%;
+    }
+}
+
+.log-receipt-link:hover {
+    background: #eef3ff;
+    border-color: #bfcdf2;
+    color: #233d80;
 }
 
 .donation-more-wrap {
@@ -274,6 +333,12 @@ textarea {
 .donor-summary-head {
     margin-bottom: 14px;
 }
+.donor-summary-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
 .donor-year-filter-wrap {
     position: relative;
     display: inline-block;
@@ -301,6 +366,23 @@ textarea {
     font-size: 20px;
     color: #1f2937;
     pointer-events: none;
+}
+.btn-donation-all {
+    height: 58px;
+    padding: 0 18px;
+    border-radius: 14px;
+    border: 2px solid #d0d5dd;
+    background: #fff;
+    color: #2f4b93;
+    font-size: 1.12rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+.btn-donation-all:hover {
+    background: #f4f7ff;
+    border-color: #bfc9e5;
+    color: #233d80;
 }
 
 .donor-hero-card {
@@ -392,10 +474,6 @@ textarea {
 .donor-tax-right small {
     font-size: 16px;
     color: #46576d;
-}
-
-.log-item--donation {
-    border-left-width: 5px;
 }
 
 /* ======== Bank Info Alert ======== */

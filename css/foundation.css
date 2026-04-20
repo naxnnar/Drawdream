@@ -404,11 +404,47 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 36px;
 }
+.fd-interest-carousel {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.fd-interest-viewport {
+    width: 100%;
+}
 .fd-interest-card {
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 6px 22px rgba(22, 27, 45, 0.16);
     background: #fff;
+}
+.fd-interest-nav {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #3C5099;
+    box-shadow: 0 8px 18px rgba(27, 41, 76, 0.18);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    cursor: pointer;
+    flex: 0 0 44px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.fd-interest-nav:hover {
+    transform: translateY(-1px);
+    background: #f8faff;
+    box-shadow: 0 10px 20px rgba(27, 41, 76, 0.23);
+}
+.fd-interest-nav:disabled {
+    opacity: 0.45;
+    cursor: default;
+    transform: none;
+    box-shadow: 0 4px 10px rgba(27, 41, 76, 0.12);
 }
 .fd-interest-top {
     position: relative;
@@ -522,7 +558,8 @@
 .fd-community-band {
     background: #F7ECDE;
     text-align: center;
-    padding: 68px 24px 60px;
+    padding: 96px 24px 92px;
+    min-height: 560px;
 }
 .fd-community-band h3 {
     margin: 0 0 12px;
@@ -539,18 +576,32 @@
 .fd-community-org-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px;
+    gap: 30px;
     max-width: 980px;
     margin: 0 auto;
+    perspective: 1200px;
 }
 .fd-community-org-card {
     aspect-ratio: 16 / 9.5;
-    min-height: 170px;
+    min-height: 210px;
     border-radius: 28px;
     background: #e8edf4;
     overflow: hidden;
     margin: 0;
     padding: 0;
+    position: relative;
+    isolation: isolate;
+    animation: fdOrgCardFloat 6.4s ease-in-out infinite;
+}
+.fd-community-org-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.32) 50%, transparent 70%);
+    transform: translateX(-150%);
+    animation: fdOrgAdShine 5.6s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 2;
 }
 .fd-community-org-card__img {
     width: 100%;
@@ -558,7 +609,71 @@
     object-fit: cover;
     object-position: center;
     display: block;
-    min-height: 170px;
+    min-height: 210px;
+    transform-origin: center;
+    animation: fdOrgAdPan 11s ease-in-out infinite;
+    will-change: transform;
+}
+.fd-community-org-card:nth-child(2) {
+    animation-delay: 0.42s;
+}
+.fd-community-org-card:nth-child(2)::after {
+    animation-delay: 0.52s;
+}
+.fd-community-org-card:nth-child(2) .fd-community-org-card__img {
+    animation-delay: 0.45s;
+}
+.fd-community-org-card:nth-child(3) {
+    animation-delay: 0.84s;
+}
+.fd-community-org-card:nth-child(3)::after {
+    animation-delay: 1.04s;
+}
+.fd-community-org-card:nth-child(3) .fd-community-org-card__img {
+    animation-delay: 0.9s;
+}
+.fd-community-org-card:hover .fd-community-org-card__img,
+.fd-community-org-card:hover::after,
+.fd-community-org-card:hover {
+    animation-play-state: paused;
+}
+
+@keyframes fdOrgCardFloat {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-6px);
+    }
+}
+
+@keyframes fdOrgAdPan {
+    0% {
+        transform: scale(1.03) translateX(0);
+    }
+    30% {
+        transform: scale(1.08) translateX(-2.4%);
+    }
+    65% {
+        transform: scale(1.08) translateX(2.4%);
+    }
+    100% {
+        transform: scale(1.04) translateX(0);
+    }
+}
+
+@keyframes fdOrgAdShine {
+    0%, 20% {
+        transform: translateX(-150%);
+        opacity: 0;
+    }
+    28%, 58% {
+        opacity: 1;
+    }
+    80%, 100% {
+        transform: translateX(150%);
+        opacity: 0;
+    }
 }
 
 .fd-community-logos {
@@ -593,6 +708,8 @@
     justify-content: center;
     padding: 8px 12px;
     box-sizing: border-box;
+    animation: fdLogoFloat 4.8s ease-in-out infinite;
+    will-change: transform;
 }
 .fd-community-logo-card__img {
     max-width: 100%;
@@ -602,6 +719,47 @@
     object-fit: contain;
     object-position: center;
     display: block;
+    transition: transform 0.25s ease, filter 0.25s ease;
+}
+
+.fd-community-logo-card:nth-child(2) {
+    animation-delay: 0.35s;
+}
+
+.fd-community-logo-card:nth-child(3) {
+    animation-delay: 0.7s;
+}
+
+.fd-community-logo-card:nth-child(4) {
+    animation-delay: 1.05s;
+}
+
+.fd-community-logo-card:hover .fd-community-logo-card__img {
+    transform: translateY(-4px) scale(1.03);
+    filter: drop-shadow(0 8px 12px rgba(32, 47, 96, 0.18));
+}
+
+@keyframes fdLogoFloat {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-7px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fd-community-org-card,
+    .fd-community-org-card__img,
+    .fd-community-org-card::after {
+        animation: none;
+    }
+    .fd-community-logo-card {
+        animation: none;
+    }
+    .fd-community-logo-card__img {
+        transition: none;
+    }
 }
 
 /* ฟุตเตอร์ต่อจากโลโก้ (includes/site_footer.php) */
@@ -651,7 +809,11 @@ body.foundation-page .site-footer .social-link:hover {
     }
     .fd-community-org-grid {
         grid-template-columns: 1fr;
-        max-width: 480px;
+        max-width: 540px;
+    }
+    .fd-community-band {
+        padding: 78px 24px 72px;
+        min-height: 0;
     }
     .fd-community-logo-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -668,6 +830,9 @@ body.foundation-page .site-footer .social-link:hover {
 }
 
 @media (max-width: 480px) {
+    .fd-community-band {
+        padding: 62px 20px 56px;
+    }
     .fd-community-band h3 {
         font-size: 28px;
     }
@@ -727,6 +892,56 @@ body.foundation-page .site-footer .social-link:hover {
 }
 @media (max-width: 640px) {
     .fd-interest-grid { grid-template-columns: 1fr; }
+}
+
+/* โหมดเลื่อนแนวนอนเมื่อมีหลายมูลนิธิ */
+.fd-interest-carousel--scroll .fd-interest-viewport {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    padding: 4px 2px 8px;
+}
+.fd-interest-carousel--scroll .fd-interest-grid {
+    display: flex;
+    gap: 24px;
+}
+.fd-interest-carousel--scroll .fd-interest-card {
+    flex: 0 0 calc((100% - 48px) / 3);
+    min-width: 300px;
+    scroll-snap-align: start;
+}
+.fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar {
+    height: 10px;
+}
+.fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar-thumb {
+    background: #c9d2e6;
+    border-radius: 999px;
+}
+.fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar-track {
+    background: #eef2f8;
+    border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+    .fd-interest-carousel--scroll .fd-interest-card {
+        flex-basis: calc((100% - 24px) / 2);
+        min-width: 280px;
+    }
+}
+@media (max-width: 640px) {
+    .fd-interest-carousel {
+        gap: 10px;
+    }
+    .fd-interest-nav {
+        width: 38px;
+        height: 38px;
+        flex-basis: 38px;
+        font-size: 1rem;
+    }
+    .fd-interest-carousel--scroll .fd-interest-card {
+        flex-basis: 88%;
+        min-width: 250px;
+    }
 }
 
 .foundation-card, .fc-left, .fc-right { background: transparent; }

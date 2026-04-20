@@ -123,6 +123,11 @@ if (isset($_GET['err'])) {
       color: #1f2937;
       margin: 0;
     }
+    .admin-notif-title i {
+      color: #4e3b84;
+      margin-right: 6px;
+      font-size: 1.2rem;
+    }
     .admin-notif-total {
       background: #4e3b84;
       color: #fff;
@@ -156,6 +161,11 @@ if (isset($_GET['err'])) {
       font-size: 1rem;
       font-weight: 700;
       color: #31245b;
+    }
+    .admin-notif-card-title i {
+      margin-right: 6px;
+      color: #4e3b84;
+      font-size: .98rem;
     }
     .admin-notif-count {
       min-width: 28px;
@@ -245,7 +255,7 @@ if (isset($_GET['err'])) {
 
 <div class="admin-notif-wrap">
   <div class="admin-notif-head">
-    <h1 class="admin-notif-title">🔔 คำขอรออนุมัติ</h1>
+    <h1 class="admin-notif-title"><i class="bi bi-bell-fill" aria-hidden="true"></i> คำขอรออนุมัติ</h1>
     <span class="admin-notif-total">ทั้งหมด <?php echo (int)$totalAll; ?> รายการ</span>
   </div>
   <?php if ($doneBanner !== ''): ?>
@@ -255,7 +265,7 @@ if (isset($_GET['err'])) {
   <div class="admin-notif-grid">
     <section class="admin-notif-card" id="admin-pending-foundations">
       <div class="admin-notif-card-head">
-        <h2 class="admin-notif-card-title">🏡 มูลนิธิ / มูลนิธิโปรไฟล์</h2>
+        <h2 class="admin-notif-card-title"><i class="bi bi-building" aria-hidden="true"></i> มูลนิธิ / มูลนิธิโปรไฟล์</h2>
         <span class="admin-notif-count"><?php echo count($foundationPendings); ?></span>
       </div>
       <ul class="admin-notif-list">
@@ -277,7 +287,7 @@ if (isset($_GET['err'])) {
 
     <section class="admin-notif-card" id="admin-pending-children">
       <div class="admin-notif-card-head">
-        <h2 class="admin-notif-card-title">🧒 โปรไฟล์เด็ก</h2>
+        <h2 class="admin-notif-card-title"><i class="bi bi-person-badge" aria-hidden="true"></i> โปรไฟล์เด็ก</h2>
         <span class="admin-notif-count"><?php echo count($childrenPendings); ?></span>
       </div>
       <ul class="admin-notif-list">
@@ -299,7 +309,7 @@ if (isset($_GET['err'])) {
 
     <section class="admin-notif-card" id="admin-pending-projects">
       <div class="admin-notif-card-head">
-        <h2 class="admin-notif-card-title">📚 โครงการ</h2>
+        <h2 class="admin-notif-card-title"><i class="bi bi-kanban" aria-hidden="true"></i> โครงการ</h2>
         <span class="admin-notif-count"><?php echo count($projectPendings); ?></span>
       </div>
       <ul class="admin-notif-list">
@@ -321,7 +331,7 @@ if (isset($_GET['err'])) {
 
     <section class="admin-notif-card" id="admin-pending-needs">
       <div class="admin-notif-card-head">
-        <h2 class="admin-notif-card-title">🎁 มูลนิธิสิ่งของที่ต้องการ</h2>
+        <h2 class="admin-notif-card-title"><i class="bi bi-box-seam" aria-hidden="true"></i> มูลนิธิสิ่งของที่ต้องการ</h2>
         <span class="admin-notif-count"><?php echo count($needPendings); ?></span>
       </div>
       <ul class="admin-notif-list">

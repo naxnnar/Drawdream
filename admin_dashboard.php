@@ -86,30 +86,9 @@ if ($rdrRes) {
     }
 }
 
-// ======== ดึงข้อมูลกราฟ 30 วันล่าสุด ========
-$chart_data = mysqli_query($conn, "
-    SELECT 
-        DATE(transfer_datetime) AS donate_date,
-        COALESCE(SUM(amount), 0) AS total
-    FROM donation
-    WHERE payment_status = 'completed'
-      AND transfer_datetime >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
-    GROUP BY DATE(transfer_datetime)
-    ORDER BY donate_date ASC
-");
-
-// สร้าง array 30 วัน (ถ้าวันไหนไม่มีข้อมูลให้เป็น 0)
-$chart_labels = [];
-$chart_values = [];
-$chart_map = [];
-while ($row = mysqli_fetch_assoc($chart_data)) {
-    $chart_map[$row['donate_date']] = (float)$row['total'];
-}
-for ($i = 29; $i >= 0; $i--) {
-    $date = date('Y-m-d', strtotime("-$i days"));
-    $chart_labels[] = date('d/m', strtotime($date));
-    $chart_values[] = $chart_map[$date] ?? 0;
-}
+// ======== ช่วงเริ่มต้นของกราฟ (30 วันล่าสุด) ========
+$chart_initial_from = date('Y-m-d', strtotime('-29 days'));
+$chart_initial_to = date('Y-m-d');
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -276,8 +255,25 @@ for ($i = 29; $i >= 0; $i--) {
     <!-- กราฟยอดบริจาค 30 วันล่าสุด -->
     <div class="chart-box">
         <div class="chart-title">📈 ยอดบริจาครายวัน — 30 วันล่าสุด</div>
+        <div class="chart-controls" aria-label="ตัวกรองกราฟยอดบริจาครายวัน">
+            <div class="chart-controls__quick">
+                <button type="button" class="chart-filter-btn" id="btnChartCurrentMonth">เดือนปัจจุบัน</button>
+                <button type="button" class="chart-filter-btn chart-filter-btn--ghost" id="btnChartPrevMonth">เดือนก่อน</button>
+                <button type="button" class="chart-filter-btn chart-filter-btn--ghost" id="btnChartPrevRange">← ช่วงก่อนหน้า</button>
+                <button type="button" class="chart-filter-btn chart-filter-btn--ghost" id="btnChartNextRange">ช่วงถัดไป →</button>
+            </div>
+            <form class="chart-controls__custom" id="chartFilterForm">
+                <label for="chartFromDate">จาก</label>
+                <input type="date" id="chartFromDate" name="from" value="<?= htmlspecialchars($chart_initial_from) ?>">
+                <label for="chartToDate">ถึง</label>
+                <input type="date" id="chartToDate" name="to" value="<?= htmlspecialchars($chart_initial_to) ?>">
+                <button type="submit" class="chart-filter-btn">แสดงกราฟ</button>
+            </form>
+        </div>
         <div class="chart-wrap">
-            <canvas id="donationChart"></canvas>
+            <div class="chart-scroll">
+                <canvas id="donationChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -289,7 +285,7 @@ for ($i = 29; $i >= 0; $i--) {
                 <?php if (count($active_projects) > 5): ?>
                     <button type="button" class="section-link section-link-btn" id="btnDashProjectsMoreTop">ดูทั้งหมด</button>
                 <?php else: ?>
-                    <span class="section-link section-link--muted">ล่าสุดครบแล้ว</span>
+                    <button type="button" class="section-link section-link-btn" disabled title="แสดงครบแล้วในรายการนี้">ดูทั้งหมด</button>
                 <?php endif; ?>
             </div>
             <?php if (!empty($active_projects)): ?>
@@ -302,7 +298,7 @@ for ($i = 29; $i >= 0; $i--) {
                             $st      = $proj['project_status'];
                             $proj_extra = $idx >= 5;
                         ?>
-                        <div class="proj-item<?= $proj_extra ? ' proj-item--extra' : '' ?>"<?= $proj_extra ? ' hidden' : '' ?>>
+                        <div class="proj-item<?= $proj_extra ? ' proj-item--extra' : '' ?>">
                             <div class="proj-name">
                                 <?= htmlspecialchars($proj['project_name']) ?>
                                 <?php
@@ -336,14 +332,14 @@ for ($i = 29; $i >= 0; $i--) {
                 <?php if (count($recent_donations) > 5): ?>
                     <button type="button" class="section-link section-link-btn" id="btnDashDonationsMoreTop">ดูทั้งหมด</button>
                 <?php else: ?>
-                    <span class="section-link section-link--muted">ล่าสุดครบแล้ว</span>
+                    <button type="button" class="section-link section-link-btn" disabled title="แสดงครบแล้วในรายการนี้">ดูทั้งหมด</button>
                 <?php endif; ?>
             </div>
             <?php if (!empty($recent_donations)): ?>
                 <div class="admin-dash-list" id="adminDashDonationsList">
                     <?php foreach ($recent_donations as $idx => $don): ?>
                         <?php $don_extra = $idx >= 5; ?>
-                        <div class="don-item<?= $don_extra ? ' don-item--extra' : '' ?>"<?= $don_extra ? ' hidden' : '' ?>>
+                        <div class="don-item<?= $don_extra ? ' don-item--extra' : '' ?>">
                             <div>
                                 <div class="don-type">
                                     <?php if (drawdream_donate_cat_label_is_active($don['project_donate'] ?? null)): ?>บริจาคโครงการ
@@ -368,51 +364,157 @@ for ($i = 29; $i >= 0; $i--) {
 </div>
 
 <script>
-const labels = <?= json_encode($chart_labels) ?>;
-const values = <?= json_encode($chart_values) ?>;
+(function () {
+    var fromInput = document.getElementById('chartFromDate');
+    var toInput = document.getElementById('chartToDate');
+    var form = document.getElementById('chartFilterForm');
+    var btnCurrentMonth = document.getElementById('btnChartCurrentMonth');
+    var btnPrevMonth = document.getElementById('btnChartPrevMonth');
+    var btnPrevRange = document.getElementById('btnChartPrevRange');
+    var btnNextRange = document.getElementById('btnChartNextRange');
+    var canvas = document.getElementById('donationChart');
+    if (!fromInput || !toInput || !form || !canvas) return;
 
-const ctx = document.getElementById('donationChart').getContext('2d');
-new Chart(ctx, {
-    type: 'bar',
-    data: {
-        labels: labels,
-        datasets: [{
-            label: 'ยอดบริจาค (บาท)',
-            data: values,
-            backgroundColor: 'rgba(74, 91, 168, 0.15)',
-            borderColor: '#4A5BA8',
-            borderWidth: 2,
-            borderRadius: 6,
-            pointBackgroundColor: '#4A5BA8',
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            tooltip: {
-                callbacks: {
-                    label: ctx => '฿' + ctx.parsed.y.toLocaleString()
-                }
-            }
+    var ctx = canvas.getContext('2d');
+    var rangeDays = 30;
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function fmtDate(d) {
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    }
+    function parseDate(s) {
+        var p = String(s || '').split('-');
+        if (p.length !== 3) return null;
+        var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+        return isNaN(d.getTime()) ? null : d;
+    }
+    function setRange(fromDate, toDate) {
+        fromInput.value = fmtDate(fromDate);
+        toInput.value = fmtDate(toDate);
+    }
+    function calcDaysDiff(a, b) {
+        var da = parseDate(a);
+        var db = parseDate(b);
+        if (!da || !db) return 0;
+        return Math.round((db - da) / 86400000) + 1;
+    }
+    function setCurrentMonth() {
+        var now = new Date();
+        var from = new Date(now.getFullYear(), now.getMonth(), 1);
+        setRange(from, now);
+    }
+    function setPrevMonth() {
+        var now = new Date();
+        var from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        var to = new Date(now.getFullYear(), now.getMonth(), 0);
+        setRange(from, to);
+    }
+    function moveRange(days) {
+        var from = parseDate(fromInput.value);
+        var to = parseDate(toInput.value);
+        if (!from || !to) return;
+        from.setDate(from.getDate() + days);
+        to.setDate(to.getDate() + days);
+        setRange(from, to);
+    }
+    function adjustCanvasWidth(labelsCount) {
+        var minW = 760;
+        var perLabel = 48;
+        canvas.style.width = Math.max(minW, labelsCount * perLabel) + 'px';
+    }
+
+    var chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'ยอดบริจาค (บาท)',
+                data: [],
+                backgroundColor: 'rgba(74, 91, 168, 0.15)',
+                borderColor: '#4A5BA8',
+                borderWidth: 2,
+                borderRadius: 6,
+                pointBackgroundColor: '#4A5BA8',
+            }]
         },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: { font: { size: 11 }, maxRotation: 45 }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function (c) { return '฿' + c.parsed.y.toLocaleString(); }
+                    }
+                }
             },
-            y: {
-                beginAtZero: true,
-                grid: { color: '#f0f0f0' },
-                ticks: {
-                    font: { size: 11 },
-                    callback: val => '฿' + val.toLocaleString()
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 11 }, maxRotation: 45, minRotation: 0, autoSkip: false }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: '#f0f0f0' },
+                    ticks: {
+                        font: { size: 11 },
+                        callback: function (val) { return '฿' + val.toLocaleString(); }
+                    }
                 }
             }
         }
+    });
+
+    function loadChartData() {
+        var from = fromInput.value;
+        var to = toInput.value;
+        if (!from || !to) return;
+        if (from > to) {
+            alert('วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุด');
+            return;
+        }
+        var q = new URLSearchParams({ from: from, to: to }).toString();
+        fetch('admin_dashboard_chart_data.php?' + q, { credentials: 'same-origin' })
+            .then(function (res) { return res.json(); })
+            .then(function (json) {
+                if (!json || !json.ok) {
+                    throw new Error((json && json.error) ? json.error : 'ไม่สามารถโหลดข้อมูลกราฟได้');
+                }
+                chart.data.labels = json.labels || [];
+                chart.data.datasets[0].data = json.values || [];
+                adjustCanvasWidth(chart.data.labels.length || 0);
+                chart.update();
+                rangeDays = calcDaysDiff(from, to) || rangeDays;
+            })
+            .catch(function (err) {
+                alert(err && err.message ? err.message : 'เกิดข้อผิดพลาดในการโหลดกราฟ');
+            });
     }
-});
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        loadChartData();
+    });
+
+    btnCurrentMonth.addEventListener('click', function () {
+        setCurrentMonth();
+        loadChartData();
+    });
+    btnPrevMonth.addEventListener('click', function () {
+        setPrevMonth();
+        loadChartData();
+    });
+    btnPrevRange.addEventListener('click', function () {
+        moveRange(-rangeDays);
+        loadChartData();
+    });
+    btnNextRange.addEventListener('click', function () {
+        moveRange(rangeDays);
+        loadChartData();
+    });
+
+    loadChartData();
+})();
 </script>
 
 <script>
@@ -443,19 +545,28 @@ new Chart(ctx, {
 
 <script>
 (function () {
-    function expandSection(btnId, wrapId, extraSelector) {
+    function expandDashboardList(btnId, listId, extraSelector) {
         var btn = document.getElementById(btnId);
-        var wrap = document.getElementById(wrapId);
-        if (!btn) return;
+        var list = document.getElementById(listId);
+        if (!btn || !list) return;
         btn.addEventListener('click', function () {
-            document.querySelectorAll(extraSelector).forEach(function (el) {
-                el.hidden = false;
-            });
-            if (wrap) wrap.style.display = 'none';
+            list.classList.add('admin-dash-list--expanded');
+            if (extraSelector) {
+                list.querySelectorAll(extraSelector).forEach(function (el) {
+                    el.hidden = false;
+                    el.style.display = '';
+                });
+            }
+            btn.hidden = true;
+            var hint = document.createElement('span');
+            hint.className = 'section-link section-link--muted';
+            hint.setAttribute('role', 'status');
+            hint.textContent = 'แสดงครบแล้ว';
+            btn.parentNode.insertBefore(hint, btn.nextSibling);
         });
     }
-    expandSection('btnDashProjectsMoreTop', '', '#adminDashProjectsList .proj-item--extra');
-    expandSection('btnDashDonationsMoreTop', '', '#adminDashDonationsList .don-item--extra');
+    expandDashboardList('btnDashProjectsMoreTop', 'adminDashProjectsList', '.proj-item--extra');
+    expandDashboardList('btnDashDonationsMoreTop', 'adminDashDonationsList', '.don-item--extra');
 })();
 </script>
 

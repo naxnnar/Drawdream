@@ -179,7 +179,7 @@ $verifiedLabel = (int)($fp['account_verified'] ?? 0) === 1 ? 'ยืนยัน
             </div>
             <div class="admin-dir-actions" style="flex-shrink:0;">
                 <a class="admin-dir-btn admin-dir-btn--ghost" href="admin_foundations_overview.php">← มูลนิธิทั้งหมด</a>
-                <a class="admin-dir-btn admin-dir-btn--analytics" href="admin_foundation_analytics_pdf.php?foundation_id=<?= (int)$foundationId ?>">รายงานเชิงวิเคราะห์</a>
+                <a class="admin-dir-btn admin-dir-btn--analytics" href="admin_foundation_analytics_view.php?foundation_id=<?= (int)$foundationId ?>">รายงานเชิงวิเคราะห์</a>
             </div>
         </div>
     </div>

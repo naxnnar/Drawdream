@@ -201,6 +201,7 @@ $adminFoundationActive = in_array($current_page, [
     'admin_view_foundation.php',
     'admin_foundation_totals.php',
     'admin_foundation_analytics_pdf.php',
+    'admin_foundation_analytics_view.php',
 ], true);
 $adminChildrenActive = in_array($current_page, ['children_.php', 'children_donate.php', 'admin_approve_children.php', 'admin_children.php'], true);
 $adminProjectActive = in_array($current_page, [

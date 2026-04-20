@@ -26,12 +26,13 @@ function drawdream_community_img(string $baseName): string {
 
 $is_verified = drawdream_foundation_account_is_verified($conn);
 
-// ถ้า foundation role ให้ดึงเฉพาะมูลนิธิของตัวเอง ถ้าไม่ใช่ให้ดึงทั้งหมด
+// ถ้าเป็นมูลนิธิ: ดูของตัวเองได้แม้ยังไม่อนุมัติ
+// ถ้าเป็นผู้ใช้ทั่วไป/ผู้บริจาค: แสดงเฉพาะมูลนิธิที่อนุมัติแล้วเท่านั้น
 if (($_SESSION['role'] ?? '') === 'foundation') {
     $userId = (int)($_SESSION['user_id'] ?? 0);
     $foundations = mysqli_query($conn, "SELECT * FROM foundation_profile WHERE user_id = $userId ORDER BY foundation_id DESC");
 } else {
-    $foundations = mysqli_query($conn, "SELECT * FROM foundation_profile ORDER BY foundation_id DESC");
+    $foundations = mysqli_query($conn, "SELECT * FROM foundation_profile WHERE account_verified = 1 ORDER BY foundation_id DESC");
 }
 if (!$foundations) die("Query foundations failed: " . mysqli_error($conn));
 
@@ -151,7 +152,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=30">
+  <link rel="stylesheet" href="css/foundation.css?v=31">
 </head>
 <body class="foundation-page">
 
@@ -390,13 +391,18 @@ $hasAnySlides = !empty($foundationSlides);
     <?php if (!empty($interestFoundations)): ?>
     <section class="fd-interest-section" aria-labelledby="fd-interest-heading">
       <h2 id="fd-interest-heading" class="fd-interest-title">มูลนิธิที่คุณอาจสนใจ</h2>
-      <p class="fd-interest-sub">ข้อมูลจากมูลนิธิที่อยู่ในระบบ</p>
-      <div class="fd-interest-grid">
-        <?php foreach (array_slice($interestFoundations, 0, 3) as $inf):
+      <div class="fd-interest-carousel<?= count($interestFoundations) > 3 ? ' fd-interest-carousel--scroll' : '' ?>">
+        <?php if (count($interestFoundations) > 3): ?>
+          <button type="button" class="fd-interest-nav fd-interest-nav--prev" data-interest-prev aria-label="เลื่อนไปมูลนิธิก่อนหน้า">
+            <i class="bi bi-chevron-left"></i>
+          </button>
+        <?php endif; ?>
+        <div class="fd-interest-viewport" data-interest-viewport>
+          <div class="fd-interest-grid">
+        <?php foreach ($interestFoundations as $inf):
           $ifid = (int)$inf['foundation_id'];
           $icurrent = $donationTotals[$ifid] ?? 0;
           $igoal = $goalTotals[$ifid] ?? 0;
-          $interestGoalMet = $igoal > 0 && $icurrent >= $igoal;
           $iImg = trim((string)($inf['foundation_image'] ?? ''));
           $iDesc = (string)($inf['foundation_desc'] ?? '');
           $shortDesc = drawdream_utf8_substr($iDesc, 0, 200);
@@ -411,11 +417,7 @@ $hasAnySlides = !empty($foundationSlides);
             <?php else: ?>
               <div class="fd-interest-cover fd-interest-cover--empty">ไม่มีรูป</div>
             <?php endif; ?>
-            <?php if ($interestGoalMet): ?>
-              <a class="fd-interest-pill-btn" href="needlist_result.php?fid=<?= $ifid ?>">ผลลัพธ์ของมูลนิธิ</a>
-            <?php else: ?>
-              <a class="fd-interest-pill-btn" href="payment/foundation_donate.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
-            <?php endif; ?>
+            <a class="fd-interest-pill-btn" href="foundation_donate_info.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
           </div>
           <div class="fd-interest-body">
             <h3 class="fd-interest-name"><?= htmlspecialchars($inf['foundation_name'] ?? 'มูลนิธิ') ?></h3>
@@ -423,6 +425,13 @@ $hasAnySlides = !empty($foundationSlides);
           </div>
         </article>
         <?php endforeach; ?>
+          </div>
+        </div>
+        <?php if (count($interestFoundations) > 3): ?>
+          <button type="button" class="fd-interest-nav fd-interest-nav--next" data-interest-next aria-label="เลื่อนไปมูลนิธิถัดไป">
+            <i class="bi bi-chevron-right"></i>
+          </button>
+        <?php endif; ?>
       </div>
     </section>
     <?php endif; ?>
@@ -484,6 +493,43 @@ $hasAnySlides = !empty($foundationSlides);
 
   <?php if (($_SESSION['role'] ?? '') !== 'foundation'): ?>
   <?php include __DIR__ . '/includes/site_footer.php'; ?>
+  <?php endif; ?>
+
+  <?php if (($_SESSION['role'] ?? '') !== 'foundation' && count($interestFoundations) > 3): ?>
+  <script>
+  (function () {
+    var carousel = document.querySelector('.fd-interest-carousel');
+    if (!carousel) return;
+    var viewport = carousel.querySelector('[data-interest-viewport]');
+    var prevBtn = carousel.querySelector('[data-interest-prev]');
+    var nextBtn = carousel.querySelector('[data-interest-next]');
+    if (!viewport || !prevBtn || !nextBtn) return;
+
+    function getStep() {
+      var card = viewport.querySelector('.fd-interest-card');
+      if (!card) return 320;
+      var styles = window.getComputedStyle(viewport.querySelector('.fd-interest-grid'));
+      var gap = parseFloat(styles.columnGap || styles.gap || '24') || 24;
+      return card.getBoundingClientRect().width + gap;
+    }
+
+    function syncButtons() {
+      var maxLeft = viewport.scrollWidth - viewport.clientWidth - 2;
+      prevBtn.disabled = viewport.scrollLeft <= 2;
+      nextBtn.disabled = viewport.scrollLeft >= maxLeft;
+    }
+
+    prevBtn.addEventListener('click', function () {
+      viewport.scrollBy({ left: -getStep(), behavior: 'smooth' });
+    });
+    nextBtn.addEventListener('click', function () {
+      viewport.scrollBy({ left: getStep(), behavior: 'smooth' });
+    });
+    viewport.addEventListener('scroll', syncButtons, { passive: true });
+    window.addEventListener('resize', syncButtons);
+    syncButtons();
+  })();
+  </script>
   <?php endif; ?>
 
   <?php if (($_SESSION['role'] ?? '') !== 'foundation' && $hasAnySlides && count($foundationSlides) > 1): ?>

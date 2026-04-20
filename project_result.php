@@ -20,6 +20,12 @@ if (!$project) {
     exit;
 }
 
+$projectGoalAmount = max(0.0, (float)($project['goal_amount'] ?? 0));
+$projectRaisedAmount = max(0.0, (float)($project['current_donate'] ?? 0));
+if ($projectGoalAmount > 0 && $projectRaisedAmount > $projectGoalAmount) {
+    $projectRaisedAmount = $projectGoalAmount;
+}
+
 // ผลลัพธ์จากคอลัมน์ foundation_project (update_text / update_at / update_images) — fallback ตาราง project_updates ถ้ามีข้อมูลเก่า
 $update = null;
 $text = trim((string)($project['update_text'] ?? ''));
@@ -140,7 +146,7 @@ function drawdream_project_result_images(array $update): array {
 <div class="result-wrap">
     <div class="result-title">ผลลัพธ์โครงการ: <?= htmlspecialchars($project['project_name']) ?></div>
     <div class="result-meta">
-        ได้รับเงิน <?= number_format((float)$project['current_donate'], 0) ?> / <?= number_format((float)$project['goal_amount'], 0) ?> บาท<br>
+        ได้รับเงิน <?= number_format($projectRaisedAmount, 0) ?> / <?= number_format($projectGoalAmount, 0) ?> บาท<br>
         สถานะ: <span style="color:#597D57;">โครงการเสร็จสิ้น</span>
     </div>
     <?php if (!$update): ?>

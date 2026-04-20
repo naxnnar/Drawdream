@@ -493,80 +493,78 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
 
             <?php if (!empty($donation_history)): ?>
                 <div class="donor-summary-head">
-                    <label class="donor-year-filter-wrap" for="donation-year-filter">
-                        <select id="donation-year-filter" class="donor-year-filter">
-                            <option value="all">ทุกปี</option>
-                            <?php foreach ($year_options as $yr): ?>
-                                <option value="<?= htmlspecialchars($yr) ?>"><?= htmlspecialchars($yr) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </label>
+                    <div class="donor-summary-head-actions">
+                        <label class="donor-year-filter-wrap" for="donation-year-filter">
+                            <select id="donation-year-filter" class="donor-year-filter">
+                                <option value="all">ทุกปี</option>
+                                <?php foreach ($year_options as $yr): ?>
+                                    <option value="<?= htmlspecialchars($yr) ?>"><?= htmlspecialchars($yr) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </label>
+                        <button type="button" class="btn-donation-all" id="btn-donation-all">ดูรายการทั้งหมด</button>
+                    </div>
                 </div>
                 <div class="donation-summary">
                     บริจาคทั้งหมด <strong><?= number_format($total_donated, 2) ?> บาท</strong> จาก <?= $don_count ?> รายการ
                 </div>
                 <?php foreach ($donation_history as $idx => $don): ?>
-                    <?php $is_extra = $idx >= 3; $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
-                    <div class="log-item log-item--donation<?= $is_extra ? ' log-item--extra' : '' ?>" data-year="<?= htmlspecialchars($yr) ?>"<?= $is_extra ? ' hidden' : '' ?>>
-                        <div class="log-action">
-                            <?php
-                            $histChild = trim((string)($don['child_name_by_target'] ?? ''));
-                            $histProject = trim((string)($don['project_name_by_target'] ?? ''));
-                            $histFoundation = trim((string)($don['foundation_name_by_target'] ?? ''));
-                            $histCatChild = drawdream_donate_cat_label_is_active($don['child_donate'] ?? null);
-                            $histCatProject = drawdream_donate_cat_label_is_active($don['project_donate'] ?? null);
-                            $histCatNeed = drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null);
-                            ?>
-                            <?php if ($histCatChild && $histChild !== ''): ?>
-                                อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
-                            <?php elseif ($histCatProject && $histProject !== ''): ?>
-                                บริจาคให้โครงการ — <?= htmlspecialchars($histProject) ?>
-                            <?php elseif ($histCatNeed && $histFoundation !== ''): ?>
-                                บริจาครายการสิ่งของ — <?= htmlspecialchars($histFoundation) ?>
-                            <?php elseif ($histChild !== ''): ?>
-                                <?php /* category_id ผิดแต่ target_id ชี้เด็กจริง (เช่น QR/รอบ Omise) */ ?>
-                                อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
-                            <?php elseif ($histProject !== ''): ?>
-                                บริจาคให้โครงการ — <?= htmlspecialchars($histProject) ?>
-                            <?php elseif ($histFoundation !== ''): ?>
-                                บริจาคมูลนิธิ (สิ่งของ) — <?= htmlspecialchars($histFoundation) ?>
-                            <?php elseif ($histCatChild): ?>
-                                อุปการะเด็ก<?php
-                                echo $histChild !== '' ? ' — ' . htmlspecialchars($histChild) : '';
+                    <?php $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
+                    <div class="log-item log-item--donation" data-year="<?= htmlspecialchars($yr) ?>"<?= $idx >= 5 ? ' hidden' : '' ?>>
+                        <div class="donor-donation-main">
+                            <div class="log-action">
+                                <?php
+                                $histChild = trim((string)($don['child_name_by_target'] ?? ''));
+                                $histProject = trim((string)($don['project_name_by_target'] ?? ''));
+                                $histFoundation = trim((string)($don['foundation_name_by_target'] ?? ''));
+                                $histCatChild = drawdream_donate_cat_label_is_active($don['child_donate'] ?? null);
+                                $histCatProject = drawdream_donate_cat_label_is_active($don['project_donate'] ?? null);
+                                $histCatNeed = drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null);
                                 ?>
-                            <?php elseif ($histCatProject): ?>
-                                บริจาคให้โครงการ<?php
-                                echo $histProject !== '' ? ' — ' . htmlspecialchars($histProject) : '';
-                                ?>
-                            <?php elseif ($histCatNeed): ?>
-                                บริจาครายการสิ่งของ<?php
-                                echo $histFoundation !== '' ? ' — ' . htmlspecialchars($histFoundation) : '';
-                                ?>
-                            <?php else: ?>
-                                บริจาค
-                            <?php endif; ?>
-                        </div>
-                        <div class="log-details">
-                            <strong>จำนวน:</strong>
-                            <span class="donation-amount-num">
-                                <?= number_format((float)$don['amount'], 2) ?> บาท
-                            </span>
-                        </div>
-                        <?php if (!empty($don['omise_charge_id'])): ?>
-                            <div class="log-details log-ref">
-                                อ้างอิง: <?= htmlspecialchars($don['omise_charge_id']) ?>
+                                <?php if ($histCatChild && $histChild !== ''): ?>
+                                    อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
+                                <?php elseif ($histCatProject && $histProject !== ''): ?>
+                                    บริจาคให้โครงการ — <?= htmlspecialchars($histProject) ?>
+                                <?php elseif ($histCatNeed && $histFoundation !== ''): ?>
+                                    บริจาครายการสิ่งของ — <?= htmlspecialchars($histFoundation) ?>
+                                <?php elseif ($histChild !== ''): ?>
+                                    <?php /* category_id ผิดแต่ target_id ชี้เด็กจริง (เช่น QR/รอบ Omise) */ ?>
+                                    อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
+                                <?php elseif ($histProject !== ''): ?>
+                                    บริจาคให้โครงการ — <?= htmlspecialchars($histProject) ?>
+                                <?php elseif ($histFoundation !== ''): ?>
+                                    บริจาคมูลนิธิ (สิ่งของ) — <?= htmlspecialchars($histFoundation) ?>
+                                <?php elseif ($histCatChild): ?>
+                                    อุปการะเด็ก<?php
+                                    echo $histChild !== '' ? ' — ' . htmlspecialchars($histChild) : '';
+                                    ?>
+                                <?php elseif ($histCatProject): ?>
+                                    บริจาคให้โครงการ<?php
+                                    echo $histProject !== '' ? ' — ' . htmlspecialchars($histProject) : '';
+                                    ?>
+                                <?php elseif ($histCatNeed): ?>
+                                    บริจาครายการสิ่งของ<?php
+                                    echo $histFoundation !== '' ? ' — ' . htmlspecialchars($histFoundation) : '';
+                                    ?>
+                                <?php else: ?>
+                                    บริจาค
+                                <?php endif; ?>
                             </div>
-                        <?php endif; ?>
-                        <div class="log-time">
-                            <?= date('d/m/Y H:i', strtotime($don['transfer_datetime'])) ?>
+                            <div class="donor-donation-meta">
+                                <span><?= date('d/m/Y H:i', strtotime($don['transfer_datetime'])) ?></span>
+                                <?php if (!empty($don['omise_charge_id'])): ?>
+                                    <span> · <?= htmlspecialchars($don['omise_charge_id']) ?></span>
+                                <?php endif; ?>
+                                <span class="donation-amount-num"><?= number_format((float)$don['amount'], 2) ?> บาท</span>
+                            </div>
                         </div>
+                        <?php if ((int)($don['donate_id'] ?? 0) > 0): ?>
+                            <a class="log-receipt-link" href="donation_receipt.php?donate_id=<?= (int)$don['donate_id'] ?>">
+                                ดูใบเสร็จอิเล็กทรอนิกส์
+                            </a>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
-                <?php if ($don_count > 3): ?>
-                <div class="donation-more-wrap">
-                    <button type="button" class="btn-donation-more" id="btn-donation-more">ดูเพิ่มเติม</button>
-                </div>
-                <?php endif; ?>
             <?php elseif (!empty($donor_active_child_subscriptions)): ?>
                 <p class="donor-history-hint">รายการแต่ละรอบจะแสดงด้านล่างเมื่อระบบบันทึกยอดสำเร็จ (Webhook Omise → <code>payment/omise_webhook.php</code> หรือ cron รอบ)</p>
             <?php else: ?>
@@ -576,7 +574,6 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
             <?php endif; ?>
         </div>
     <?php endif; ?>
-
     <?php if ($role === 'admin' && !empty($logs)): ?>
         <?php $admin_log_total = count($logs); ?>
         <div class="logs-section logs-section--admin-work">
@@ -681,42 +678,44 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
         });
     }
 
-    var btn = document.getElementById('btn-donation-more');
     var yearFilter = document.getElementById('donation-year-filter');
+    var showAllBtn = document.getElementById('btn-donation-all');
     var items = [].slice.call(document.querySelectorAll('.log-item--donation'));
-    var wrap = btn ? btn.closest('.donation-more-wrap') : null;
+    var expandedAll = false;
     function applyFilter() {
         var year = yearFilter ? yearFilter.value : 'all';
-        var shown = 0;
-        var hiddenCount = 0;
+        var visibleCount = 0;
+        var hasMoreThanFive = false;
         items.forEach(function(el) {
             var ok = (year === 'all') || (el.getAttribute('data-year') === year);
             if (!ok) {
                 el.hidden = true;
                 return;
             }
-            if (shown < 3) {
-                el.hidden = false;
-            } else {
+            if (!expandedAll && visibleCount >= 5) {
                 el.hidden = true;
-                hiddenCount++;
+                hasMoreThanFive = true;
+            } else {
+                el.hidden = false;
             }
-            shown++;
+            visibleCount++;
         });
-        if (wrap) wrap.style.display = hiddenCount > 0 ? '' : 'none';
+        if (showAllBtn) {
+            showAllBtn.style.display = hasMoreThanFive ? '' : 'none';
+        }
     }
-    if (btn) {
-        btn.addEventListener('click', function() {
-            var year = yearFilter ? yearFilter.value : 'all';
-            items.forEach(function(el) {
-                var ok = (year === 'all') || (el.getAttribute('data-year') === year);
-                if (ok) el.hidden = false;
-            });
-            if (wrap) wrap.style.display = 'none';
+    if (showAllBtn) {
+        showAllBtn.addEventListener('click', function() {
+            expandedAll = true;
+            applyFilter();
+            showAllBtn.style.display = 'none';
         });
     }
     if (yearFilter) {
-        yearFilter.addEventListener('change', applyFilter);
+        yearFilter.addEventListener('change', function() {
+            expandedAll = false;
+            applyFilter();
+        });
     }
     applyFilter();
 

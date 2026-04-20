@@ -108,7 +108,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
       <div class="accordion-item border-0 rounded-4 overflow-hidden" style="background-color:#f5c518;">
         <h2 class="accordion-header">
-          <button class="accordion-button fw-bold rounded-4" type="button"
+          <button class="accordion-button collapsed fw-bold rounded-4" type="button"
             data-bs-toggle="collapse" data-bs-target="#faq1"
             style="background-color:#f5c518; color:#222; box-shadow:none;">
             1.การลดหย่อนภาษี?
@@ -133,8 +133,7 @@ if (session_status() === PHP_SESSION_NONE) {
         </h2>
         <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
           <div class="accordion-body" style="color:#333; line-height:2;">
-            สามารถเลือกสนับสนุนเป็นรายเดือนหรือรายปีก็ได้ ถ้าช่วงไหนพี่ๆ ไม่สะดวกดูแลต่อ
-            แจ้งระบบล่วงหน้าเพื่อให้มีเวลาหาผู้อุปการะใจดีท่านใหม่มาช่วยดูแลน้องได้อย่างต่อเนื่อง
+            สามารถเลือกสนับสนุนเป็นรายเดือนหรือรายปีก็ได้ ถ้าช่วงไหนคุณไม่สะดวกดูแลต่อ กดยกเลิกการอุปการะเด็กล่วงหน้าเพื่อให้มีเวลาหาผู้อุปการะใจดีท่านใหม่มาช่วยดูแลน้องได้อย่างต่อเนื่อง
           </div>
         </div>
       </div>
@@ -149,8 +148,8 @@ if (session_status() === PHP_SESSION_NONE) {
         </h2>
         <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
           <div class="accordion-body" style="color:#333; line-height:2;">
-            ได้เลย พี่ๆ สามารถเลือกอุปการะน้องกี่คนก็ได้ตามที่ไหวเลย โดยในระบบจะมีหน้าผลลัพธ์
-            ไว้ให้พี่ๆ เข้ามาดูอัปเดตของน้องๆ ทุกคน
+            ได้เลย คุณสามารถเลือกอุปการะน้องกี่คนก็ได้ตามที่ไหวเลย โดยในระบบจะมีหน้าผลลัพธ์
+            ไว้ให้คุณเข้ามาดูอัปเดตของน้องๆ ทุกคน
           </div>
         </div>
       </div>
@@ -160,11 +159,14 @@ if (session_status() === PHP_SESSION_NONE) {
           <button class="accordion-button collapsed fw-bold rounded-4" type="button"
             data-bs-toggle="collapse" data-bs-target="#faq4"
             style="background-color:#f5c518; color:#222; box-shadow:none;">
-            4. ค่าธรรมเนียม 10% เป็นค่าอะไรบ้าง
+            4. สามารถขอใบเสร็จรับเงินเพื่อลดหย่อนภาษีได้หรือไม่?
           </button>
         </h2>
         <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-          <div class="accordion-body" style="color:#333;">เนื้อหาคำตอบข้อ 4</div>
+          <div class="accordion-body" style="color:#333; line-height:2;">
+            ได้รับใบเสร็จทันที เมื่อการบริจาคเสร็จสมบูรณ์ ระบบจะออก ใบเสร็จรับเงินบริจาคอิเล็กทรอนิกส์ ให้โดยอัตโนมัติ
+            ระบบรองรับการออกใบเสร็จทั้งในนาม บุคคลธรรมดา และ นิติบุคคล (บริษัท) เพื่อให้เหมาะสมกับประเภทการยื่นภาษีของคุณ
+          </div>
         </div>
       </div>
 
