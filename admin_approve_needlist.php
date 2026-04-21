@@ -39,35 +39,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $donateEndSql = null;
         if ($newStatus === 'approved') {
-            $sn = $conn->prepare("SELECT note FROM foundation_needlist WHERE item_id = ? AND approve_item = 'pending' LIMIT 1");
+            $sn = $conn->prepare("SELECT reviewed_at FROM foundation_needlist WHERE item_id = ? AND approve_item = 'pending' LIMIT 1");
             if (!$sn) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
                 $sn->bind_param("i", $item_id);
                 $sn->execute();
                 $nrow = $sn->get_result()->fetch_assoc();
-                $periodLabel = drawdream_needlist_period_label_from_note((string)($nrow['note'] ?? ''));
-                $donateEndSql = drawdream_needlist_compute_donate_window_end($periodLabel, new DateTimeImmutable('now'));
+                $reviewedAtRaw = trim((string)($nrow['reviewed_at'] ?? ''));
+                try {
+                    $from = ($reviewedAtRaw !== '' && !str_starts_with($reviewedAtRaw, '0000-00-00'))
+                        ? new DateTimeImmutable($reviewedAtRaw)
+                        : new DateTimeImmutable('now');
+                } catch (Throwable $e) {
+                    $from = new DateTimeImmutable('now');
+                }
+                $donateEndSql = drawdream_needlist_compute_donate_window_end('', $from);
             }
         }
 
         if ($error !== '') {
             // ข้าม execute
-        } elseif ($newStatus === 'approved' && $donateEndSql === null) {
-            $stmt = $conn->prepare("
-                UPDATE foundation_needlist
-                SET approve_item=?,
-                    reviewed_by_user_id=?,
-                    reviewed_at=NOW(),
-                    review_note=?,
-                    donate_window_end_at=NULL
-                WHERE item_id=? AND approve_item='pending'
-            ");
-            if (!$stmt) {
-                $error = "Prepare failed: " . $conn->error;
-            } else {
-                $stmt->bind_param("sisi", $newStatus, $uid, $note, $item_id);
-            }
         } elseif ($newStatus === 'approved' && $donateEndSql !== null) {
             $stmt = $conn->prepare("
                 UPDATE foundation_needlist
@@ -83,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $stmt->bind_param("sissi", $newStatus, $uid, $note, $donateEndSql, $item_id);
             }
+        } elseif ($newStatus === 'approved') {
+            $error = "ไม่สามารถคำนวณวันปิดรับบริจาคอัตโนมัติได้";
         } else {
             $stmt = $conn->prepare("
                 UPDATE foundation_needlist
@@ -122,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $fu,
                         'need_approved',
                         'รายการสิ่งของได้รับการอนุมัติ',
-                        'รายการ "' . $iname . '" ผ่านการตรวจสอบแล้ว',
+                        'รายการ "' . $iname . '" ผ่านการตรวจสอบแล้ว (ระบบจะปิดรับบริจาคอัตโนมัติใน 1 เดือน)',
                         'foundation.php',
                         'fdn_need:' . $item_id
                     );

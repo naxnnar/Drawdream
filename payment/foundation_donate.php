@@ -35,10 +35,18 @@ $stmt3->execute();
 $current = (float)($stmt3->get_result()->fetch_assoc()['current'] ?? 0);
 
 $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
+$remainingNeed = ($goal > 0) ? max(0.0, $goal - $current) : 0.0;
+$maxDonatePerChargeBaht = ($goal > 0) ? (int)max(0, (int)floor($remainingNeed + 1e-9)) : 0;
+$error = "";
+$qr_image = "";
+$charge_id = "";
 
 if ($goal > 0 && $current >= $goal) {
     header('Location: ../needlist_result.php?fid=' . $fid);
     exit();
+}
+if ($goal > 0 && $remainingNeed > 0 && $remainingNeed < 20) {
+    $error = "ยอดที่เหลือจะครบเป้าหมายไม่ถึงขั้นต่ำการบริจาค 20 บาท — ไม่สามารถบริจาคเพิ่มได้";
 }
 
 $items_stmt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND $needOpen ORDER BY urgent DESC, item_id DESC");
@@ -55,15 +63,42 @@ foreach ($items as $itCov) {
     }
 }
 
-$error = ""; $qr_image = ""; $charge_id = "";
+$donateDisabled = ($goal <= 0 || count($items) === 0 || ($goal > 0 && $remainingNeed > 0 && $remainingNeed < 20));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
-    $amount = (int)($_POST['amount'] ?? 0);
+    $rawAmt = (string)($_POST['amount'] ?? '');
+    $rawAmt = str_replace([',', ' ', "\xC2\xA0"], '', $rawAmt);
+    $amount = (int)max(0, round((float)$rawAmt));
     if ($goal <= 0 || count($items) === 0) {
         $error = "ขณะนี้ไม่มีรายการสิ่งของที่เปิดรับบริจาค (ครบระยะเวลาหรือปิดรับแล้ว)";
     } elseif ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
+        $stFreshGoal = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
+        $stFreshCur = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
+        $gFresh = 0.0;
+        $rFresh = 0.0;
+        if ($stFreshGoal && $stFreshCur) {
+            $stFreshGoal->bind_param("i", $fid);
+            $stFreshGoal->execute();
+            $gFresh = (float)($stFreshGoal->get_result()->fetch_assoc()['goal'] ?? 0);
+            $stFreshCur->bind_param("i", $fid);
+            $stFreshCur->execute();
+            $rFresh = (float)($stFreshCur->get_result()->fetch_assoc()['current'] ?? 0);
+        }
+        $remFresh = ($gFresh > 0) ? max(0.0, $gFresh - $rFresh) : 0.0;
+        if ($gFresh > 0) {
+            if ($remFresh <= 0) {
+                $error = 'รายการสิ่งของนี้ระดมครบตามเป้าหมายแล้ว ไม่สามารถบริจาคเพิ่มได้';
+            } elseif ($amount > $remFresh + 1e-6) {
+                $error = 'จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' . number_format($remFresh, 0, '.', ',') . ' บาท)';
+            } elseif ($remFresh < 20) {
+                $error = 'ยอดที่เหลือจะครบเป้าหมายไม่ถึงขั้นต่ำการบริจาค 20 บาท — ไม่สามารถบริจาคเพิ่มได้';
+            }
+        }
+    }
+
+    if ($error === '') {
         drawdream_clear_pending_payment_session();
         $amount_satang = $amount * 100;
         $source_response = omise_request('POST', '/sources', ['type' => 'promptpay', 'amount' => $amount_satang, 'currency' => 'THB']);
@@ -231,8 +266,14 @@ function _omise_local_mock(string $path, array $data): array {
 
                 <h3 class="fd-donate-section-title">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
                 <p class="fd-form-sub">เงินจะรวมเป็นกองทุนเพื่อซื้อสิ่งของให้มูลนิธิ</p>
+                <?php if ($goal > 0 && $maxDonatePerChargeBaht > 0): ?>
+                <p class="project-donate-cap-hint" style="margin:0 0 12px;font-size:0.95rem;color:#334155;font-weight:600;font-family:'Sarabun',sans-serif;">
+                    บริจาคได้สูงสุดครั้งละไม่เกิน <?= number_format($maxDonatePerChargeBaht, 0, '.', ',') ?> บาท (ยอดที่เหลือจะครบเป้าหมาย)
+                </p>
+                <input type="hidden" id="maxDonateBaht" value="<?= (int)$maxDonatePerChargeBaht ?>">
+                <?php endif; ?>
 
-                <form method="POST" id="foundationDonateForm"<?= ($goal <= 0 || empty($items)) ? ' class="fd-form-disabled"' : '' ?>>
+                <form method="POST" id="foundationDonateForm"<?= $donateDisabled ? ' class="fd-form-disabled"' : '' ?>>
                     <div class="amount-presets-grid fd-amount-presets-grid">
                         <button type="button" class="preset-btn" data-amt="2000" onclick="fdSelectPreset(2000)">2,000 บาท</button>
                         <button type="button" class="preset-btn" data-amt="1000" onclick="fdSelectPreset(1000)">1,000 บาท</button>
@@ -250,7 +291,7 @@ function _omise_local_mock(string $path, array $data): array {
                             <span>PromptPay QR</span>
                         </div>
                     </div>
-                    <button type="submit" name="pay" class="btn-pay"<?= ($goal <= 0 || empty($items)) ? ' disabled' : '' ?>>บริจาค</button>
+                    <button type="submit" name="pay" class="btn-pay"<?= $donateDisabled ? ' disabled' : '' ?>>บริจาค</button>
                 </form>
         </div><!-- /.fd-right -->
 
@@ -258,27 +299,69 @@ function _omise_local_mock(string $path, array $data): array {
 </div><!-- /.fd-wrapper -->
 
 <script>
+function fdParseBahtAmount(raw) {
+    if (raw == null) return NaN;
+    var s = String(raw).replace(/,/g, '').replace(/\u00a0/g, '').replace(/\s/g, '').trim();
+    if (s === '') return NaN;
+    var x = parseFloat(s);
+    return isNaN(x) ? NaN : Math.round(x);
+}
+function fdGetMaxDonateBaht() {
+    var el = document.getElementById('maxDonateBaht');
+    if (!el || el.value === '') return null;
+    var m = parseInt(el.value, 10);
+    return (isNaN(m) || m <= 0) ? null : m;
+}
 function fdClearPresetHighlight() {
     document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
         b.classList.remove('preset-selected');
     });
 }
 function fdSelectPreset(amt) {
+    var maxB = fdGetMaxDonateBaht();
+    var useAmt = amt;
+    if (maxB !== null && amt > maxB) {
+        useAmt = maxB;
+    }
     var inp = document.getElementById('amountInput');
     if (inp) {
-        inp.value = String(amt);
+        inp.value = String(useAmt);
     }
     document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
         var v = parseInt(b.getAttribute('data-amt'), 10);
-        b.classList.toggle('preset-selected', v === amt);
+        b.classList.toggle('preset-selected', v === useAmt);
     });
 }
+document.addEventListener('DOMContentLoaded', function () {
+    var maxB = fdGetMaxDonateBaht();
+    if (maxB === null) return;
+    document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+        var v = parseInt(b.getAttribute('data-amt'), 10);
+        if (v > maxB) {
+            b.disabled = true;
+            b.style.opacity = '0.45';
+            b.title = 'เกินยอดที่เหลือจะครบเป้าหมาย';
+        }
+    });
+});
 document.getElementById('foundationDonateForm').addEventListener('submit', function (e) {
     var inp = document.getElementById('amountInput');
-    var n = inp ? parseInt(String(inp.value).trim(), 10) : 0;
-    if (!n || n < 20) {
+    var n = inp ? fdParseBahtAmount(inp.value) : NaN;
+    var maxB = fdGetMaxDonateBaht();
+    if (inp && !isNaN(n) && n >= 20) {
+        if (maxB !== null && n > maxB) {
+            e.preventDefault();
+            alert('จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' + maxB.toLocaleString('th-TH') + ' บาท)');
+            inp.focus();
+            return;
+        }
+        inp.value = String(n);
+        return;
+    }
+    if (!n || isNaN(n) || n < 20) {
         e.preventDefault();
         alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
+        if (inp) inp.focus();
     }
 });
 </script>

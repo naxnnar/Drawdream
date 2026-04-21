@@ -96,7 +96,6 @@ $imgs = foundation_needlist_item_filenames_from_row($row);
 $mainImg = $imgs[0] ?? '';
 $imgUrl = $mainImg !== '' ? 'uploads/needs/' . $mainImg : '';
 
-$allowOther = (int)($row['allow_other_brand'] ?? 0) === 1;
 $urgent = (int)($row['urgent'] ?? 0) === 1;
 $apRaw = trim((string)($row['approve_item'] ?? ''));
 $apLower = strtolower($apRaw);
@@ -198,23 +197,15 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                             <span class="value"><?= htmlspecialchars((string)($row['item_desc'] ?? '—')) ?></span>
                         </div>
                         <div class="data-item">
-                            <span class="label">ยี่ห้อที่ต้องการ</span>
+                            <span class="label">หมวดหมู่สิ่งของ</span>
                             <span class="value"><?= htmlspecialchars(trim((string)($row['brand'] ?? '')) !== '' ? (string)$row['brand'] : '—') ?></span>
-                        </div>
-                        <div class="data-item">
-                            <span class="label">รับยี่ห้ออื่นแทนได้</span>
-                            <span class="value"><?= $allowOther ? 'ได้' : 'ไม่ได้' ?></span>
-                        </div>
-                        <div class="data-item">
-                            <span class="label">จำนวนที่ต้องการ</span>
-                            <span class="value"><?= htmlspecialchars((string)($row['qty_needed'] ?? '0')) ?></span>
                         </div>
                         <div class="data-item">
                             <span class="label">ราคาโดยประมาณต่อหน่วย (บาท)</span>
                             <span class="value"><?= number_format((float)($row['price_estimate'] ?? 0), 2) ?></span>
                         </div>
                         <div class="data-item full">
-                            <span class="label">หมายเหตุ / ระยะเวลารับบริจาค (จากมูลนิธิ)</span>
+                            <span class="label">หมายเหตุจากมูลนิธิ</span>
                             <span class="value"><?= htmlspecialchars(trim((string)($row['note'] ?? '')) !== '' ? (string)$row['note'] : '—') ?></span>
                         </div>
                         <div class="data-item">
@@ -222,7 +213,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                             <span class="value"><?= htmlspecialchars(admin_needlist_view_format_date(isset($row['reviewed_at']) ? (string)$row['reviewed_at'] : '')) ?></span>
                         </div>
                         <div class="data-item">
-                            <span class="label">ปิดรับบริจาค (ระบบ)</span>
+                            <span class="label">ปิดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</span>
                             <span class="value"><?= htmlspecialchars($endStatLabel) ?></span>
                         </div>
                         <?php if ($apLower !== 'pending' && trim((string)($row['review_note'] ?? '')) !== ''): ?>
@@ -253,7 +244,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                             <div class="stat-box">
                                 <div class="stat-icon"><i class="bi bi-calendar-event"></i></div>
                                 <div class="stat-num stat-num--date"><?= htmlspecialchars($endStatLabel) ?></div>
-                                <div class="stat-label">ปิดรับบริจาค</div>
+                                <div class="stat-label">ปิดรับอัตโนมัติ (1 เดือน)</div>
                             </div>
                         </div>
                     </div>

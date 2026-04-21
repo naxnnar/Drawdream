@@ -78,7 +78,6 @@ $pctNl = ($goalNl > 0) ? (int)min(100, round(($raisedNl / $goalNl) * 100)) : 0;
 $imgs = foundation_needlist_item_filenames_from_row($row);
 $mainImg = $imgs[0] ?? '';
 $imgUrl = $mainImg !== '' ? 'uploads/needs/' . htmlspecialchars($mainImg, ENT_QUOTES, 'UTF-8') : '';
-$allowOther = (int)($row['allow_other_brand'] ?? 0) === 1;
 $urgent = (int)($row['urgent'] ?? 0) === 1;
 $apRaw = trim((string)($row['approve_item'] ?? ''));
 $apLower = strtolower($apRaw);
@@ -174,23 +173,15 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <div class="admin-record-v"><?= htmlspecialchars((string)($row['item_desc'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="admin-record-field">
-                    <div class="admin-record-k">ยี่ห้อที่ต้องการ</div>
+                    <div class="admin-record-k">หมวดหมู่สิ่งของ</div>
                     <div class="admin-record-v"><?= htmlspecialchars(trim((string)($row['brand'] ?? '')) !== '' ? (string)$row['brand'] : '—', ENT_QUOTES, 'UTF-8') ?></div>
-                </div>
-                <div class="admin-record-field">
-                    <div class="admin-record-k">รับยี่ห้ออื่นแทนได้</div>
-                    <div class="admin-record-v"><?= $allowOther ? 'ได้' : 'ไม่ได้' ?></div>
-                </div>
-                <div class="admin-record-field">
-                    <div class="admin-record-k">จำนวนที่ต้องการ</div>
-                    <div class="admin-record-v"><?= htmlspecialchars((string)($row['qty_needed'] ?? '0'), ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="admin-record-field">
                     <div class="admin-record-k">ราคาโดยประมาณต่อหน่วย (บาท)</div>
                     <div class="admin-record-v"><?= number_format((float)($row['price_estimate'] ?? 0), 2) ?></div>
                 </div>
                 <div class="admin-record-field admin-record-field--full">
-                    <div class="admin-record-k">หมายเหตุ / ระยะเวลารับบริจาค (จากมูลนิธิ)</div>
+                    <div class="admin-record-k">หมายเหตุจากมูลนิธิ</div>
                     <div class="admin-record-v"><?= htmlspecialchars(trim((string)($row['note'] ?? '')) !== '' ? (string)$row['note'] : '—', ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="admin-record-field">
@@ -198,7 +189,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <div class="admin-record-v"><?= htmlspecialchars(admin_view_needlist_fmt(isset($row['reviewed_at']) ? (string)$row['reviewed_at'] : ''), ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="admin-record-field">
-                    <div class="admin-record-k">ปิดรับบริจาค (ระบบ)</div>
+                    <div class="admin-record-k">ปิดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</div>
                     <div class="admin-record-v"><?= htmlspecialchars($endStatLabel, ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <?php if ($apLower !== 'pending' && trim((string)($row['review_note'] ?? '')) !== ''): ?>
@@ -229,7 +220,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <div class="stat-box">
                         <div class="stat-icon"><i class="bi bi-calendar-event"></i></div>
                         <div class="stat-num stat-num--date"><?= htmlspecialchars($endStatLabel) ?></div>
-                        <div class="stat-label">ปิดรับบริจาค</div>
+                        <div class="stat-label">ปิดรับอัตโนมัติ (1 เดือน)</div>
                     </div>
                 </div>
             </div>

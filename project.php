@@ -163,6 +163,31 @@ function projectStatusThai($status) {
     return $map[$status] ?? ['label' => (string)$status, 'class' => 'st-pending'];
 }
 
+/** โครงการนี้เปิดให้อัปเดตผลลัพธ์ได้หรือไม่ (ใช้ทั้งปุ่มบนแถบและปุ่มในการ์ด) */
+function foundation_project_allow_outcome_update(array $row): bool
+{
+    $goal = (float)($row['goal_amount'] ?? 0);
+    $raised = projectRaisedForDisplay($row);
+    $pst = strtolower(trim((string)($row['project_status'] ?? '')));
+    if ($pst === '') {
+        $pst = 'pending';
+    }
+    $tzB = new DateTimeZone('Asia/Bangkok');
+    $endRaw = $row['end_date'] ?? null;
+    $ended = false;
+    if (!empty($endRaw)) {
+        try {
+            $endD = new DateTimeImmutable(substr((string)$endRaw, 0, 10), $tzB);
+            $ended = $endD->format('Y-m-d') <= (new DateTimeImmutable('now', $tzB))->format('Y-m-d');
+        } catch (Exception $e) {
+            $ended = false;
+        }
+    }
+    $isCompletedStatus = in_array($pst, ['completed', 'done', 'purchasing'], true);
+    $qualifiedFundraising = ($pst === 'approved' && $goal > 0 && $raised >= $goal && $ended);
+    return ($isCompletedStatus || $qualifiedFundraising);
+}
+
 /** มีข้อมูลผลลัพธ์ใน foundation_project (update_text / update_images) แล้วหรือไม่ */
 function foundation_project_has_outcome_posted(array $row): bool {
     if (trim((string)($row['update_text'] ?? '')) !== '') {
@@ -445,6 +470,15 @@ if ($isFoundationOwnView) {
         }
     }
 }
+$hasOutcomeCandidates = false;
+if ($isFoundationOwnView) {
+    foreach ($projects as $projectRow) {
+        if (foundation_project_allow_outcome_update($projectRow)) {
+            $hasOutcomeCandidates = true;
+            break;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -455,7 +489,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=39">
+    <link rel="stylesheet" href="css/project.css?v=40">
 
 </head>
 <body class="projects-page">
@@ -477,11 +511,16 @@ if ($isFoundationOwnView) {
                 <?php endif; ?>
                 <button type="button" id="toggleEditProjectBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขโครงการ</button>
                 <button type="button" id="toggleDeleteProjectBtn" class="foundation-manage-btn foundation-manage-btn-danger">ลบโครงการ</button>
-                <button type="button" id="toggleOutcomeProjectBtn" class="foundation-manage-btn foundation-manage-btn-outcome">อัปเดตผลลัพธ์โครงการ</button>
+                <?php if ($hasOutcomeCandidates): ?>
+                    <button type="button" id="toggleOutcomeProjectBtn" class="foundation-manage-btn foundation-manage-btn-outcome">อัปเดตผลลัพธ์โครงการ</button>
+                <?php else: ?>
+                    <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="เมื่อมีโครงการที่ครบเงื่อนไขแล้ว จึงจะอัปเดตผลลัพธ์ได้">อัปเดตผลลัพธ์โครงการ</span>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
+    <h3 class="foundation-project-section-title">โครงการที่เสนอทั้งหมด</h3>
     <div class="foundation-project-list">
         <?php if (!empty($projects)): ?>
             <?php foreach ($projects as $row): ?>
@@ -566,11 +605,7 @@ if ($isFoundationOwnView) {
                             $halfGoal = ($goal > 0) ? ($goal * 0.5) : 0.0;
                             $mergedIntoId = (int)($row['merged_into_project_id'] ?? 0);
                             $canMergeFunds = ($pst === 'approved' && $ended && $goal > 0 && $raised > 0 && $raised < $halfGoal && $mergedIntoId <= 0);
-                            // อนุญาตอัปเดตผลลัพธ์ได้ทันทีเมื่อโครงการอยู่สถานะเสร็จสิ้นแล้ว
-                            // และยังคงรองรับเคสโครงการระดมทุนที่ครบเงื่อนไข (ถึงเป้า + เลยวันปิดรับ)
-                            $isCompletedStatus = in_array($pst, ['completed', 'done', 'purchasing'], true);
-                            $qualifiedFundraising = ($pst === 'approved' && $goal > 0 && $raised >= $goal && $ended);
-                            $allowOutcomeCard = ($isCompletedStatus || $qualifiedFundraising);
+                            $allowOutcomeCard = foundation_project_allow_outcome_update($row);
                             $hasOutcomePosted = foundation_project_has_outcome_posted($row);
                         ?>
                         <?php if ($mergedIntoId > 0): ?>
@@ -603,7 +638,7 @@ if ($isFoundationOwnView) {
                 </article>
             <?php endforeach; ?>
         <?php else: ?>
-            <div class="foundation-empty">ยังไม่มีโครงการของมูลนิธิในระบบ</div>
+            <div class="foundation-empty">ยังไม่มีโครงการที่เสนอ</div>
         <?php endif; ?>
     </div>
 </div>
@@ -943,12 +978,14 @@ if ($role === 'admin'):
     const editBtn = document.getElementById('toggleEditProjectBtn');
     const deleteBtn = document.getElementById('toggleDeleteProjectBtn');
     const outcomeBtn = document.getElementById('toggleOutcomeProjectBtn');
-    if (!editBtn || !deleteBtn || !outcomeBtn) return;
+    if (!editBtn || !deleteBtn) return;
 
     function syncToolbarActive() {
         editBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-edit-project'));
         deleteBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-delete-project'));
-        outcomeBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-outcome-project'));
+        if (outcomeBtn) {
+            outcomeBtn.classList.toggle('btn-mode-active', document.body.classList.contains('mode-outcome-project'));
+        }
     }
 
     editBtn.addEventListener('click', function() {
@@ -967,13 +1004,15 @@ if ($role === 'admin'):
         syncToolbarActive();
     });
 
-    outcomeBtn.addEventListener('click', function() {
-        const turnOn = !document.body.classList.contains('mode-outcome-project');
-        document.body.classList.remove('mode-edit-project');
-        document.body.classList.remove('mode-delete-project');
-        document.body.classList.toggle('mode-outcome-project', turnOn);
-        syncToolbarActive();
-    });
+    if (outcomeBtn) {
+        outcomeBtn.addEventListener('click', function() {
+            const turnOn = !document.body.classList.contains('mode-outcome-project');
+            document.body.classList.remove('mode-edit-project');
+            document.body.classList.remove('mode-delete-project');
+            document.body.classList.toggle('mode-outcome-project', turnOn);
+            syncToolbarActive();
+        });
+    }
 
     document.querySelectorAll('.foundation-pill-cancel-delete').forEach(function(btn) {
         btn.addEventListener('click', function() {

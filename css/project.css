@@ -126,6 +126,15 @@ body.admin-approve-projects-page {
     box-shadow: none;
 }
 
+.foundation-manage-btn-disabled {
+    background: #9ca3af;
+    color: #fff;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.8;
+    pointer-events: none;
+}
+
 .foundation-manage-btn-edit:hover,
 .foundation-manage-btn-edit:active,
 .foundation-manage-btn-edit:focus {
@@ -291,6 +300,14 @@ body.admin-approve-projects-page {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 24px 18px;
     align-items: stretch;
+}
+
+.foundation-project-section-title {
+    margin: 6px 0 14px;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    font-size: 1.4rem;
+    color: #2e3f7f;
+    font-weight: 700;
 }
 
 .foundation-project-item {
@@ -603,12 +620,15 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
 }
 
 .foundation-empty {
-    background: #f7f8fa;
-    border-radius: 12px;
-    padding: 22px;
-    color: #6b7280;
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: #8b9098;
     font-family: 'Sarabun', sans-serif;
-    text-align: center;
+    font-size: 1.1rem;
+    text-align: left;
+    box-sizing: border-box;
+    grid-column: 1 / -1;
 }
 
 /* ======== Hero ======== */

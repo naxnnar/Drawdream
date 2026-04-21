@@ -36,8 +36,7 @@
 
 ## 4) Foundation Management
 
-- `foundation_add_children.php` เพิ่มโปรไฟล์เด็ก
-- `foundation_edit_child.php` แก้ไขโปรไฟล์เด็ก
+- `foundation_add_children.php` เพิ่ม/แก้ไขโปรไฟล์เด็ก
 - `foundation_child_outcome.php` อัปเดตผลลัพธ์เด็กที่อุปการะครบเงื่อนไข
 - `foundation_add_project.php` เพิ่มโครงการ
 - `foundation_project_view.php` ดูรายละเอียดโครงการ

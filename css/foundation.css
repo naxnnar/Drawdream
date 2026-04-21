@@ -94,6 +94,33 @@
     box-shadow: none;
 }
 
+.foundation-manage-btn-update {
+    background: #597D57;
+    color: #fff;
+    padding: 12px 20px;
+    font-size: 1.05rem;
+    border: none !important;
+    box-shadow: 0 10px 20px rgba(89, 125, 87, 0.28);
+}
+
+.foundation-manage-btn-update:hover,
+.foundation-manage-btn-update:active,
+.foundation-manage-btn-update:focus {
+    background: #4f704d !important;
+    color: #fff !important;
+    filter: none !important;
+    box-shadow: 0 12px 22px rgba(89, 125, 87, 0.35);
+}
+
+.foundation-manage-btn-disabled {
+    background: #9ca3af;
+    color: #fff;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.8;
+    pointer-events: none;
+}
+
 .foundation-manage-btn-danger {
     background: #CC583F;
     color: #fff;
@@ -576,7 +603,7 @@
 .fd-community-org-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 30px;
+    gap: 38px;
     max-width: 980px;
     margin: 0 auto;
     perspective: 1200px;
@@ -586,6 +613,7 @@
     min-height: 210px;
     border-radius: 28px;
     background: #e8edf4;
+    border: 4px solid #fff;
     overflow: hidden;
     margin: 0;
     padding: 0;
@@ -900,6 +928,8 @@ body.foundation-page .site-footer .social-link:hover {
     scroll-snap-type: x mandatory;
     scroll-behavior: smooth;
     padding: 4px 2px 8px;
+    -ms-overflow-style: none; /* IE/Edge legacy */
+    scrollbar-width: none; /* Firefox */
 }
 .fd-interest-carousel--scroll .fd-interest-grid {
     display: flex;
@@ -911,15 +941,16 @@ body.foundation-page .site-footer .social-link:hover {
     scroll-snap-align: start;
 }
 .fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar {
-    height: 10px;
+    width: 0;
+    height: 0;
+    display: none;
+    background: transparent;
 }
 .fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar-thumb {
-    background: #c9d2e6;
-    border-radius: 999px;
+    background: transparent;
 }
 .fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar-track {
-    background: #eef2f8;
-    border-radius: 999px;
+    background: transparent;
 }
 
 @media (max-width: 900px) {
@@ -1704,6 +1735,17 @@ body.foundation-post-update-page .update-date { font-size: 12px; color: #aaa; }
    ============================================================ */
 body.foundation-page .my-needlist-section { margin: 28px 0 10px; padding: 0 4px; }
 body.foundation-page .my-needlist-title { font-size: 1.2rem; font-weight: 800; color: #3C5099; margin-bottom: 16px; font-family: 'Prompt', 'Sarabun', sans-serif; }
+body.foundation-page .foundation-needlist-empty {
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: #8b9098;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 1.1rem;
+    text-align: left;
+    box-sizing: border-box;
+    margin: 0 0 14px;
+}
 body.foundation-page .my-needlist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px 20px; }
 body.foundation-page .need-card { position: relative; background: #fff; border-radius: 14px; box-shadow: 0 2px 10px rgba(60,80,153,0.10); border: 1.5px solid #e5e7eb; overflow: hidden; display: flex; flex-direction: column; font-family: 'Sarabun', sans-serif; }
 body.foundation-page .need-card-tap-link {
@@ -1828,9 +1870,16 @@ body.foundation-page .need-card-name { font-size: 16px; font-weight: 700; color:
 body.foundation-page .need-card-cat { font-size: 13px; color: #6b7280; line-height: 1.4; }
 body.foundation-page .need-card-goal { font-size: 15px; font-weight: 700; color: #3C5099; }
 body.foundation-page .need-period { font-size: 12px; font-weight: 400; color: #6b7280; }
+body.foundation-page .needlist-cycle-hint {
+    margin: -4px 0 10px;
+    font-size: 13px;
+    color: #556070;
+    font-family: 'Sarabun', sans-serif;
+}
 body.foundation-page .need-card-desc { font-size: 12px; color: #6b7280; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 body.foundation-page .need-edit-wrap { display: none; margin-top: 10px; }
 body.mode-edit-need.foundation-page .need-edit-wrap { display: block; }
+body.mode-edit-need.foundation-page .need-card-tap-link { pointer-events: none; }
 body.foundation-page .need-card-edit-link {
     display: inline-flex;
     align-items: center;

@@ -1,7 +1,7 @@
 /* ======================================================
    children.css — CSS ร่วมสำหรับหน้าที่เกี่ยวกับเด็ก
    ใช้ใน: children_.php, children_donate.php,
-           foundation_add_children.php, foundation_edit_child.php
+           foundation_add_children.php
    ====================================================== */
 
 /* ── ตัวแปรสีร่วม ─────────────────────────────────── */
@@ -159,6 +159,26 @@ body.admin-sidebar-page.donation-page {
     align-items: center;
     width: 100%;
     justify-content: flex-start;
+}
+
+.foundation-child-section-title {
+    margin: 8px 0 14px;
+    font-family: 'Prompt', 'Sarabun', sans-serif;
+    font-size: 1.4rem;
+    color: #2e3f7f;
+    font-weight: 700;
+}
+
+.foundation-child-empty {
+    background: #f3f4f6;
+    border-radius: 10px;
+    padding: 14px 18px;
+    color: #8b9098;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 1.1rem;
+    text-align: left;
+    box-sizing: border-box;
+    margin-bottom: 14px;
 }
 
 .btn-create-profile {
@@ -950,6 +970,138 @@ body.admin-approve-projects-page {
 .admin-project-review .stat-num--date {
     font-size: 1.35rem;
     line-height: 1.15;
+}
+
+/* child admin review: compact layout (match legacy card) */
+body.admin-child-review-page {
+    background: #F7ECDE;
+}
+
+body.admin-child-review-page .admin-child-review-main {
+    max-width: 860px;
+    margin: 18px auto 28px;
+}
+
+body.admin-child-review-page .admin-review-card {
+    max-width: 760px;
+    margin: 0 auto;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+}
+
+body.admin-child-review-page .admin-review-header {
+    padding: 10px 16px;
+}
+
+body.admin-child-review-page .admin-review-title h4 {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+body.admin-child-review-page .admin-review-title div {
+    font-size: 0.78rem;
+    margin-top: 2px;
+    opacity: 0.95;
+}
+
+body.admin-child-review-page .admin-review-body {
+    padding: 14px 16px 16px;
+}
+
+body.admin-child-review-page .admin-review-layout {
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+body.admin-child-review-page .admin-image-col {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+body.admin-child-review-page .admin-child-image {
+    width: 140px;
+    height: 170px;
+    border-radius: 10px;
+    max-width: none;
+    max-height: none;
+    box-shadow: none;
+    border: 1px solid #d7dee8;
+}
+
+body.admin-child-review-page .admin-details-col {
+    width: 100%;
+}
+
+body.admin-child-review-page .data-grid {
+    max-width: 560px;
+    gap: 8px 10px;
+}
+
+body.admin-child-review-page .data-item {
+    border-radius: 8px;
+    padding: 8px 10px;
+}
+
+body.admin-child-review-page .label {
+    font-size: 0.7rem;
+    margin-bottom: 2px;
+}
+
+body.admin-child-review-page .value {
+    font-size: 0.92rem;
+}
+
+body.admin-child-review-page .donation-stats-panel {
+    margin-top: 10px !important;
+    margin-bottom: 10px;
+}
+
+body.admin-child-review-page .stats-row {
+    gap: 8px;
+}
+
+body.admin-child-review-page .stat-box {
+    min-width: 120px;
+    border-radius: 8px;
+    padding: 10px 8px;
+}
+
+body.admin-child-review-page .stat-box .stat-icon {
+    font-size: 22px;
+    margin-bottom: 4px;
+}
+
+body.admin-child-review-page .stat-box .stat-num {
+    font-size: 1.75rem;
+}
+
+body.admin-child-review-page .stat-box .stat-label {
+    font-size: 0.82rem;
+    line-height: 1.25;
+}
+
+body.admin-child-review-page .admin-review-actions-note {
+    margin-bottom: 6px;
+    font-size: 0.76rem;
+}
+
+body.admin-child-review-page .admin-review-actions-grid {
+    grid-template-columns: minmax(150px, 1fr) 106px 106px;
+    gap: 8px;
+}
+
+body.admin-child-review-page .admin-review-actions-grid textarea {
+    min-height: 52px;
+    font-size: 0.84rem;
+    padding: 7px 9px;
+}
+
+body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn.btn {
+    padding: 8px 8px;
+    font-size: 0.92rem;
+    border-radius: 8px;
 }
 
 .foundation-sponsors-list {
@@ -1833,7 +1985,7 @@ select.dream-sel   { width: 100%; }
 
 
 /* =====================================================
-   4. foundation_edit_child.php — แก้ไขโปรไฟล์เด็ก
+   4. กลุ่มฟอร์มสำรอง (legacy style)
    ===================================================== */
 
 /* scoped ไว้ใน .wrap เพื่อไม่ให้ input/label ทับ global */

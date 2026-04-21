@@ -11,6 +11,7 @@ require_once __DIR__ . '/../includes/needlist_donate_window.php';
 require_once __DIR__ . '/../includes/payment_transaction_schema.php';
 require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/../includes/donate_type.php';
+require_once __DIR__ . '/../includes/notification_audit.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -109,6 +110,21 @@ if ($is_success && !$already_processed && $fid > 0) {
     $grand_total = (float)($grand['grand_total'] ?? 0);
 
     if ($grand_total > 0) {
+        $sumBefore = $conn->prepare("
+            SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g
+            FROM foundation_needlist
+            WHERE foundation_id = ? AND ($needOpen)
+        ");
+        $old_c = 0.0;
+        $old_g = 0.0;
+        if ($sumBefore) {
+            $sumBefore->bind_param('i', $fid);
+            $sumBefore->execute();
+            $rowSb = $sumBefore->get_result()->fetch_assoc();
+            $old_c = (float)($rowSb['c'] ?? 0);
+            $old_g = (float)($rowSb['g'] ?? 0);
+        }
+
         $items = $conn->prepare("
             SELECT item_id, total_price
             FROM foundation_needlist
@@ -129,6 +145,49 @@ if ($is_success && !$already_processed && $fid > 0) {
             ");
             $upd->bind_param("di", $item_amount, $item['item_id']);
             $upd->execute();
+        }
+
+        $sumAfter = $conn->prepare("
+            SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g
+            FROM foundation_needlist
+            WHERE foundation_id = ? AND ($needOpen)
+        ");
+        if ($sumAfter) {
+            $sumAfter->bind_param('i', $fid);
+            $sumAfter->execute();
+            $rowSa = $sumAfter->get_result()->fetch_assoc();
+            $new_c = (float)($rowSa['c'] ?? 0);
+            $new_g = (float)($rowSa['g'] ?? 0);
+            $eps = 1e-6;
+            if ($old_g > $eps && $old_c < $old_g - $eps && $new_c >= $new_g - $eps) {
+                $fu = $conn->prepare('SELECT user_id, foundation_name FROM foundation_profile WHERE foundation_id = ? LIMIT 1');
+                if ($fu) {
+                    $fu->bind_param('i', $fid);
+                    $fu->execute();
+                    $frow = $fu->get_result()->fetch_assoc();
+                    if ($frow) {
+                        $foundation_uid = (int)($frow['user_id'] ?? 0);
+                        $foundation_nm = trim((string)($frow['foundation_name'] ?? ''));
+                        if ($foundation_uid > 0) {
+                            $totalFmt = number_format($new_c, 2, '.', ',');
+                            $dispName = $foundation_nm !== '' ? '"' . $foundation_nm . '"' : 'มูลนิธิของคุณ';
+                            $title = 'รายการสิ่งของได้รับเงินครบเป้าหมายแล้ว! 🎉';
+                            $msg = 'รายการสิ่งของของ ' . $dispName . ' ได้รับเงินบริจาครวม ' . $totalFmt . ' บาท กรุณาอัปเดตผลลัพธ์สิ่งของให้ผู้บริจาคทราบภายใน 30 วัน';
+                            $link = 'foundation_post_needlist_result.php';
+                            $sigStmt = $conn->prepare("SELECT GROUP_CONCAT(item_id ORDER BY item_id) AS sig FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
+                            $sig = '';
+                            if ($sigStmt) {
+                                $sigStmt->bind_param('i', $fid);
+                                $sigStmt->execute();
+                                $sigRow = $sigStmt->get_result()->fetch_assoc();
+                                $sig = trim((string)($sigRow['sig'] ?? ''));
+                            }
+                            $entityKey = 'needlist_goal_met:' . $fid . ':' . ($sig !== '' ? $sig : '0');
+                            drawdream_send_notification($conn, $foundation_uid, 'needlist_funded', $title, $msg, $link, $entityKey);
+                        }
+                    }
+                }
+            }
         }
     }
 

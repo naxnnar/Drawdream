@@ -70,6 +70,8 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
     if (($_SESSION['role'] ?? '') === 'foundation') {
       require_once __DIR__ . '/includes/donate_category_resolve.php';
       require_once __DIR__ . '/includes/payment_transaction_schema.php';
+      require_once __DIR__ . '/includes/notification_audit.php';
+      drawdream_ensure_notifications_table($conn);
       drawdream_payment_transaction_ensure_schema($conn);
       $stmtFid = $conn->prepare("SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1");
       if ($stmtFid) {
@@ -78,6 +80,70 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
         $fidRow = $stmtFid->get_result()->fetch_assoc();
         $fid = (int)($fidRow['foundation_id'] ?? 0);
         if ($fid > 0) {
+            // แจ้งเตือนรอบรายการสิ่งของใหม่: ระบบปิดรับอัตโนมัติที่ 1 เดือน และเปิดให้เสนอรอบถัดไป
+            $openRoundCount = 0;
+            $stOpenRound = $conn->prepare(
+              "SELECT COUNT(*) AS cnt
+               FROM foundation_needlist
+               WHERE foundation_id = ?
+                 AND approve_item = 'approved'
+                 AND donate_window_end_at IS NOT NULL
+                 AND donate_window_end_at > NOW()"
+            );
+            if ($stOpenRound) {
+              $stOpenRound->bind_param("i", $fid);
+              $stOpenRound->execute();
+              $openRoundCount = (int)(($stOpenRound->get_result()->fetch_assoc()['cnt'] ?? 0));
+            }
+            $pendingNeedCount = 0;
+            $stPendingNeed = $conn->prepare("SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'pending'");
+            if ($stPendingNeed) {
+              $stPendingNeed->bind_param("i", $fid);
+              $stPendingNeed->execute();
+              $pendingNeedCount = (int)(($stPendingNeed->get_result()->fetch_assoc()['cnt'] ?? 0));
+            }
+            $latestClosedNeed = null;
+            $stClosedNeed = $conn->prepare(
+              "SELECT donate_window_end_at
+               FROM foundation_needlist
+               WHERE foundation_id = ?
+                 AND approve_item = 'approved'
+                 AND donate_window_end_at IS NOT NULL
+                 AND donate_window_end_at <= NOW()
+               ORDER BY donate_window_end_at DESC
+               LIMIT 1"
+            );
+            if ($stClosedNeed) {
+              $stClosedNeed->bind_param("i", $fid);
+              $stClosedNeed->execute();
+              $latestClosedNeed = $stClosedNeed->get_result()->fetch_assoc();
+            }
+            $closedNeedRaw = trim((string)($latestClosedNeed['donate_window_end_at'] ?? ''));
+            if ($openRoundCount === 0 && $pendingNeedCount === 0 && $closedNeedRaw !== '') {
+              $closedNeedTs = strtotime($closedNeedRaw);
+              if ($closedNeedTs !== false) {
+                $entityKey = 'fdn_need_round_open:' . date('YmdHis', $closedNeedTs);
+                $alreadyHas = false;
+                $stHasNotif = $conn->prepare("SELECT notif_id FROM notifications WHERE user_id = ? AND entity_key = ? LIMIT 1");
+                if ($stHasNotif) {
+                  $stHasNotif->bind_param("is", $uid, $entityKey);
+                  $stHasNotif->execute();
+                  $alreadyHas = (bool)$stHasNotif->get_result()->fetch_assoc();
+                }
+                if (!$alreadyHas) {
+                  drawdream_send_notification(
+                    $conn,
+                    $uid,
+                    'need_round_open',
+                    'ถึงเวลาเสนอรายการสิ่งของรอบใหม่',
+                    'รอบก่อนหน้าปิดรับครบ 1 เดือนแล้ว ตอนนี้คุณสามารถเสนอรายการสิ่งของรอบใหม่ได้',
+                    'foundation_add_need.php',
+                    $entityKey
+                  );
+                }
+              }
+            }
+
             $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
             $existExpr = "(EXISTS (SELECT 1 FROM donation d WHERE d.category_id = {$childCategoryId} AND d.target_id = c.child_id AND d.payment_status = 'completed' AND d.donor_id IS NOT NULL)
               OR EXISTS (SELECT 1 FROM donation ds WHERE ds.target_id = c.child_id AND ds.donate_type = 'child_subscription' AND ds.recurring_status IN ('active','paused') AND ds.donor_id IS NOT NULL))";

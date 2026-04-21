@@ -56,8 +56,7 @@
 - `foundation_public_profile.php` หน้าแสดงโปรไฟล์มูลนิธิแบบสาธารณะ
 - `foundation_edit_profile.php` หน้าแก้ไขโปรไฟล์มูลนิธิ
 - `foundation_notifications.php` หน้าแจ้งเตือนฝั่งมูลนิธิ
-- `foundation_add_children.php` ฟอร์มเพิ่มเด็ก
-- `foundation_edit_child.php` แก้ไขข้อมูลเด็ก
+- `foundation_add_children.php` ฟอร์มเพิ่ม/แก้ไขข้อมูลเด็ก
 - `foundation_child_outcome.php` อัปเดตผลลัพธ์ของเด็ก
 - `foundation_add_project.php` เพิ่มโครงการ
 - `foundation_project_view.php` ดูรายละเอียดโครงการ (มูลนิธิ)

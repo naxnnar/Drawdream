@@ -61,6 +61,7 @@ if (!$stmtAll) die("Prepare failed: " . $conn->error);
 $myNeedlist = [];
 $myFoundationId = 0;
 $myNeedlistGoalMet = false;
+$myNeedProposeBlock = ['blocked' => false, 'reason' => '', 'donate_end_at' => null];
 if (($_SESSION['role'] ?? '') === 'foundation') {
     // ดึง foundation_id จาก foundation_profile ก่อน
     $rowFp = mysqli_fetch_assoc(mysqli_query($conn, "SELECT foundation_id FROM foundation_profile WHERE user_id = $userId LIMIT 1"));
@@ -70,6 +71,8 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
         $mc = $donationTotals[$myFoundationId] ?? 0;
         $mg = $goalTotals[$myFoundationId] ?? 0;
         $myNeedlistGoalMet = $mg > 0 && $mc >= $mg;
+
+        $myNeedProposeBlock = drawdream_foundation_needlist_propose_blocked($conn, $myFoundationId);
     }
 
     if ($myFoundationId > 0) {
@@ -84,6 +87,21 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
             $stmtMine->execute();
             $myNeedlist = $stmtMine->get_result()->fetch_all(MYSQLI_ASSOC);
         }
+    }
+}
+
+$myNeedProposeBlockTitle = '';
+if (!empty($myNeedProposeBlock['blocked'])) {
+    switch ($myNeedProposeBlock['reason'] ?? '') {
+        case 'pending':
+            $myNeedProposeBlockTitle = 'รอแอดมินตรวจสอบรายการสิ่งของ — จึงจะเสนอรายการเพิ่มได้หลังมีผลการตรวจสอบ';
+            break;
+        case 'purchasing':
+            $myNeedProposeBlockTitle = 'รายการสิ่งของอยู่ในขั้นตอนจัดซื้อ — จึงจะเสนอรายการเพิ่มไม่ได้';
+            break;
+        default:
+            $myNeedProposeBlockTitle = 'รอบปัจจุบันเปิดรับบริจาค 1 เดือน หลังครบกำหนดจะเสนอรอบใหม่ได้';
+            break;
     }
 }
 
@@ -154,7 +172,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=31">
+  <link rel="stylesheet" href="css/foundation.css?v=36">
 </head>
 <body class="foundation-page">
 
@@ -169,14 +187,18 @@ $hasAnySlides = !empty($foundationSlides);
           <p>จัดการรายการสิ่งของที่ต้องการได้จากหน้านี้</p>
           <div class="foundation-view-toolbar">
             <div class="foundation-view-actions">
-              <?php if ($is_verified): ?>
+              <?php if ($is_verified && empty($myNeedProposeBlock['blocked'])): ?>
                 <a href="foundation_add_need.php" class="foundation-manage-btn foundation-manage-btn-primary">+ เสนอสิ่งของมูลนิธิ</a>
+              <?php elseif ($is_verified): ?>
+                <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="<?= htmlspecialchars($myNeedProposeBlockTitle, ENT_QUOTES, 'UTF-8') ?>">+ เสนอสิ่งของมูลนิธิ</span>
               <?php else: ?>
                 <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอสิ่งของมูลนิธิได้</span>
               <?php endif; ?>
               <button type="button" id="toggleEditNeedBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขรายการสิ่งของ</button>
-              <?php if ($myNeedlistGoalMet && $is_verified): ?>
-                <a href="foundation_post_needlist_result.php" class="foundation-manage-btn foundation-manage-btn-primary">ผลลัพธ์ของมูลนิธิ (โพสต์)</a>
+              <?php if ($is_verified && $myNeedlistGoalMet): ?>
+                <a href="foundation_post_needlist_result.php" class="foundation-manage-btn foundation-manage-btn-update">อัปเดตผลลัพธ์สิ่งของ</a>
+              <?php elseif ($is_verified): ?>
+                <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="เมื่อยอดรวมรายการสิ่งของครบเป้าหมายแล้ว จึงจะอัปเดตผลลัพธ์ได้">อัปเดตผลลัพธ์สิ่งของ</span>
               <?php endif; ?>
             </div>
           </div>
@@ -184,11 +206,35 @@ $hasAnySlides = !empty($foundationSlides);
 
         <div class="my-needlist-section" id="my-needlist-section">
           <h3 class="my-needlist-title" style="font-family:'Prompt',sans-serif;font-size:1.4em;color:#2e3f7f;margin-bottom:18px;">รายการสิ่งของที่เสนอทั้งหมด</h3>
+          <p class="needlist-cycle-hint">ระบบปิดรับบริจาคอัตโนมัติเมื่อครบ 1 เดือนนับจากวันที่แอดมินอนุมัติรายการ และจึงจะเสนอรอบใหม่ได้</p>
+          <?php if (!empty($_GET['need_created'])): ?>
+            <div class="alert alert-success needlist-flash" role="status">เสนอรายการสิ่งของสำเร็จ รอแอดมินอนุมัติ</div>
+          <?php endif; ?>
           <?php if (!empty($_GET['need_updated'])): ?>
             <div class="alert alert-success needlist-flash" role="status">อัปเดตรายการสิ่งของแล้ว</div>
           <?php endif; ?>
+          <?php if (!empty($_GET['need_round_wait'])): ?>
+            <?php
+              $nextCloseText = '';
+              $nextRaw = trim((string)($_GET['next'] ?? ''));
+              if ($nextRaw !== '') {
+                $nextTs = strtotime($nextRaw);
+                if ($nextTs !== false) {
+                  $nextCloseText = date('d/m/Y H:i', $nextTs);
+                }
+              }
+              $waitReason = (string)($_GET['reason'] ?? 'approved_open');
+            ?>
+            <?php if ($waitReason === 'pending'): ?>
+              <div class="alert alert-warning needlist-flash" role="status">ไม่สามารถเสนอรายการสิ่งของเพิ่มได้ในขณะที่รอการตรวจสอบจากแอดมิน</div>
+            <?php elseif ($waitReason === 'purchasing'): ?>
+              <div class="alert alert-warning needlist-flash" role="status">ไม่สามารถเสนอรายการสิ่งของเพิ่มได้ในขณะที่รายการอยู่ในขั้นตอนจัดซื้อ</div>
+            <?php else: ?>
+              <div class="alert alert-warning needlist-flash" role="status">เสนอรายการรอบใหม่ได้หลังจากรอบปัจจุบันครบ 1 เดือนแล้ว<?= $nextCloseText !== '' ? ' (รอบนี้ปิดรับ: ' . htmlspecialchars($nextCloseText, ENT_QUOTES, 'UTF-8') . ')' : '' ?></div>
+            <?php endif; ?>
+          <?php endif; ?>
           <?php if (empty($myNeedlist)): ?>
-            <p style="color:#888; font-family:'Sarabun',sans-serif;">ยังไม่มีรายการที่เสนอ หรือยังไม่ถูกบันทึก</p>
+            <div class="foundation-needlist-empty">ยังไม่มีรายการที่เสนอ</div>
           <?php endif; ?>
           <div class="my-needlist-grid">
             <?php foreach ($myNeedlist as $nl): ?>
@@ -199,12 +245,6 @@ $hasAnySlides = !empty($foundationSlides);
               $nlFdn = trim((string)($nl['need_foundation_image'] ?? ''));
               /* หน้ามูลนิธิ: โชว์เฉพาะรูปมูลนิธิถ้ามี ไม่แบ่งคู่กับรูปสิ่งของ */
               $nlImg = $nlFdn !== '' ? $nlFdn : $nlImgItem;
-              // ดึงระยะเวลาจาก note
-              $nlNote = $nl['note'] ?? '';
-              $nlPeriod = '';
-              if (preg_match('/^ระยะเวลา:\s*(.+)/u', $nlNote, $pm)) {
-                $nlPeriod = trim($pm[1]);
-              }
               $statusLabel = ['pending' => 'รอการอนุมัติ', 'approved' => 'อนุมัติแล้ว', 'rejected' => 'ไม่อนุมัติ'][$status] ?? $status;
               /* คลาสสอดคล้องกับ .foundation-status-pill ในโครงการ (project.css) */
               $statusPillClass = ['pending' => 'st-pending', 'approved' => 'st-approved', 'rejected' => 'st-rejected'][$status] ?? 'st-pending';
@@ -233,7 +273,7 @@ $hasAnySlides = !empty($foundationSlides);
               </div>
               <div class="need-card-body">
                 <?php if (!$donateWindowExpired && $status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false): ?>
-                  <span class="need-window-hint" title="วันปิดรับบริจาค">ปิดรับ <?= htmlspecialchars(date('d/m/Y H:i', strtotime($dweRaw))) ?></span>
+                  <span class="need-window-hint" title="วันปิดรับบริจาคอัตโนมัติ 1 เดือน">ปิดรับอัตโนมัติครบ 1 เดือน (<?= htmlspecialchars(date('d/m/Y H:i', strtotime($dweRaw))) ?>)</span>
                 <?php endif; ?>
                 <div class="need-card-name"><?= htmlspecialchars($nl['item_name']) ?></div>
                 <?php if ($nl['brand']): ?>
@@ -241,13 +281,13 @@ $hasAnySlides = !empty($foundationSlides);
                 <?php endif; ?>
                 <div class="need-card-goal">
                   เป้าหมาย: <?= number_format((float)($nl['total_price'] ?: $nl['price_estimate']), 0) ?> บาท
-                  <?php if ($nlPeriod): ?><span class="need-period">/<?= htmlspecialchars($nlPeriod) ?></span><?php endif; ?>
+                  <span class="need-period">/ รอบละ 1 เดือน</span>
                 </div>
                 <?php if ($nl['item_desc']): ?>
                   <div class="need-card-desc"><?= htmlspecialchars($nl['item_desc']) ?></div>
                 <?php endif; ?>
                 <div class="need-edit-wrap">
-                  <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>">แก้ไขรายการนี้</a>
+                  <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>" onclick="event.stopPropagation();">แก้ไขรายการนี้</a>
                 </div>
               </div>
             </div>

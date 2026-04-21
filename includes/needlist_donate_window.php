@@ -1,12 +1,10 @@
 <?php
 
-// includes/needlist_donate_window.php — ระยะเวลารับบริจาครายการสิ่งของ (นับจากเวลาแอดมินอนุมัติ)
-// สรุปสั้น: คำนวณช่วงเวลาเปิดรับบริจาคของ needlist และสร้างเงื่อนไข SQL ที่ใช้ซ้ำ
+// includes/needlist_donate_window.php — รอบรับบริจาครายการสิ่งของ (1 เดือนนับจากอนุมัติ)
+// สรุปสั้น: คำนวณวันสิ้นสุดรับบริจาคของ needlist แบบคงที่ 1 เดือน และสร้างเงื่อนไข SQL ที่ใช้ซ้ำ
 declare(strict_types=1);
 
-/**
- * แยกข้อความระยะเวลาจากบรรทัดแรกของ note (รูปแบบ "ระยะเวลา: …")
- */
+/** legacy parser: kept for backward compatibility with old notes */
 function drawdream_needlist_period_label_from_note(string $note): string
 {
     $lines = preg_split('/\R/u', $note, 2);
@@ -18,36 +16,17 @@ function drawdream_needlist_period_label_from_note(string $note): string
 }
 
 /**
- * คำนวณเวลาปิดรับบริจาคจากข้อความระยะเวลาที่มูลนิธิเลือก
- * นับจาก $approvalMoment (เช่น reviewed_at ตอนอนุมัติ)
+ * คำนวณเวลาปิดรับบริจาค "คงที่ 1 เดือน" นับจากเวลาที่แอดมินอนุมัติ
  *
- * @return string|null datetime 'Y-m-d H:i:s' หรือ null = ไม่ปิดตามเวลา (ครั้งเดียว / ไม่รู้จัก)
+ * @return string datetime 'Y-m-d H:i:s'
  */
 function drawdream_needlist_compute_donate_window_end(string $periodLabel, DateTimeImmutable $approvalMoment): ?string
 {
-    $p = trim($periodLabel);
-    if ($p === '' || $p === 'ครั้งเดียว (ไม่ซ้ำ)') {
-        return null;
-    }
-
     try {
-        if ($p === 'ต่อสัปดาห์') {
-            return $approvalMoment->modify('+1 week')->format('Y-m-d H:i:s');
-        }
-        if ($p === 'ต่อเดือน') {
-            return $approvalMoment->modify('+1 month')->format('Y-m-d H:i:s');
-        }
-        if ($p === 'ต่อ 6 เดือน') {
-            return $approvalMoment->modify('+6 months')->format('Y-m-d H:i:s');
-        }
-        if ($p === 'ต่อปี') {
-            return $approvalMoment->modify('+1 year')->format('Y-m-d H:i:s');
-        }
+        return $approvalMoment->modify('+1 month')->format('Y-m-d H:i:s');
     } catch (Throwable $e) {
-        return null;
+        return (new DateTimeImmutable('now'))->modify('+1 month')->format('Y-m-d H:i:s');
     }
-
-    return null;
 }
 
 /**
@@ -59,6 +38,56 @@ function drawdream_needlist_sql_open_for_donation(string $alias = ''): string
 {
     $a = $alias;
     return "({$a}approve_item = 'approved' AND ({$a}donate_window_end_at IS NULL OR {$a}donate_window_end_at > NOW()))";
+}
+
+/**
+ * มูลนิธิยังเสนอรายการสิ่งของใหม่ไม่ได้ (รอตรวจ / รอบรับบริจาคยังไม่จบ รวมกรณียังไม่มีวันปิดใน DB / กำลังจัดซื้อ)
+ *
+ * @return array{blocked: bool, reason: string, donate_end_at: ?string}
+ */
+function drawdream_foundation_needlist_propose_blocked(mysqli $conn, int $foundationId): array
+{
+    $none = ['blocked' => false, 'reason' => '', 'donate_end_at' => null];
+    if ($foundationId <= 0) {
+        return $none;
+    }
+    $st = $conn->prepare(
+        "SELECT approve_item, donate_window_end_at FROM foundation_needlist
+         WHERE foundation_id = ?
+           AND (
+             approve_item = 'pending'
+             OR approve_item = 'purchasing'
+             OR (approve_item = 'approved' AND (donate_window_end_at IS NULL OR donate_window_end_at > NOW()))
+           )
+         ORDER BY
+           CASE approve_item
+             WHEN 'pending' THEN 0
+             WHEN 'purchasing' THEN 1
+             ELSE 2
+           END,
+           item_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return $none;
+    }
+    $st->bind_param('i', $foundationId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    if (!$row) {
+        return $none;
+    }
+    $ap = (string)($row['approve_item'] ?? '');
+    $endRaw = trim((string)($row['donate_window_end_at'] ?? ''));
+    if ($ap === 'pending') {
+        return ['blocked' => true, 'reason' => 'pending', 'donate_end_at' => null];
+    }
+    if ($ap === 'purchasing') {
+        return ['blocked' => true, 'reason' => 'purchasing', 'donate_end_at' => null];
+    }
+    $endOut = ($endRaw !== '' && !str_starts_with($endRaw, '0000-00-00')) ? $endRaw : null;
+
+    return ['blocked' => true, 'reason' => 'approved_open', 'donate_end_at' => $endOut];
 }
 
 /**
@@ -83,21 +112,16 @@ function drawdream_needlist_backfill_donate_window_ends(mysqli $conn): void
         if ($rv === '' || str_starts_with($rv, '0000-00-00')) {
             continue;
         }
-        $period = drawdream_needlist_period_label_from_note((string)($row['note'] ?? ''));
         try {
             $from = new DateTimeImmutable($rv);
         } catch (Throwable $e) {
             continue;
         }
-        $end = drawdream_needlist_compute_donate_window_end($period, $from);
-        if ($end === null) {
-            @$conn->query('UPDATE foundation_needlist SET donate_window_end_at = NULL WHERE item_id = ' . $rid);
-        } else {
-            $st = $conn->prepare('UPDATE foundation_needlist SET donate_window_end_at = ? WHERE item_id = ?');
-            if ($st) {
-                $st->bind_param('si', $end, $rid);
-                $st->execute();
-            }
+        $end = drawdream_needlist_compute_donate_window_end('', $from);
+        $st = $conn->prepare('UPDATE foundation_needlist SET donate_window_end_at = ? WHERE item_id = ?');
+        if ($st) {
+            $st->bind_param('si', $end, $rid);
+            $st->execute();
         }
     }
 }

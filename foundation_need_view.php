@@ -173,7 +173,7 @@ if ($titleShort !== '') {
 
     <?php if ($donateWindowExpired): ?>
         <div class="foundation-project-view-note foundation-project-view-note--merge">
-            <strong>ปิดรับบริจาคแล้ว</strong> — ครบระยะเวลาตามที่กำหนดในระบบ
+            <strong>ปิดรับบริจาคแล้ว</strong> — ครบกำหนดรอบ 1 เดือนของระบบ
         </div>
     <?php endif; ?>
 
@@ -214,15 +214,9 @@ if ($titleShort !== '') {
             <dd>ต้องการด่วน</dd>
         </div>
         <?php endif; ?>
-        <?php if ($periodLabel !== ''): ?>
-        <div class="foundation-project-view-row">
-            <dt>ระยะเวลารับบริจาค (ตามที่เสนอ)</dt>
-            <dd><?= htmlspecialchars($periodLabel) ?></dd>
-        </div>
-        <?php endif; ?>
         <?php if ($dweFmt !== ''): ?>
         <div class="foundation-project-view-row">
-            <dt>วันสิ้นสุดรับบริจาค (ระบบ)</dt>
+            <dt>วันสิ้นสุดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</dt>
             <dd><?= htmlspecialchars($dweFmt) ?></dd>
         </div>
         <?php endif; ?>

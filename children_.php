@@ -287,6 +287,13 @@ if ($role === 'foundation') {
 </form>
 <?php endif; ?>
 
+<?php if ($role === 'foundation'): ?>
+  <h3 class="foundation-child-section-title">โปรไฟล์เด็กที่เสนอทั้งหมด</h3>
+  <?php if ($all_list_rows === []): ?>
+    <div class="foundation-child-empty">ยังไม่มีโปรไฟล์เด็กที่เสนอ</div>
+  <?php endif; ?>
+<?php endif; ?>
+
 <?php if ($role === 'admin'): ?>
 <div class="admin-directory-page children-admin-directory">
     <div class="admin-directory-head">
@@ -407,7 +414,7 @@ if ($role === 'foundation') {
       <div class="child-card-wrap<?php echo $blockBulkCheckbox ? ' child-card-wrap--bulk-protected' : ''; ?><?php echo $sponsoredLocked ? ' child-card-wrap--sponsored-lock' : ''; ?>">
         <div class="child-card<?php echo !empty($gridSection['sponsored']) ? ' child-card--sponsored' : ''; ?>"
              data-view-url="<?php echo htmlspecialchars($cardViewUrl, ENT_QUOTES, 'UTF-8'); ?>"
-             data-edit-url="<?php echo $foundationAccountVerified ? 'foundation_edit_child.php?id=' . (int)$child['child_id'] : ''; ?>"
+             data-edit-url="<?php echo $foundationAccountVerified ? 'foundation_add_children.php?edit=' . (int)$child['child_id'] : ''; ?>"
              data-sponsored-locked="<?php echo $sponsoredLocked ? '1' : '0'; ?>"
              data-cycle-total="<?php echo htmlspecialchars((string)(float)($cycleTotals[(int)$child['child_id']] ?? 0)); ?>">
           <?php if ($role === 'foundation' && $foundationAccountVerified): ?>
@@ -453,9 +460,9 @@ if ($role === 'foundation') {
                   <?php else: ?>
                   <button type="button" class="btn-edit-pill" <?php
                     if ($editWarn) {
-                      echo 'onclick="event.stopPropagation(); if(confirm(\'การแก้ไขหลังอนุมัติจะส่งให้แอดมินตรวจสอบอีกครั้งก่อนเผยแพร่ข้อมูลใหม่ ต้องการดำเนินการต่อหรือไม่\')) { window.location.href=\'foundation_edit_child.php?id=' . $eid . '\'; }"';
+                      echo 'onclick="event.stopPropagation(); if(confirm(\'การแก้ไขหลังอนุมัติจะส่งให้แอดมินตรวจสอบอีกครั้งก่อนเผยแพร่ข้อมูลใหม่ ต้องการดำเนินการต่อหรือไม่\')) { window.location.href=\'foundation_add_children.php?edit=' . $eid . '\'; }"';
                     } else {
-                      echo 'onclick="event.stopPropagation(); window.location.href=\'foundation_edit_child.php?id=' . $eid . '\';"';
+                      echo 'onclick="event.stopPropagation(); window.location.href=\'foundation_add_children.php?edit=' . $eid . '\';"';
                     }
                   ?>>
                     แก้ไขโปรไฟล์

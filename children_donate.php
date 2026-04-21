@@ -256,12 +256,12 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/children.css?v=34">
+    <link rel="stylesheet" href="css/children.css?v=35">
     <?php if ($isAdmin): ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <?php endif; ?>
 </head>
-<body>
+<body class="<?php echo $isAdmin ? 'admin-child-review-page' : ''; ?>">
 
 <?php include 'navbar.php'; ?>
 
@@ -283,7 +283,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
 <?php endif; ?>
 
 <?php if ($isAdmin): ?>
-<main class="container-fluid my-4">
+<main class="container-fluid my-4 admin-child-review-main">
     <div class="admin-review-card">
         <div class="admin-review-header">
             <div class="admin-review-title">
@@ -293,12 +293,12 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
         </div>
 
         <div class="admin-review-body">
-            <div class="row g-4 admin-review-layout">
-                <div class="col-lg-4 admin-image-col">
+            <div class="admin-review-layout">
+                <div class="admin-image-col">
                     <img src="uploads/childern/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="Profile" class="admin-child-image">
                 </div>
 
-                <div class="col-lg-8 admin-details-col">
+                <div class="admin-details-col">
                     <div class="data-grid">
                         <div class="data-item">
                             <span class="label">ชื่อเด็ก</span>
@@ -419,7 +419,6 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     </form>
                     <?php endif; ?>
 
-                </div>
             </div>
         </div>
     </div>
