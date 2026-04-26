@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 // สรุปสั้น: helper กลางสำหรับ Google Login (สร้าง URL, แลก token, ดึงข้อมูลผู้ใช้)
+require_once __DIR__ . '/env_loader.php';
+drawdream_load_env_file(__DIR__ . '/../.env');
 
 /**
  * includes/google_oauth.php

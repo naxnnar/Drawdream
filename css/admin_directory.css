@@ -109,22 +109,26 @@ body.admin-sidebar-page .admin-directory-page {
 
 /* หน้ามูลนิธิ: จัดปุ่มให้ขนาด/ตำแหน่งเท่ากัน ไม่เยื้อง */
 .admin-dir-actions--foundation {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
-    gap: 8px;
-    width: 100%;
-    max-width: 280px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: auto;
+    max-width: none;
 }
 
 .admin-dir-actions--foundation .admin-dir-btn {
-    width: 100%;
-    min-height: 40px;
+    width: auto;
+    min-height: 0;
     justify-content: center;
     white-space: nowrap;
+    padding: 9px 15px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-weight: 400;
 }
 
 .admin-dir-actions--foundation .admin-dir-btn--analytics {
-    grid-column: 1 / -1;
+    width: auto;
 }
 
 /* ปุ่มคู่ในตารางโครงการ/สิ่งของ: ขนาดเท่ากันและวางข้างกัน */

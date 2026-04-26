@@ -25,6 +25,19 @@ if (-not $phpExe) {
     exit 1
 }
 
+# Map Aiven env -> DB env (only when DB_* is not already set)
+if (-not $env:DB_HOST -and $env:AIVEN_HOST) { $env:DB_HOST = $env:AIVEN_HOST }
+if (-not $env:DB_PORT -and $env:AIVEN_PORT) { $env:DB_PORT = $env:AIVEN_PORT }
+if (-not $env:DB_USER -and $env:AIVEN_USER) { $env:DB_USER = $env:AIVEN_USER }
+if (-not $env:DB_PASSWORD -and $env:AIVEN_PASSWORD) { $env:DB_PASSWORD = $env:AIVEN_PASSWORD }
+if (-not $env:DB_NAME -and $env:AIVEN_DB) { $env:DB_NAME = $env:AIVEN_DB }
+
+# Fall back to project defaults (same as db.php) so the DB line is never blank
+if (-not $env:DB_HOST) { $env:DB_HOST = "mysql-17ffeb44-drawdream.c.aivencloud.com" }
+if (-not $env:DB_PORT) { $env:DB_PORT = "21503" }
+if (-not $env:DB_USER) { $env:DB_USER = "avnadmin" }
+if (-not $env:DB_NAME) { $env:DB_NAME = "defaultdb" }
+
 # Standalone PHP (e.g. C:\php) often has no php.ini, so mysqli/mbstring/openssl/curl never load.
 # ต้องมีอย่างน้อย cURL หรือ openssl อย่างใดอย่างหนึ่ง — โค้ด Omise ใช้ curl ก่อน; ถ้าไม่มี curl ต้องมี openssl (HTTPS ผ่าน socket / file_get_contents)
 # โหลด -d เฉพาะเมื่อ probe ล้ม (ลด warning "already loaded" บน XAMPP ที่เปิด extension ใน php.ini แล้ว)
@@ -50,6 +63,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  DrawDream - PHP built-in server" -ForegroundColor Cyan
 Write-Host "========================================"
 Write-Host "  Root: $root"
+Write-Host "  PHP : $phpExe"
+Write-Host "  DB  : $($env:DB_HOST):$($env:DB_PORT)/$($env:DB_NAME)"
 Write-Host "  Open: $url"
 Write-Host "  Stop: Ctrl+C"
 Write-Host "========================================"

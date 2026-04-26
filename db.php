@@ -12,6 +12,8 @@
  * @see docs/CODEBASE_FILE_INDEX.md | docs/SYSTEM_PRESENTATION_GUIDE.md
  */
 declare(strict_types=1);
+require_once __DIR__ . '/includes/env_loader.php';
+drawdream_load_env_file(__DIR__ . '/.env');
 
 /** ให้ header() / redirect ทำงานได้แม้หน้าเพจเริ่มส่ง HTML แล้ว (เช่น โหมดดูมุมมองผู้บริจาคใน navbar) */
 if (ob_get_level() === 0) {
@@ -23,12 +25,17 @@ if (is_file($dbLocalFile)) {
     /** @var array{host:string,port?:int,user:string,password:string,database:string} $dbConfig */
     $dbConfig = require $dbLocalFile;
 } else {
+    $envPass = getenv('DB_PASSWORD');
+    if ($envPass === false || $envPass === '') {
+        $envPass = getenv('AIVEN_PASSWORD');
+    }
     $dbConfig = [
-        'host' => getenv('DB_HOST') ?: 'localhost',
-        'port' => (int)(getenv('DB_PORT') ?: 3306),
-        'user' => getenv('DB_USER') ?: 'root',
-        'password' => getenv('DB_PASSWORD') !== false ? (string)getenv('DB_PASSWORD') : '',
-        'database' => getenv('DB_NAME') ?: 'drawdream_db',
+        // ค่า default สำหรับ Aiven Cloud (override ได้ด้วย env vars)
+        'host' => getenv('DB_HOST') ?: (getenv('AIVEN_HOST') ?: 'mysql-17ffeb44-drawdream.c.aivencloud.com'),
+        'port' => (int)(getenv('DB_PORT') ?: (getenv('AIVEN_PORT') ?: 21503)),
+        'user' => getenv('DB_USER') ?: (getenv('AIVEN_USER') ?: 'avnadmin'),
+        'password' => $envPass !== false && $envPass !== '' ? (string)$envPass : '',
+        'database' => getenv('DB_NAME') ?: (getenv('AIVEN_DB') ?: 'defaultdb'),
     ];
 }
 
@@ -38,10 +45,45 @@ $user = (string)($dbConfig['user'] ?? 'root');
 $password = (string)($dbConfig['password'] ?? '');
 $database = (string)($dbConfig['database'] ?? 'drawdream_db');
 
-$conn = mysqli_connect($host, $user, $password, $database, $port);
+if (function_exists('mysqli_init') && function_exists('mysqli_real_connect')) {
+    $connInit = mysqli_init();
+    if (!$connInit) {
+        die('Connection failed: cannot initialize MySQL client');
+    }
 
-if (!$conn) {
-    die('Connection failed: ' . htmlspecialchars(mysqli_connect_error(), ENT_QUOTES, 'UTF-8'));
+    $sslCa = trim((string)(getenv('DB_SSL_CA') !== false ? getenv('DB_SSL_CA') : ''));
+    $sslMode = strtolower(trim((string)(getenv('DB_SSL_MODE') !== false ? getenv('DB_SSL_MODE') : 'require')));
+    $useSsl = ($sslMode !== 'disable') || str_contains($host, 'aivencloud.com');
+    $sslFlags = 0;
+    if ($useSsl) {
+        if ($sslCa !== '' && is_file($sslCa)) {
+            mysqli_ssl_set($connInit, null, null, $sslCa, null, null);
+        } elseif (defined('MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT')) {
+            $sslFlags = MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT;
+        }
+    }
+
+    $connOk = @mysqli_real_connect(
+        $connInit,
+        $host,
+        $user,
+        $password,
+        $database,
+        $port,
+        null,
+        $sslFlags
+    );
+    if (!$connOk) {
+        $hint = $password === '' ? ' (DB_PASSWORD/AIVEN_PASSWORD ยังว่าง)' : '';
+        die('Connection failed: ' . htmlspecialchars(mysqli_connect_error(), ENT_QUOTES, 'UTF-8') . $hint);
+    }
+    $conn = $connInit;
+} else {
+    $conn = mysqli_connect($host, $user, $password, $database, $port);
+    if (!$conn) {
+        $hint = $password === '' ? ' (DB_PASSWORD/AIVEN_PASSWORD ยังว่าง)' : '';
+        die('Connection failed: ' . htmlspecialchars(mysqli_connect_error(), ENT_QUOTES, 'UTF-8') . $hint);
+    }
 }
 
 mysqli_set_charset($conn, 'utf8mb4');
