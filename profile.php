@@ -361,6 +361,11 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                 <span class="profile-menu-label">ยอดบริจาค</span>
                 <span class="profile-menu-arrow">›</span>
             </button>
+            <a href="foundation_dashboard.php" class="profile-menu-btn profile-menu-btn--dashboard">
+                <span class="profile-menu-icon"><i class="bi bi-grid-1x2-fill"></i></span>
+                <span class="profile-menu-label">แดชบอร์ด</span>
+                <span class="profile-menu-arrow">›</span>
+            </a>
         </div>
 
         <?php

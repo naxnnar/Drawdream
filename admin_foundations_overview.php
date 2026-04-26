@@ -48,7 +48,7 @@ $rows = $conn->query($sql);
     </div>
 
     <div class="admin-dir-table-wrap">
-        <table class="admin-dir-table">
+        <table class="admin-dir-table admin-dir-table--foundations">
             <thead>
             <tr>
                 <th>ชื่อมูลนิธิ</th>
