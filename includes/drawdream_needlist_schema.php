@@ -31,6 +31,15 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_foundation_image'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN need_foundation_image VARCHAR(255) NULL DEFAULT NULL AFTER item_image_3');
     }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_items_json'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN need_items_json LONGTEXT NULL DEFAULT NULL AFTER total_price');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'desired_brand'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN desired_brand VARCHAR(200) NULL DEFAULT NULL AFTER item_desc');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'price_estimate'")) && $c->num_rows > 0) {
+        @$conn->query('ALTER TABLE foundation_needlist DROP COLUMN price_estimate');
+    }
 
     $addedDonateWindowEnd = false;
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'donate_window_end_at'")) && $c->num_rows === 0) {

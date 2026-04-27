@@ -199,7 +199,11 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
             </thead>
             <tbody>
             <?php while($row = mysqli_fetch_assoc($result)): ?>
-                <?php $total = (float)$row['qty_needed'] * (float)$row['price_estimate']; ?>
+                <?php
+                    $total = (float)($row['total_price'] ?? 0);
+                    $qtyForUnit = (float)($row['qty_needed'] ?? 0);
+                    $unitPrice = $qtyForUnit > 0 ? ($total / $qtyForUnit) : 0.0;
+                ?>
                 <?php
                     $itemImages = foundation_needlist_item_filenames_from_row($row);
                     $mainItemImage = $itemImages[0] ?? '';
@@ -225,7 +229,7 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                         <?php endif; ?>
                     </td>
                     <td><?= (int)$row['qty_needed'] ?></td>
-                    <td><?= number_format((float)$row['price_estimate'], 2) ?></td>
+                    <td><?= number_format($unitPrice, 2) ?></td>
                     <td><b><?= number_format($total, 2) ?></b></td>
                     <td>
                         <form id="f<?= (int)$row['item_id'] ?>" method="post">

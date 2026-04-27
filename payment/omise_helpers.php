@@ -22,6 +22,15 @@ function drawdream_omise_ca_bundle_path(): ?string
     if (is_readable($p)) {
         return $p;
     }
+    $iniCa = ini_get('curl.cainfo');
+    if (is_string($iniCa) && $iniCa !== '' && is_readable($iniCa)) {
+        return $iniCa;
+    }
+    $iniOpenSslCa = ini_get('openssl.cafile');
+    if (is_string($iniOpenSslCa) && $iniOpenSslCa !== '' && is_readable($iniOpenSslCa)) {
+        return $iniOpenSslCa;
+    }
+    error_log('[drawdream_omise] missing CA bundle fallback, using system store');
     return null;
 }
 
@@ -188,34 +197,47 @@ function drawdream_omise_http_raw(string $method, string $path, ?string $jsonBod
 
     if (function_exists('curl_init')) {
         // ทางหลัก (เสถียรสุด): cURL
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        $caBundle = drawdream_omise_ca_bundle_path();
-        if ($caBundle !== null) {
-            curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
+        $maxAttempts = 3;
+        $lastErr = '';
+        $lastResponse = '';
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_USERPWD, OMISE_SECRET_KEY . ':');
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+            $caBundle = drawdream_omise_ca_bundle_path();
+            if ($caBundle !== null) {
+                curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
+            }
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            if ($method === 'GET') {
+                curl_setopt($ch, CURLOPT_HTTPGET, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, []);
+            } elseif ($method === 'POST') {
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonBody ?? '{}');
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            } else {
+                curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonBody ?? '');
+                curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            }
+            $response = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            if ($response !== false && $response !== '' && $httpCode < 500 && $httpCode !== 429) {
+                return ['ok' => true, 'body' => (string)$response, 'err' => ''];
+            }
+            $lastResponse = is_string($response) ? $response : '';
+            $lastErr = $curlErr !== '' ? $curlErr : ('HTTP ' . $httpCode);
+            if ($attempt < $maxAttempts) {
+                usleep((int)(200000 * $attempt));
+            }
         }
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        if ($method === 'GET') {
-            curl_setopt($ch, CURLOPT_HTTPGET, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, []);
-        } elseif ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonBody ?? '{}');
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        } else {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonBody ?? '');
-            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        }
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        if ($response === false || $response === '') {
-            return ['ok' => false, 'body' => '', 'err' => $curlErr !== '' ? $curlErr : 'empty response'];
-        }
-        return ['ok' => true, 'body' => (string) $response, 'err' => ''];
+        return ['ok' => false, 'body' => $lastResponse, 'err' => $lastErr !== '' ? $lastErr : 'empty response'];
     }
 
     // fallback 1: SSL socket (มักช่วยเคส local/windows)
@@ -279,10 +301,29 @@ function drawdream_omise_fetch_charge(string $chargeId): ?array
     $path = '/charges/' . rawurlencode($chargeId) . '?expand[]=source';
     $http = drawdream_omise_http_raw('GET', $path, null);
     if (!$http['ok'] || $http['body'] === '') {
+        error_log('[drawdream_omise] fetch charge failed: ' . drawdream_omise_error_for_human($http['err'] ?? ''));
         return null;
     }
     $decoded = json_decode($http['body'], true);
     return is_array($decoded) ? $decoded : null;
+}
+
+function drawdream_omise_error_for_human(string $err): string
+{
+    $lower = strtolower($err);
+    if (str_contains($lower, 'timed out')) {
+        return 'การเชื่อมต่อ Omise หมดเวลา กรุณาลองใหม่';
+    }
+    if (str_contains($lower, 'ssl') || str_contains($lower, 'certificate')) {
+        return 'การเชื่อมต่อ SSL ไป Omise ไม่สำเร็จ กรุณาตรวจสอบ CA certificate';
+    }
+    if (str_contains($lower, 'http 429')) {
+        return 'คำขอไป Omise ถูกจำกัดความถี่ชั่วคราว';
+    }
+    if (preg_match('/http\s+5\d\d/i', $err)) {
+        return 'ระบบ Omise ขัดข้องชั่วคราว กรุณาลองใหม่';
+    }
+    return $err !== '' ? $err : 'เชื่อมต่อ Omise ไม่สำเร็จ';
 }
 
 /**

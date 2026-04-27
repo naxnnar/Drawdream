@@ -12,6 +12,7 @@ require_once dirname(__DIR__) . '/includes/omise_api_client.php';
 require_once dirname(__DIR__) . '/includes/omise_user_messages.php';
 require_once dirname(__DIR__) . '/includes/donate_category_resolve.php';
 require_once dirname(__DIR__) . '/includes/e_receipt.php';
+require_once dirname(__DIR__) . '/includes/child_subscription_history.php';
 
 /**
  * Omise ต้องการ on[days_of_month][]=N ไม่ใช่ on[days_of_month][0]=N
@@ -371,6 +372,26 @@ if (($sres['object'] ?? '') === 'error') {
             $updCard->bind_param('si', $cardId, $donorUid);
             $updCard->execute();
         }
+        drawdream_child_subscription_history_log(
+            $conn,
+            $childId,
+            $donorUid,
+            $firstDonateId,
+            $localSchId,
+            $firstChId !== '' ? $firstChId : null,
+            'subscription_created',
+            null,
+            'active',
+            $planCode,
+            $firstAmountBaht,
+            'web_create',
+            'local_cron_subscription_created',
+            [
+                'customer_id' => $custId,
+                'card_id' => $cardId,
+                'next_charge_at' => $nextSql,
+            ]
+        );
         drawdream_send_e_receipt_notification_by_donate_id($conn, $firstDonateId);
     }
 
@@ -412,6 +433,30 @@ $ins->bind_param(
 if (!$ins->execute()) {
     child_subscription_redirect('บันทึกฐานข้อมูลไม่สำเร็จ รหัส Schedule: ' . $schId . ' (ตรวจใน Omise Dashboard)', false, $childId);
 }
+$seedDonateId = (int)$conn->insert_id;
+drawdream_child_subscription_history_log(
+    $conn,
+    $childId,
+    $donorUid,
+    $seedDonateId > 0 ? $seedDonateId : null,
+    $schId,
+    null,
+    'subscription_created',
+    null,
+    'active',
+    $planCode,
+    (float)$planSpec['amount_thb'],
+    'web_create',
+    'omise_schedule_created',
+    [
+        'customer_id' => $custId,
+        'card_id' => $cardId,
+        'schedule_id' => $schId,
+        'plan_every' => (int)$planSpec['every'],
+        'plan_period' => (string)$planSpec['period'],
+        'bill_day' => $billDay,
+    ]
+);
 
 $updCard2 = $conn->prepare('UPDATE donor SET omise_card_id = ? WHERE user_id = ?');
 if ($updCard2) {

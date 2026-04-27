@@ -30,6 +30,7 @@ function drawdream_omise_curl_ca_bundle_path(): ?string
         return $iniCa;
     }
 
+    error_log('[drawdream_omise] CA bundle not found, using system default trust store');
     return null;
 }
 
@@ -65,16 +66,26 @@ function drawdream_omise_post_form(string $path, array $fields): array
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => http_build_query($fields),
     ]);
-    $response = curl_exec($ch);
-    $curlErr = curl_error($ch);
-    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $maxAttempts = 3;
+    $response = false;
+    $curlErr = '';
+    $httpCode = 0;
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        $response = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $shouldRetry = ($response === false || $response === '') || $httpCode >= 500 || $httpCode === 429;
+        if (!$shouldRetry || $attempt === $maxAttempts) {
+            break;
+        }
+        usleep((int)(200000 * $attempt));
+    }
     if ($response === false || $response === '') {
         $msg = $curlErr !== '' ? $curlErr : ('เชื่อมต่อ Omise ไม่ได้ (HTTP ' . $httpCode . ')');
-
         return [
             'object' => 'error',
             'code' => 'curl',
-            'message' => $msg,
+            'message' => drawdream_omise_map_error_message($msg, $httpCode),
             'http_code' => $httpCode,
         ];
     }
@@ -87,8 +98,31 @@ function drawdream_omise_post_form(string $path, array $fields): array
             'http_code' => $httpCode,
         ];
     }
+    if (($decoded['object'] ?? '') === 'error') {
+        $rawMsg = (string)($decoded['message'] ?? '');
+        $decoded['message'] = drawdream_omise_map_error_message($rawMsg, $httpCode);
+        $decoded['http_code'] = $httpCode;
+    }
 
     return $decoded;
+}
+
+function drawdream_omise_map_error_message(string $raw, int $httpCode = 0): string
+{
+    $lower = strtolower($raw);
+    if (str_contains($lower, 'timed out')) {
+        return 'การเชื่อมต่อกับ Omise หมดเวลา กรุณาลองอีกครั้ง';
+    }
+    if (str_contains($lower, 'ssl') || str_contains($lower, 'certificate')) {
+        return 'ไม่สามารถยืนยันความปลอดภัย SSL กับ Omise ได้ กรุณาตรวจสอบ CA certificate';
+    }
+    if ($httpCode === 429) {
+        return 'คำขอไป Omise ถูกจำกัดความถี่ชั่วคราว กรุณาลองใหม่';
+    }
+    if ($httpCode >= 500) {
+        return 'ระบบ Omise ขัดข้องชั่วคราว กรุณาลองใหม่';
+    }
+    return $raw !== '' ? $raw : 'ไม่สามารถเชื่อมต่อ Omise ได้';
 }
 
 /**

@@ -13,6 +13,7 @@ require_once dirname(__DIR__) . '/includes/omise_user_messages.php';
 require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/notification_audit.php';
+require_once dirname(__DIR__) . '/includes/child_subscription_history.php';
 
 function child_subscription_cancel_redirect(string $msg, bool $ok, int $childId): void
 {
@@ -59,6 +60,7 @@ if (!$sub) {
 
 $scheduleId = trim((string)($sub['recurring_schedule_id'] ?? ''));
 $planCode = strtolower(trim((string)($sub['recurring_plan_code'] ?? '')));
+$activeDonateId = (int)($sub['donate_id'] ?? 0);
 
 // omise_schedule: เรียก revoke schedule เพื่อตัดรอบอนาคต
 if ($scheduleId !== '' && str_starts_with($scheduleId, 'schd_')) {
@@ -80,6 +82,29 @@ if (!$up) {
 }
 $up->bind_param('sii', $cancelled, $childId, $donorUid);
 $up->execute();
+
+if ($up->affected_rows > 0) {
+    drawdream_child_subscription_history_log(
+        $conn,
+        $childId,
+        $donorUid,
+        $activeDonateId > 0 ? $activeDonateId : null,
+        $scheduleId !== '' ? $scheduleId : null,
+        null,
+        'subscription_cancelled',
+        'active',
+        'cancelled',
+        $planCode !== '' ? $planCode : null,
+        null,
+        'web_cancel',
+        'cancelled_by_donor',
+        [
+            'request_method' => (string)($_SERVER['REQUEST_METHOD'] ?? ''),
+            'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
+            'user_agent' => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
+        ]
+    );
+}
 
 if ($up->affected_rows > 0) {
     $stChild = $conn->prepare(

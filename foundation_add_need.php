@@ -121,49 +121,121 @@ function drawdream_need_tokens_from_db($raw)
     return array_values(array_unique($clean));
 }
 
+/**
+ * Decode line-items JSON from foundation_needlist.need_items_json.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function drawdream_need_items_from_json($raw): array
+{
+    $txt = trim((string)$raw);
+    if ($txt === '') {
+        return [];
+    }
+    try {
+        $decoded = json_decode($txt, true, 512, JSON_THROW_ON_ERROR);
+    } catch (Throwable $e) {
+        return [];
+    }
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $out = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $cat = trim((string)($row['category'] ?? ''));
+        $qty = (float)($row['qty_needed'] ?? ($row['qty'] ?? 0));
+        $price = (float)($row['price_estimate'] ?? ($row['price'] ?? 0));
+        if ($cat === '' || $qty <= 0 || $price <= 0) {
+            continue;
+        }
+        $out[] = [
+            'category' => $cat,
+            'qty' => $qty,
+            'price' => $price,
+        ];
+    }
+    return $out;
+}
+
 if ($editRow && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     $cats = drawdream_need_tokens_from_db($editRow['brand'] ?? '');
     $opts = drawdream_need_tokens_from_db($editRow['item_name'] ?? '');
-
-    // fallback for legacy rows with empty/invalid brand: infer categories from selected options
-    if ($cats === []) {
-        $inferred = [];
-        foreach ($categoryItems as $cat => $options) {
-            if ($options !== [] && count(array_intersect($opts, $options)) > 0) {
-                $inferred[] = $cat;
+    $itemRowsFromJson = drawdream_need_items_from_json($editRow['need_items_json'] ?? '');
+    for ($i = 1; $i <= 5; $i++) {
+        $_POST['item_category_' . $i] = '';
+        $_POST['item_option_' . $i] = '';
+        $_POST['item_custom_' . $i] = '';
+        $_POST['item_price_' . $i] = '';
+        $_POST['item_qty_' . $i] = '';
+    }
+    $qtyFromDb = (float)($editRow['qty_needed'] ?? 0);
+    if ($qtyFromDb <= 0) {
+        $qtyFromDb = 1;
+    }
+    $goalFromTotal = (float)($editRow['total_price'] ?? 0);
+    $priceFromDb = $goalFromTotal > 0 ? ($goalFromTotal / $qtyFromDb) : 0.0;
+    $slotIdx = 1;
+    $sourceRows = [];
+    if (!empty($itemRowsFromJson)) {
+        $sourceRows = $itemRowsFromJson;
+    } else {
+        foreach ($opts as $itemName) {
+            $sourceRows[] = [
+                'category' => '',
+                'item_name' => $itemName,
+                'qty' => $qtyFromDb,
+                'price' => $priceFromDb,
+            ];
+        }
+    }
+    foreach ($sourceRows as $rowData) {
+        if ($slotIdx > 5) {
+            break;
+        }
+        $fallbackName = $opts[$slotIdx - 1] ?? '';
+        $itemName = trim((string)($rowData['item_name'] ?? $fallbackName));
+        $rowCat = trim((string)($rowData['category'] ?? ''));
+        $rowQty = (float)($rowData['qty'] ?? 0);
+        $rowPrice = (float)($rowData['price'] ?? 0);
+        if ($rowQty <= 0) {
+            $rowQty = $qtyFromDb;
+        }
+        if ($rowPrice <= 0) {
+            $rowPrice = $priceFromDb;
+        }
+        $matchedCategory = '';
+        foreach ($categoryItems as $catName => $optList) {
+            if (in_array($itemName, $optList, true)) {
+                $matchedCategory = $catName;
+                break;
             }
         }
-        if ($inferred !== []) {
-            $cats = $inferred;
+        if ($matchedCategory === '') {
+            if ($rowCat !== '') {
+                $matchedCategory = $rowCat;
+            } else {
+                $matchedCategory = $cats[0] ?? 'อื่นๆ ที่จำเป็นเฉพาะทาง';
+            }
         }
-    }
-
-    $_POST['item_categories'] = $cats;
-    $allowedForEdit = [];
-    foreach ($cats as $cat) {
-        if (isset($categoryItems[$cat])) {
-            $allowedForEdit = array_merge($allowedForEdit, $categoryItems[$cat]);
+        $_POST['item_category_' . $slotIdx] = $matchedCategory;
+        if (in_array($itemName, $categoryItems[$matchedCategory] ?? [], true)) {
+            $_POST['item_option_' . $slotIdx] = $itemName;
+        } else {
+            $_POST['item_option_' . $slotIdx] = '__other__';
+            $_POST['item_custom_' . $slotIdx] = $itemName;
         }
+        $_POST['item_price_' . $slotIdx] = $rowPrice > 0 ? (string)round($rowPrice, 2) : '';
+        $_POST['item_qty_' . $slotIdx] = $rowQty > 0 ? (string)(int)$rowQty : '';
+        $slotIdx++;
     }
-    $allowedForEdit = array_values(array_unique($allowedForEdit));
-    $_POST['item_options'] = [];
-    for ($i = 1; $i <= 5; $i++) {
-        $_POST['item_other_' . $i] = '';
+    $_POST['desired_brand'] = (string)($editRow['desired_brand'] ?? $editRow['item_desc'] ?? '');
+    if ((int)($editRow['allow_other_brand'] ?? 0) === 1) {
+        $_POST['allow_any_brand'] = '1';
     }
-    $oi = 0;
-    foreach ($opts as $o) {
-        if (in_array($o, $allowedForEdit, true)) {
-            $_POST['item_options'][] = $o;
-        } elseif ($oi < 5) {
-            $oi++;
-            $_POST['item_other_' . $oi] = $o;
-        }
-    }
-    $_POST['item_desc'] = (string)($editRow['item_desc'] ?? '');
-    $goalFromTotal = (float)($editRow['total_price'] ?? 0);
     if ($goalFromTotal <= 0) {
-        $qtyFromDb = (float)($editRow['qty_needed'] ?? 0);
-        $priceFromDb = (float)($editRow['price_estimate'] ?? 0);
         $goalFromTotal = ($qtyFromDb > 0 ? $qtyFromDb : 1) * $priceFromDb;
     }
     $_POST['goal_amount'] = (string)(int)round($goalFromTotal);
@@ -216,83 +288,132 @@ if (isset($_POST['submit'])) {
         // ข้าม validation เมื่อตรวจสิทธิ์แก้ไขไม่ผ่าน
     } else {
 
-    $selectedCategories = $_POST['item_categories'] ?? [];
-    if (!is_array($selectedCategories)) $selectedCategories = [];
-    $selectedCategories = array_values(array_unique(array_filter(array_map('trim', $selectedCategories), function ($v) {
-        return $v !== '';
-    })));
+    $lineItems = [];
+    $selectedCategories = [];
+    $itemNames = [];
+    $goal = 0.0;
+    for ($slot = 1; $slot <= 5; $slot++) {
+        $cat = trim((string)($_POST['item_category_' . $slot] ?? ''));
+        $opt = trim((string)($_POST['item_option_' . $slot] ?? ''));
+        $custom = trim((string)($_POST['item_custom_' . $slot] ?? ''));
+        $priceSlot = (float)($_POST['item_price_' . $slot] ?? 0);
+        $qtySlot = (float)($_POST['item_qty_' . $slot] ?? 0);
 
-    $itemOptions = $_POST['item_options'] ?? [];
-    if (!is_array($itemOptions)) $itemOptions = [];
-    $itemOptions = array_values(array_unique(array_filter(array_map('trim', $itemOptions), function ($v) {
-        return $v !== '';
-    })));
-
-    $otherItems = [];
-    for ($oi = 1; $oi <= 5; $oi++) {
-        $ok = 'item_other_' . $oi;
-        $t = trim((string)($_POST[$ok] ?? ''));
-        if ($t !== '') {
-            $otherItems[] = $t;
+        $hasAny = ($cat !== '' || $opt !== '' || $custom !== '' || $priceSlot > 0 || $qtySlot > 0);
+        if (!$hasAny) {
+            continue;
         }
-    }
-    $item_desc   = trim($_POST['item_desc'] ?? '');
-    $brand       = implode(' | ', $selectedCategories);
-    $allow_other = 0;
-    $urgent      = isset($_POST['urgent']) ? 1 : 0;
-    $note        = trim($_POST['note'] ?? '');
-    $goal        = (float)($_POST['goal_amount'] ?? 0);
-    $qty         = 1;   // ใช้ค่าคงที่แทน ไม่รับจาก user
-    $price       = $goal;
-
-    $totalPicks = count($itemOptions) + count($otherItems);
-    $item_name = '';
-
-    // Validation
-    if (count($selectedCategories) < 1) {
-        $error = "กรุณาเลือกหมวดหมู่สิ่งของอย่างน้อย 1 หมวด";
-    } elseif (count(array_diff($selectedCategories, $itemCategories)) > 0) {
-        $error = "หมวดหมู่สิ่งของไม่ถูกต้อง";
-    } elseif ($totalPicks < 1) {
-        $error = "กรุณาเลือกหรือระบุรายการสิ่งของอย่างน้อย 1 รายการ";
-    } elseif ($totalPicks > 5) {
-        $error = "รายการสิ่งของรวมกันได้สูงสุด 5 รายการ (รายการตามหมวด + ระบุเอง อื่นๆ)";
-    } else {
-        foreach ($otherItems as $oi) {
-            if (mb_strlen($oi, 'UTF-8') > 200) {
-                $error = 'แต่ละรายการที่ระบุเองต้องไม่เกิน 200 ตัวอักษร';
+        if ($cat === '' || !in_array($cat, $itemCategories, true)) {
+            $error = "ช่องรายการที่ {$slot}: กรุณาเลือกหมวดหมู่สิ่งของ";
+            break;
+        }
+        if ($cat === 'อื่นๆ ที่จำเป็นเฉพาะทาง' && $opt === '') {
+            $opt = '__other__';
+            $_POST['item_option_' . $slot] = '__other__';
+        }
+        $allowedOptions = $categoryItems[$cat] ?? [];
+        $allowedWithOther = array_merge($allowedOptions, ['__other__']);
+        if ($opt === '' || !in_array($opt, $allowedWithOther, true)) {
+            $error = "ช่องรายการที่ {$slot}: กรุณาเลือกรายการสิ่งของตามหมวด";
+            break;
+        }
+        $itemName = $opt;
+        if ($opt === '__other__') {
+            if ($custom === '') {
+                $error = "ช่องรายการที่ {$slot}: กรุณาระบุรายการอื่นๆ";
                 break;
             }
+            if (mb_strlen($custom, 'UTF-8') > 200) {
+                $error = "ช่องรายการที่ {$slot}: รายการอื่นๆ ต้องไม่เกิน 200 ตัวอักษร";
+                break;
+            }
+            $itemName = $custom;
         }
-        if ($error === '') {
-            $allowedOptions = [];
-            foreach ($selectedCategories as $cat) {
-                if (isset($categoryItems[$cat])) {
-                    $allowedOptions = array_merge($allowedOptions, $categoryItems[$cat]);
-                }
-            }
-            $allowedOptions = array_values(array_unique($allowedOptions));
-            if ($itemIdEdit > 0 && $existingNeedRow) {
-                $oldOpts = [];
-                foreach (preg_split('/\s*,\s*/u', (string)($existingNeedRow['item_name'] ?? '')) as $p) {
-                    $t = trim($p);
-                    if ($t !== '') {
-                        $oldOpts[] = $t;
-                    }
-                }
-                $allowedOptions = array_values(array_unique(array_merge($allowedOptions, $oldOpts)));
-            }
-            foreach ($itemOptions as $opt) {
-                if (!in_array($opt, $allowedOptions, true)) {
-                    $error = "มีรายการสิ่งของที่ไม่ตรงกับหมวดที่เลือก";
-                    break;
-                }
-            }
+        if ($priceSlot <= 0) {
+            $error = "ช่องรายการที่ {$slot}: กรุณากรอกราคาที่มากกว่า 0";
+            break;
         }
-        if ($error === '') {
-            $merged = array_merge($itemOptions, $otherItems);
-            $merged = array_values(array_unique($merged));
-            $item_name = implode(', ', $merged);
+        if ($qtySlot <= 0) {
+            $error = "ช่องรายการที่ {$slot}: กรุณากรอกจำนวนชิ้นที่มากกว่า 0";
+            break;
+        }
+        $lineTotal = $priceSlot * $qtySlot;
+        $goal += $lineTotal;
+        $lineItems[] = [
+            'slot' => $slot,
+            'category' => $cat,
+            'item_name' => $itemName,
+            'price' => $priceSlot,
+            'qty' => $qtySlot,
+            'line_total' => $lineTotal,
+        ];
+        $selectedCategories[] = $cat;
+        $itemNames[] = $itemName;
+    }
+
+    if ($error === '' && count($lineItems) < 1) {
+        $error = "กรุณากรอกอย่างน้อย 1 รายการสิ่งของ";
+    }
+    if ($error === '' && count($lineItems) > 5) {
+        $error = "กรอกรายการได้สูงสุด 5 ช่อง";
+    }
+
+    $desiredBrand = trim((string)($_POST['desired_brand'] ?? ''));
+    $brand       = implode(' | ', array_values(array_unique($selectedCategories)));
+    $allow_other = isset($_POST['allow_any_brand']) ? 1 : 0;
+    $urgent      = isset($_POST['urgent']) ? 1 : 0;
+    $note        = trim($_POST['note'] ?? '');
+    $qty         = 0.0;
+    $price       = 0.0;
+    $item_name = implode(', ', $itemNames);
+    $needItemsJson = '';
+    foreach ($lineItems as $li) {
+        $qty += (float)$li['qty'];
+    }
+    if ($qty > 0) {
+        $price = $goal / $qty;
+    }
+    if ($error === '') {
+        $lineSummary = [];
+        foreach ($lineItems as $li) {
+            $lineSummary[] = sprintf(
+                '[%d] %s | %s | %s ชิ้น × %s บาท = %s บาท',
+                (int)$li['slot'],
+                (string)$li['category'],
+                (string)$li['item_name'],
+                number_format((float)$li['qty'], 0),
+                number_format((float)$li['price'], 2),
+                number_format((float)$li['line_total'], 2)
+            );
+        }
+        $lineSummaryText = implode("\n", $lineSummary);
+        if ($allow_other !== 1 && $desiredBrand === '') {
+            $error = 'กรุณากรอกแบรนด์ที่ต้องการ หรือเลือกว่ายอมรับแบรนด์ไหนก็ได้';
+        }
+        if ($error === '' && mb_strlen($desiredBrand, 'UTF-8') > 200) {
+            $error = 'แบรนด์ที่ต้องการต้องไม่เกิน 200 ตัวอักษร';
+        }
+        $item_desc = $desiredBrand;
+        $lineItemsForJson = [];
+        foreach ($lineItems as $li) {
+            $lineItemsForJson[] = [
+                'slot' => (int)($li['slot'] ?? 0),
+                'category' => (string)($li['category'] ?? ''),
+                'qty_needed' => (float)($li['qty'] ?? 0),
+                'price_estimate' => (float)($li['price'] ?? 0),
+                'line_total' => (float)($li['line_total'] ?? 0),
+            ];
+        }
+        $needItemsJson = json_encode($lineItemsForJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($needItemsJson) || $needItemsJson === '') {
+            $needItemsJson = '[]';
+        }
+        $_POST['goal_amount'] = (string)round($goal, 2);
+        $_POST['desired_brand'] = $desiredBrand;
+        if ($allow_other === 1) {
+            $_POST['allow_any_brand'] = '1';
+        } else {
+            unset($_POST['allow_any_brand']);
         }
     }
 
@@ -426,23 +547,23 @@ if (isset($_POST['submit'])) {
             }
 
             $sqlU = "UPDATE foundation_needlist SET
-                item_name = ?, item_desc = ?, brand = ?, allow_other_brand = ?,
-                qty_needed = ?, price_estimate = ?, urgent = ?,
+                item_name = ?, item_desc = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
+                qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
-                note = ?, total_price = ?
+                note = ?, total_price = ?, need_items_json = ?
                 WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'sss' . 'iidi' . str_repeat('s', 5) . 'd' . 'ii';
+                $updTypes = 'ssss' . 'idi' . str_repeat('s', 5) . 'ds' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
-                    $item_name, $item_desc, $brand,
-                    $allow_other, $qty, $price, $urgent,
+                    $item_name, $item_desc, $desiredBrand, $brand,
+                    $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
-                    $note, $total_price,
+                    $note, $total_price, $needItemsJson,
                     $itemIdEdit, $foundation_id
                 );
 
@@ -500,18 +621,45 @@ if (isset($_POST['submit'])) {
 
             $sql  = "INSERT INTO foundation_needlist 
                  (foundation_id, item_name, item_desc, brand, allow_other_brand,
-                  qty_needed, price_estimate, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, approve_item)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                 qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, approve_item)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
             $stmt = $conn->prepare($sql);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $stmt->bind_param(
-                    "isssiidissssisd",
-                    $foundation_id, $item_name, $item_desc, $brand,
-                    $allow_other, $qty, $price, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price
-                );
+                // รองรับทั้ง schema ใหม่ (มี need_items_json) และ schema เก่าที่ยังไม่ migration
+                $hasNeedItemsJson = false;
+                $chkNeedJson = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_items_json'");
+                if ($chkNeedJson && $chkNeedJson->num_rows > 0) {
+                    $hasNeedItemsJson = true;
+                }
+                if ($hasNeedItemsJson) {
+                    $sql = "INSERT INTO foundation_needlist
+                        (foundation_id, item_name, item_desc, desired_brand, brand, allow_other_brand,
+                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, need_items_json, approve_item)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                    $stmt = $conn->prepare($sql);
+                    if (!$stmt) {
+                        $error = "Prepare failed: " . $conn->error;
+                    }
+                }
+            }
+
+            if ($error === '' && $stmt) {
+                if ($hasNeedItemsJson) {
+                    $stmt->bind_param(
+                        "issssidisssisds",
+                        $foundation_id, $item_name, $item_desc, $desiredBrand, $brand,
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $needItemsJson
+                    );
+                } else {
+                    $stmt->bind_param(
+                        "isssidissssisd",
+                        $foundation_id, $item_name, $item_desc, $brand,
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price
+                    );
+                }
 
                 if ($stmt->execute()) {
                     $newItemId = (int)$conn->insert_id;
@@ -583,48 +731,42 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
             <div class="form-col">
 
                 <div class="form-group">
-                    <label>หมวดหมู่สิ่งของ * (เลือกได้หลายหมวด)</label>
-                    <?php $selectedCategories = $_POST['item_categories'] ?? []; if (!is_array($selectedCategories)) $selectedCategories = []; ?>
-                    <div class="category-check-grid" id="categoryCheckGrid">
-                        <?php foreach ($itemCategories as $category): ?>
-                            <label class="category-check-item">
-                                <input type="checkbox" name="item_categories[]" value="<?= htmlspecialchars($category) ?>" class="category-check" <?= in_array($category, $selectedCategories, true) ? 'checked' : '' ?>>
-                                <span><?= htmlspecialchars($category) ?></span>
-                            </label>
-                        <?php endforeach; ?>
-                    </div>
-                    <small style="color:#6b7280;">เลือกหลายหมวดได้ รายการตามหมวด + ระบุเอง (อื่นๆ) รวมกันได้สูงสุด 5 รายการ</small>
-                </div>
-
-                <div class="form-group" id="itemSectionGroup" style="display:none;">
-                    <label>รายการสิ่งของ * (เลือกได้สูงสุด 5 รายการ)</label>
-                    <?php $selectedItems = $_POST['item_options'] ?? []; if (!is_array($selectedItems)) $selectedItems = []; ?>
-                    <div class="item-check-groups" id="itemCheckGroups">
-                        <?php foreach ($categoryItems as $catName => $options): ?>
-                            <?php if (count($options) === 0) {
-                                continue;
-                            } ?>
-                            <div class="item-check-group" data-category="<?= htmlspecialchars($catName) ?>">
-                                <div class="item-check-group-title"><?= htmlspecialchars($catName) ?></div>
-                                <div class="item-check-grid">
-                                    <?php foreach ($options as $option): ?>
-                                        <label class="item-check-item">
-                                            <input type="checkbox" name="item_options[]" value="<?= htmlspecialchars($option) ?>" class="item-option-check" <?= in_array($option, $selectedItems, true) ? 'checked' : '' ?>>
-                                            <span><?= htmlspecialchars($option) ?></span>
-                                        </label>
+                    <label>รายการสิ่งของ (สูงสุด 5 ช่อง)</label>
+                    <small style="color:#6b7280;display:block;margin-bottom:8px;">
+                        แต่ละช่อง: เลือกหมวดหมู่ > เลือกสิ่งของ (หรือระบุเอง) > กรอกราคา > กรอกจำนวนชิ้น
+                    </small>
+                    <?php for ($slot = 1; $slot <= 5; $slot++): ?>
+                        <?php
+                        $catVal = (string)($_POST['item_category_' . $slot] ?? '');
+                        $optVal = (string)($_POST['item_option_' . $slot] ?? '');
+                        $customVal = (string)($_POST['item_custom_' . $slot] ?? '');
+                        $priceVal = (string)($_POST['item_price_' . $slot] ?? '');
+                        $qtyVal = (string)($_POST['item_qty_' . $slot] ?? '');
+                        ?>
+                        <div class="item-check-group need-line-slot" data-slot="<?= (int)$slot ?>">
+                            <div class="item-check-group-title">รายการที่ <?= (int)$slot ?></div>
+                            <div style="display:grid;grid-template-columns:2.1fr 2.1fr 1fr 1fr;gap:8px;">
+                                <select name="item_category_<?= $slot ?>" class="need-slot-category" data-slot="<?= (int)$slot ?>">
+                                    <option value="">เลือกหมวดหมู่</option>
+                                    <?php foreach ($itemCategories as $category): ?>
+                                        <option value="<?= htmlspecialchars($category, ENT_QUOTES, 'UTF-8') ?>" <?= $catVal === $category ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($category) ?>
+                                        </option>
                                     <?php endforeach; ?>
-                                </div>
+                                </select>
+                                <select name="item_option_<?= $slot ?>" class="need-slot-item" data-slot="<?= (int)$slot ?>" data-selected="<?= htmlspecialchars($optVal, ENT_QUOTES, 'UTF-8') ?>">
+                                    <option value="">เลือกรายการสิ่งของ</option>
+                                </select>
+                                <input type="text" inputmode="decimal" name="item_price_<?= $slot ?>" class="need-slot-price" data-slot="<?= (int)$slot ?>" value="<?= htmlspecialchars($priceVal, ENT_QUOTES, 'UTF-8') ?>" placeholder="ราคา/ชิ้น">
+                                <input type="text" inputmode="numeric" name="item_qty_<?= $slot ?>" class="need-slot-qty" data-slot="<?= (int)$slot ?>" value="<?= htmlspecialchars($qtyVal, ENT_QUOTES, 'UTF-8') ?>" placeholder="จำนวน">
                             </div>
-                        <?php endforeach; ?>
-                    </div>
-                    <small id="selectedItemCount" style="color:#6b7280;">เลือกแล้ว 0/5 รายการ</small>
-                </div>
-
-                <div class="form-group" id="itemOtherGroup" style="display:none;">
-                    <label>ระบุเอง (อื่นๆ)</label>
-                    <?php for ($oi = 1; $oi <= 5; $oi++): ?>
-                        <?php $ov = htmlspecialchars($_POST['item_other_' . $oi] ?? '', ENT_QUOTES, 'UTF-8'); ?>
-                        <input type="text" name="item_other_<?= $oi ?>" id="itemOther<?= $oi ?>" class="item-other-input" maxlength="200" value="<?= $ov ?>" placeholder="รายการที่ <?= $oi ?>" autocomplete="off">
+                            <small class="need-slot-item-hint" data-slot="<?= (int)$slot ?>" style="display:none;color:#6b7280;margin-top:6px;">
+                                หมวดอื่นๆ ใช้การกรอกรายการเองในช่องด้านล่าง
+                            </small>
+                            <div style="margin-top:8px;display:none;" class="need-slot-custom-wrap" data-slot="<?= (int)$slot ?>">
+                                <input type="text" name="item_custom_<?= $slot ?>" class="need-slot-custom" data-slot="<?= (int)$slot ?>" maxlength="200" value="<?= htmlspecialchars($customVal, ENT_QUOTES, 'UTF-8') ?>" placeholder="ระบุรายการอื่นๆ">
+                            </div>
+                        </div>
                     <?php endfor; ?>
                 </div>
 
@@ -638,7 +780,8 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
 
                 <div class="form-group">
                     <label>ยอดเป้าหมายเงินบริจาค (บาท)</label>
-                    <input type="number" name="goal_amount" id="goalAmount" min="1" step="1" value="<?= htmlspecialchars($_POST['goal_amount'] ?? '') ?>" placeholder="เช่น 50000" required>
+                    <input type="text" id="goalAmountDisplay" value="<?= htmlspecialchars($_POST['goal_amount'] ?? '0', ENT_QUOTES, 'UTF-8') ?>" readonly>
+                    <input type="hidden" name="goal_amount" id="goalAmount" value="<?= htmlspecialchars($_POST['goal_amount'] ?? '0', ENT_QUOTES, 'UTF-8') ?>">
                 </div>
 
                 <?php if ($thumbRow && foundation_needlist_item_filenames_from_row($thumbRow) !== []): ?>
@@ -698,8 +841,12 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                 </div>
 
                 <div class="form-group">
-                    <label>รายละเอียด</label>
-                    <textarea name="item_desc" rows="4" placeholder="ระบุเงื่อนไขที่จำเป็น"><?= htmlspecialchars($_POST['item_desc'] ?? '') ?></textarea>
+                    <label>แบรนด์สินค้า</label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" name="allow_any_brand" id="allowAnyBrand" <?= !empty($_POST['allow_any_brand']) ? 'checked' : '' ?>>
+                        <label for="allowAnyBrand">ยอมรับแบรนด์ไหนก็ได้</label>
+                    </div>
+                    <input type="text" name="desired_brand" id="desiredBrandInput" value="<?= htmlspecialchars((string)($_POST['desired_brand'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="กรอกแบรนด์ที่ต้องการ">
                 </div>
 
                 <div class="form-group">
@@ -721,17 +868,23 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
 
 <script>
 const goalAmount  = document.getElementById('goalAmount');
+const goalAmountDisplay = document.getElementById('goalAmountDisplay');
 const totalBox = document.getElementById('totalBox');
 const urgentCheckbox = document.getElementById('urgent');
+const allowAnyBrandCheckbox = document.getElementById('allowAnyBrand');
+const desiredBrandInput = document.getElementById('desiredBrandInput');
 const fileInput = document.getElementById('fileInput');
 const btnNeedPickImg = document.getElementById('btnNeedPickImg');
 const previewList = document.getElementById('imagePreviewList');
 const MAX_NEED_IMAGES = 3;
 const MAX_NEED_IMAGE_BYTES = 5 * 1024 * 1024;
-const categoryChecks = Array.from(document.querySelectorAll('.category-check'));
-const itemChecks = Array.from(document.querySelectorAll('.item-option-check'));
-const itemGroups = Array.from(document.querySelectorAll('.item-check-group'));
-const selectedItemCount = document.getElementById('selectedItemCount');
+const slotCategoryEls = Array.from(document.querySelectorAll('.need-slot-category'));
+const slotItemEls = Array.from(document.querySelectorAll('.need-slot-item'));
+const slotPriceEls = Array.from(document.querySelectorAll('.need-slot-price'));
+const slotQtyEls = Array.from(document.querySelectorAll('.need-slot-qty'));
+const slotCustomWrapEls = Array.from(document.querySelectorAll('.need-slot-custom-wrap'));
+const slotCustomEls = Array.from(document.querySelectorAll('.need-slot-custom'));
+const categoryItemsMap = <?= json_encode($categoryItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 /** @type {File[]} */
 let selectedFiles = [];
 
@@ -838,66 +991,129 @@ function removeNeedFileAt(index) {
     renderPreviews();
 }
 
-const itemSectionGroup = document.getElementById('itemSectionGroup');
-const itemOtherGroup = document.getElementById('itemOtherGroup');
-const otherInputs = Array.from(document.querySelectorAll('.item-other-input'));
-
-function getOtherFilledCount() {
-    return otherInputs.filter((inp) => inp.value.trim() !== '').length;
-}
-
-function getTotalItemCount() {
-    return itemChecks.filter((chk) => chk.checked).length + getOtherFilledCount();
-}
-
-function updateVisibleItemGroups() {
-    const selectedCategories = new Set(categoryChecks.filter(chk => chk.checked).map(chk => chk.value));
-    // แสดง/ซ่อน section รายการสิ่งของทั้งหมดตามว่าเลือกหมวดหรือยัง
-    if (itemSectionGroup) {
-        itemSectionGroup.style.display = selectedCategories.size === 0 ? 'none' : 'block';
-    }
-    if (itemOtherGroup) {
-        itemOtherGroup.style.display = selectedCategories.size === 0 ? 'none' : 'block';
-    }
-    // กรองแสดงเฉพาะกลุ่มที่ตรงหมวดที่เลือก
-    itemGroups.forEach((group) => {
-        const cat = group.getAttribute('data-category') || '';
-        group.style.display = selectedCategories.has(cat) ? 'block' : 'none';
-    });
-}
-
-function updateSelectedItemCounter() {
-    if (selectedItemCount) {
-        selectedItemCount.textContent = `เลือกแล้ว ${getTotalItemCount()}/5 รายการ`;
-    }
-}
-
-function enforceMaxItemSelection(event) {
-    const total = getTotalItemCount();
-    if (total > 5 && event && event.target) {
-        event.target.checked = false;
-        alert('เลือกและระบุรายการสิ่งของได้รวมกันสูงสุด 5 รายการ');
-    }
-    updateSelectedItemCounter();
-}
-
-function enforceOtherItemInput(event) {
-    if (getTotalItemCount() > 5 && event && event.target) {
-        event.target.value = '';
-        alert('เลือกและระบุรายการสิ่งของได้รวมกันสูงสุด 5 รายการ');
-    }
-    updateSelectedItemCounter();
-}
-
 function updateTotal() {
-    const g = parseFloat(goalAmount.value || 0);
+    let g = 0;
+    slotPriceEls.forEach((pEl, idx) => {
+        const qEl = slotQtyEls[idx];
+        const price = parseFloat((pEl && pEl.value) || '0');
+        const qty = parseFloat((qEl && qEl.value) || '0');
+        if (price > 0 && qty > 0) {
+            g += (price * qty);
+        }
+    });
+    goalAmount.value = String(g.toFixed(2));
+    if (goalAmountDisplay) {
+        goalAmountDisplay.value = g.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
     totalBox.textContent = "เป้าหมาย: " + g.toLocaleString('th-TH', { minimumFractionDigits: 0 }) + " บาท";
 }
 
-goalAmount.addEventListener('input', updateTotal);
-categoryChecks.forEach((chk) => chk.addEventListener('change', updateVisibleItemGroups));
-itemChecks.forEach((chk) => chk.addEventListener('change', enforceMaxItemSelection));
-otherInputs.forEach((inp) => inp.addEventListener('input', enforceOtherItemInput));
+function sanitizePriceInput(el) {
+    if (!el) return;
+    let v = String(el.value || '');
+    v = v.replace(/,/g, '.');
+    v = v.replace(/[^0-9.]/g, '');
+    const firstDot = v.indexOf('.');
+    if (firstDot !== -1) {
+        v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+    }
+    el.value = v;
+}
+
+function sanitizeQtyInput(el) {
+    if (!el) return;
+    el.value = String(el.value || '').replace(/\D/g, '');
+}
+
+function syncSlotItemOptions(slot, opts = {}) {
+    const forceResetItem = Boolean(opts.forceResetItem);
+    const forceClearCustom = Boolean(opts.forceClearCustom);
+    const catEl = document.querySelector(`.need-slot-category[data-slot="${slot}"]`);
+    const itemEl = document.querySelector(`.need-slot-item[data-slot="${slot}"]`);
+    const customWrap = document.querySelector(`.need-slot-custom-wrap[data-slot="${slot}"]`);
+    const customInput = document.querySelector(`.need-slot-custom[data-slot="${slot}"]`);
+    const itemHint = document.querySelector(`.need-slot-item-hint[data-slot="${slot}"]`);
+    if (!catEl || !itemEl) return;
+    const selectedCategory = catEl.value || '';
+    const itemOptions = Array.isArray(categoryItemsMap[selectedCategory]) ? categoryItemsMap[selectedCategory] : [];
+    const previous = forceResetItem ? '' : (itemEl.value || itemEl.getAttribute('data-selected') || '');
+    itemEl.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = 'เลือกรายการสิ่งของ';
+    itemEl.appendChild(defaultOpt);
+    itemOptions.forEach((name) => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        itemEl.appendChild(opt);
+    });
+    const otherOpt = document.createElement('option');
+    otherOpt.value = '__other__';
+    otherOpt.textContent = 'อื่นๆ (ระบุเอง)';
+    itemEl.appendChild(otherOpt);
+    if (previous && Array.from(itemEl.options).some((x) => x.value === previous)) {
+        itemEl.value = previous;
+    } else {
+        itemEl.value = '';
+    }
+    if (selectedCategory === 'อื่นๆ ที่จำเป็นเฉพาะทาง') {
+        itemEl.value = '__other__';
+        itemEl.disabled = true;
+        if (itemHint) itemHint.style.display = 'block';
+    } else {
+        itemEl.disabled = false;
+        if (itemHint) itemHint.style.display = 'none';
+    }
+    if (customWrap) {
+        customWrap.style.display = itemEl.value === '__other__' ? '' : 'none';
+    }
+    if (forceClearCustom && customInput) {
+        customInput.value = '';
+    }
+}
+
+slotCategoryEls.forEach((catEl) => {
+    const slot = catEl.getAttribute('data-slot');
+    syncSlotItemOptions(slot);
+    catEl.addEventListener('change', () => {
+        syncSlotItemOptions(slot, { forceResetItem: true, forceClearCustom: true });
+    });
+});
+slotItemEls.forEach((itemEl) => {
+    const slot = itemEl.getAttribute('data-slot');
+    itemEl.addEventListener('change', () => {
+        const customWrap = document.querySelector(`.need-slot-custom-wrap[data-slot="${slot}"]`);
+        if (customWrap) {
+            customWrap.style.display = itemEl.value === '__other__' ? '' : 'none';
+        }
+    });
+});
+slotPriceEls.forEach((el) => {
+    el.addEventListener('input', () => {
+        sanitizePriceInput(el);
+        updateTotal();
+    });
+});
+slotQtyEls.forEach((el) => {
+    el.addEventListener('input', () => {
+        sanitizeQtyInput(el);
+        updateTotal();
+    });
+});
+
+function syncDesiredBrandState() {
+    if (!allowAnyBrandCheckbox || !desiredBrandInput) return;
+    const allowAny = allowAnyBrandCheckbox.checked;
+    desiredBrandInput.disabled = allowAny;
+    desiredBrandInput.placeholder = allowAny ? 'เลือกยอมรับแบรนด์ไหนก็ได้แล้ว' : 'กรอกแบรนด์ที่ต้องการ';
+    if (allowAny) {
+        desiredBrandInput.value = '';
+    }
+}
+if (allowAnyBrandCheckbox) {
+    allowAnyBrandCheckbox.addEventListener('change', syncDesiredBrandState);
+}
 
 function renderPreviews() {
     previewList.innerHTML = '';
@@ -1015,9 +1231,8 @@ if (needForm && fileInput) {
 }
 
 updateNeedUploadChrome();
-updateVisibleItemGroups();
-updateSelectedItemCounter();
 updateTotal();
+syncDesiredBrandState();
 </script>
 
 </body>

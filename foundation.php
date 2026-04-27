@@ -50,11 +50,18 @@ $q = mysqli_query($conn, "
 if ($q) while ($r = mysqli_fetch_assoc($q)) $donationTotals[(int)$r['foundation_id']] = (float)$r['total'];
 
 $goalTotals = [];
-$q2 = mysqli_query($conn, "SELECT foundation_id, COALESCE(SUM(total_price),0) AS goal FROM foundation_needlist WHERE $needOpenPub GROUP BY foundation_id");
+$q2 = mysqli_query($conn, "
+    SELECT
+        foundation_id,
+        COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
+    FROM foundation_needlist
+    WHERE $needOpenPub
+    GROUP BY foundation_id
+");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
 /* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — LIMIT 3 เดิมทำให้แถวที่มีรูปถูกตัดออก */
-$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, price_estimate, urgent, item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE foundation_id=? AND $needOpenPub ORDER BY urgent DESC, item_id DESC LIMIT 120");
+$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE foundation_id=? AND $needOpenPub ORDER BY urgent DESC, item_id DESC LIMIT 120");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
@@ -77,7 +84,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, item_desc, brand, price_estimate, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, reviewed_at
+            SELECT item_id, item_name, item_desc, brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, reviewed_at
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -251,6 +258,9 @@ $hasAnySlides = !empty($foundationSlides);
               $dweRaw = trim((string)($nl['donate_window_end_at'] ?? ''));
               $donateWindowExpired = ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false && strtotime($dweRaw) < time());
             ?>
+            <?php
+              $cardGoal = (float)($nl['total_price'] ?? 0);
+            ?>
             <div class="need-card">
               <a class="need-card-tap-link" href="foundation_need_view.php?id=<?= (int)($nl['item_id'] ?? 0) ?>" aria-label="ดูรายละเอียดรายการสิ่งของ"></a>
               <div class="need-card-img-wrap">
@@ -280,7 +290,7 @@ $hasAnySlides = !empty($foundationSlides);
                   <div class="need-card-cat"><?= htmlspecialchars($nl['brand']) ?></div>
                 <?php endif; ?>
                 <div class="need-card-goal">
-                  เป้าหมาย: <?= number_format((float)($nl['total_price'] ?: $nl['price_estimate']), 0) ?> บาท
+                  เป้าหมาย: <?= number_format($cardGoal, 0) ?> บาท
                   <span class="need-period">/ รอบละ 1 เดือน</span>
                 </div>
                 <?php if ($nl['item_desc']): ?>

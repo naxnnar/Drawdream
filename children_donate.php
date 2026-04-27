@@ -448,7 +448,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     <p><strong>อาชีพในฝัน</strong> <?php echo htmlspecialchars($child['dream']); ?></p>
                     <p><strong>พรที่ขอ</strong> <?php echo htmlspecialchars($child['wish']); ?></p>
                     <?php if ($role === 'donor' && $hasActiveChildSub): ?>
-                    <form method="post" action="payment/child_subscription_cancel.php" class="child-cancel-below-wish-form" onsubmit="return confirm('ยืนยันยกเลิกการอุปการะเด็กคนนี้? ระบบจะหยุดการตัดรอบถัดไป');">
+                    <form method="post" action="payment/child_subscription_cancel.php" class="child-cancel-below-wish-form js-confirm-cancel-sub" data-child-name="<?php echo htmlspecialchars((string)($child['child_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                         <input type="hidden" name="child_id" value="<?php echo (int)$child['child_id']; ?>">
                         <button type="submit" class="btn-subscription-cancel btn-subscription-cancel--large">ยกเลิกอุปการะเด็กคนนี้</button>
                     </form>
@@ -805,6 +805,39 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
     </div>
 </main>
 <?php endif; ?>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+(function () {
+    var forms = document.querySelectorAll('.js-confirm-cancel-sub');
+    forms.forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var childName = (form.getAttribute('data-child-name') || '').trim();
+            var titleText = childName !== '' ? ('ยืนยันยกเลิกอุปการะ ' + childName + ' ?') : 'ยืนยันยกเลิกการอุปการะเด็กคนนี้?';
+            if (typeof Swal === 'undefined') {
+                if (window.confirm(titleText + '\nระบบจะหยุดการตัดรอบถัดไป')) {
+                    form.submit();
+                }
+                return;
+            }
+            Swal.fire({
+                icon: 'warning',
+                title: titleText,
+                text: 'ระบบจะหยุดการตัดรอบถัดไป',
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยัน',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#b32525'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
+    });
+})();
+</script>
 
 </body>
 </html>

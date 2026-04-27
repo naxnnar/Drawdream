@@ -35,6 +35,7 @@ $stmt3->execute();
 $current = (float)($stmt3->get_result()->fetch_assoc()['current'] ?? 0);
 
 $percent = ($goal > 0) ? min(100, ($current / $goal) * 100) : 0;
+$percentRounded = (int)round($percent);
 $remainingNeed = ($goal > 0) ? max(0.0, $goal - $current) : 0.0;
 $maxDonatePerChargeBaht = ($goal > 0) ? (int)max(0, (int)floor($remainingNeed + 1e-9)) : 0;
 $error = "";
@@ -64,6 +65,72 @@ foreach ($items as $itCov) {
 }
 
 $donateDisabled = ($goal <= 0 || count($items) === 0 || ($goal > 0 && $remainingNeed > 0 && $remainingNeed < 20));
+
+/**
+ * @return array<int,array{item_name:string,qty_needed:float,price_estimate:float,line_total:float}>
+ */
+function drawdream_need_item_lines_from_row(array $item): array
+{
+    $raw = trim((string)($item['need_items_json'] ?? ''));
+    $lines = [];
+    $nameTokens = [];
+    $rawNames = trim((string)($item['item_name'] ?? ''));
+    if ($rawNames !== '') {
+        $parts = preg_split('/\s*(?:,|\||\R)\s*/u', $rawNames);
+        if (is_array($parts)) {
+            foreach ($parts as $p) {
+                $t = trim((string)$p);
+                if ($t !== '') {
+                    $nameTokens[] = $t;
+                }
+            }
+        }
+    }
+    if ($raw !== '') {
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $idx => $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $qty = (float)($row['qty_needed'] ?? ($row['qty'] ?? 0));
+                $price = (float)($row['price_estimate'] ?? ($row['price'] ?? 0));
+                $lineTotal = (float)($row['line_total'] ?? 0);
+                if ($lineTotal <= 0 && $qty > 0 && $price > 0) {
+                    $lineTotal = $qty * $price;
+                }
+                if ($qty <= 0 || $price <= 0) {
+                    continue;
+                }
+                $name = trim((string)($row['item_name'] ?? ''));
+                if ($name === '') {
+                    $name = $nameTokens[$idx] ?? ('รายการที่ ' . ((int)$idx + 1));
+                }
+                $lines[] = [
+                    'item_name' => $name,
+                    'qty_needed' => $qty,
+                    'price_estimate' => $price,
+                    'line_total' => $lineTotal,
+                ];
+            }
+        }
+    }
+    if ($lines !== []) {
+        return $lines;
+    }
+    $fallbackQty = (float)($item['qty_needed'] ?? 0);
+    $fallbackTotal = (float)($item['total_price'] ?? 0);
+    $fallbackPrice = $fallbackQty > 0 ? ($fallbackTotal / $fallbackQty) : 0.0;
+    if ($fallbackQty > 0 && $fallbackPrice > 0) {
+        return [[
+            'item_name' => trim((string)($item['item_name'] ?? '')) !== '' ? (string)$item['item_name'] : 'รายการสิ่งของ',
+            'qty_needed' => $fallbackQty,
+            'price_estimate' => $fallbackPrice,
+            'line_total' => $fallbackTotal,
+        ]];
+    }
+    return [];
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     $rawAmt = (string)($_POST['amount'] ?? '');
@@ -215,6 +282,9 @@ function _omise_local_mock(string $path, array $data): array {
             <?php endif; ?>
 
             <div class="fd-progress">
+                <div class="fd-progress-remaining">
+                    เหลืออีก <strong><?= number_format($remainingNeed, 0) ?> บาท</strong> จะครบเป้าหมาย
+                </div>
                 <div class="fd-bar">
                     <div style="width:<?= (int)$percent ?>%;min-width:<?= $percent > 0 ? '6px' : '0' ?>;"></div>
                 </div>
@@ -251,6 +321,21 @@ function _omise_local_mock(string $path, array $data): array {
                         <div class="fd-item-meta">
                             รวม <?= $total ?> บาท
                         </div>
+                        <?php
+                            $itemLines = drawdream_need_item_lines_from_row($item);
+                        ?>
+                        <?php if ($itemLines !== []): ?>
+                        <div class="fd-item-lines">
+                            <?php foreach ($itemLines as $line): ?>
+                                <div class="fd-item-line">
+                                    <span class="fd-item-line-name"><?= htmlspecialchars((string)$line['item_name']) ?></span>
+                                    <span class="fd-item-line-meta">
+                                        <?= number_format((float)$line['qty_needed'], 0) ?> ชิ้น × <?= number_format((float)$line['price_estimate'], 2) ?> บาท
+                                    </span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endforeach; ?>

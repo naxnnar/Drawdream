@@ -106,7 +106,12 @@ function admin_needlist_status_pill_class(string $ap): string
                             </span>
                         </td>
                         <td class="admin-dir-num"><?= htmlspecialchars((string)($r['qty_needed'] ?? '0')) ?></td>
-                        <td class="admin-dir-num"><?= number_format((float)($r['price_estimate'] ?? 0), 0) ?></td>
+                        <?php
+                            $dQty = (float)($r['qty_needed'] ?? 0);
+                            $dTotal = (float)($r['total_price'] ?? 0);
+                            $dUnit = $dQty > 0 ? ($dTotal / $dQty) : 0.0;
+                        ?>
+                        <td class="admin-dir-num"><?= number_format($dUnit, 0) ?></td>
                         <td>
                             <div class="admin-dir-actions admin-dir-actions--pair">
                                 <a class="admin-dir-btn admin-dir-btn--primary" href="<?= htmlspecialchars($detailUrl) ?>">สิ่งของ</a>

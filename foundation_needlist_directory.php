@@ -115,11 +115,8 @@ function foundation_need_progress_pct(float $current, float $goal): int
                     $imgs = foundation_needlist_item_filenames_from_row($r);
                     $thumb = $imgs[0] ?? '';
                     $qty = (float)($r['qty_needed'] ?? 0);
-                    $price = (float)($r['price_estimate'] ?? 0);
                     $goal = (float)($r['total_price'] ?? 0);
-                    if ($goal <= 0) {
-                        $goal = ($qty > 0 ? $qty : 1) * $price;
-                    }
+                    $price = $qty > 0 ? ($goal / $qty) : 0.0;
                     $cur = (float)($r['current_donate'] ?? 0);
                     $pct = foundation_need_progress_pct($cur, $goal);
                     ?>
@@ -139,7 +136,7 @@ function foundation_need_progress_pct(float $current, float $goal): int
                             </span>
                         </td>
                         <td class="admin-dir-num"><?= htmlspecialchars((string)($r['qty_needed'] ?? '0')) ?></td>
-                        <td class="admin-dir-num"><?= number_format((float)($r['price_estimate'] ?? 0), 0) ?></td>
+                        <td class="admin-dir-num"><?= number_format($price, 0) ?></td>
                         <td>
                             <div style="min-width:140px;">
                                 <div style="height:8px;background:#e5e7eb;border-radius:999px;overflow:hidden;">

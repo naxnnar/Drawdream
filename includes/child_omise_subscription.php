@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/payment_transaction_schema.php';
 require_once __DIR__ . '/donate_category_resolve.php';
+require_once __DIR__ . '/child_subscription_history.php';
 
 function drawdream_child_omise_subscription_ensure_schema(mysqli $conn): void
 {
@@ -56,7 +57,8 @@ function drawdream_child_persist_subscription_paid_charge(
     string $chargeId,
     int $amountSatang,
     int $childId,
-    int $donorUserId
+    int $donorUserId,
+    string $sourceChannel = 'system'
 ): bool {
     if ($chargeId === '' || strpos($chargeId, 'chrg_') !== 0 || $childId <= 0 || $donorUserId <= 0) {
         return false;
@@ -96,7 +98,17 @@ function drawdream_child_persist_subscription_paid_charge(
         $seedId = (int)($seedRow['donate_id'] ?? 0);
     }
 
+    $scheduleIdForLog = null;
+    $planCodeForLog = '';
     if ($seedId > 0) {
+        $seedMeta = $conn->prepare('SELECT recurring_schedule_id, recurring_plan_code FROM donation WHERE donate_id = ? LIMIT 1');
+        if ($seedMeta) {
+            $seedMeta->bind_param('i', $seedId);
+            $seedMeta->execute();
+            $seedMetaRow = $seedMeta->get_result()->fetch_assoc() ?: [];
+            $scheduleIdForLog = isset($seedMetaRow['recurring_schedule_id']) ? (string)$seedMetaRow['recurring_schedule_id'] : null;
+            $planCodeForLog = (string)($seedMetaRow['recurring_plan_code'] ?? '');
+        }
         $up = $conn->prepare(
             "UPDATE donation
              SET amount = ?, payment_status = ?, transfer_datetime = NOW(),
@@ -108,6 +120,7 @@ function drawdream_child_persist_subscription_paid_charge(
         }
         $up->bind_param('dsssi', $amountBaht, $completed, $chargeId, $completed, $seedId);
         $ok = $up->execute() && $up->affected_rows >= 1;
+        $donateIdForLog = $seedId;
     } else {
         $planCode = '';
         $nextAt = null;
@@ -158,6 +171,26 @@ function drawdream_child_persist_subscription_paid_charge(
             $scheduleId
         );
         $ok = $ins->execute();
+        $donateIdForLog = (int)$conn->insert_id;
+        $scheduleIdForLog = $scheduleId;
+        $planCodeForLog = $planCode;
+    }
+    if ($ok) {
+        drawdream_child_subscription_history_log(
+            $conn,
+            $childId,
+            $donorUserId,
+            ($donateIdForLog ?? 0) > 0 ? (int)$donateIdForLog : null,
+            $scheduleIdForLog,
+            $chargeId,
+            'charge_success',
+            'active',
+            'active',
+            $planCodeForLog !== '' ? $planCodeForLog : null,
+            $amountBaht,
+            $sourceChannel,
+            'persist_subscription_paid_charge'
+        );
     }
     if ($ok && !function_exists('drawdream_child_sync_sponsorship_status')) {
         require_once __DIR__ . '/child_sponsorship.php';

@@ -235,7 +235,10 @@ if ($role === 'foundation') {
         SELECT a.*, 
                nl.item_name, nl.item_desc,
                nl.qty_needed AS quantity_required,
-               nl.price_estimate AS item_price,
+               CASE
+                   WHEN COALESCE(nl.qty_needed, 0) > 0 THEN COALESCE(nl.total_price, 0) / nl.qty_needed
+                   ELSE 0
+               END AS item_price,
                nl.item_image AS photo_item,
                nl.foundation_id,
                p.project_name, p.project_desc,
@@ -487,7 +490,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                                 <span class="donor-sponsorship-active-banner__meta"><?= htmlspecialchars($planTh) ?> <?= number_format((float)($sub['amount_thb'] ?? 0), 0) ?> บาท</span>
                             </div>
                             <?php if ($subChildId > 0): ?>
-                                <form method="post" action="payment/child_subscription_cancel.php" class="donor-sponsorship-cancel-form" onsubmit="return confirm('ยืนยันยกเลิกการอุปการะเด็กคนนี้? ระบบจะหยุดการตัดรอบถัดไป');">
+                                <form method="post" action="payment/child_subscription_cancel.php" class="donor-sponsorship-cancel-form js-confirm-cancel-sub" data-child-name="<?= htmlspecialchars((string)($sub['child_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="child_id" value="<?= $subChildId ?>">
                                     <button type="submit" class="donor-sponsorship-cancel-btn">ยกเลิกอุปการะ</button>
                                 </form>
@@ -757,8 +760,37 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
             }
         });
     }
+
+    var cancelForms = document.querySelectorAll('.js-confirm-cancel-sub');
+    cancelForms.forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var childName = (form.getAttribute('data-child-name') || '').trim();
+            var titleText = childName !== '' ? ('ยืนยันยกเลิกอุปการะ ' + childName + ' ?') : 'ยืนยันยกเลิกการอุปการะเด็กคนนี้?';
+            if (typeof Swal === 'undefined') {
+                if (window.confirm(titleText + '\nระบบจะหยุดการตัดรอบถัดไป')) {
+                    form.submit();
+                }
+                return;
+            }
+            Swal.fire({
+                icon: 'warning',
+                title: titleText,
+                text: 'ระบบจะหยุดการตัดรอบถัดไป',
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยัน',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#b32525'
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
+    });
 })();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 </body>
 </html>

@@ -17,7 +17,97 @@ require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/e_receipt.php';
 
+function drawdream_webhook_get_header(string $name): string
+{
+    $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+    $v = $_SERVER[$key] ?? '';
+    return is_string($v) ? trim($v) : '';
+}
+
+function drawdream_webhook_event_seen_path(): string
+{
+    return dirname(__DIR__) . '/data/omise_webhook_seen.json';
+}
+
+function drawdream_webhook_mark_seen_event(string $eventId, int $ttlSeconds = 86400): bool
+{
+    if ($eventId === '') {
+        return true;
+    }
+    $path = drawdream_webhook_event_seen_path();
+    $dir = dirname($path);
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    $fp = @fopen($path, 'c+');
+    if ($fp === false) {
+        return true;
+    }
+    if (!flock($fp, LOCK_EX)) {
+        fclose($fp);
+        return true;
+    }
+    $raw = stream_get_contents($fp);
+    $seen = json_decode(is_string($raw) ? $raw : '[]', true);
+    if (!is_array($seen)) {
+        $seen = [];
+    }
+    $now = time();
+    $fresh = [];
+    foreach ($seen as $k => $ts) {
+        if (is_string($k) && is_int($ts) && $ts >= ($now - $ttlSeconds)) {
+            $fresh[$k] = $ts;
+        }
+    }
+    if (isset($fresh[$eventId])) {
+        flock($fp, LOCK_UN);
+        fclose($fp);
+        return false;
+    }
+    $fresh[$eventId] = $now;
+    ftruncate($fp, 0);
+    rewind($fp);
+    fwrite($fp, json_encode($fresh, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    fflush($fp);
+    flock($fp, LOCK_UN);
+    fclose($fp);
+    return true;
+}
+
+function drawdream_webhook_verify_signature_and_time(string $rawBody): bool
+{
+    $secret = trim((string)(getenv('OMISE_WEBHOOK_SECRET') ?: ''));
+    if ($secret === '') {
+        return true;
+    }
+    $sig = drawdream_webhook_get_header('X-Omise-Signature');
+    if ($sig === '') {
+        error_log('[drawdream_webhook] missing signature header');
+        return false;
+    }
+    $expected = hash_hmac('sha256', $rawBody, $secret);
+    if (!hash_equals($expected, strtolower($sig))) {
+        error_log('[drawdream_webhook] signature mismatch');
+        return false;
+    }
+    $tsHeader = drawdream_webhook_get_header('X-Omise-Timestamp');
+    if ($tsHeader !== '' && ctype_digit($tsHeader)) {
+        $skew = abs(time() - (int)$tsHeader);
+        if ($skew > 300) {
+            error_log('[drawdream_webhook] timestamp skew too high: ' . $skew);
+            return false;
+        }
+    }
+    return true;
+}
+
 $raw = file_get_contents('php://input');
+$raw = is_string($raw) ? $raw : '';
+if (!drawdream_webhook_verify_signature_and_time($raw)) {
+    http_response_code(400);
+    echo json_encode(['received' => false, 'error' => 'invalid_signature_or_timestamp']);
+    exit;
+}
 $payload = json_decode($raw ?: '[]', true);
 if (!is_array($payload)) {
     echo json_encode(['received' => false]);
@@ -45,6 +135,14 @@ if ($chargeId === '' || strpos($chargeId, 'chrg_') !== 0) {
     echo json_encode(['received' => true]);
     exit;
 }
+$eventId = trim((string)($payload['id'] ?? ''));
+if ($eventId === '') {
+    $eventId = 'fallback:' . hash('sha256', $key . '|' . $chargeId . '|' . $raw);
+}
+if (!drawdream_webhook_mark_seen_event($eventId)) {
+    echo json_encode(['received' => true, 'duplicate_event' => true]);
+    exit;
+}
 
 $meta = $data['metadata'] ?? [];
 if (!is_array($meta) || ($meta['app'] ?? '') !== 'drawdream_child_subscription') {
@@ -66,6 +164,14 @@ if (!$paid) {
 }
 
 drawdream_child_omise_subscription_ensure_schema($conn);
+$beforeStatus = 'none';
+$statusBeforeStmt = $conn->prepare('SELECT transaction_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
+if ($statusBeforeStmt) {
+    $statusBeforeStmt->bind_param('s', $chargeId);
+    $statusBeforeStmt->execute();
+    $beforeRow = $statusBeforeStmt->get_result()->fetch_assoc();
+    $beforeStatus = (string)($beforeRow['transaction_status'] ?? 'none');
+}
 $dupChk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
 $done = 'completed';
 $dupChk->bind_param('ss', $chargeId, $done);
@@ -81,7 +187,8 @@ $rec = drawdream_child_persist_subscription_paid_charge(
     $chargeId,
     $amountSatang,
     $childId,
-    $donorUid
+    $donorUid,
+    'webhook'
 );
 if (!$rec) {
     echo json_encode(['received' => true, 'recorded' => false]);
@@ -92,5 +199,19 @@ $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $cha
 if ($receiptDonateId > 0) {
     drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
 }
+$afterStatus = 'unknown';
+$statusAfterStmt = $conn->prepare('SELECT transaction_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
+if ($statusAfterStmt) {
+    $statusAfterStmt->bind_param('s', $chargeId);
+    $statusAfterStmt->execute();
+    $afterRow = $statusAfterStmt->get_result()->fetch_assoc();
+    $afterStatus = (string)($afterRow['transaction_status'] ?? 'unknown');
+}
+error_log('[drawdream_webhook] ' . json_encode([
+    'event_id' => $eventId,
+    'charge_id' => $chargeId,
+    'before_status' => $beforeStatus,
+    'after_status' => $afterStatus,
+], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
 echo json_encode(['received' => true, 'recorded' => true, 'child_id' => $childId]);

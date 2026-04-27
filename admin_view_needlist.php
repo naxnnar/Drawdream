@@ -177,8 +177,11 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <div class="admin-record-v"><?= htmlspecialchars(trim((string)($row['brand'] ?? '')) !== '' ? (string)$row['brand'] : '—', ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="admin-record-field">
-                    <div class="admin-record-k">ราคาโดยประมาณต่อหน่วย (บาท)</div>
-                    <div class="admin-record-v"><?= number_format((float)($row['price_estimate'] ?? 0), 2) ?></div>
+                    <div class="admin-record-k">ยอดเงินเป้าหมายรวม (บาท)</div>
+                    <?php
+                        $vTotal = (float)($row['total_price'] ?? 0);
+                    ?>
+                    <div class="admin-record-v"><?= number_format($vTotal, 2) ?></div>
                 </div>
                 <div class="admin-record-field admin-record-field--full">
                     <div class="admin-record-k">หมายเหตุจากมูลนิธิ</div>

@@ -62,7 +62,7 @@ $tcpdfPresent = is_file($tcpdfPath);
         @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;700&family=Sarabun:wght@400;600&display=swap');
         body { margin: 0; background: #F7ECDE; font-family: 'Prompt','Sarabun',sans-serif; }
         .fan-wrap { max-width: 920px; margin: 28px auto; padding: 0 16px 48px; box-sizing: border-box; }
-        .fan-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+        .fan-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; margin-bottom: 16px; }
         .fan-btn { display: inline-flex; align-items: center; padding: 10px 18px; border-radius: 10px; font-weight: 600; text-decoration: none; border: 1px solid #e5e7eb; background: #fff; color: #374151; font-size: 15px; }
         .fan-btn:hover { background: #f9fafb; }
         .fan-btn--pri { background: #4A5BA8; color: #fff; border-color: #4A5BA8; }
@@ -82,14 +82,11 @@ $tcpdfPresent = is_file($tcpdfPath);
 <div class="fan-wrap">
     <div class="no-print">
         <div class="fan-toolbar">
-            <a class="fan-btn" href="foundation.php">← กลับ</a>
-            <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                <?php if ($tcpdfPresent): ?>
-                    <a class="fan-btn fan-btn--pri" href="foundation_analytics_report_pdf.php">ดาวน์โหลด PDF</a>
-                <?php else: ?>
-                    <button type="button" class="fan-btn fan-btn--pri" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button>
-                <?php endif; ?>
-            </div>
+            <?php if ($tcpdfPresent): ?>
+                <a class="fan-btn fan-btn--pri" href="foundation_analytics_report_pdf.php">ดาวน์โหลด PDF</a>
+            <?php else: ?>
+                <button type="button" class="fan-btn fan-btn--pri" onclick="window.print()">พิมพ์ / บันทึกเป็น PDF</button>
+            <?php endif; ?>
         </div>
         <p class="fan-note">เอกสารนี้สรุปข้อมูลของมูลนิธิคุณ ณ เวลาที่เปิดดู</p>
     </div>

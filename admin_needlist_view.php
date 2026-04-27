@@ -201,8 +201,11 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                             <span class="value"><?= htmlspecialchars(trim((string)($row['brand'] ?? '')) !== '' ? (string)$row['brand'] : '—') ?></span>
                         </div>
                         <div class="data-item">
-                            <span class="label">ราคาโดยประมาณต่อหน่วย (บาท)</span>
-                            <span class="value"><?= number_format((float)($row['price_estimate'] ?? 0), 2) ?></span>
+                            <span class="label">ยอดเงินเป้าหมายรวม (บาท)</span>
+                            <?php
+                                $vTotal = (float)($row['total_price'] ?? 0);
+                            ?>
+                            <span class="value"><?= number_format($vTotal, 2) ?></span>
                         </div>
                         <div class="data-item full">
                             <span class="label">หมายเหตุจากมูลนิธิ</span>

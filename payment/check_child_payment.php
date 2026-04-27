@@ -64,6 +64,9 @@ $is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMI
 
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
+$normalized_terminal_status = in_array($status, ['failed', 'expired', 'reversed'], true)
+    ? (($status === 'reversed') ? 'cancelled' : 'failed')
+    : $status;
 
 $ptRow = null;
 $dup = $conn->prepare('SELECT donate_id, transaction_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
@@ -76,7 +79,7 @@ $has_pending       = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') =
 $donor_uid = (int)$_SESSION['user_id'];
 
 if (!$is_mock && $has_pending && !$already_completed && !$is_success
-    && in_array($status, ['failed', 'expired'], true)) {
+    && in_array($normalized_terminal_status, ['failed', 'cancelled'], true)) {
     // เส้นทาง "จบแบบไม่สำเร็จ" ของ QR: ปิดรายการค้างทันทีเพื่อลดความสับสนของผู้ใช้
     drawdream_abandon_pending_donation_by_charge($conn, $donor_uid, $charge_id);
     drawdream_clear_pending_payment_session();
@@ -97,6 +100,23 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
     }
     $donate_id_from_pt = (int)($ptRow['donate_id'] ?? 0);
     if (drawdream_finalize_child_donation($conn, $child_id, $donate_id_from_pt, $charge_id, (float)$amount, $donor_uid)) {
+        $chargeMeta = is_array($charge['metadata'] ?? null) ? $charge['metadata'] : [];
+        $metaRecurring = trim((string)($chargeMeta['recurring_plan_code'] ?? ''));
+        $metaSubId = trim((string)($chargeMeta['subscription_id'] ?? ''));
+        if ($metaRecurring !== '' || $metaSubId !== '') {
+            $updMeta = $conn->prepare('UPDATE donation SET recurring_plan_code = ? WHERE donate_id = ?');
+            if ($updMeta) {
+                $planCode = $metaRecurring !== '' ? $metaRecurring : DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
+                $updMeta->bind_param('si', $planCode, $donate_id_from_pt);
+                $updMeta->execute();
+            }
+            error_log('[drawdream_child_check] ' . json_encode([
+                'charge_id' => $charge_id,
+                'donate_id' => $donate_id_from_pt,
+                'subscription_id' => $metaSubId,
+                'recurring_plan_code' => $metaRecurring,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
         $finalized_this_request = true;
         $receiptDonateId = $donate_id_from_pt;
         unset(
@@ -169,6 +189,7 @@ $already_processed_display = $finalized_this_request
     || ($is_success && is_array($ptRow) && ($ptRow['transaction_status'] ?? '') === 'completed');
 
 if ($already_processed_display && !$finalized_this_request) {
+    error_log('[drawdream_child_check] retry-safe duplicate callback handled for charge ' . $charge_id);
     $is_success = true;
     $amount     = ($charge['amount'] ?? 0) / 100;
     if ($amount <= 0) {

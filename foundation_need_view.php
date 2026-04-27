@@ -64,9 +64,6 @@ $statusMeta = foundation_need_view_status_meta((string)($n['approve_item'] ?? 'p
 $reviewNote = trim((string)($n['review_note'] ?? ''));
 
 $goal = (float)($n['total_price'] ?? 0);
-if ($goal <= 0) {
-    $goal = (float)($n['price_estimate'] ?? 0);
-}
 $raised = (float)($n['current_donate'] ?? 0);
 $progress = ($goal > 0) ? min(100.0, ($raised / $goal) * 100.0) : 0.0;
 $remainingToGoal = ($goal > 0) ? max(0.0, $goal - $raised) : 0.0;

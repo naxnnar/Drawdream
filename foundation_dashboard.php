@@ -147,6 +147,18 @@ foreach ($donRows as $r) {
     }
 }
 $sumTotal = $sumChild + $sumProject + $sumNeed;
+$piePercentChild = $sumTotal > 0 ? ($sumChild / $sumTotal) * 100 : 0.0;
+$piePercentProject = $sumTotal > 0 ? ($sumProject / $sumTotal) * 100 : 0.0;
+$piePercentNeed = $sumTotal > 0 ? ($sumNeed / $sumTotal) * 100 : 0.0;
+$pieBreakdown = [
+    ['key' => 'child', 'label' => 'เด็ก', 'amount' => $sumChild, 'pct' => $piePercentChild, 'count' => $rowCountChild, 'color' => '#4A5BA8'],
+    ['key' => 'project', 'label' => 'โครงการ', 'amount' => $sumProject, 'pct' => $piePercentProject, 'count' => $rowCountProject, 'color' => '#22c55e'],
+    ['key' => 'need', 'label' => 'สิ่งของ', 'amount' => $sumNeed, 'pct' => $piePercentNeed, 'count' => $rowCountNeed, 'color' => '#f59e0b'],
+];
+usort($pieBreakdown, static fn (array $a, array $b): int => ($b['amount'] <=> $a['amount']));
+$pieTop = $pieBreakdown[0] ?? ['label' => '-', 'amount' => 0.0, 'pct' => 0.0];
+$donationCountTotal = $rowCountChild + $rowCountProject + $rowCountNeed;
+$avgPerDonation = $donationCountTotal > 0 ? $sumTotal / $donationCountTotal : 0.0;
 
 $latestByCat = ['child' => '', 'project' => '', 'need' => ''];
 foreach ($donRows as $r) {
@@ -446,8 +458,51 @@ function foundation_dashboard_plan_label(string $code): string
         <div class="admin-dir-table-wrap" style="padding:18px;">
             <h3 style="margin:0 0 8px;font-family:'Prompt',sans-serif;color:#1f2937;">สัดส่วนประเภทการบริจาค</h3>
             <p style="margin:0 0 14px;color:#64748b;font-size:.92rem;">สัดส่วนยอดบริจาคตามฟีเจอร์ เด็ก / โครงการ / สิ่งของ</p>
-            <div style="max-width:320px;height:320px;">
-                <canvas id="foundationCategoryPieChart"></canvas>
+            <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start;">
+                <div style="max-width:320px;height:320px;flex:0 0 320px;">
+                    <canvas id="foundationCategoryPieChart"></canvas>
+                </div>
+                <div style="flex:1 1 260px;min-width:250px;display:grid;gap:10px;">
+                    <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#f8fafc;">
+                        <div style="font-size:.86rem;color:#64748b;margin-bottom:4px;">หมวดที่มีสัดส่วนสูงสุด</div>
+                        <div style="font-family:'Prompt',sans-serif;font-weight:700;color:#0f172a;">
+                            <?= htmlspecialchars((string)$pieTop['label']) ?>
+                            (<?= number_format((float)$pieTop['pct'], 1) ?>%)
+                        </div>
+                        <div style="font-size:.88rem;color:#334155;">
+                            <?= number_format((float)$pieTop['amount'], 2) ?> บาท
+                        </div>
+                    </div>
+                    <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff;">
+                        <div style="font-size:.86rem;color:#64748b;margin-bottom:8px;">สรุปยอดช่วงเวลาปัจจุบัน</div>
+                        <div style="display:flex;justify-content:space-between;gap:10px;font-size:.9rem;margin-bottom:4px;">
+                            <span style="color:#475569;">ยอดบริจาครวม</span>
+                            <strong style="color:#0f172a;"><?= number_format($sumTotal, 2) ?> บาท</strong>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;gap:10px;font-size:.9rem;margin-bottom:4px;">
+                            <span style="color:#475569;">จำนวนรายการ</span>
+                            <strong style="color:#0f172a;"><?= number_format($donationCountTotal) ?> รายการ</strong>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;gap:10px;font-size:.9rem;">
+                            <span style="color:#475569;">เฉลี่ยต่อรายการ</span>
+                            <strong style="color:#0f172a;"><?= number_format($avgPerDonation, 2) ?> บาท</strong>
+                        </div>
+                    </div>
+                    <div style="border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;background:#fff;">
+                        <?php foreach ($pieBreakdown as $i => $b): ?>
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed #e2e8f0;<?= ($i === array_key_last($pieBreakdown)) ? 'border-bottom:none;' : '' ?>">
+                                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                                    <span style="width:10px;height:10px;border-radius:999px;background:<?= htmlspecialchars((string)$b['color']) ?>;"></span>
+                                    <span style="color:#334155;font-size:.9rem;"><?= htmlspecialchars((string)$b['label']) ?></span>
+                                </div>
+                                <div style="text-align:right;">
+                                    <div style="font-size:.88rem;color:#0f172a;font-weight:700;"><?= number_format((float)$b['pct'], 1) ?>%</div>
+                                    <div style="font-size:.8rem;color:#64748b;"><?= number_format((int)$b['count']) ?> รายการ</div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

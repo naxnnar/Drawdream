@@ -21,6 +21,7 @@ require_once dirname(__DIR__) . '/includes/omise_api_client.php';
 require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/e_receipt.php';
+require_once dirname(__DIR__) . '/includes/child_subscription_history.php';
 
 drawdream_child_omise_subscription_ensure_schema($conn);
 drawdream_child_sponsorship_ensure_columns($conn);
@@ -89,23 +90,70 @@ while ($row = $res->fetch_assoc()) {
         ]
     );
     if (($ch['object'] ?? '') === 'error') {
+        drawdream_child_subscription_history_log(
+            $conn,
+            $childId,
+            $donorUid,
+            $subId,
+            (string)($row['recurring_schedule_id'] ?? ''),
+            null,
+            'charge_failed',
+            'active',
+            'active',
+            (string)($row['recurring_plan_code'] ?? ''),
+            (float)$planSpec['amount_thb'],
+            'cron',
+            'omise_error',
+            ['message' => (string)($ch['message'] ?? 'charge failed')]
+        );
         $errors[] = 'sub ' . $subId . ': ' . (string)($ch['message'] ?? 'charge failed');
         continue;
     }
     $paid = ($ch['paid'] ?? false) === true || (string)($ch['status'] ?? '') === 'successful';
     if (!$paid) {
+        drawdream_child_subscription_history_log(
+            $conn,
+            $childId,
+            $donorUid,
+            $subId,
+            (string)($row['recurring_schedule_id'] ?? ''),
+            (string)($ch['id'] ?? ''),
+            'charge_not_paid',
+            'active',
+            'active',
+            (string)($row['recurring_plan_code'] ?? ''),
+            (float)$planSpec['amount_thb'],
+            'cron',
+            'charge_status_not_successful',
+            ['status' => (string)($ch['status'] ?? '')]
+        );
         $errors[] = 'sub ' . $subId . ': not paid status=' . (string)($ch['status'] ?? '');
         continue;
     }
     $chId = (string)($ch['id'] ?? '');
     $amtSat = (int)($ch['amount'] ?? $planSpec['amount_satang']);
-    $rec = drawdream_child_persist_subscription_paid_charge($conn, $chId, $amtSat, $childId, $donorUid);
+    $rec = drawdream_child_persist_subscription_paid_charge($conn, $chId, $amtSat, $childId, $donorUid, 'cron');
     if (!$rec) {
         $dup = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
         $done = 'completed';
         $dup->bind_param('ss', $chId, $done);
         $dup->execute();
         if (!$dup->get_result()->fetch_row()) {
+            drawdream_child_subscription_history_log(
+                $conn,
+                $childId,
+                $donorUid,
+                $subId,
+                (string)($row['recurring_schedule_id'] ?? ''),
+                $chId,
+                'charge_persist_failed',
+                'active',
+                'active',
+                (string)($row['recurring_plan_code'] ?? ''),
+                $amtSat / 100.0,
+                'cron',
+                'persist_donation_failed'
+            );
             $errors[] = 'sub ' . $subId . ': persist donation failed';
             continue;
         }
@@ -128,6 +176,22 @@ while ($row = $res->fetch_assoc()) {
     );
     $upd->bind_param('si', $nextSql, $subId);
     $upd->execute();
+    drawdream_child_subscription_history_log(
+        $conn,
+        $childId,
+        $donorUid,
+        $subId,
+        (string)($row['recurring_schedule_id'] ?? ''),
+        $chId !== '' ? $chId : null,
+        'next_charge_scheduled',
+        'active',
+        'active',
+        (string)($row['recurring_plan_code'] ?? ''),
+        $amtSat / 100.0,
+        'cron',
+        'next_charge_updated',
+        ['next_charge_at' => $nextSql]
+    );
     ++$processed;
 }
 

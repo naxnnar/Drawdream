@@ -1083,10 +1083,28 @@ body.foundation-donate-page {
 
 /* progress */
 .fd-progress { margin-bottom: 24px; }
+.fd-progress-remaining {
+    margin: 2px 0 8px;
+    font-size: 16px;
+    color: #1f2937;
+    font-weight: 700;
+}
+.fd-progress-remaining strong {
+    color: #1f7a4f;
+}
 .fd-bar { background: #E5D4C1; border-radius: 20px; height: 16px; overflow: hidden; margin-bottom: 8px; }
 .fd-bar > div { background: #CC583F; height: 100%; border-radius: 20px; transition: width 0.5s; }
-.fd-progress-text { font-size: 13px; color: #666; }
-.fd-progress-text strong { color: #CC583F; }
+.fd-progress-text {
+    font-size: 24px;
+    line-height: 1.2;
+    color: #334155;
+    font-weight: 700;
+}
+.fd-progress-text strong {
+    color: #CC583F;
+    font-size: 28px;
+    font-weight: 800;
+}
 
 /* items list */
 .fd-items-wrap {
@@ -1130,6 +1148,51 @@ body.foundation-donate-page {
 .fd-item-detail { flex: 1; min-width: 0; }
 .fd-item-name { font-size: 14px; font-weight: 700; color: #1f2937; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .fd-item-meta { font-size: 12px; color: #888; line-height: 1.6; }
+.fd-item-lines {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #ffffff;
+}
+.fd-item-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+.fd-item-line-name {
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.fd-item-line-meta {
+    color: #334155;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+@media (max-width: 700px) {
+    .fd-item-line {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+    .fd-item-line-name,
+    .fd-item-line-meta {
+        white-space: normal;
+    }
+}
 .fd-urgent-badge { background: #CC583F; color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
 
 /* ---- RIGHT column — เทียบเท่า .payment-box หน้าโครงการ ---- */
@@ -1288,6 +1351,15 @@ body.foundation-donate-page #foundationDonateForm .payment-method {
     .fd-right {
         border-left: none;
         padding: 28px 20px 18px;
+    }
+    .fd-progress-remaining {
+        font-size: 15px;
+    }
+    .fd-progress-text {
+        font-size: 20px;
+    }
+    .fd-progress-text strong {
+        font-size: 24px;
     }
 }
 @media (max-width: 500px) {

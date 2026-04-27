@@ -234,6 +234,20 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
             background: #597d57;
             color: #fff;
         }
+        .receipt-mode-print-only {
+            display: none;
+            margin-top: 10px;
+            font-size: 0.92rem;
+            color: #304369;
+        }
+        .receipt-mode-print-only .tag {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid #d8dfef;
+            background: #f8faff;
+            font-weight: 700;
+        }
         .receipt-mode-notice {
             margin-top: 10px;
             background: #fff6e7;
@@ -266,10 +280,81 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
         .btn-print { background: #3c5099; color: #fff; }
         .btn-back { background: #e6ebf8; color: #25365f; }
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 8mm;
+            }
             .navbar, .actions { display: none !important; }
             body { background: #fff; }
             .receipt-wrap { margin: 0; max-width: none; padding: 0; }
-            .receipt-card { box-shadow: none; border: 0; border-radius: 0; }
+            .receipt-card {
+                box-shadow: none;
+                border: 0;
+                border-radius: 0;
+                padding: 10px 12px;
+                font-size: 12px;
+            }
+            .head {
+                padding-bottom: 8px;
+                margin-bottom: 6px;
+                gap: 6px;
+            }
+            .brand h1 { font-size: 27px; margin: 0 0 4px; }
+            .brand p { font-size: 16px; }
+            .ref .k { font-size: 13px; }
+            .ref .v { font-size: 16px; }
+            .receipt-mode-switch {
+                margin-top: 6px;
+            }
+            .receipt-mode-switch__btn {
+                display: none !important;
+            }
+            .receipt-mode-switch__btn.is-active {
+                display: inline-block !important;
+                font-size: 13px;
+                padding: 5px 12px;
+                border-radius: 999px;
+            }
+            .receipt-mode-print-only {
+                display: block;
+            }
+            .receipt-mode-notice {
+                margin-top: 6px;
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+            .grid {
+                margin-top: 8px;
+                gap: 7px;
+            }
+            .box {
+                padding: 8px 10px;
+                border-radius: 10px;
+            }
+            .box .k { font-size: 13px; }
+            .box .v {
+                margin-top: 2px;
+                font-size: 16px;
+                line-height: 1.25;
+            }
+            .amt {
+                margin-top: 10px;
+                border-radius: 10px;
+                padding: 9px 10px;
+            }
+            .amt .sum {
+                font-size: 34px;
+                line-height: 1.1;
+            }
+            .foot {
+                margin-top: 9px;
+                font-size: 11px;
+                line-height: 1.35;
+            }
+            .receipt-card, .grid, .box, .amt {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
         }
         @media (max-width: 760px) {
             .grid { grid-template-columns: 1fr; }
@@ -300,6 +385,7 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
                class="receipt-mode-switch__btn<?php echo $receiptMode === 'juristic' ? ' is-active' : ''; ?>"
                role="tab" aria-selected="<?php echo $receiptMode === 'juristic' ? 'true' : 'false'; ?>">นิติบุคคล</a>
         </div>
+        <div class="receipt-mode-print-only">ประเภทเอกสาร: <span class="tag"><?php echo htmlspecialchars($donorReceiptType); ?></span></div>
         <?php if ($receiptModeNotice !== ''): ?>
         <div class="receipt-mode-notice"><?php echo htmlspecialchars($receiptModeNotice); ?></div>
         <?php endif; ?>
