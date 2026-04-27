@@ -193,8 +193,8 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                         </div>
                         <?php endif; ?>
                         <div class="data-item full">
-                            <span class="label">รายละเอียดสิ่งของ</span>
-                            <span class="value"><?= htmlspecialchars((string)($row['item_desc'] ?? '—')) ?></span>
+                            <span class="label">แบรนด์ที่ต้องการ</span>
+                            <span class="value"><?= htmlspecialchars(trim((string)($row['desired_brand'] ?? '')) !== '' ? (string)$row['desired_brand'] : '—') ?></span>
                         </div>
                         <div class="data-item">
                             <span class="label">หมวดหมู่สิ่งของ</span>

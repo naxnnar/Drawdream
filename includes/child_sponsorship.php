@@ -46,8 +46,10 @@ function drawdream_child_plan_months_by_code(string $planCode): int
 }
 
 /**
- * คำนวณช่วงสิทธิ์อุปการะที่ถูก stack ตามแผน (จ่ายซ้ำในเดือนเดียวกัน -> สิทธิ์เลื่อนไปรอบถัดไป)
- * คืนหน้าต่างสิทธิ์ล่าสุด [start, end) และบอกว่าตอนนี้ยังอยู่ในสิทธิ์หรือไม่
+ * คำนวณช่วงสิทธิ์อุปการะแบบเป๊ะตามวัน/เวลา (anniversary model)
+ * - ใช้เวลาจ่ายจริงเป็น anchor ของสิทธิ์แต่ละรอบ
+ * - ถ้าจ่ายซ้อนก่อนสิทธิ์เดิมหมด จะต่อช่วงจากปลายสิทธิ์เดิม (stack ต่อเนื่อง)
+ * - คืนหน้าต่างสิทธิ์ล่าสุด [start, end) และบอกว่าปัจจุบันอยู่ในสิทธิ์หรือไม่
  *
  * @return array{current:bool,start:?DateTimeImmutable,end:?DateTimeImmutable,plan_code:string}
  */
@@ -101,9 +103,8 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
         } catch (Exception $e) {
             continue;
         }
-        $monthStart = $paidAt->modify('first day of this month')->setTime(0, 0, 0);
-        if ($coverageEnd === null || $monthStart >= $coverageEnd) {
-            $coverageStart = $monthStart;
+        if ($coverageEnd === null || $paidAt >= $coverageEnd) {
+            $coverageStart = $paidAt;
         } else {
             $coverageStart = $coverageEnd;
         }
@@ -672,10 +673,101 @@ function drawdream_child_sync_sponsorship_status(mysqli $conn, int $childId): vo
     }
     $cycle = drawdream_child_cycle_total($conn, $childId, $row);
     $target = drawdream_child_cycle_target_amount($conn, $childId);
-    $status = $cycle >= $target ? 'อุปการะแล้ว' : 'รออุปการะ';
+    $hasCoverage = drawdream_child_has_plan_coverage_now($conn, $childId);
+    $status = ($hasCoverage || $cycle >= $target) ? 'อุปการะแล้ว' : 'รออุปการะ';
     $stmt = $conn->prepare('UPDATE foundation_children SET status = ? WHERE child_id = ?');
     $stmt->bind_param('si', $status, $childId);
     $stmt->execute();
+}
+
+/**
+ * รายชื่อ donor_user_id ที่ถือเป็น "ผู้อุปการะปัจจุบัน" ของเด็ก
+ * - มี recurring_status active/paused หรือ
+ * - ยกเลิกแล้วแต่ยังอยู่ในช่วงสิทธิ์ตามระยะที่ชำระจริง (coverage ยังไม่หมด)
+ *
+ * @return array<int,true> key = donor_user_id
+ */
+function drawdream_child_current_sponsor_user_ids(mysqli $conn, int $childId): array
+{
+    $out = [];
+    if ($childId <= 0) {
+        return $out;
+    }
+
+    $stActive = $conn->prepare(
+        "SELECT DISTINCT donor_id
+         FROM donation
+         WHERE target_id = ? AND donate_type = 'child_subscription'
+           AND donor_id IS NOT NULL AND recurring_status IN ('active', 'paused')"
+    );
+    if ($stActive) {
+        $stActive->bind_param('i', $childId);
+        $stActive->execute();
+        $rsA = $stActive->get_result();
+        while ($r = $rsA->fetch_assoc()) {
+            $uid = (int)($r['donor_id'] ?? 0);
+            if ($uid > 0) {
+                $out[$uid] = true;
+            }
+        }
+    }
+
+    $stPaid = $conn->prepare(
+        "SELECT donor_id, recurring_plan_code, transfer_datetime, donate_id
+         FROM donation
+         WHERE target_id = ? AND payment_status = 'completed'
+           AND donor_id IS NOT NULL
+           AND recurring_plan_code IN ('monthly','semiannual','yearly')
+         ORDER BY donor_id ASC, transfer_datetime ASC, donate_id ASC"
+    );
+    if (!$stPaid) {
+        return $out;
+    }
+    $stPaid->bind_param('i', $childId);
+    $stPaid->execute();
+    $rows = $stPaid->get_result()->fetch_all(MYSQLI_ASSOC);
+    if ($rows === []) {
+        return $out;
+    }
+
+    $tz = new DateTimeZone('Asia/Bangkok');
+    $now = new DateTimeImmutable('now', $tz);
+    $byDonor = [];
+    foreach ($rows as $row) {
+        $uid = (int)($row['donor_id'] ?? 0);
+        if ($uid <= 0) {
+            continue;
+        }
+        $byDonor[$uid][] = $row;
+    }
+
+    foreach ($byDonor as $uid => $donorRows) {
+        $coverageEnd = null;
+        foreach ($donorRows as $r) {
+            $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
+            $months = drawdream_child_plan_months_by_code($planCode);
+            if ($months <= 0) {
+                continue;
+            }
+            $dtRaw = trim((string)($r['transfer_datetime'] ?? ''));
+            if ($dtRaw === '') {
+                continue;
+            }
+            try {
+                $paidAt = new DateTimeImmutable($dtRaw, $tz);
+            } catch (Exception $e) {
+                continue;
+            }
+            $coverageStart = ($coverageEnd === null || $paidAt >= $coverageEnd) ? $paidAt : $coverageEnd;
+            $coverageEnd = $coverageStart->modify('+' . $months . ' months');
+            if ($now >= $coverageStart && $now < $coverageEnd) {
+                $out[(int)$uid] = true;
+                break;
+            }
+        }
+    }
+
+    return $out;
 }
 
 /**

@@ -224,8 +224,8 @@ if ($titleShort !== '') {
         </div>
         <?php endif; ?>
         <div class="foundation-project-view-row foundation-project-view-row--block">
-            <dt>รายละเอียดรายการ</dt>
-            <dd class="foundation-project-view-pre"><?= nl2br(htmlspecialchars((string)($n['item_desc'] ?? ''))) ?></dd>
+            <dt>แบรนด์ที่ต้องการ</dt>
+            <dd class="foundation-project-view-pre"><?= nl2br(htmlspecialchars((string)($n['desired_brand'] ?? ''))) ?></dd>
         </div>
         <?php if ($noteFree !== ''): ?>
         <div class="foundation-project-view-row foundation-project-view-row--block">

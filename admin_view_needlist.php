@@ -169,8 +169,8 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                 </div>
                 <?php endif; ?>
                 <div class="admin-record-field admin-record-field--full">
-                    <div class="admin-record-k">รายละเอียดสิ่งของ</div>
-                    <div class="admin-record-v"><?= htmlspecialchars((string)($row['item_desc'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="admin-record-k">แบรนด์ที่ต้องการ</div>
+                    <div class="admin-record-v"><?= htmlspecialchars(trim((string)($row['desired_brand'] ?? '')) !== '' ? (string)$row['desired_brand'] : '—', ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <div class="admin-record-field">
                     <div class="admin-record-k">หมวดหมู่สิ่งของ</div>

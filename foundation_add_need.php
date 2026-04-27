@@ -231,7 +231,7 @@ if ($editRow && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         $_POST['item_qty_' . $slotIdx] = $rowQty > 0 ? (string)(int)$rowQty : '';
         $slotIdx++;
     }
-    $_POST['desired_brand'] = (string)($editRow['desired_brand'] ?? $editRow['item_desc'] ?? '');
+    $_POST['desired_brand'] = (string)($editRow['desired_brand'] ?? '');
     if ((int)($editRow['allow_other_brand'] ?? 0) === 1) {
         $_POST['allow_any_brand'] = '1';
     }
@@ -393,7 +393,6 @@ if (isset($_POST['submit'])) {
         if ($error === '' && mb_strlen($desiredBrand, 'UTF-8') > 200) {
             $error = 'แบรนด์ที่ต้องการต้องไม่เกิน 200 ตัวอักษร';
         }
-        $item_desc = $desiredBrand;
         $lineItemsForJson = [];
         foreach ($lineItems as $li) {
             $lineItemsForJson[] = [
@@ -547,7 +546,7 @@ if (isset($_POST['submit'])) {
             }
 
             $sqlU = "UPDATE foundation_needlist SET
-                item_name = ?, item_desc = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
+                item_name = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
                 note = ?, total_price = ?, need_items_json = ?
@@ -557,10 +556,10 @@ if (isset($_POST['submit'])) {
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'ssss' . 'idi' . str_repeat('s', 5) . 'ds' . 'ii';
+                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'ds' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
-                    $item_name, $item_desc, $desiredBrand, $brand,
+                    $item_name, $desiredBrand, $brand,
                     $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
                     $note, $total_price, $needItemsJson,
@@ -620,7 +619,7 @@ if (isset($_POST['submit'])) {
             $im2 = $slot2;
 
             $sql  = "INSERT INTO foundation_needlist 
-                 (foundation_id, item_name, item_desc, brand, allow_other_brand,
+                 (foundation_id, item_name, desired_brand, brand, allow_other_brand,
                  qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, approve_item)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
             $stmt = $conn->prepare($sql);
@@ -636,9 +635,9 @@ if (isset($_POST['submit'])) {
                 }
                 if ($hasNeedItemsJson) {
                     $sql = "INSERT INTO foundation_needlist
-                        (foundation_id, item_name, item_desc, desired_brand, brand, allow_other_brand,
+                        (foundation_id, item_name, desired_brand, brand, allow_other_brand,
                          qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, need_items_json, approve_item)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
                     $stmt = $conn->prepare($sql);
                     if (!$stmt) {
                         $error = "Prepare failed: " . $conn->error;
@@ -649,14 +648,14 @@ if (isset($_POST['submit'])) {
             if ($error === '' && $stmt) {
                 if ($hasNeedItemsJson) {
                     $stmt->bind_param(
-                        "issssidisssisds",
-                        $foundation_id, $item_name, $item_desc, $desiredBrand, $brand,
+                        "isssidissssisds",
+                        $foundation_id, $item_name, $desiredBrand, $brand,
                         $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $needItemsJson
                     );
                 } else {
                     $stmt->bind_param(
                         "isssidissssisd",
-                        $foundation_id, $item_name, $item_desc, $brand,
+                        $foundation_id, $item_name, $desiredBrand, $brand,
                         $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price
                     );
                 }

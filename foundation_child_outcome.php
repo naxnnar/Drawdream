@@ -201,31 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$success) {
                     @unlink($p);
                 }
             }
-            // แจ้งเตือนเฉพาะผู้บริจาคที่เป็นผู้อุปการะเด็กคนนี้เท่านั้น
-            $notifyUserIds = [];
-            $stNotify = $conn->prepare("
-                SELECT DISTINCT donor_id AS uid
-                FROM donation
-                WHERE category_id = ? AND target_id = ? AND payment_status = 'completed' AND donor_id IS NOT NULL
-                UNION
-                SELECT DISTINCT donor_id AS uid
-                FROM donation
-                WHERE target_id = ? AND donate_type = 'child_subscription'
-                  AND donor_id IS NOT NULL AND recurring_status IN ('active', 'paused')
-            ");
-            if ($stNotify) {
-                require_once __DIR__ . '/includes/donate_category_resolve.php';
-                $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
-                $stNotify->bind_param('iii', $childCategoryId, $childId, $childId);
-                $stNotify->execute();
-                $rsNotify = $stNotify->get_result();
-                while ($nr = $rsNotify->fetch_assoc()) {
-                    $uid = (int)($nr['uid'] ?? 0);
-                    if ($uid > 0) {
-                        $notifyUserIds[$uid] = true;
-                    }
-                }
-            }
+            // แจ้งเตือนเฉพาะ "ผู้อุปการะปัจจุบัน" (active/paused หรือ cancelled แต่ coverage ยังไม่หมด)
+            $notifyUserIds = drawdream_child_current_sponsor_user_ids($conn, $childId);
             if ($notifyUserIds !== []) {
                 $childNameText = trim((string)($child['child_name'] ?? 'เด็กคนนี้'));
                 $notifTitle = 'อัปเดตผลลัพธ์เด็กที่คุณอุปการะ';

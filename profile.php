@@ -233,7 +233,8 @@ if ($role === 'foundation') {
 
     $stmt3 = $conn->prepare("
         SELECT a.*, 
-               nl.item_name, nl.item_desc,
+               nl.item_name,
+               COALESCE(NULLIF(nl.desired_brand, ''), NULLIF(nl.note, '')) AS need_detail,
                nl.qty_needed AS quantity_required,
                CASE
                    WHEN COALESCE(nl.qty_needed, 0) > 0 THEN COALESCE(nl.total_price, 0) / nl.qty_needed
@@ -646,7 +647,7 @@ function showModal(data) {
         if (firstNeedImage) html += `<img class="modal-image" src="uploads/needs/${firstNeedImage}" alt="">`;
         html += `<div class="modal-title">${data.item_name}</div>`;
         html += `<div class="modal-section"><div class="modal-label">มูลนิธิ:</div><div class="modal-value">${data.foundation_name || '-'}</div></div>`;
-        html += `<div class="modal-section"><div class="modal-label">รายละเอียด:</div><div class="modal-value">${data.item_desc || '-'}</div></div>`;
+        html += `<div class="modal-section"><div class="modal-label">แบรนด์ที่ต้องการ/รายละเอียด:</div><div class="modal-value">${data.need_detail || '-'}</div></div>`;
         html += `<div class="modal-section"><div class="modal-label">จำนวน:</div><div class="modal-value">${data.quantity_required} ชิ้น</div></div>`;
         html += `<div class="modal-section"><div class="modal-label">ราคา/หน่วย:</div><div class="modal-value">${Number(data.item_price).toLocaleString('th-TH', {minimumFractionDigits: 2})} บาท</div></div>`;
         html += `<div class="modal-section"><div class="modal-label">รวม:</div><div class="modal-value"><strong>${(data.quantity_required * data.item_price).toLocaleString('th-TH', {minimumFractionDigits: 2})} บาท</strong></div></div>`;

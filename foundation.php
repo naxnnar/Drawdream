@@ -84,7 +84,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, item_desc, brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, reviewed_at
+            SELECT item_id, item_name, desired_brand, brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, reviewed_at
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -293,8 +293,8 @@ $hasAnySlides = !empty($foundationSlides);
                   เป้าหมาย: <?= number_format($cardGoal, 0) ?> บาท
                   <span class="need-period">/ รอบละ 1 เดือน</span>
                 </div>
-                <?php if ($nl['item_desc']): ?>
-                  <div class="need-card-desc"><?= htmlspecialchars($nl['item_desc']) ?></div>
+                <?php if (trim((string)($nl['desired_brand'] ?? '')) !== ''): ?>
+                  <div class="need-card-desc">แบรนด์ที่ต้องการ: <?= htmlspecialchars((string)$nl['desired_brand']) ?></div>
                 <?php endif; ?>
                 <div class="need-edit-wrap">
                   <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>" onclick="event.stopPropagation();">แก้ไขรายการนี้</a>
