@@ -545,29 +545,24 @@ if (isset($_POST['submit'])) {
                 $nfFinal = $needFoundationImageDb;
             }
 
-            $oldTotalPrice = (float)($existingNeedRow['total_price'] ?? 0);
-
             $sqlU = "UPDATE foundation_needlist SET
                 item_name = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
-                note = ?, total_price = ?, need_items_json = ?,
-                previous_total_price = IF(? != total_price, total_price, previous_total_price)
+                note = ?, total_price = ?, submitted_total_price = COALESCE(submitted_total_price, ?), need_items_json = ?
                 WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                // types: sss(idi)(sssss)(ds)(d)(ii) — extra d for IF(? != total_price, ...)
-                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'ds' . 'd' . 'ii';
+                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'dds' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
                     $item_name, $desiredBrand, $brand,
                     $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
-                    $note, $total_price, $needItemsJson,
-                    $total_price,
+                    $note, $total_price, $total_price, $needItemsJson,
                     $itemIdEdit, $foundation_id
                 );
 
@@ -625,8 +620,8 @@ if (isset($_POST['submit'])) {
 
             $sql  = "INSERT INTO foundation_needlist 
                  (foundation_id, item_name, desired_brand, brand, allow_other_brand,
-                 qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, approve_item)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                  qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, submitted_total_price, approve_item)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
             $stmt = $conn->prepare($sql);
 
             if (!$stmt) {
@@ -641,8 +636,8 @@ if (isset($_POST['submit'])) {
                 if ($hasNeedItemsJson) {
                     $sql = "INSERT INTO foundation_needlist
                         (foundation_id, item_name, desired_brand, brand, allow_other_brand,
-                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, need_items_json, approve_item)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, submitted_total_price, need_items_json, approve_item)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
                     $stmt = $conn->prepare($sql);
                     if (!$stmt) {
                         $error = "Prepare failed: " . $conn->error;
@@ -653,15 +648,15 @@ if (isset($_POST['submit'])) {
             if ($error === '' && $stmt) {
                 if ($hasNeedItemsJson) {
                     $stmt->bind_param(
-                        "isssidissssisds",
+                        "isssidissssisdds",
                         $foundation_id, $item_name, $desiredBrand, $brand,
-                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $needItemsJson
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $total_price, $needItemsJson
                     );
                 } else {
                     $stmt->bind_param(
-                        "isssidissssisd",
+                        "isssidissssisdd",
                         $foundation_id, $item_name, $desiredBrand, $brand,
-                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $total_price
                     );
                 }
 

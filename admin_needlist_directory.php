@@ -58,6 +58,18 @@ function admin_needlist_status_pill_class(string $ap): string
     <title>รายการสิ่งของทั้งหมด | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">
+    <style>
+        .admin-needlist-head-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .admin-needlist-head-note {
+            font-size: 13px;
+            color: #6b7280;
+        }
+    </style>
 </head>
 <body>
 <?php include 'navbar.php'; ?>
@@ -65,6 +77,10 @@ function admin_needlist_status_pill_class(string $ap): string
 <div class="admin-directory-page children-admin-directory">
     <div class="admin-directory-head">
         <h1 class="admin-directory-title">รายการสิ่งของทั้งหมด</h1>
+        <div class="admin-needlist-head-actions">
+            <a class="admin-dir-btn admin-dir-btn--primary" href="admin_approve_needlist.php">อนุมัติสิ่งของ</a>
+            <span class="admin-needlist-head-note">กดปุ่ม "สิ่งของ / แก้ราคา" ในแต่ละแถวเพื่อแก้ราคาทีละชิ้น</span>
+        </div>
     </div>
 
     <div class="admin-dir-table-wrap">
@@ -114,7 +130,7 @@ function admin_needlist_status_pill_class(string $ap): string
                         <td class="admin-dir-num"><?= number_format($dUnit, 0) ?></td>
                         <td>
                             <div class="admin-dir-actions admin-dir-actions--pair">
-                                <a class="admin-dir-btn admin-dir-btn--primary" href="<?= htmlspecialchars($detailUrl) ?>">สิ่งของ</a>
+                                <a class="admin-dir-btn admin-dir-btn--primary" href="<?= htmlspecialchars($detailUrl) ?>">สิ่งของ / แก้ราคา</a>
                                 <a class="admin-dir-btn admin-dir-btn--ghost" href="<?= htmlspecialchars($totalsUrl) ?>">ยอดสิ่งของ</a>
                             </div>
                         </td>

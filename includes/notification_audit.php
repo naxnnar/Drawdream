@@ -118,11 +118,13 @@ function drawdream_send_notification(
             $del->execute();
         }
         $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, entity_key, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)');
-        if (!$stmt) {
-            return false;
+        if ($stmt) {
+            $stmt->bind_param('isssss', $userId, $typeTh, $title, $message, $link, $key);
+            if ($stmt->execute()) {
+                return true;
+            }
         }
-        $stmt->bind_param('isssss', $userId, $typeTh, $title, $message, $link, $key);
-        return $stmt->execute();
+        // Fallback: entity_key column ยังไม่มีหรือ INSERT ล้มเหลว — ใช้ INSERT แบบธรรมดา
     }
     $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
     if (!$stmt) {

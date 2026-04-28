@@ -350,7 +350,7 @@ if (isset($_GET['err'])) {
                 }
               ?></div>
               <div class="admin-notif-item-actions">
-                <a class="admin-notif-link" href="admin_needlist_view.php?item_id=<?php echo (int)$n['item_id']; ?>">ตรวจสอบ</a>
+                <a class="admin-notif-link" href="admin_approve_needlist.php">ตรวจสอบ / แก้ราคา</a>
               </div>
             </li>
           <?php endforeach; ?>

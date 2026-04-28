@@ -37,6 +37,21 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'desired_brand'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN desired_brand VARCHAR(200) NULL DEFAULT NULL');
     }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_total_price'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN submitted_total_price DECIMAL(12,2) NULL DEFAULT NULL AFTER total_price');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_items_json'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN submitted_items_json LONGTEXT NULL DEFAULT NULL AFTER need_items_json');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'approved_total_price'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN approved_total_price DECIMAL(12,2) NULL DEFAULT NULL AFTER submitted_total_price');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'price_reviewed_by_user_id'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN price_reviewed_by_user_id INT NULL DEFAULT NULL AFTER approved_total_price');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'price_reviewed_at'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN price_reviewed_at DATETIME NULL DEFAULT NULL AFTER price_reviewed_by_user_id');
+    }
     $hasItemDesc = false;
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'item_desc'")) && $c->num_rows > 0) {
         $hasItemDesc = true;
@@ -69,6 +84,34 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
         require_once __DIR__ . '/needlist_donate_window.php';
         drawdream_needlist_backfill_donate_window_ends($conn);
     }
+
+    // Backfill ประวัติราคา: ค่าที่มูลนิธิเสนอ และค่าที่แอดมินอนุมัติ
+    @$conn->query(
+        "UPDATE foundation_needlist
+         SET submitted_total_price = total_price
+         WHERE submitted_total_price IS NULL AND total_price IS NOT NULL"
+    );
+    @$conn->query(
+        "UPDATE foundation_needlist
+         SET approved_total_price = total_price
+         WHERE approved_total_price IS NULL
+           AND approve_item IN ('approved','purchasing','done')
+           AND total_price IS NOT NULL"
+    );
+    @$conn->query(
+        "UPDATE foundation_needlist
+         SET price_reviewed_by_user_id = reviewed_by_user_id
+         WHERE price_reviewed_by_user_id IS NULL
+           AND reviewed_by_user_id IS NOT NULL
+           AND approve_item IN ('approved','purchasing','done')"
+    );
+    @$conn->query(
+        "UPDATE foundation_needlist
+         SET price_reviewed_at = reviewed_at
+         WHERE price_reviewed_at IS NULL
+           AND reviewed_at IS NOT NULL
+           AND approve_item IN ('approved','purchasing','done')"
+    );
 }
 
 /**

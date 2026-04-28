@@ -25,10 +25,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $item_id = (int)($_POST['item_id'] ?? 0);
     $action  = $_POST['action'] ?? '';
     $note    = trim($_POST['note'] ?? '');
+    $adminTotalInput = trim((string)($_POST['admin_total_price'] ?? ''));
+    $adminTotalPrice = null;
+
+    if ($adminTotalInput !== '') {
+        $adminTotalInput = str_replace([',', ' '], '', $adminTotalInput);
+        $adminTotalPrice = (float)$adminTotalInput;
+        if ($adminTotalPrice <= 0) {
+            $error = 'ราคาสุดท้ายที่แอดมินกำหนดต้องมากกว่า 0';
+        }
+    }
 
     $newStatus = null;
     if ($action === 'approve') $newStatus = 'approved';
     if ($action === 'reject')  $newStatus = 'rejected';
+
+    $submittedTotal = 0.0;
+    if ($item_id > 0) {
+        $stOld = $conn->prepare('SELECT total_price, submitted_total_price FROM foundation_needlist WHERE item_id = ? LIMIT 1');
+        if ($stOld) {
+            $stOld->bind_param('i', $item_id);
+            $stOld->execute();
+            $oldRow = $stOld->get_result()->fetch_assoc();
+            $submittedTotal = (float)($oldRow['submitted_total_price'] ?? 0);
+            if ($submittedTotal <= 0) {
+                $submittedTotal = (float)($oldRow['total_price'] ?? 0);
+            }
+        }
+    }
 
     if ($item_id <= 0 || !in_array($newStatus, ['approved','rejected'], true)) {
         $error = "ข้อมูลไม่ถูกต้อง";
@@ -58,6 +82,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($newStatus === 'approved' && $adminTotalPrice === null) {
+            $adminTotalPrice = $submittedTotal;
+        }
+
         if ($error !== '') {
             // ข้าม execute
         } elseif ($newStatus === 'approved' && $donateEndSql !== null) {
@@ -67,13 +95,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     reviewed_by_user_id=?,
                     reviewed_at=NOW(),
                     review_note=?,
+                    submitted_total_price = COALESCE(submitted_total_price, total_price),
+                    total_price=?,
+                    approved_total_price=?,
+                    price_reviewed_by_user_id=?,
+                    price_reviewed_at=NOW(),
                     donate_window_end_at=?
                 WHERE item_id=? AND approve_item='pending'
             ");
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $stmt->bind_param("sissi", $newStatus, $uid, $note, $donateEndSql, $item_id);
+                $stmt->bind_param("sisddisi", $newStatus, $uid, $note, $adminTotalPrice, $adminTotalPrice, $uid, $donateEndSql, $item_id);
             }
         } elseif ($newStatus === 'approved') {
             $error = "ไม่สามารถคำนวณวันปิดรับบริจาคอัตโนมัติได้";
@@ -111,12 +144,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $iname = (string)($nr['item_name'] ?? '');
                 $notifKind = $newStatus === 'approved' ? 'need_approved' : 'need_rejected';
                 if ($newStatus === 'approved') {
+                    $approvedTotal = $adminTotalPrice ?? $submittedTotal;
+                    $finalMsg = 'รายการ "' . $iname . '" ผ่านการตรวจสอบแล้ว (ระบบจะปิดรับบริจาคอัตโนมัติใน 1 เดือน)';
+                    $finalMsg .= ' ยอดเป้าหมายที่อนุมัติ: ' . number_format((float)$approvedTotal, 2) . ' บาท';
+                    if (abs((float)$approvedTotal - (float)$submittedTotal) > 0.0001) {
+                        $finalMsg .= ' (ปรับจาก ' . number_format((float)$submittedTotal, 2) . ' บาท)';
+                    }
                     drawdream_send_notification(
                         $conn,
                         $fu,
                         'need_approved',
                         'รายการสิ่งของได้รับการอนุมัติ',
-                        'รายการ "' . $iname . '" ผ่านการตรวจสอบแล้ว (ระบบจะปิดรับบริจาคอัตโนมัติใน 1 เดือน)',
+                        $finalMsg,
                         'foundation.php',
                         'fdn_need:' . $item_id
                     );
@@ -193,6 +232,7 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                 <th>จำนวน</th>
                 <th>ราคา/หน่วย</th>
                 <th>รวม</th>
+                <th>ราคาสุดท้าย (แอดมิน)</th>
                 <th>เหตุผล (กรณีปฏิเสธ)</th>
                 <th>จัดการ</th>
             </tr>
@@ -231,6 +271,17 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                     <td><?= (int)$row['qty_needed'] ?></td>
                     <td><?= number_format($unitPrice, 2) ?></td>
                     <td><b><?= number_format($total, 2) ?></b></td>
+                    <td>
+                        <input
+                            type="number"
+                            name="admin_total_price"
+                            form="f<?= (int)$row['item_id'] ?>"
+                            min="0.01"
+                            step="0.01"
+                            value="<?= htmlspecialchars(number_format($total, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
+                            style="width:140px;"
+                        >
+                    </td>
                     <td>
                         <form id="f<?= (int)$row['item_id'] ?>" method="post">
                             <input type="hidden" name="item_id" value="<?= (int)$row['item_id'] ?>">
