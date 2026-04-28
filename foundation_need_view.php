@@ -6,6 +6,7 @@
 session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
+drawdream_ensure_needlist_schema($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: foundation.php');
@@ -172,6 +173,20 @@ if ($titleShort !== '') {
         <div class="foundation-project-view-note foundation-project-view-note--merge">
             <strong>ปิดรับบริจาคแล้ว</strong> — ครบกำหนดรอบ 1 เดือนของระบบ
         </div>
+    <?php endif; ?>
+
+    <?php
+        $prevPrice = isset($n['previous_total_price']) && $n['previous_total_price'] !== null
+            ? (float)$n['previous_total_price']
+            : null;
+        $priceWasEdited = $prevPrice !== null && $prevPrice > 0 && $prevPrice != $goal;
+    ?>
+    <?php if ($priceWasEdited): ?>
+    <div class="foundation-project-view-note foundation-project-view-note--price-change">
+        <strong>ราคาเป้าหมายถูกแก้ไข</strong>
+        — ราคาเดิม <span class="price-old"><?= number_format($prevPrice, 0) ?> บาท</span>
+        → ราคาใหม่ <span class="price-new"><?= number_format($goal, 0) ?> บาท</span>
+    </div>
     <?php endif; ?>
 
     <div class="foundation-project-view-progress">

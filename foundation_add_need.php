@@ -545,24 +545,29 @@ if (isset($_POST['submit'])) {
                 $nfFinal = $needFoundationImageDb;
             }
 
+            $oldTotalPrice = (float)($existingNeedRow['total_price'] ?? 0);
+
             $sqlU = "UPDATE foundation_needlist SET
                 item_name = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
-                note = ?, total_price = ?, need_items_json = ?
+                note = ?, total_price = ?, need_items_json = ?,
+                previous_total_price = IF(? != total_price, total_price, previous_total_price)
                 WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'ds' . 'ii';
+                // types: sss(idi)(sssss)(ds)(d)(ii) — extra d for IF(? != total_price, ...)
+                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'ds' . 'd' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
                     $item_name, $desiredBrand, $brand,
                     $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
                     $note, $total_price, $needItemsJson,
+                    $total_price,
                     $itemIdEdit, $foundation_id
                 );
 
