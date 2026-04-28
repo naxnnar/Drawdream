@@ -19,3 +19,9 @@ lib/tcpdf/
 lib/tcpdf.zip
 lib/tcpdf_copy.zip
 lib/tcpdf_extract/
+
+# Local agent metadata
+.claude/
+
+# Local migration marker
+config/migration_done.txt
