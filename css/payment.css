@@ -657,10 +657,123 @@ a.contact-card-link:focus-visible .contact-card-name {
     border-left: 4px solid #c62828;
 }
 
-/* ======== Responsive ======== */
+/* ======== Responsive — หน้าชำระเงิน / บริจาคโครงการ (payment_project.php) ======== */
 @media (max-width: 768px) {
     .payment-container {
-        grid-template-columns: 1fr;
+        margin: 12px auto 0;
+        padding: 0 14px;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .payment-card {
+        flex-direction: column;
+        min-height: unset;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .project-info {
+        flex: none;
+        width: 100%;
+    }
+
+    .project-img {
+        height: auto;
+        min-height: 200px;
+        max-height: min(56vw, 300px);
+        width: 100%;
+        object-fit: cover;
+    }
+
+    .project-info-inner {
+        padding: 18px 16px 16px;
+        gap: 10px;
+    }
+
+    .project-payment-heading-row {
+        flex-wrap: wrap;
+        align-items: flex-start !important;
+        row-gap: 8px;
+    }
+
+    .project-info h2 {
+        font-size: 1.05em;
+        flex-wrap: wrap;
+    }
+
+    .project-info h3 {
+        font-size: 1.12em;
+        line-height: 1.35;
+        word-break: break-word;
+    }
+
+    .payment-box {
+        flex: none;
+        width: 100%;
+        height: auto;
+        border-left: none;
+        border-top: 2px solid #f1cf54;
+        padding: 20px 16px 22px;
+        box-sizing: border-box;
+    }
+
+    .project-detail-summary {
+        margin-bottom: 18px !important;
+        font-size: 1rem !important;
+        line-height: 1.6 !important;
+    }
+
+    .project-detail-summary .detail-row {
+        font-size: 0.98rem !important;
+        line-height: 1.55 !important;
+        margin-bottom: 10px;
+    }
+
+    .contact-card {
+        max-width: 100%;
+    }
+
+    .sdg-row {
+        max-width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .sdg-title {
+        height: auto;
+        min-height: 0;
+        font-size: 0.95em;
+    }
+
+    .project-donate-progress-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 0.88rem;
+    }
+
+    .amount-presets-grid {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .payment-container {
+        padding: 0 10px;
+    }
+
+    .project-info-inner {
+        padding: 14px 12px 12px;
+    }
+
+    .payment-box {
+        padding: 16px 12px 20px;
+    }
+
+    .project-info a[href*="history.back"] {
+        top: 12px;
+        left: 12px;
+        width: 38px;
+        height: 38px;
     }
 }
 .payment-container:has(.result-box) {

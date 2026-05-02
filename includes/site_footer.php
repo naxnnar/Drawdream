@@ -9,8 +9,8 @@ $footerBase = $footer_base_path ?? '';
   <div class="container py-4" style="background-color: #3f4f9a;">
     <div class="row text-light">
 
-      <div class="col-md-6 mb-4">
-        <img src="<?= htmlspecialchars($footerBase) ?>img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo">
+      <div class="col-md-6 mb-4 text-center text-md-start">
+        <img src="<?= htmlspecialchars($footerBase) ?>img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo d-block mx-auto mx-md-0">
         <p class="text-light">
           ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
           ธนาคารไทยพาณิชย์<br>

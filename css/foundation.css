@@ -337,6 +337,99 @@
     justify-content: center;
     font-size: 12px;
 }
+
+/* —— มือถือ / แท็บเล็ก: การ์ดมูลนิธิในสไลด์ — ภาพใหญ่ด้านบน, รายการด่วนเรียงแนวตั้ง อ่านง่าย —— */
+@media (max-width: 1024px) {
+    .foundation-hero-track .foundation-slide.foundation-card .fc-right {
+        order: -1;
+    }
+    .foundation-hero-track .foundation-slide .fc-left {
+        padding-top: 4px;
+    }
+}
+
+@media (max-width: 768px) {
+    .foundation-hero-carousel {
+        padding-left: 12px;
+        padding-right: 12px;
+        margin-bottom: 28px;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-progress-block {
+        max-width: 100%;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-amount-row {
+        text-align: center;
+        font-size: 0.95rem;
+        line-height: 1.45;
+        margin-bottom: 14px;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-title {
+        font-size: clamp(1.2rem, 5.2vw, 1.65rem);
+        min-height: 0;
+        -webkit-line-clamp: unset;
+        display: block;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-desc {
+        min-height: 0;
+        -webkit-line-clamp: unset;
+        display: block;
+        margin-bottom: 16px;
+        font-size: 0.96rem;
+        line-height: 1.55;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-urgent-zone {
+        min-height: 0;
+        margin-bottom: 14px;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-urgent-zone .fc-urgent-items-grid {
+        grid-template-columns: 1fr;
+        max-width: 100%;
+        gap: 14px;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-urgent-zone .fc-urgent-items-grid .urgent-item-card .item-img.urgent-img-big,
+    .foundation-hero-track .foundation-slide .fc-urgent-zone .fc-urgent-items-grid .urgent-item-card .noimg.urgent-img-big {
+        height: auto;
+        min-height: 156px;
+        max-height: 220px;
+        aspect-ratio: 4 / 3;
+        object-fit: cover;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-urgent-zone .fc-urgent-items-grid .urgent-item-card .noimg.urgent-img-big {
+        object-fit: none;
+    }
+
+    .foundation-hero-track .foundation-slide .btn-donate {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        padding-left: 16px;
+        padding-right: 16px;
+        font-size: clamp(1rem, 4vw, 1.15rem);
+    }
+}
+
+@media (max-width: 480px) {
+    .foundation-hero-track .foundation-slide .fc-left,
+    .foundation-hero-track .foundation-slide .fc-right {
+        padding-left: 14px;
+        padding-right: 14px;
+    }
+
+    .foundation-hero-track .foundation-slide .fc-urgent-zone .fc-urgent-items-grid .urgent-item-card .urgent-tag-abs {
+        font-size: 11px;
+        padding: 4px 10px;
+    }
+}
+
 .foundation-hero-track .foundation-slide .fc-right {
     justify-content: flex-start;
     align-items: stretch;
@@ -1700,8 +1793,10 @@ body.foundation-post-update-page .alert { padding: 14px 18px; border-radius: 10p
     }
     .btn-donate {
         font-size: 1rem;
-        padding: 10px 0;
-        width: 90vw;
+        padding: 10px 16px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
     }
     /* ปุ่มและ input */
     .foundation-owner-btn-edit,

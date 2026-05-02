@@ -260,26 +260,37 @@
 
     /* ปรับขนาดรูปภาพและ container หลัก */
     .portrait-wrapper {
-        width: 90vw;
-        height: 45vw;
+        width: min(92vw, 400px);
+        height: auto;
+        aspect-ratio: 1;
         min-width: 180px;
         min-height: 180px;
-        max-width: 95vw;
-        max-height: 60vw;
+        max-width: 100%;
+        max-height: none;
         left: 0;
-        margin: 0 auto 1rem auto;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        margin-bottom: 1rem;
         position: static;
         justify-content: center;
-        align-items: flex-end;
+        align-items: center;
     }
+
+    .portrait-img {
+        object-fit: contain;
+        object-position: center center;
+    }
+
     .donation-image {
-        width: 90vw;
-        height: 45vw;
+        width: min(92vw, 520px);
+        height: auto;
+        aspect-ratio: 1;
         min-width: 180px;
         min-height: 180px;
-        max-width: 95vw;
-        max-height: 60vw;
-        margin-left: 0;
+        max-width: 100%;
+        max-height: none;
+        margin-left: auto !important;
+        margin-right: auto !important;
     }
 
     /* ปุ่มและกล่องจำนวนเงิน */
@@ -412,6 +423,31 @@ body { overflow-x: hidden; }
 
 .home-hero .portrait-wrapper {
     margin-left: 0 !important;
+}
+
+/* มือถือ / แท็บเล็ก: จัดรูป hero (วงกลม) และรูปบ้านบริจาคให้อยู่กลางจอ */
+@media (max-width: 991.98px) {
+    .home-hero .hero-image-col {
+        justify-content: center !important;
+        align-items: center;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        width: 100%;
+    }
+
+    .home-hero .portrait-wrapper {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+
+    .home-hero .row {
+        min-height: 0;
+    }
+
+    .donation-image {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
 }
 
 .home-hero .hero-text-col {

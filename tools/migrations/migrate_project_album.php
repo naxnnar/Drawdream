@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 
-// สรุปสั้น: ไฟล์นี้ใช้ย้ายหรือปรับโครงสร้างข้อมูลส่วน project album
-require_once __DIR__ . '/db.php';
+// รันครั้งเดียวด้วยมือ: php tools/migrations/migrate_project_album.php
 
-$uploadsRoot = __DIR__ . '/uploads';
+$root = dirname(__DIR__, 2);
+require_once $root . '/db.php';
+
+$uploadsRoot = $root . '/uploads';
 $projectDir = $uploadsRoot . '/project';
 if (!is_dir($projectDir) && !@mkdir($projectDir, 0755, true) && !is_dir($projectDir)) {
     fwrite(STDERR, "Cannot create directory: {$projectDir}\n");
@@ -94,4 +96,3 @@ echo "Done.\n";
 foreach ($stats as $k => $v) {
     echo str_pad($k, 14, ' ') . ": {$v}\n";
 }
-

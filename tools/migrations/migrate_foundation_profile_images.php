@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 
-// สรุปสั้น: ไฟล์นี้ใช้ย้ายหรือปรับโครงสร้างข้อมูลส่วน foundation profile images
-require_once __DIR__ . '/db.php';
+// รันครั้งเดียวด้วยมือ: php tools/migrations/migrate_foundation_profile_images.php
 
-$profilesDir = __DIR__ . '/uploads/profiles';
+$root = dirname(__DIR__, 2);
+require_once $root . '/db.php';
+
+$profilesDir = $root . '/uploads/profiles';
 if (!is_dir($profilesDir)) {
     fwrite(STDERR, "profiles directory not found\n");
     exit(1);
@@ -113,4 +115,3 @@ echo "Done.\n";
 foreach ($stats as $k => $v) {
     echo str_pad($k, 14, ' ') . ": {$v}\n";
 }
-

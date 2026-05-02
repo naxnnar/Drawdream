@@ -162,7 +162,7 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
         <a href="detail_pin.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
       <div class="col-md-6 d-flex flex-column align-items-center text-light">
-        <img src="img/san.png" alt="น้องแซน" class="img-fluid rounded shadow mb-3">
+        <img src="img/san.png" alt="น้องแซน" class="img-fluid rounded shadow mb-3" style="object-fit:cover; object-position:top; align-self:flex-start;">
         <h3>น้องแซน</h3>
         <p class="card-text">
           น้องแซนมักจะใช้ชอบระบายสีเสมอเมื่อมีกิจกรรมเล่นเวลาว่าง เขาจะใช้ดินสอแท่งเดิมจนเหลือแท่งสั้นๆ วาดรูปบนกระดาษ
@@ -227,8 +227,8 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
   <div class="container py-4" style="background-color: #3f4f9a;">
     <div class="row text-light">
 
-      <div class="col-md-6 mb-4">
-        <img src="img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo">
+      <div class="col-md-6 mb-4 text-center text-md-start">
+        <img src="img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo d-block mx-auto mx-md-0">
         <p class="text-light">
           ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
           ธนาคารไทยพาณิชย์<br>

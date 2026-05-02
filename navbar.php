@@ -286,7 +286,7 @@ $adminNeedlistActive = in_array($current_page, [
 ], true);
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
-<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=6">
 <link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=3">
 <?php if ($is_admin_mode): ?>
 <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
@@ -382,28 +382,18 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
   <span>บัญชีมูลนิธิของคุณยังรอการตรวจสอบจากผู้ดูแลระบบ — จึงยังไม่สามารถสร้างหรือจัดการโปรไฟล์ โครงการ หรือรายการสิ่งของได้จนกว่าจะได้รับการอนุมัติ</span>
 </div>
 <?php endif; ?>
-<nav class="navbar">
-
+<nav class="navbar navbar-public">
   <div class="nav-left">
-    <?php if ($is_admin_mode): ?>
-      <a href="<?= $_nav_base ?>admin_dashboard.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? 'class="active"' : '' ?>>Dashboard</a>
-      <a href="<?= $_nav_base ?>admin_notifications.php#admin-pending-foundations" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_foundation.php' ? 'class="active"' : '' ?>>
-        อนุมัติมูลนิธิ<?php if ($pending_count > 0): ?> <span class="menu-badge"><?= $pending_count ?></span><?php endif; ?>
-      </a>
-      <a href="<?= $_nav_base ?>admin_notifications.php#admin-pending-projects" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_projects.php' ? 'class="active"' : '' ?>>
-        อนุมัติโครงการ<?php if ($pending_projects > 0): ?> <span class="menu-badge"><?= $pending_projects ?></span><?php endif; ?>
-      </a>
-      <a href="<?= $_nav_base ?>admin_approve_needlist.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_approve_needlist.php' ? 'class="active"' : '' ?>>
-        อนุมัติสิ่งของ<?php if ($pending_needs > 0): ?> <span class="menu-badge"><?= $pending_needs ?></span><?php endif; ?>
-      </a>
-      <a href="<?= $_nav_base ?>admin_escrow.php" <?= basename($_SERVER['PHP_SELF']) == 'admin_escrow.php' ? 'class="active"' : '' ?>>Escrow</a>
-    <?php else: ?>
+    <button type="button" class="nav-mobile-menu-btn" id="navMobileMenuBtn" aria-label="เปิดเมนูนำทาง" aria-expanded="false" aria-controls="navMainLinks">
+      <i class="bi bi-list" aria-hidden="true"></i>
+    </button>
+    <div class="nav-main-links" id="navMainLinks" role="navigation" aria-label="เมนูหลัก">
       <a href="<?= $_nav_base ?>homepage.php" <?= basename($_SERVER['PHP_SELF']) == 'homepage.php' ? 'class="active"' : '' ?>>หน้าแรก</a>
       <a href="<?= $_nav_base ?>children_.php" <?= basename($_SERVER['PHP_SELF']) == 'children_.php' ? 'class="active"' : '' ?>>บริจาค</a>
       <a href="<?= $_nav_base ?>project.php" <?= basename($_SERVER['PHP_SELF']) == 'project.php' ? 'class="active"' : '' ?>>โครงการ</a>
       <a href="<?= $_nav_base ?>foundation.php" <?= basename($_SERVER['PHP_SELF']) == 'foundation.php' ? 'class="active"' : '' ?>>มูลนิธิ</a>
       <a href="<?= $_nav_base ?>about.php" <?= basename($_SERVER['PHP_SELF']) == 'about.php' ? 'class="active"' : '' ?>>เกี่ยวกับเรา</a>
-    <?php endif; ?>
+    </div>
   </div>
 
   <div class="nav-center">
@@ -470,10 +460,19 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
         </div>
       <?php endif; ?>
 
-      <a href="<?= $_nav_base ?>profile.php" class="profile-btn" title="โปรไฟล์">
-        <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="โปรไฟล์" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
-      </a>
-      <a href="<?= $_nav_base ?>logout.php" class="logout-btn">ออกจากระบบ</a>
+      <div class="nav-profile-wrap">
+        <a href="<?= $_nav_base ?>profile.php" class="profile-btn nav-profile-desktop-only" title="โปรไฟล์">
+          <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="โปรไฟล์" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
+        </a>
+        <button type="button" class="profile-btn nav-profile-mobile-only" id="navProfileMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="navProfileMenu" title="เมนูบัญชี">
+          <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
+        </button>
+        <div class="nav-profile-menu" id="navProfileMenu" role="menu" hidden>
+          <a href="<?= $_nav_base ?>profile.php" class="nav-profile-menu-item" role="menuitem">โปรไฟล์</a>
+          <a href="<?= $_nav_base ?>logout.php" class="nav-profile-menu-item nav-profile-menu-logout" role="menuitem">ออกจากระบบ</a>
+        </div>
+      </div>
+      <a href="<?= $_nav_base ?>logout.php" class="logout-btn nav-logout-desktop-only">ออกจากระบบ</a>
 
     <?php else: ?>
       <a href="<?= $_nav_base ?>login.php" class="logout-btn">เข้าสู่ระบบ</a>
@@ -481,6 +480,82 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
   </div>
 
 </nav>
+<div class="nav-mobile-overlay" id="navMobileOverlay" aria-hidden="true"></div>
+<script>
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('navMobileMenuBtn');
+    var overlay = document.getElementById('navMobileOverlay');
+    if (!btn || !overlay) return;
+
+    function setOpen(open) {
+      document.body.classList.toggle('nav-public-drawer-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      btn.setAttribute('aria-label', open ? 'ปิดเมนูนำทาง' : 'เปิดเมนูนำทาง');
+      overlay.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if (open) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+    }
+
+    function close() {
+      setOpen(false);
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOpen(!document.body.classList.contains('nav-public-drawer-open'));
+    });
+    overlay.addEventListener('click', close);
+    var panel = document.getElementById('navMainLinks');
+    if (panel) {
+      panel.querySelectorAll('a').forEach(function (a) {
+        a.addEventListener('click', close);
+      });
+    }
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 600) close();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') close();
+    });
+  });
+})();
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('navProfileMenuBtn');
+    var wrap = document.querySelector('.nav-profile-wrap');
+    var menu = document.getElementById('navProfileMenu');
+    if (!btn || !wrap || !menu) return;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var open = !wrap.classList.contains('nav-profile-open');
+      wrap.classList.toggle('nav-profile-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        menu.removeAttribute('hidden');
+      } else {
+        menu.setAttribute('hidden', '');
+      }
+      var nw = document.getElementById('notifWrap');
+      if (nw) nw.classList.remove('open');
+    });
+    menu.querySelectorAll('a').forEach(function (a) {
+      a.addEventListener('click', function () {
+        if (typeof closeNavProfileMenu === 'function') closeNavProfileMenu();
+      });
+    });
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 768 && typeof closeNavProfileMenu === 'function') closeNavProfileMenu();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && typeof closeNavProfileMenu === 'function') closeNavProfileMenu();
+    });
+  });
+})();
+</script>
 <?php endif; ?>
 
 <script>
@@ -488,10 +563,21 @@ function toggleNotif(e) {
   e.stopPropagation();
   const w = document.getElementById('notifWrap');
   if (w) w.classList.toggle('open');
+  closeNavProfileMenu();
+}
+function closeNavProfileMenu() {
+  var wrap = document.querySelector('.nav-profile-wrap');
+  var btn = document.getElementById('navProfileMenuBtn');
+  var menu = document.getElementById('navProfileMenu');
+  if (!wrap || !btn || !menu) return;
+  wrap.classList.remove('nav-profile-open');
+  btn.setAttribute('aria-expanded', 'false');
+  menu.setAttribute('hidden', '');
 }
 document.addEventListener('click', function() {
   const w = document.getElementById('notifWrap');
   if (w) w.classList.remove('open');
+  closeNavProfileMenu();
 });
 function markRead(id) {
   fetch('<?= $_nav_base ?>mark_notif_read.php?id=' + id);

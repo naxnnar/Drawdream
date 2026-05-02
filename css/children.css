@@ -1694,6 +1694,174 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
     .admin-details-col { width: 100%; }
 }
 
+/*
+ * children_donate.php — มือถือ: จัดโครงรอบนอกการ์ด + แท็บ + โซนบริจาค (col-right) ให้อ่านง่าย
+ * ไม่แตะ .child-details / .child-img-container (โซนประวัติเด็กในการ์ดเหลืองคงเรียงแบบเดิม)
+ */
+@media (max-width: 768px) {
+    main.child-profile-main.container {
+        max-width: 100% !important;
+        padding-left: max(12px, env(safe-area-inset-left, 0px)) !important;
+        padding-right: max(12px, env(safe-area-inset-right, 0px)) !important;
+        margin-top: 1rem !important;
+        margin-bottom: 2rem !important;
+    }
+
+    main.child-profile-main .custom-profile-card {
+        padding: 24px 16px 20px;
+        border-radius: 28px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* แท็บ «เด็กรายบุคคล» — ไม่ซ้อนทับขอบบน (มือถือ) */
+    main.child-profile-main .profile-labels {
+        position: static;
+        left: auto;
+        top: auto;
+        margin: 0 0 14px;
+        padding: 0;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    main.child-profile-main .profile-label-tab {
+        padding: 9px 18px;
+        font-size: 0.95rem;
+        border-radius: 14px 14px 0 0;
+    }
+
+    main.child-profile-main .profile-inner {
+        gap: 20px;
+        align-items: stretch;
+    }
+
+    main.child-profile-main .col-left {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 420px;
+        margin-left: auto;
+        margin-right: auto;
+        width: 100%;
+    }
+
+    main.child-profile-main .col-right {
+        padding: 0 2px;
+        width: 100%;
+    }
+
+    main.child-profile-main .brand-header {
+        font-size: clamp(1.85rem, 9vw, 2.65rem);
+        letter-spacing: -0.02em;
+        margin-bottom: 8px;
+    }
+
+    main.child-profile-main .donate-text {
+        font-size: 0.98rem;
+        line-height: 1.65;
+        margin-bottom: 18px;
+        padding: 0 4px;
+    }
+
+    main.child-profile-main .donation-stats-panel {
+        margin-top: 12px;
+        margin-bottom: 14px;
+    }
+
+    main.child-profile-main .stats-row {
+        gap: 10px;
+    }
+
+    main.child-profile-main .stat-box {
+        min-width: calc(50% - 8px);
+        flex: 1 1 calc(50% - 8px);
+        padding: 12px 8px;
+    }
+
+    main.child-profile-main .stat-box .stat-num {
+        font-size: 1.45rem;
+    }
+
+    main.child-profile-main .stat-box .stat-label {
+        font-size: 0.82rem;
+        line-height: 1.25;
+    }
+
+    main.child-profile-main .foundation-full-info {
+        text-align: left;
+        padding: 0 2px;
+    }
+
+    main.child-profile-main .foundation-full-info h4 {
+        font-size: 1.15rem;
+    }
+
+    main.child-profile-main .foundation-full-info p {
+        font-size: 1.05rem;
+        line-height: 1.65;
+    }
+
+    main.child-profile-main .foundation-sponsors-list {
+        font-size: 0.92rem;
+        text-align: left;
+    }
+
+    main.child-profile-main .child-sub-cancelled-notice {
+        margin: 10px 0 14px;
+        padding: 12px 14px;
+    }
+
+    main.child-profile-main .child-subscription-box {
+        margin-top: 10px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    main.child-profile-main .custom-profile-card {
+        padding: 18px 12px 16px;
+        border-radius: 22px;
+    }
+
+    main.child-profile-main .brand-header {
+        font-size: clamp(1.6rem, 8.5vw, 2.2rem);
+    }
+
+    main.child-profile-main .sub-plan-btn {
+        padding: 14px 6px;
+        font-size: 1.2rem;
+        min-height: 52px;
+    }
+
+    main.child-profile-main .sub-plan-grid {
+        gap: 8px;
+    }
+
+    main.child-profile-main .sub-cycle-btn {
+        min-height: 64px;
+        padding: 12px 8px;
+    }
+
+    main.child-profile-main .sub-cycle-amt {
+        font-size: 1.2rem;
+    }
+
+    main.child-profile-main .sub-plan-summary--prominent {
+        padding: 16px 14px;
+        min-height: 76px;
+    }
+
+    main.child-profile-main .sub-plan-summary--prominent .sub-summary-amt {
+        font-size: 1.55rem;
+    }
+
+    main.child-profile-main .btn-submit-donation--sub,
+    main.child-profile-main .child-daily-form .btn-submit-donation--sub,
+    main.child-profile-main .child-sub-form .btn-submit-donation--sub {
+        font-size: 1.2rem;
+        padding: 16px 16px;
+    }
+}
+
 
 /* =====================================================
    3. foundation_add_children.php — สร้างโปรไฟล์เด็ก

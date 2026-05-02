@@ -9,7 +9,7 @@
  * - ไม่นับยอดก่อน approve_at / anchor
  * - drawdream_child_can_receive_donation() หยุดรับเมื่อครบ threshold ในรอบนั้น
  *
- * @see docs/SYSTEM_PRESENTATION_GUIDE.md
+ * @see README.md
  */
 
 const DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT = 700.0;

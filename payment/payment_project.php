@@ -5,7 +5,7 @@
  * ชำระเงินโครงการ: Omise PromptPay (source + charge) แล้วไป scan_qr.php
  * mock ใช้ได้เฉพาะเมื่อ OMISE_ALLOW_LOCAL_MOCK=true (ค่าเริ่มต้น false → QR จาก Omise test จริง)
  *
- * @see docs/SYSTEM_PRESENTATION_GUIDE.md
+ * @see README.md
  */
 if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
@@ -369,7 +369,7 @@ function _omise_local_mock(string $path, array $data): array {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ชำระเงิน | DrawDream</title>
-        <link rel="stylesheet" href="../css/payment.css?v=4">
+        <link rel="stylesheet" href="../css/payment.css?v=5">
         <style>
         .project-sdgs-benefit-wrap {
             display: flex;
@@ -464,7 +464,7 @@ function _omise_local_mock(string $path, array $data): array {
             <?php endif; ?>
         </div>
         <div class="project-info-inner">
-            <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
+            <div class="project-payment-heading-row" style="display:flex;align-items:center;gap:14px;margin-bottom:8px;">
                 <h2 style="margin:0;display:flex;align-items:center;gap:10px;">
                     บริจาคให้โครงการ
                     <?php if (!empty($project['category'])): ?>

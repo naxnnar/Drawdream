@@ -4,14 +4,14 @@ declare(strict_types=1);
 // Migrate legacy update images to uploads/evidence with clear prefixes:
 // - project_updates.update_image      => project_<project_id>_...
 // - foundation_children outcome imgs => children_<child_id>_...
+//
+// รันครั้งเดียวด้วยมือ: php tools/migrations/migrate_evidence_media.php (จาก root โปรเจกต์)
 
-// สรุปสั้น: ไฟล์นี้ใช้ย้ายหรือปรับโครงสร้างข้อมูลส่วน evidence media
-
-require_once __DIR__ . '/db.php';
+$root = dirname(__DIR__, 2);
+require_once $root . '/db.php';
 
 mysqli_report(MYSQLI_REPORT_OFF);
 
-$root = __DIR__;
 $dirEvidence = $root . '/uploads/evidence';
 $dirUpdatesLegacy = $root . '/uploads/updates';
 $dirChildrenOutcomeLegacy = $root . '/uploads/childern';
@@ -210,4 +210,3 @@ echo "Migration finished.\n";
 foreach ($stats as $k => $v) {
     echo str_pad($k, 24, ' ') . ": {$v}\n";
 }
-

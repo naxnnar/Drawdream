@@ -9,7 +9,7 @@
  * 2) ตัวแปรสภาพแวดล้อม DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
  * 3) ค่าเริ่มต้นแบบ XAMPP เดิม (root ไร้รหัส + drawdream_db)
  *
- * @see docs/CODEBASE_FILE_INDEX.md | docs/SYSTEM_PRESENTATION_GUIDE.md
+ * @see README.md
  */
 declare(strict_types=1);
 require_once __DIR__ . '/includes/env_loader.php';

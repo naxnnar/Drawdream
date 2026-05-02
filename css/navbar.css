@@ -68,6 +68,44 @@ button {
     z-index: 2;
 }
 
+/* ลิงก์หลักเว็บไซต์สาธารณะ — เดสก์ท็อปเป็นแถว; มือถือถูกควบคุมใน media query ด้านล่าง */
+.navbar-public .nav-main-links {
+    display: flex;
+    gap: 25px;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.nav-mobile-menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #333;
+    cursor: pointer;
+    border-radius: 8px;
+    flex-shrink: 0;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.nav-mobile-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.nav-mobile-menu-btn .bi-list {
+    font-size: 1.75rem;
+    line-height: 1;
+}
+
+.nav-mobile-overlay {
+    display: none;
+}
+
 .nav-left a {
     text-decoration: none;
     color: #333;
@@ -199,7 +237,89 @@ button {
     transform: translateY(-2px);
 }
 
+/* โปรไฟล์: เดสก์ท็อป = ลิงก์รูป + ปุ่มออกจากระบบ | มือถือ = ปุ่มรูปเปิดเมนู (มีโปรไฟล์ + ออกจากระบบ) */
+.nav-profile-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.nav-profile-desktop-only {
+    display: inline-flex;
+}
+
+.nav-profile-mobile-only {
+    display: none !important;
+}
+
+.nav-logout-desktop-only {
+    display: inline-block;
+}
+
+.nav-profile-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 172px;
+    padding: 6px 0;
+    margin: 0;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+    border: 1px solid #e8e8e8;
+    z-index: 10050;
+}
+
+.nav-profile-menu[hidden] {
+    display: none !important;
+}
+
+.nav-profile-menu:not([hidden]) {
+    display: block !important;
+}
+
+.nav-profile-menu-item {
+    display: block;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'Prompt', sans-serif;
+    color: #333;
+    text-decoration: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.nav-profile-menu-item:hover {
+    background: #f6f6f6;
+    color: #E74C3C;
+}
+
+.nav-profile-menu-logout {
+    color: #b83226;
+    border-top: 1px solid #eee;
+}
+
+.nav-profile-menu-logout:hover {
+    color: #922b22;
+}
+
 @media (max-width: 768px) {
+    .nav-profile-desktop-only {
+        display: none !important;
+    }
+
+    .nav-profile-mobile-only {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .nav-logout-desktop-only {
+        display: none !important;
+    }
+
     .navbar {
         padding: 10px 15px;
         gap: 10px;
@@ -209,6 +329,117 @@ button {
     .nav-right { order: 3; justify-content: center; }
     .nav-left a { font-size: 14px; }
     .nav-logo { height: 50px; }
+    /* เว็บสาธารณะ: คงลำดับ DOM ซ้าย–โลโก้–ขวา ไม่ใช้ order ที่สลับคอลัมน์จนทับกัน */
+    .navbar.navbar-public .nav-left,
+    .navbar.navbar-public .nav-center,
+    .navbar.navbar-public .nav-right {
+        order: unset;
+    }
+
+    /*
+     * แถบสาธารณะบนมือถือ/แท็บเล็ก:
+     * - คอลัมน์กลาง minmax(0,1fr) รับพื้นที่คั่น ซ้าย/ขวาไม่ล้นมาทับโลโก้
+     * - รีเซ็ต z-index เดิม (.nav-left/.nav-right = 2 ทับ .nav-center = 1 ทำให้กระดิ่งทับโลโก้เมื่อชิดกัน)
+     */
+    .navbar.navbar-public {
+        display: grid !important;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 6px;
+        row-gap: 0;
+        min-height: 56px;
+        box-sizing: border-box;
+        width: 100%;
+        flex-direction: unset !important;
+        flex-wrap: unset !important;
+        justify-content: unset !important;
+        isolation: isolate;
+    }
+
+    .navbar.navbar-public .nav-left,
+    .navbar.navbar-public .nav-center,
+    .navbar.navbar-public .nav-right {
+        z-index: auto !important;
+        position: relative;
+    }
+
+    .navbar-public .nav-center {
+        left: auto !important;
+        transform: none !important;
+        margin-bottom: 0 !important;
+        justify-self: stretch;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        padding-inline: 2px;
+        pointer-events: auto;
+    }
+
+    .navbar-public .nav-center > a {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .navbar-public .nav-logo {
+        width: auto !important;
+        height: auto !important;
+        max-height: 42px;
+        max-width: min(140px, 42vw);
+        margin: 0 !important;
+        object-fit: contain;
+    }
+
+    .navbar-public .nav-left {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 10px !important;
+        width: auto !important;
+        min-width: 0;
+        justify-self: start;
+    }
+
+    .navbar-public .nav-right {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        width: auto !important;
+        max-width: min(52vw, 260px);
+        min-width: 0;
+        justify-self: end;
+    }
+
+    .navbar-public .notif-wrap,
+    .navbar-public .profile-btn,
+    .navbar-public .logout-btn {
+        flex-shrink: 0;
+    }
+
+    .navbar-public .logout-btn {
+        padding: 6px 8px;
+        font-size: 11px;
+        line-height: 1.25;
+    }
+
+    .navbar-public .donor-view-btn {
+        padding: 5px 8px;
+        font-size: 11px;
+        max-width: min(38vw, 180px);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 .nav-icon {
     width: 28px !important;
@@ -323,6 +554,107 @@ button {
         width: 36px;
         height: 36px;
         font-size: 18px;
+    }
+
+    /* เว็บสาธารณะ: คง layout จาก breakpoint 768px — บังคับ grid ทับ .navbar { flex-direction: column } */
+    .navbar.navbar-public {
+        display: grid !important;
+        flex-direction: unset !important;
+        min-height: 52px;
+        padding: 8px 10px;
+    }
+
+    .navbar-public .nav-right {
+        max-width: min(56vw, 240px);
+        gap: 5px !important;
+    }
+
+    .navbar-public .nav-mobile-menu-btn {
+        display: inline-flex;
+        flex-shrink: 0;
+        margin-right: 0;
+    }
+
+    /* ต้องต่ำกว่า .navbar (1000) — มิฉะนั้น overlay ทับแผงเมนู fixed ภายใน nav จะกดลิงก์เปลี่ยนหน้าไม่ได้ */
+    .nav-mobile-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 998;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.2s ease, visibility 0.2s;
+    }
+
+    body.nav-public-drawer-open .nav-mobile-overlay {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    .navbar-public .nav-main-links {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(300px, 86vw);
+        margin: 0;
+        padding: max(16px, env(safe-area-inset-top, 0px)) 0 max(24px, env(safe-area-inset-bottom, 0px));
+        background: #fff;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+        z-index: 1;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.nav-public-drawer-open .navbar-public .nav-main-links {
+        transform: translateX(0);
+    }
+
+    .navbar-public .nav-main-links a {
+        font-size: 1rem !important;
+        padding: 14px 20px;
+        width: 100%;
+        text-align: left;
+        box-sizing: border-box;
+        border-bottom: 1px solid #eee;
+    }
+
+    .navbar-public .nav-main-links a.active::after {
+        display: none;
+    }
+
+    .navbar-public .nav-main-links a.active {
+        border-left: 4px solid #E74C3C;
+        padding-left: 16px;
+        color: #E74C3C;
+        font-weight: 600;
+    }
+
+    .navbar-public .nav-logo {
+        max-height: 36px;
+        max-width: min(118px, 36vw);
+    }
+
+    .navbar-public .logout-btn,
+    .navbar-public .donor-view-btn {
+        width: auto;
+        text-align: center;
+    }
+
+    /* ไม่ให้กฎ .nav-left/.nav-right { width:100% } ของบล็อกด้านบนขยายเต็มจอจนทับกัน */
+    .navbar.navbar-public .nav-left,
+    .navbar.navbar-public .nav-right {
+        width: auto !important;
+        align-items: center !important;
+        flex-direction: row !important;
     }
 }
 :root {

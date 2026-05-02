@@ -26,7 +26,7 @@
  * - Webhook charge.complete ยังต้องตั้งไว้ — ทุกรอบที่หักสำเร็จ Omise ส่งมาเพื่อบันทึก child_donations
  * - ถ้า Omise คืนแค่ not_found (ลูกค้า/บัตรไม่ตรงหรือโทเค็นบัตรหมดอายุ) ระบบไม่เข้าโหมดสำรองนี้ และจะเคลียร์ donor.omise_customer_id — ให้สมัครใหม่ด้วยโทเค็นบัตรใหม่
  *
- * @see docs/SYSTEM_PRESENTATION_GUIDE.md หัวข้อ Omise
+ * @see README.md (Omise)
  */
 
 define('OMISE_PUBLIC_KEY', 'pkey_test_672j5iz6trht7azp83c');

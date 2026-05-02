@@ -21,4 +21,27 @@ if (Test-Path $dst) {
 Move-Item -Path $src -Destination $dst -Force
 Remove-Item $tmp -Recurse -Force
 Remove-Item $zip -Force
+
+# ไม่ใช้โฟลเดอร์ตัวอย่างใน production — เก็บเฉพาะรูปว่างที่ TCPDF ต้องใช้
+$exImages = Join-Path $dst "examples\images\_blank.png"
+$imgDir = Join-Path $dst "images"
+if (Test-Path $exImages) {
+    New-Item -ItemType Directory -Force -Path $imgDir | Out-Null
+    Copy-Item -Path $exImages -Destination (Join-Path $imgDir "_blank.png") -Force
+}
+$ex = Join-Path $dst "examples"
+if (Test-Path $ex) {
+    Remove-Item $ex -Recurse -Force
+}
+
+# ตัดส่วนที่ runtime ไม่ต้องใช้ (ลดขนาด deploy)
+$toolsDir = Join-Path $dst "tools"
+if (Test-Path $toolsDir) {
+    Remove-Item $toolsDir -Recurse -Force
+}
+$chg = Join-Path $dst "CHANGELOG.TXT"
+if (Test-Path $chg) { Remove-Item $chg -Force }
+$rm = Join-Path $dst "README.md"
+if (Test-Path $rm) { Remove-Item $rm -Force }
+
 Write-Host "Done. TCPDF is at: $dst"

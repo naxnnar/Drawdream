@@ -39,78 +39,43 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
-  <!-- link css -->
-  <style>
-    body {
-      background: #efefef;
-    }
-    .story-shell {
-      padding: 28px;
-      max-width: 1120px;
-      margin: 0 auto;
-    }
-    .story-card {
-      background: #f3ecdf;
-      border: 1px solid #e1d7c7;
-      padding: 34px 26px 28px;
-    }
-    .story-close-btn {
-      width: 36px;
-      height: 36px;
-      border: 0;
-      border-radius: 0;
-      background: #f2d34f;
-      color: #222;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      text-decoration: none;
-    }
-    .story-close-btn:hover {
-      color: #000;
-      background: #e6c540;
-    }
-  </style>
+  <link rel="stylesheet" href="css/navbar.css">
+  <link rel="stylesheet" href="css/child_story_detail.css?v=3">
 </head>
-<body>
+<body class="child-story-page">
 
 <?php include 'navbar.php'; ?>
-<div class="container-fluid story-shell">
-<div class="story-card">
-<div class="row align-items-center py-5">
-  <div class="row">
-    <div class="col-md-1"></div>
-    <div class="col-md-5 position-relative">
-      <img src="<?php echo $story['image']; ?>" alt="<?php echo $story['name']; ?>" class="img-fluid" style="margin-left: 20%; width: 80%;">
-      
-      <!-- ปุ่มปิด: วางตรงมุมบนขวาของรูป -->
-      <a href="homepage.php#stories" onclick="if (window.history.length > 1) { history.back(); return false; }" class="position-absolute story-close-btn" style="margin-left: 85%; margin-top: -4%;">
-        <i class="bi bi-x-lg"></i>
-      </a>
+<div class="container-fluid child-story-shell">
+  <div class="child-story-card">
+    <a href="homepage.php#stories" onclick="if (window.history.length > 1) { history.back(); return false; }" class="child-story-close-btn" aria-label="ปิดและกลับ">
+      <i class="bi bi-x-lg" aria-hidden="true"></i>
+    </a>
+    <div class="row child-story-top align-items-start g-4 py-3 py-lg-5">
+      <div class="col-12 col-lg-5 child-story-hero-col">
+        <img src="<?php echo htmlspecialchars($story['image'], ENT_QUOTES, 'UTF-8'); ?>" alt="<?php echo htmlspecialchars($story['name'], ENT_QUOTES, 'UTF-8'); ?>" class="img-fluid child-story-hero-photo" width="640" height="640" decoding="async">
+      </div>
+      <div class="col-12 col-lg-7 child-story-intro">
+        <h3 class="child-story-name"><?php echo htmlspecialchars($story['name'], ENT_QUOTES, 'UTF-8'); ?></h3>
+        <p class="child-story-lead"><?php echo htmlspecialchars($story['description'], ENT_QUOTES, 'UTF-8'); ?></p>
+      </div>
     </div>
-    <div class="col-md-5">
-      <h3 class="mt-5"><?php echo $story['name']; ?></h3>
-      <p class="mt-3"><?php echo $story['description']; ?></p>
+
+    <div class="row child-story-gallery g-3 justify-content-center mt-2 mt-lg-4">
+      <?php foreach ($story['images'] as $img): ?>
+      <div class="col-12 col-md-6 col-lg-4">
+        <figure class="child-story-figure">
+          <img src="<?php echo htmlspecialchars($img, ENT_QUOTES, 'UTF-8'); ?>" alt="" class="img-fluid child-story-gallery-img" width="800" height="600" loading="lazy" decoding="async">
+        </figure>
+      </div>
+      <?php endforeach; ?>
     </div>
-  </div>
-  
-  <div class="row mt-5">
-    <div class="col-md-2"></div>
-    <?php foreach($story['images'] as $img): ?>
-    <div class="col-md-3">
-      <img src="<?php echo $img; ?>" alt="Story detail" class="img-fluid">
-    </div>
-    <?php endforeach; ?>
-  </div>
-  
-  <div class="row mt-3 mb-5">
-    <div class="col-md-2"></div>
-    <div class="col-md-8">
-      <p class="text-center"><?php echo $story['story']; ?></p>
+
+    <div class="row child-story-body mt-4 mb-3 mb-lg-4">
+      <div class="col-12 col-lg-10 col-xl-8 mx-auto">
+        <p class="child-story-text text-center mb-0"><?php echo htmlspecialchars($story['story'], ENT_QUOTES, 'UTF-8'); ?></p>
+      </div>
     </div>
   </div>
-</div>
-</div>
 </div>
 
 

@@ -1,0 +1,182 @@
+/* หน้าเรื่องราวเด็ก — detail_alin.php, detail_pin.php, detail_san.php */
+
+body.child-story-page {
+    background: #efefef;
+}
+
+.child-story-shell {
+    padding: 16px;
+    max-width: 1120px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.child-story-card {
+    position: relative;
+    background: #f3ecdf;
+    border: 1px solid #e1d7c7;
+    border-radius: 16px;
+    padding: 20px 16px 24px;
+    box-sizing: border-box;
+}
+
+.child-story-top {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.child-story-hero-col {
+    max-width: 520px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.child-story-hero-photo {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 12px;
+}
+
+.child-story-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 10px;
+    background: #f2d34f;
+    color: #222;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.child-story-close-btn:hover {
+    color: #000;
+    background: #e6c540;
+}
+
+.child-story-intro {
+    padding-top: 0;
+}
+
+.child-story-name {
+    font-weight: 800;
+    color: #1a1a1a;
+    margin-bottom: 0.75rem;
+    line-height: 1.35;
+}
+
+.child-story-lead {
+    color: #333;
+    line-height: 1.65;
+    margin-bottom: 0;
+    font-size: 1.05rem;
+}
+
+.child-story-gallery {
+    margin-left: 0;
+    margin-right: 0;
+}
+
+.child-story-gallery .col-12 {
+    padding-left: calc(var(--bs-gutter-x) * 0.5);
+    padding-right: calc(var(--bs-gutter-x) * 0.5);
+}
+
+/* กรอบสัดส่วนคงที่ — ทุกภาพในแถวเท่ากัน (ครอปด้วย object-fit ถ้าไฟล์ต่างขนาด) */
+.child-story-gallery .child-story-figure {
+    margin: 0;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    aspect-ratio: 4 / 3;
+    position: relative;
+}
+
+.child-story-gallery .child-story-gallery-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center;
+}
+
+.child-story-body {
+    margin-top: 1.25rem;
+}
+
+.child-story-text {
+    color: #2d2d2d;
+    line-height: 1.75;
+    font-size: 1.05rem;
+}
+
+/* เดสก์ท็อป: คงเลย์เอาต์สองคอลัมน์ รูปซ้าย ข้อความขวา */
+@media (min-width: 992px) {
+    .child-story-shell {
+        padding: 28px;
+    }
+
+    .child-story-card {
+        padding: 34px 32px 32px;
+        border-radius: 12px;
+    }
+
+    .child-story-close-btn {
+        top: 18px;
+        right: 22px;
+    }
+
+    .child-story-hero-col {
+        max-width: none;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .child-story-hero-photo {
+        width: 85%;
+        max-width: 440px;
+        margin-left: 0;
+        margin-right: auto;
+    }
+
+    .child-story-intro {
+        padding-top: 0.5rem;
+    }
+
+    .child-story-name {
+        margin-top: 0;
+    }
+
+    .child-story-intro {
+        text-align: left;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .child-story-intro {
+        text-align: center;
+        max-width: 640px;
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .child-story-body .child-story-text {
+        text-align: center;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+}
