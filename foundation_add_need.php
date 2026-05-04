@@ -549,20 +549,22 @@ if (isset($_POST['submit'])) {
                 item_name = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
-                note = ?, total_price = ?, submitted_total_price = COALESCE(submitted_total_price, ?), need_items_json = ?
+                note = ?, total_price = ?, submitted_total_price = COALESCE(submitted_total_price, ?),
+                previous_total_price = IF(? != total_price, total_price, previous_total_price),
+                need_items_json = ?
                 WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'dds' . 'ii';
+                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'ddds' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
                     $item_name, $desiredBrand, $brand,
                     $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
-                    $note, $total_price, $total_price, $needItemsJson,
+                    $note, $total_price, $total_price, $total_price, $needItemsJson,
                     $itemIdEdit, $foundation_id
                 );
 
