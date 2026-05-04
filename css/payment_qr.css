@@ -141,3 +141,40 @@ body.payment-qr-page {
     padding: 20px 0;
     color: white;
 }
+
+@media (max-width: 600px) {
+    .payment-card {
+        padding: 28px 20px 32px;
+        margin: 20px auto;
+        border-radius: 24px;
+    }
+    .qr-wrapper img {
+        width: 220px;
+        height: 220px;
+    }
+    .btn-attach-slip {
+        font-size: 1.05rem;
+        padding: 15px 20px;
+    }
+    .info-row {
+        font-size: 0.98rem;
+    }
+}
+
+@media (max-width: 400px) {
+    .payment-card {
+        padding: 20px 14px 24px;
+        margin: 12px auto;
+        border-radius: 18px;
+    }
+    .qr-wrapper {
+        padding: 16px;
+    }
+    .qr-wrapper img {
+        width: 190px;
+        height: 190px;
+    }
+    .amount-text {
+        font-size: 1.35rem !important;
+    }
+}

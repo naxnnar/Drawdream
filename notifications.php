@@ -196,6 +196,16 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
         }
 
         .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+        @media (max-width: 480px) {
+            .wrap { padding: 0 12px 40px; margin: 16px auto; }
+            .page-title { font-size: 18px; }
+            .notif-card { padding: 12px 14px; gap: 10px; }
+            .notif-icon { font-size: 22px; }
+            .notif-title { font-size: 14px; }
+            .notif-message { font-size: 12px; }
+            .btn-markall { padding: 7px 14px; font-size: 12px; }
+        }
     </style>
 </head>
 <body>

@@ -96,3 +96,24 @@ body.policy-consent-page .policy-consent-page__paper {
     color: #7f5a0c;
     font-weight: 700;
 }
+
+@media (max-width: 600px) {
+    body.policy-consent-page .policy-consent-page__container {
+        margin: 14px auto 28px;
+    }
+    body.policy-consent-page .policy-consent-page__paper {
+        padding: 16px 16px 14px;
+    }
+    .policy-consent-prose h1 {
+        font-size: 1.28rem;
+    }
+    .policy-consent-prose h2 {
+        font-size: 1.12rem;
+        margin: 18px 0 8px;
+    }
+    .policy-consent-prose p,
+    .policy-consent-prose ol,
+    .policy-consent-prose ul {
+        font-size: 0.95rem;
+    }
+}

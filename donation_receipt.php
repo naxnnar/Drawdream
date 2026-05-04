@@ -360,6 +360,16 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
             .grid { grid-template-columns: 1fr; }
             .ref { text-align: left; }
         }
+        @media (max-width: 480px) {
+            .receipt-wrap { padding: 0 8px; margin: 12px auto 28px; }
+            .receipt-card { padding: 16px 14px 18px; }
+            .brand h1 { font-size: 1.4rem; }
+            .head { flex-direction: column; gap: 4px; }
+            .actions { flex-direction: column-reverse; gap: 8px; }
+            .btn { width: 100%; text-align: center; display: block; }
+            .amt { flex-direction: column; gap: 6px; }
+            .amt .sum { font-size: 1.3rem; }
+        }
     </style>
 </head>
 <body>
