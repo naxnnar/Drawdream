@@ -145,6 +145,7 @@ if (isset($_POST['submit'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>เพิ่มข้อมูลเด็ก - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/children.css">

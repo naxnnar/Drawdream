@@ -275,8 +275,17 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
         }
         .amt .sum { font-size: 1.5rem; font-weight: 800; color: #1c3978; }
         .foot { margin-top: 16px; color: #5d6d90; font-size: 0.9rem; line-height: 1.65; }
-        .actions { margin-top: 18px; display: flex; gap: 10px; justify-content: flex-end; }
-        .btn { border: 0; border-radius: 10px; padding: 10px 16px; text-decoration: none; font-weight: 700; cursor: pointer; }
+        .actions { margin-top: 18px; display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
+        .btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 10px 16px;
+            text-decoration: none;
+            font-weight: 700;
+            cursor: pointer;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
         .btn-print { background: #3c5099; color: #fff; }
         .btn-back { background: #e6ebf8; color: #25365f; }
         @media print {
@@ -284,8 +293,25 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
                 size: A4 portrait;
                 margin: 8mm;
             }
-            .navbar, .actions { display: none !important; }
-            body { background: #fff; }
+            /* ซ่อนเฉพาะ chrome เว็บ — เหลือเฉพาะก้อนใบเสร็จ (กัน navbar / sidebar / overlay / banner) */
+            body.donation-receipt-page {
+                background: #fff !important;
+                padding-top: 0 !important;
+                overflow: visible !important;
+            }
+            body.donation-receipt-page.admin-sidebar-page,
+            body.donation-receipt-page.admin-sidebar-page.admin-sidebar-collapsed {
+                padding-top: 0 !important;
+            }
+            body.donation-receipt-page nav.navbar,
+            body.donation-receipt-page .nav-mobile-overlay,
+            body.donation-receipt-page .donor-preview-banner,
+            body.donation-receipt-page .foundation-pending-account-banner,
+            body.donation-receipt-page .admin-sidebar-nav,
+            body.donation-receipt-page .admin-sidebar-show-btn,
+            body.donation-receipt-page .actions {
+                display: none !important;
+            }
             .receipt-wrap { margin: 0; max-width: none; padding: 0; }
             .receipt-card {
                 box-shadow: none;
@@ -365,14 +391,35 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
             .receipt-card { padding: 16px 14px 18px; }
             .brand h1 { font-size: 1.4rem; }
             .head { flex-direction: column; gap: 4px; }
-            .actions { flex-direction: column-reverse; gap: 8px; }
-            .btn { width: 100%; text-align: center; display: block; }
+            .actions {
+                flex-direction: column-reverse;
+                gap: 10px;
+                align-items: stretch;
+                justify-content: flex-start;
+                width: 100%;
+            }
+            /* ให้ลิงก์กับปุ่มมีความกว้าง/สูงและ padding เท่ากัน */
+            .actions .btn {
+                width: 100%;
+                min-height: 48px;
+                padding: 12px 18px;
+                font-size: 1rem;
+                line-height: 1.3;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+            }
+            button.btn {
+                -webkit-appearance: none;
+                appearance: none;
+            }
             .amt { flex-direction: column; gap: 6px; }
             .amt .sum { font-size: 1.3rem; }
         }
     </style>
 </head>
-<body>
+<body class="donation-receipt-page">
 <?php include __DIR__ . '/navbar.php'; ?>
 <div class="receipt-wrap">
     <div class="receipt-card">

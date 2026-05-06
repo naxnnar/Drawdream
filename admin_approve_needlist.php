@@ -202,8 +202,9 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
 <html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
-    <link rel="stylesheet" href="css/navbar.css">
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="css/navbar.css">
     <title>อนุมัติรายการสิ่งของ | Admin</title>
     <link rel="stylesheet" href="css/admin.css">
 </head>

@@ -225,6 +225,19 @@ textarea {
     background: #eef2ff;
 }
 
+.donor-history-panel .donation-summary-primary {
+    color: #24367a;
+    font-size: 1.06rem;
+    line-height: 1.45;
+}
+
+.donor-history-panel .donation-summary-secondary {
+    margin-top: 5px;
+    color: #7c89b8;
+    font-size: 0.96rem;
+    font-weight: 500;
+}
+
 .donor-history-panel .log-item--donation {
     display: flex;
     align-items: center;
@@ -840,6 +853,11 @@ textarea {
     left: 0;
     top: 0;
     width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+}
 
 /* =============================
      Responsive สำหรับ Mobile
@@ -883,11 +901,107 @@ textarea {
     .log-details, .log-remark, .log-time {
         font-size: 0.95rem;
     }
-}
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    align-items: center;
-    justify-content: center;
+
+    /* ประวัติการบริจาค (ผู้บริจาค) — โทรศัพท์ */
+    .donor-history-panel {
+        padding: 14px 12px 10px;
+        border-radius: 12px;
+    }
+
+    .donor-history-panel h2 {
+        font-size: 1.05rem;
+        margin-bottom: 12px;
+    }
+
+    .donor-summary-head-actions {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .donor-year-filter-wrap {
+        display: block;
+        width: 100%;
+    }
+
+    .donor-year-filter {
+        width: 100%;
+        min-width: 0;
+        height: 52px;
+        font-size: 17px;
+        border-radius: 12px;
+    }
+
+    .btn-donation-all {
+        width: 100%;
+        height: 52px;
+        font-size: 1rem;
+        border-radius: 12px;
+    }
+
+    .donor-history-panel .donation-summary {
+        padding: 14px 14px;
+        margin-bottom: 0;
+        border-radius: 12px;
+    }
+
+    .donor-history-panel .donation-summary-primary {
+        font-size: 1rem;
+        line-height: 1.45;
+        color: #24367a;
+    }
+
+    .donor-history-panel .donation-summary-secondary {
+        margin-top: 6px;
+        font-size: 0.92rem;
+        color: #7c89b8;
+        font-weight: 500;
+    }
+
+    .donor-history-panel .log-item--donation {
+        align-items: stretch;
+        padding: 14px 0;
+        border: none;
+        border-bottom: 1px solid #e8ecf4;
+        border-radius: 0;
+    }
+
+    .donor-history-panel .donation-summary + .log-item--donation {
+        border-top: 1px solid #e8ecf4;
+    }
+
+    .donor-history-panel .log-action {
+        font-size: 0.98rem;
+        color: #111827;
+        margin-bottom: 6px;
+        line-height: 1.4;
+    }
+
+    .donor-history-panel .donor-donation-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        font-size: 0.88rem;
+        color: #6b7280;
+    }
+
+    .donor-history-panel .donor-donation-charge {
+        font-size: 0.82rem;
+        color: #9ca3af;
+        word-break: break-all;
+    }
+
+    .donor-history-panel .donation-amount-num {
+        margin-top: 6px;
+        font-size: 1.05rem;
+    }
+
+    .donor-history-panel .log-receipt-link {
+        margin-top: 12px;
+        padding: 11px 16px;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+    }
 }
 
 .modal.active {

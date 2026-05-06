@@ -227,3 +227,31 @@ body.admin-approve-needlist-page .admin-note {
     border: 1px solid #aaa;
     padding: 8px;
 }
+
+/* มือถือ / จอแคบ: ตารางอนุมัติกว้าง — เลื่อนแนวนอนได้ */
+@media (max-width: 900px) {
+    body.admin-approve-needlist-page .wrap,
+    body.admin-approve-projects-page .wrap,
+    body.admin-projects-page .wrap {
+        padding: 0 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.admin-approve-needlist-page .admin-table {
+        font-size: 0.88rem;
+    }
+
+    body.admin-approve-needlist-page .admin-table th,
+    body.admin-approve-needlist-page .admin-table td {
+        padding: 8px 10px;
+    }
+
+    body.admin-projects-page th,
+    body.admin-projects-page td,
+    body.admin-approve-projects-page th,
+    body.admin-approve-projects-page td {
+        padding: 10px 10px;
+        font-size: 0.9rem;
+    }
+}

@@ -517,7 +517,8 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                     </div>
                 </div>
                 <div class="donation-summary">
-                    บริจาคทั้งหมด <strong><?= number_format($total_donated, 2) ?> บาท</strong> จาก <?= $don_count ?> รายการ
+                    <div class="donation-summary-primary">บริจาคทั้งหมด <strong><?= number_format($total_donated, 2) ?> บาท</strong></div>
+                    <div class="donation-summary-secondary">จาก <?= $don_count ?> รายการ</div>
                 </div>
                 <?php foreach ($donation_history as $idx => $don): ?>
                     <?php $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
@@ -562,9 +563,9 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                                 <?php endif; ?>
                             </div>
                             <div class="donor-donation-meta">
-                                <span><?= date('d/m/Y H:i', strtotime($don['transfer_datetime'])) ?></span>
+                                <span class="donor-donation-datetime"><?= date('d/m/Y H:i', strtotime($don['transfer_datetime'])) ?></span>
                                 <?php if (!empty($don['omise_charge_id'])): ?>
-                                    <span> · <?= htmlspecialchars($don['omise_charge_id']) ?></span>
+                                    <span class="donor-donation-charge">· <?= htmlspecialchars($don['omise_charge_id']) ?></span>
                                 <?php endif; ?>
                                 <span class="donation-amount-num"><?= number_format((float)$don['amount'], 2) ?> บาท</span>
                             </div>

@@ -311,6 +311,7 @@ if (isset($_POST['submit'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= $isEditForm ? 'แก้ไขโปรไฟล์เด็ก' : 'สร้างโปรไฟล์เด็ก' ?> - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/children.css">
