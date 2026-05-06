@@ -155,8 +155,8 @@ if (isset($_POST['submit'])) {
         exit();
     }
 
-    if (!preg_match('/^\d{10}$/', $child_bank)) {
-        echo "<script>alert('เลขบัญชีต้องเป็นตัวเลข 10 หลัก'); history.back();</script>";
+    if (!preg_match('/^\d{9,12}$/', $child_bank)) {
+        echo "<script>alert('เลขบัญชีต้องเป็นตัวเลข 9-12 หลัก'); history.back();</script>";
         exit();
     }
 
@@ -488,7 +488,7 @@ if (isset($_POST['submit'])) {
                 <!-- เลขบัญชี -->
                 <div class="field-group">
                     <label>เลขบัญชีธนาคาร</label>
-                    <input type="text" id="child_bank_input" name="child_bank" placeholder="ตัวเลข 10 หลัก" inputmode="numeric" maxlength="10" pattern="\d{10}" required value="<?= htmlspecialchars((string)($_POST['child_bank'] ?? '')) ?>">
+                    <input type="text" id="child_bank_input" name="child_bank" placeholder="ตัวเลข 9-12 หลัก" inputmode="numeric" maxlength="12" pattern="\d{9,12}" required value="<?= htmlspecialchars((string)($_POST['child_bank'] ?? '')) ?>">
                 </div>
 
             </div><!-- end grid -->
@@ -822,7 +822,7 @@ document.getElementById('wish_item_custom').addEventListener('input', function()
 });
 
 document.getElementById('child_bank_input').addEventListener('input', function() {
-    this.value = this.value.replace(/\D/g, '').slice(0, 10);
+    this.value = this.value.replace(/\D/g, '').slice(0, 12);
     const fg = this.closest('.field-group');
     if (fg) fg.classList.remove('has-error');
 });
@@ -918,12 +918,27 @@ function validateForm() {
         hasError = true;
     }
 
+    // sync ค่า wish_hidden จาก UI จริงอีกครั้งก่อน validate (กันกรณี browser autofill/ค่า select ไม่ยิง change)
+    const wishSelect = document.getElementById('wish_item_select');
+    const wishCustom = document.getElementById('wish_item_custom');
+    const wishHiddenInput = document.getElementById('wish_hidden_input');
+    const clothSize = document.getElementById('clothing_size_hidden').value.trim();
+    if (!wishHiddenInput.value.trim() && wishSelect && wishSelect.value) {
+        if (wishSelect.value === '__other__') {
+            wishHiddenInput.value = (wishCustom ? wishCustom.value : '').trim();
+        } else if (CLOTHING_ITEMS.has(wishSelect.value) && clothSize) {
+            wishHiddenInput.value = `${wishSelect.value} (ไซส์ ${clothSize})`;
+        } else if (!CLOTHING_ITEMS.has(wishSelect.value) && !SHOE_ITEMS.has(wishSelect.value)) {
+            wishHiddenInput.value = wishSelect.value;
+        }
+    }
+
     // รายการสิ่งของ + ไซส์
     const clothingWrap  = document.getElementById('clothing_size_wrap');
     const shoeWrap      = document.getElementById('shoe_size_wrap');
     const shoeTypeVal   = document.getElementById('shoe_type_hidden').value.trim();
     const shoeSizeVal   = document.getElementById('shoe_size_hidden').value.trim();
-    const wishHiddenVal = document.getElementById('wish_hidden_input').value.trim();
+    const wishHiddenVal = wishHiddenInput.value.trim();
     if (!wishHiddenVal) {
         if (clothingWrap.style.display !== 'none') {
             clothingWrap.classList.add('has-error');
@@ -935,6 +950,7 @@ function validateForm() {
             hasError = true;
         } else {
             mark(document.getElementById('wish_item_select'));
+            customErrorMessage = customErrorMessage || 'กรุณาเลือกรายการสิ่งของ';
         }
     }
 
@@ -942,17 +958,18 @@ function validateForm() {
         shoeWrap.classList.add('has-error');
         if (!firstError) firstError = shoeWrap;
         hasError = true;
+        customErrorMessage = customErrorMessage || 'กรุณาเลือกประเภทรองเท้าและเบอร์รองเท้า';
     }
 
     // ธนาคาร
     if (!document.getElementById('bank_select').value)
-        mark(document.getElementById('bank_select'));
+        { mark(document.getElementById('bank_select')); customErrorMessage = customErrorMessage || 'กรุณาเลือกธนาคาร'; }
 
     // เลขบัญชี
     const bankAccInput = document.getElementById('child_bank_input');
-    if (!/^\d{10}$/.test(bankAccInput.value.trim())) {
+    if (!/^\d{9,12}$/.test(bankAccInput.value.trim())) {
         mark(bankAccInput);
-        customErrorMessage = 'เลขบัญชีต้องเป็นตัวเลข 10 หลัก';
+        customErrorMessage = 'เลขบัญชีต้องเป็นตัวเลข 9-12 หลัก';
     }
 
     // รูปภาพ

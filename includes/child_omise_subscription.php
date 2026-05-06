@@ -64,7 +64,7 @@ function drawdream_child_persist_subscription_paid_charge(
         return false;
     }
     drawdream_child_omise_subscription_ensure_schema($conn);
-    $chk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
+    $chk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1');
     if (!$chk) {
         return false;
     }
@@ -79,102 +79,50 @@ function drawdream_child_persist_subscription_paid_charge(
     if ($categoryId <= 0) {
         return false;
     }
-    // ใช้แถว subscription ที่มีอยู่เป็นแถวแรกของการชำระ (กันเกิดแถวซ้ำจากการสมัครครั้งแรก)
-    $seed = $conn->prepare(
-        "SELECT donate_id
-         FROM donation
-         WHERE target_id = ? AND donor_id = ?
-           AND donate_type = 'child_subscription'
-           AND recurring_status IN ('active', 'paused')
-           AND (omise_charge_id IS NULL OR omise_charge_id = '')
-         ORDER BY donate_id DESC
-         LIMIT 1"
-    );
-    $seedId = 0;
-    if ($seed) {
-        $seed->bind_param('ii', $childId, $donorUserId);
-        $seed->execute();
-        $seedRow = $seed->get_result()->fetch_assoc();
-        $seedId = (int)($seedRow['donate_id'] ?? 0);
-    }
-
     $scheduleIdForLog = null;
     $planCodeForLog = '';
-    if ($seedId > 0) {
-        $seedMeta = $conn->prepare('SELECT recurring_schedule_id, recurring_plan_code FROM donation WHERE donate_id = ? LIMIT 1');
-        if ($seedMeta) {
-            $seedMeta->bind_param('i', $seedId);
-            $seedMeta->execute();
-            $seedMetaRow = $seedMeta->get_result()->fetch_assoc() ?: [];
-            $scheduleIdForLog = isset($seedMetaRow['recurring_schedule_id']) ? (string)$seedMetaRow['recurring_schedule_id'] : null;
-            $planCodeForLog = (string)($seedMetaRow['recurring_plan_code'] ?? '');
+    $planCode = '';
+    $scheduleId = null;
+    $hMeta = $conn->prepare(
+        "SELECT recurring_plan_code, recurring_schedule_id
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'
+         ORDER BY history_id DESC
+         LIMIT 1"
+    );
+    if ($hMeta) {
+        $hMeta->bind_param('ii', $childId, $donorUserId);
+        $hMeta->execute();
+        $m = $hMeta->get_result()->fetch_assoc() ?: null;
+        if (is_array($m)) {
+            $planCode = (string)($m['recurring_plan_code'] ?? '');
+            $scheduleId = ($m['recurring_schedule_id'] ?? null) !== null ? (string)$m['recurring_schedule_id'] : null;
         }
-        $up = $conn->prepare(
-            "UPDATE donation
-             SET amount = ?, payment_status = ?, transfer_datetime = NOW(),
-                 omise_charge_id = ?, transaction_status = ?
-             WHERE donate_id = ?"
-        );
-        if (!$up) {
-            return false;
-        }
-        $up->bind_param('dsssi', $amountBaht, $completed, $chargeId, $completed, $seedId);
-        $ok = $up->execute() && $up->affected_rows >= 1;
-        $donateIdForLog = $seedId;
-    } else {
-        $planCode = '';
-        $nextAt = null;
-        $scheduleId = null;
-        $sMeta = $conn->prepare(
-            "SELECT recurring_plan_code, recurring_next_charge_at, recurring_schedule_id
-             FROM donation
-             WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription'
-             ORDER BY donate_id DESC
-             LIMIT 1"
-        );
-        if ($sMeta) {
-            $sMeta->bind_param('ii', $childId, $donorUserId);
-            $sMeta->execute();
-            $m = $sMeta->get_result()->fetch_assoc() ?: null;
-            if (is_array($m)) {
-                $planCode = (string)($m['recurring_plan_code'] ?? '');
-                $nextAt = ($m['recurring_next_charge_at'] ?? null) !== null ? (string)$m['recurring_next_charge_at'] : null;
-                $scheduleId = ($m['recurring_schedule_id'] ?? null) !== null ? (string)$m['recurring_schedule_id'] : null;
-            }
-        }
-        $ins = $conn->prepare(
-            'INSERT INTO donation (
-                category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                omise_charge_id, transaction_status,
-                donate_type, recurring_status, recurring_plan_code,
-                recurring_next_charge_at, recurring_schedule_id
-            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)'
-        );
-        if (!$ins) {
-            return false;
-        }
-        $rType = DRAWDREAM_DONATE_TYPE_CHILD_SUBSCRIPTION_CHARGE;
-        $rStatus = 'charged';
-        $ins->bind_param(
-            'iiiddssssssss',
-            $categoryId,
-            $childId,
-            $donorUserId,
-            $amountBaht,
-            $completed,
-            $chargeId,
-            $completed,
-            $rType,
-            $rStatus,
-            $planCode,
-            $nextAt,
-            $scheduleId
-        );
-        $ok = $ins->execute();
-        $donateIdForLog = (int)$conn->insert_id;
-        $scheduleIdForLog = $scheduleId;
-        $planCodeForLog = $planCode;
     }
+    $ins = $conn->prepare(
+        'INSERT INTO donation (
+            category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+            omise_charge_id, donate_type
+        ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)'
+    );
+    if (!$ins) {
+        return false;
+    }
+    $rType = DRAWDREAM_DONATE_TYPE_CHILD_SUBSCRIPTION_CHARGE;
+    $ins->bind_param(
+        'iiiddss',
+        $categoryId,
+        $childId,
+        $donorUserId,
+        $amountBaht,
+        $completed,
+        $chargeId,
+        $rType
+    );
+    $ok = $ins->execute();
+    $donateIdForLog = (int)$conn->insert_id;
+    $scheduleIdForLog = $scheduleId;
+    $planCodeForLog = $planCode;
     if ($ok) {
         drawdream_child_subscription_history_log(
             $conn,
@@ -207,18 +155,20 @@ function drawdream_child_has_active_omise_subscription(mysqli $conn, int $childI
         return false;
     }
     drawdream_child_omise_subscription_ensure_schema($conn);
-    $active = 'active';
-    $type = 'child_subscription';
     $st = $conn->prepare(
-        'SELECT 1 FROM donation
-         WHERE target_id = ? AND donor_id = ? AND donate_type = ? AND recurring_status = ? LIMIT 1'
+        "SELECT current_status
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ?
+         ORDER BY history_id DESC
+         LIMIT 1"
     );
     if (!$st) {
         return false;
     }
-    $st->bind_param('iiss', $childId, $donorUserId, $type, $active);
+    $st->bind_param('ii', $childId, $donorUserId);
     $st->execute();
-    return (bool)$st->get_result()->fetch_row();
+    $row = $st->get_result()->fetch_assoc();
+    return strtolower(trim((string)($row['current_status'] ?? ''))) === 'active';
 }
 
 function drawdream_child_has_any_active_subscription(mysqli $conn, int $childId): bool
@@ -227,16 +177,22 @@ function drawdream_child_has_any_active_subscription(mysqli $conn, int $childId)
         return false;
     }
     drawdream_child_omise_subscription_ensure_schema($conn);
-    $active = 'active';
-    $type = 'child_subscription';
     $st = $conn->prepare(
-        'SELECT 1 FROM donation
-         WHERE target_id = ? AND donate_type = ? AND recurring_status = ? LIMIT 1'
+        "SELECT 1
+         FROM child_subscription_history h
+         INNER JOIN (
+            SELECT donor_user_id, MAX(history_id) AS max_history_id
+            FROM child_subscription_history
+            WHERE child_id = ?
+            GROUP BY donor_user_id
+         ) x ON x.max_history_id = h.history_id
+         WHERE h.current_status = 'active'
+         LIMIT 1"
     );
     if (!$st) {
         return false;
     }
-    $st->bind_param('iss', $childId, $type, $active);
+    $st->bind_param('i', $childId);
     $st->execute();
     return (bool)$st->get_result()->fetch_row();
 }
@@ -255,16 +211,24 @@ function drawdream_child_ids_with_active_plan_sponsorship(mysqli $conn, array $c
     $ph = implode(',', array_fill(0, count($ids), '?'));
     $types = str_repeat('i', count($ids));
     $active = 'active';
-    $type = 'child_subscription';
     $sql = "SELECT DISTINCT target_id AS child_id
-            FROM donation
-            WHERE donate_type = ? AND recurring_status = ? AND target_id IN ($ph)";
+            FROM (
+                SELECT h1.child_id AS target_id, h1.current_status
+                FROM child_subscription_history h1
+                INNER JOIN (
+                    SELECT child_id, donor_user_id, MAX(history_id) AS max_history_id
+                    FROM child_subscription_history
+                    WHERE child_id IN ($ph)
+                    GROUP BY child_id, donor_user_id
+                ) latest ON latest.max_history_id = h1.history_id
+            ) latest_status
+            WHERE latest_status.current_status = ?";
     $st = $conn->prepare($sql);
     if (!$st) {
         return [];
     }
-    $bindTypes = 'ss' . $types;
-    $st->bind_param($bindTypes, $type, $active, ...$ids);
+    $bindTypes = 's' . $types;
+    $st->bind_param($bindTypes, $active, ...$ids);
     $st->execute();
     $res = $st->get_result();
     $out = [];

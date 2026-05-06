@@ -43,9 +43,9 @@ drawdream_child_omise_subscription_ensure_schema($conn);
 
 $st = $conn->prepare(
     "SELECT donate_id, recurring_schedule_id, recurring_plan_code
-     FROM donation
-     WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription' AND recurring_status = 'active'
-     ORDER BY donate_id DESC
+     FROM child_subscription_history
+     WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'
+     ORDER BY history_id DESC
      LIMIT 1"
 );
 if (!$st) {
@@ -71,16 +71,15 @@ if ($scheduleId !== '' && str_starts_with($scheduleId, 'schd_')) {
     }
 }
 
-$cancelled = 'cancelled';
 $up = $conn->prepare(
     "UPDATE donation
-     SET recurring_status = ?, recurring_next_charge_at = NULL
-     WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription' AND recurring_status = 'active'"
+     SET donate_type = 'child_subscription_charge', recurring_status = NULL, recurring_next_charge_at = NULL, recurring_schedule_id = NULL, recurring_plan_code = NULL
+     WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription'"
 );
 if (!$up) {
     child_subscription_cancel_redirect('บันทึกสถานะยกเลิกไม่สำเร็จ', false, $childId);
 }
-$up->bind_param('sii', $cancelled, $childId, $donorUid);
+$up->bind_param('ii', $childId, $donorUid);
 $up->execute();
 
 if ($up->affected_rows > 0) {

@@ -99,7 +99,6 @@ function drawdream_payment_transaction_ensure_schema(mysqli $conn): void
 
     $cols = [
         'omise_charge_id' => 'VARCHAR(80) NULL DEFAULT NULL',
-        'transaction_status' => "VARCHAR(20) NOT NULL DEFAULT 'completed'",
         'donate_type' => 'VARCHAR(40) NULL DEFAULT NULL',
         'recurring_status' => 'VARCHAR(20) NULL DEFAULT NULL',
         'recurring_plan_code' => 'VARCHAR(24) NULL DEFAULT NULL',
@@ -114,7 +113,6 @@ function drawdream_payment_transaction_ensure_schema(mysqli $conn): void
     }
     $indexDefs = [
         'idx_donation_omise_charge' => '(omise_charge_id)',
-        'idx_donation_pending_charge' => '(transaction_status, omise_charge_id)',
         'idx_donation_recurring' => '(donate_type, recurring_status, target_id, donor_id)',
     ];
     foreach ($indexDefs as $indexName => $expr) {

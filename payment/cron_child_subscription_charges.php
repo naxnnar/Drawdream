@@ -29,31 +29,37 @@ drawdream_child_sponsorship_ensure_columns($conn);
 $tz = new DateTimeZone('Asia/Bangkok');
 $nowSql = drawdream_subscription_now_bangkok_sql();
 $st = $conn->prepare(
-    'SELECT d.*, dn.omise_customer_id, dn.omise_card_id
-     FROM donation d
-     INNER JOIN donor dn ON dn.user_id = d.donor_id
-     WHERE d.donate_type = \'child_subscription\'
-       AND d.recurring_status = ?
-       AND d.recurring_next_charge_at IS NOT NULL AND d.recurring_next_charge_at <= ?
-       AND d.recurring_schedule_id LIKE \'local_cron_%\'
-     ORDER BY d.recurring_next_charge_at ASC
-     LIMIT 50'
+    "SELECT h.history_id, h.child_id, h.donor_user_id, h.donate_id, h.recurring_schedule_id,
+            h.recurring_plan_code, h.recurring_next_charge_at, dn.omise_customer_id, dn.omise_card_id
+     FROM child_subscription_history h
+     INNER JOIN donor dn ON dn.user_id = h.donor_user_id
+     WHERE h.current_status = 'active'
+       AND h.recurring_schedule_id LIKE 'local_cron_%'
+     ORDER BY h.child_id ASC, h.donor_user_id ASC, h.history_id DESC"
 );
-$stAct = 'active';
-$st->bind_param('ss', $stAct, $nowSql);
 $st->execute();
 $res = $st->get_result();
+$latestActiveSubs = [];
+while ($hist = $res->fetch_assoc()) {
+    $k = (int)($hist['child_id'] ?? 0) . ':' . (int)($hist['donor_user_id'] ?? 0);
+    if (!isset($latestActiveSubs[$k])) {
+        $latestActiveSubs[$k] = $hist;
+    }
+}
 
 $processed = 0;
 $errors = [];
 
-while ($row = $res->fetch_assoc()) {
+foreach ($latestActiveSubs as $row) {
     $subId = (int)($row['donate_id'] ?? 0);
-    $childId = (int)($row['target_id'] ?? 0);
-    $donorUid = (int)($row['donor_id'] ?? 0);
+    $childId = (int)($row['child_id'] ?? 0);
+    $donorUid = (int)($row['donor_user_id'] ?? 0);
     $custId = trim((string)($row['omise_customer_id'] ?? ''));
     $cardId = trim((string)($row['omise_card_id'] ?? ''));
     $dueStr = trim((string)($row['recurring_next_charge_at'] ?? ''));
+    if ($dueStr === '' || strtotime($dueStr) === false || strtotime($dueStr) > strtotime($nowSql)) {
+        continue;
+    }
     $billDay = drawdream_subscription_bill_day_from_datetime_sql($dueStr !== '' ? $dueStr : $nowSql);
     if ($subId <= 0 || $childId <= 0 || $donorUid <= 0 || $custId === '') {
         continue;
@@ -134,7 +140,7 @@ while ($row = $res->fetch_assoc()) {
     $amtSat = (int)($ch['amount'] ?? $planSpec['amount_satang']);
     $rec = drawdream_child_persist_subscription_paid_charge($conn, $chId, $amtSat, $childId, $donorUid, 'cron');
     if (!$rec) {
-        $dup = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
+        $dup = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1');
         $done = 'completed';
         $dup->bind_param('ss', $chId, $done);
         $dup->execute();
@@ -171,11 +177,6 @@ while ($row = $res->fetch_assoc()) {
     }
     $nextAt = drawdream_subscription_next_charge_at($anchor, $planSpec, $billDay);
     $nextSql = $nextAt->format('Y-m-d H:i:s');
-    $upd = $conn->prepare(
-        'UPDATE donation SET recurring_next_charge_at = ? WHERE donate_id = ?'
-    );
-    $upd->bind_param('si', $nextSql, $subId);
-    $upd->execute();
     drawdream_child_subscription_history_log(
         $conn,
         $childId,

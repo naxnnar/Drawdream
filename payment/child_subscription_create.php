@@ -332,18 +332,15 @@ if (($sres['object'] ?? '') === 'error') {
     $ins = $conn->prepare(
         'INSERT INTO donation (
             category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-            omise_charge_id, transaction_status,
-            donate_type, recurring_status, recurring_plan_code,
-            recurring_next_charge_at, recurring_schedule_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            omise_charge_id, donate_type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
-    $status = 'active';
     $planCode = $planSpec['plan_code'];
     $categoryId = drawdream_get_or_create_child_donate_category_id($conn);
-    $recurringType = 'child_subscription';
+    $recurringType = 'child_subscription_charge';
     $completed = 'completed';
     $ins->bind_param(
-        'iiidsssssssss',
+        'iiidssss',
         $categoryId,
         $childId,
         $donorUid,
@@ -351,12 +348,7 @@ if (($sres['object'] ?? '') === 'error') {
         $completed,
         $transferNowSql,
         $firstChId,
-        $completed,
-        $recurringType,
-        $status,
-        $planCode,
-        $nextSql,
-        $localSchId
+        $recurringType
     );
     if (!$ins->execute()) {
         child_subscription_redirect(
@@ -408,32 +400,8 @@ if ($schId === '') {
     child_subscription_redirect('Omise ไม่คืน schedule id', false, $childId);
 }
 
-$ins = $conn->prepare(
-    'INSERT INTO donation (
-        category_id, target_id, donor_id, amount, payment_status, transfer_datetime, transaction_status,
-        donate_type, recurring_status, recurring_plan_code, recurring_next_charge_at, recurring_schedule_id
-    ) VALUES (?, ?, ?, 0, \'subscription\', NOW(), \'completed\', ?, ?, ?, ?, ?)'
-);
-$status = 'active';
+$seedDonateId = 0;
 $planCode = $planSpec['plan_code'];
-$nxNull = null;
-$categoryId = drawdream_get_or_create_child_donate_category_id($conn);
-$recurringType = 'child_subscription';
-$ins->bind_param(
-    'iiisssss',
-    $categoryId,
-    $childId,
-    $donorUid,
-    $recurringType,
-    $status,
-    $planCode,
-    $nxNull,
-    $schId
-);
-if (!$ins->execute()) {
-    child_subscription_redirect('บันทึกฐานข้อมูลไม่สำเร็จ รหัส Schedule: ' . $schId . ' (ตรวจใน Omise Dashboard)', false, $childId);
-}
-$seedDonateId = (int)$conn->insert_id;
 drawdream_child_subscription_history_log(
     $conn,
     $childId,

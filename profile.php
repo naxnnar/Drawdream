@@ -199,17 +199,20 @@ if ($role === 'foundation') {
     $donation_history = array_slice($donation_history, 0, 200);
 
     $stSub = $conn->prepare(
-        "SELECT d.donate_id AS id, d.target_id AS child_id,
-                d.recurring_plan_code AS plan_code,
-                fc.child_name
-         FROM donation d
-         INNER JOIN foundation_children fc ON fc.child_id = d.target_id AND fc.deleted_at IS NULL
-         WHERE d.donor_id = ? AND d.donate_type = 'child_subscription' AND d.recurring_status = ?
+        "SELECT h.donate_id AS id, h.child_id, h.recurring_plan_code AS plan_code, fc.child_name
+         FROM child_subscription_history h
+         INNER JOIN (
+            SELECT child_id, donor_user_id, MAX(history_id) AS max_history_id
+            FROM child_subscription_history
+            WHERE donor_user_id = ?
+            GROUP BY child_id, donor_user_id
+         ) latest ON latest.max_history_id = h.history_id
+         INNER JOIN foundation_children fc ON fc.child_id = h.child_id AND fc.deleted_at IS NULL
+         WHERE h.current_status = 'active'
          ORDER BY fc.child_name ASC"
     );
     if ($stSub) {
-        $active = 'active';
-        $stSub->bind_param('is', $user_id, $active);
+        $stSub->bind_param('i', $user_id);
         $stSub->execute();
         $donor_active_child_subscriptions = $stSub->get_result()->fetch_all(MYSQLI_ASSOC);
         require_once __DIR__ . '/includes/child_omise_subscription.php';

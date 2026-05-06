@@ -11,24 +11,58 @@ function drawdream_child_subscription_history_ensure_schema(mysqli $conn): void
             donor_user_id INT UNSIGNED NOT NULL,
             donate_id INT UNSIGNED NULL DEFAULT NULL,
             recurring_schedule_id VARCHAR(96) NULL DEFAULT NULL,
+            recurring_next_charge_at DATETIME NULL DEFAULT NULL,
             omise_charge_id VARCHAR(64) NULL DEFAULT NULL,
             event_type VARCHAR(48) NOT NULL,
-            previous_status VARCHAR(32) NULL DEFAULT NULL,
             current_status VARCHAR(32) NULL DEFAULT NULL,
             recurring_plan_code VARCHAR(32) NULL DEFAULT NULL,
             amount_baht DECIMAL(12,2) NULL DEFAULT NULL,
-            currency VARCHAR(8) NOT NULL DEFAULT 'THB',
-            source_channel VARCHAR(32) NOT NULL DEFAULT 'web',
-            event_note VARCHAR(255) NULL DEFAULT NULL,
-            event_payload_json LONGTEXT NULL,
-            event_occurred_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            KEY idx_csh_child_time (child_id, event_occurred_at),
-            KEY idx_csh_donor_time (donor_user_id, event_occurred_at),
-            KEY idx_csh_event_time (event_type, event_occurred_at),
+            KEY idx_csh_child_time (child_id, created_at),
+            KEY idx_csh_donor_time (donor_user_id, created_at),
+            KEY idx_csh_event_time (event_type, created_at),
             KEY idx_csh_charge (omise_charge_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+
+    // รองรับฐานเดิม: เช็คก่อน ALTER เพื่อกัน duplicate/unknown column exception
+    $hasColumn = static function (string $name) use ($conn): bool {
+        $safe = $conn->real_escape_string($name);
+        $q = $conn->query("SHOW COLUMNS FROM child_subscription_history LIKE '{$safe}'");
+        return $q instanceof mysqli_result && $q->num_rows > 0;
+    };
+
+    // เติมคอลัมน์หลักที่โค้ดใช้งาน (กรณีฐานบางเครื่อง schema ไม่ครบ)
+    if (!$hasColumn('current_status')) {
+        $conn->query("ALTER TABLE child_subscription_history ADD COLUMN current_status VARCHAR(32) NULL DEFAULT NULL AFTER event_type");
+    }
+    if (!$hasColumn('recurring_plan_code')) {
+        $conn->query("ALTER TABLE child_subscription_history ADD COLUMN recurring_plan_code VARCHAR(32) NULL DEFAULT NULL AFTER current_status");
+    }
+    if (!$hasColumn('amount_baht')) {
+        $conn->query("ALTER TABLE child_subscription_history ADD COLUMN amount_baht DECIMAL(12,2) NULL DEFAULT NULL AFTER recurring_plan_code");
+    }
+    if (!$hasColumn('recurring_next_charge_at')) {
+        $conn->query("ALTER TABLE child_subscription_history ADD COLUMN recurring_next_charge_at DATETIME NULL DEFAULT NULL AFTER recurring_schedule_id");
+    }
+    if ($hasColumn('previous_status')) {
+        $conn->query("ALTER TABLE child_subscription_history DROP COLUMN previous_status");
+    }
+    if ($hasColumn('source_channel')) {
+        $conn->query("ALTER TABLE child_subscription_history DROP COLUMN source_channel");
+    }
+    if ($hasColumn('currency')) {
+        $conn->query("ALTER TABLE child_subscription_history DROP COLUMN currency");
+    }
+    if ($hasColumn('event_note')) {
+        $conn->query("ALTER TABLE child_subscription_history DROP COLUMN event_note");
+    }
+    if ($hasColumn('event_payload_json')) {
+        $conn->query("ALTER TABLE child_subscription_history DROP COLUMN event_payload_json");
+    }
+    if ($hasColumn('event_occurred_at')) {
+        $conn->query("ALTER TABLE child_subscription_history DROP COLUMN event_occurred_at");
+    }
 }
 
 /**
@@ -56,39 +90,39 @@ function drawdream_child_subscription_history_log(
     drawdream_child_subscription_history_ensure_schema($conn);
     $stmt = $conn->prepare(
         'INSERT INTO child_subscription_history (
-            child_id, donor_user_id, donate_id, recurring_schedule_id, omise_charge_id,
-            event_type, previous_status, current_status, recurring_plan_code, amount_baht, currency,
-            source_channel, event_note, event_payload_json, event_occurred_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+            child_id, donor_user_id, donate_id, recurring_schedule_id, recurring_next_charge_at, omise_charge_id,
+            event_type, current_status, recurring_plan_code, amount_baht, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
     );
     if (!$stmt) {
         return;
     }
-    $payloadJson = null;
-    if (is_array($payload) && $payload !== []) {
-        $encoded = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($encoded !== false) {
-            $payloadJson = $encoded;
+    $nextChargeAt = null;
+    if (is_array($payload)) {
+        $candidates = [
+            (string)($payload['next_charge_at'] ?? ''),
+            (string)($payload['next_charge_at_before_cancel'] ?? ''),
+        ];
+        foreach ($candidates as $candidate) {
+            $v = trim($candidate);
+            if ($v !== '' && strtotime($v) !== false) {
+                $nextChargeAt = date('Y-m-d H:i:s', strtotime($v));
+                break;
+            }
         }
     }
-    $currency = 'THB';
-    $source = trim($sourceChannel) !== '' ? trim($sourceChannel) : 'web';
     $stmt->bind_param(
-        'iiissssssdssss',
+        'iiissssssd',
         $childId,
         $donorUserId,
         $donateId,
         $scheduleId,
+        $nextChargeAt,
         $chargeId,
         $eventType,
-        $previousStatus,
         $currentStatus,
         $planCode,
-        $amountBaht,
-        $currency,
-        $source,
-        $eventNote,
-        $payloadJson
+        $amountBaht
     );
     @$stmt->execute();
 }

@@ -28,7 +28,7 @@ function drawdream_receipt_completed_donation_id_by_charge(mysqli $conn, string 
     $st = $conn->prepare(
         'SELECT donate_id
          FROM donation
-         WHERE omise_charge_id = ? AND transaction_status = ?
+         WHERE omise_charge_id = ? AND payment_status = ?
          ORDER BY donate_id DESC
          LIMIT 1'
     );

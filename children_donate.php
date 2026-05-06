@@ -81,10 +81,10 @@ $activeChildSub = null;
 if ($role === 'donor' && $donorUid > 0) {
     $stActiveSub = $conn->prepare(
         "SELECT donate_id AS id, recurring_plan_code AS plan_code,
-                recurring_next_charge_at AS next_charge_at, recurring_status AS status
-         FROM donation
-         WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription' AND recurring_status = 'active'
-         ORDER BY donate_id DESC
+                recurring_next_charge_at AS next_charge_at, current_status AS status
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'
+         ORDER BY history_id DESC
          LIMIT 1"
     );
     if ($stActiveSub) {
@@ -117,10 +117,10 @@ $cycleTargetAmount = drawdream_child_cycle_target_amount($conn, $child_id);
 $cycleMonthLabel = date('m/Y');
     $stLatestCancelledAny = $conn->prepare(
         "SELECT recurring_plan_code AS plan_code,
-                recurring_next_charge_at AS last_charge_at, transfer_datetime AS created_at
-         FROM donation
-         WHERE target_id = ? AND donate_type = 'child_subscription' AND recurring_status = 'cancelled'
-         ORDER BY COALESCE(recurring_next_charge_at, transfer_datetime) DESC, donate_id DESC
+                recurring_next_charge_at AS last_charge_at, created_at
+         FROM child_subscription_history
+         WHERE child_id = ? AND current_status = 'cancelled'
+         ORDER BY history_id DESC
          LIMIT 1"
     );
     if ($stLatestCancelledAny) {
@@ -131,10 +131,10 @@ $cycleMonthLabel = date('m/Y');
     if ($role === 'donor' && $donorUid > 0) {
         $stLatestCancelledForDonor = $conn->prepare(
             "SELECT recurring_plan_code AS plan_code,
-                    recurring_next_charge_at AS last_charge_at, transfer_datetime AS created_at
-             FROM donation
-             WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription' AND recurring_status = 'cancelled'
-             ORDER BY COALESCE(recurring_next_charge_at, transfer_datetime) DESC, donate_id DESC
+                    recurring_next_charge_at AS last_charge_at, created_at
+             FROM child_subscription_history
+             WHERE child_id = ? AND donor_user_id = ? AND current_status = 'cancelled'
+             ORDER BY history_id DESC
              LIMIT 1"
         );
         if ($stLatestCancelledForDonor) {
@@ -477,7 +477,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                 </div>
                 <?php endif; ?>
 
-                <?php if ($role === 'donor' && $donorShowcaseSponsored): ?>
+                <?php if ($role === 'donor' && ($donorShowcaseSponsored || $hasActiveChildSub || $anyPlanSponsor)): ?>
                 <div class="child-subscription-box mt-2">
                     <div class="sub-plan-grid" role="group" aria-label="รูปแบบการบริจาค">
                         <button type="button" class="sub-plan-btn sub-mode-btn" disabled>รายวัน</button>

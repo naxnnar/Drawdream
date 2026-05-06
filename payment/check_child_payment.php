@@ -69,12 +69,12 @@ $normalized_terminal_status = in_array($status, ['failed', 'expired', 'reversed'
     : $status;
 
 $ptRow = null;
-$dup = $conn->prepare('SELECT donate_id, transaction_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
+$dup = $conn->prepare('SELECT donate_id, payment_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
 $dup->bind_param('s', $charge_id);
 $dup->execute();
 $ptRow = $dup->get_result()->fetch_assoc();
-$already_completed = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'completed');
-$has_pending       = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'pending');
+$already_completed = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'completed');
+$has_pending       = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'pending');
 
 $donor_uid = (int)$_SESSION['user_id'];
 
@@ -85,7 +85,7 @@ if (!$is_mock && $has_pending && !$already_completed && !$is_success
     drawdream_clear_pending_payment_session();
     $has_pending = false;
     if (is_array($ptRow)) {
-        $ptRow['transaction_status'] = 'failed';
+        $ptRow['payment_status'] = 'failed';
     }
 }
 
@@ -148,12 +148,12 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
         $stmt = $conn->prepare('
             INSERT INTO donation (
                 category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                omise_charge_id, transaction_status, donate_type, recurring_plan_code
-            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
+                omise_charge_id, donate_type, recurring_plan_code
+            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
         ');
         $donateType = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
         $planDaily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
-        $stmt->bind_param('iiidsssss', $category_id, $child_id, $donor_id, $amount, $completed, $charge_id, $completed, $donateType, $planDaily);
+        $stmt->bind_param('iiidssss', $category_id, $child_id, $donor_id, $amount, $completed, $charge_id, $donateType, $planDaily);
         $stmt->execute();
         $donate_id = (int)$conn->insert_id;
         $receiptDonateId = $donate_id;
@@ -186,7 +186,7 @@ if ($finalized_this_request && $receiptDonateId > 0) {
 
 $already_processed_display = $finalized_this_request
     || $already_completed
-    || ($is_success && is_array($ptRow) && ($ptRow['transaction_status'] ?? '') === 'completed');
+    || ($is_success && is_array($ptRow) && ($ptRow['payment_status'] ?? '') === 'completed');
 
 if ($already_processed_display && !$finalized_this_request) {
     error_log('[drawdream_child_check] retry-safe duplicate callback handled for charge ' . $charge_id);

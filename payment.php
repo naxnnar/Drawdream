@@ -73,10 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_paid'])) {
         $dtOne = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
         $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
         $stmtIns = $conn->prepare(
-            "INSERT INTO donation (category_id, target_id, donor_id, amount, payment_status, transfer_datetime, transaction_status, donate_type, recurring_plan_code)
-             VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)"
+            "INSERT INTO donation (category_id, target_id, donor_id, amount, payment_status, transfer_datetime, donate_type, recurring_plan_code)
+             VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)"
         );
-        $stmtIns->bind_param('iiidssss', $categoryId, $postedChildId, $donorUserId, $postedAmount, $completed, $completed, $dtOne, $planOnce);
+        $stmtIns->bind_param('iiidsss', $categoryId, $postedChildId, $donorUserId, $postedAmount, $completed, $dtOne, $planOnce);
         $stmtIns->execute();
         drawdream_child_sync_sponsorship_status($conn, $postedChildId);
 

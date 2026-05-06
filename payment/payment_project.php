@@ -118,8 +118,8 @@ function drawdream_insert_pending_project_donation(
     $insP = $conn->prepare(
         'INSERT INTO donation (
             category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-            omise_charge_id, transaction_status, donate_type, recurring_plan_code
-        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)'
+            omise_charge_id, donate_type, recurring_plan_code
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)'
     );
     if (!$insP) {
         return 0;
@@ -127,14 +127,13 @@ function drawdream_insert_pending_project_donation(
     $dtProj = DRAWDREAM_DONATE_TYPE_PROJECT;
     $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
     $insP->bind_param(
-        'iiidsssss',
+        'iiidssss',
         $categoryId,
         $targetProjectId,
         $donorUserId,
         $amountBaht,
         $pending,
         $omiseChargeId,
-        $pending,
         $dtProj,
         $planOnce
     );

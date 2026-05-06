@@ -38,22 +38,21 @@ function drawdream_insert_pending_child_donation(
     $ins = $conn->prepare(
         'INSERT INTO donation (
             category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-            omise_charge_id, transaction_status, donate_type, recurring_plan_code
-        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)'
+            omise_charge_id, donate_type, recurring_plan_code
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)'
     );
     if (!$ins) {
         return 0;
     }
     $donateType = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
     $ins->bind_param(
-        'iiidsssss',
+        'iiidssss',
         $categoryId,
         $childId,
         $donorUserId,
         $amountBaht,
         $paymentPending,
         $omiseChargeId,
-        $pending,
         $donateType,
         $planDaily
     );
@@ -79,7 +78,7 @@ function drawdream_finalize_child_donation(
     $st = $conn->prepare(
         'SELECT donate_id, category_id, target_id, donor_id
          FROM donation
-         WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
+         WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1'
     );
     if (!$st) {
         return false;
@@ -111,14 +110,14 @@ function drawdream_finalize_child_donation(
         $planDaily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
         $up = $conn->prepare(
             'UPDATE donation
-             SET amount = ?, payment_status = ?, transaction_status = ?, transfer_datetime = NOW(),
+             SET amount = ?, payment_status = ?, transfer_datetime = NOW(),
                  donate_type = ?, recurring_plan_code = ?
-             WHERE donate_id = ? AND transaction_status = ?'
+             WHERE donate_id = ? AND payment_status = ?'
         );
         if (!$up) {
             throw new RuntimeException('prepare update donation');
         }
-        $up->bind_param('dssssis', $amountBaht, $completed, $completed, $dtOne, $planDaily, $rowDonateId, $pending);
+        $up->bind_param('dsssis', $amountBaht, $completed, $dtOne, $planDaily, $rowDonateId, $pending);
         $up->execute();
         if ($up->affected_rows < 1) {
             throw new RuntimeException('update donation');

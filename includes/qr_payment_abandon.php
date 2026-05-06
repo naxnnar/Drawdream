@@ -48,7 +48,7 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
     $st = $conn->prepare(
         'SELECT donate_id, donor_id
          FROM donation
-         WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
+         WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1'
     );
     $pend = 'pending';
     $st->bind_param('ss', $chargeId, $pend);
@@ -64,7 +64,7 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
     if ($rowDonorId !== $donorUserId) {
         return 0;
     }
-    $del = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND transaction_status = ?');
+    $del = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND payment_status = ?');
     $del->bind_param('is', $donateId, $pend);
     $del->execute();
     return $del->affected_rows > 0 ? 1 : 0;
@@ -82,7 +82,7 @@ function drawdream_abandon_all_pending_qr_for_donor(mysqli $conn, int $donorUser
 
     $st1 = $conn->prepare(
         'DELETE FROM donation
-         WHERE transaction_status = ? AND donor_id = ?'
+         WHERE payment_status = ? AND donor_id = ?'
     );
     $pend = 'pending';
     $st1->bind_param('si', $pend, $donorUserId);

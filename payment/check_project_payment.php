@@ -72,12 +72,12 @@ $amount     = 0;
 
 // รายการเดิมที่สร้างตอนเปิด QR (pending) หรือ completed แล้ว
 $ptRow = null;
-$dup = $conn->prepare("SELECT donate_id, transaction_status FROM donation WHERE omise_charge_id = ? LIMIT 1");
+$dup = $conn->prepare("SELECT donate_id, payment_status FROM donation WHERE omise_charge_id = ? LIMIT 1");
 $dup->bind_param("s", $charge_id);
 $dup->execute();
 $ptRow = $dup->get_result()->fetch_assoc();
-$already_completed = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'completed');
-$has_pending = is_array($ptRow) && (($ptRow['transaction_status'] ?? '') === 'pending');
+$already_completed = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'completed');
+$has_pending = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'pending');
 
 $donor_uid = (int)$_SESSION['user_id'];
 // Omise แจ้งว่ารายการถึงที่สุดแล้ว (ไม่สำเร็จ/หมดอายุ) → อัปเดตฐานข้อมูลเป็น failed ไม่ค้าง pending
@@ -88,7 +88,7 @@ if (!$is_mock && $has_pending && !$already_completed && !$is_success
     drawdream_clear_pending_payment_session();
     $has_pending = false;
     if (is_array($ptRow)) {
-        $ptRow['transaction_status'] = 'failed';
+        $ptRow['payment_status'] = 'failed';
     }
 }
 
@@ -176,7 +176,7 @@ function drawdream_finalize_project_donation(
     $pend = 'pending';
     $pt = $conn->prepare(
         'SELECT donate_id, category_id, target_id, donor_id
-         FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1'
+         FROM donation WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1'
     );
     $pt->bind_param('ss', $charge_id, $pend);
     $pt->execute();
@@ -207,11 +207,11 @@ function drawdream_finalize_project_donation(
         $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
         $upt = $conn->prepare(
             'UPDATE donation
-             SET amount = ?, payment_status = ?, transaction_status = ?, transfer_datetime = NOW(), donate_type = ?,
+             SET amount = ?, payment_status = ?, transfer_datetime = NOW(), donate_type = ?,
                  recurring_plan_code = ?
-             WHERE donate_id = ? AND transaction_status = ?'
+             WHERE donate_id = ? AND payment_status = ?'
         );
-        $upt->bind_param('dssssis', $amountBaht, $completed, $completed, $dtProj, $planOnce, $ptDonateId, $pend);
+        $upt->bind_param('dsssis', $amountBaht, $completed, $dtProj, $planOnce, $ptDonateId, $pend);
         $upt->execute();
         if ($upt->affected_rows < 1) {
             throw new RuntimeException('update donation');
@@ -263,8 +263,8 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
             $stmt = $conn->prepare("
                 INSERT INTO donation (
                     category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                    omise_charge_id, transaction_status, donate_type, recurring_plan_code
-                ) VALUES (?, ?, ?, ?, 'completed', NOW(), ?, 'completed', ?, ?)
+                    omise_charge_id, donate_type, recurring_plan_code
+                ) VALUES (?, ?, ?, ?, 'completed', NOW(), ?, ?, ?)
             ");
             $stmt->bind_param('iiidsss', $category_id, $target_id, $donor_id, $amount, $charge_id, $dtProj, $planOnce);
             $stmt->execute();
@@ -295,7 +295,7 @@ if ($finalized_this_request && $receiptDonateId > 0) {
 
 $already_processed = $finalized_this_request
     || $already_completed
-    || ($is_success && is_array($ptRow) && ($ptRow['transaction_status'] ?? '') === 'completed');
+    || ($is_success && is_array($ptRow) && ($ptRow['payment_status'] ?? '') === 'completed');
 
 // ถ้าเคยประมวลผลแล้ว ให้ดึงจำนวนเงินจาก charge
 if ($already_processed) {

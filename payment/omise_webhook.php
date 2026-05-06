@@ -165,14 +165,14 @@ if (!$paid) {
 
 drawdream_child_omise_subscription_ensure_schema($conn);
 $beforeStatus = 'none';
-$statusBeforeStmt = $conn->prepare('SELECT transaction_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
+$statusBeforeStmt = $conn->prepare('SELECT payment_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
 if ($statusBeforeStmt) {
     $statusBeforeStmt->bind_param('s', $chargeId);
     $statusBeforeStmt->execute();
     $beforeRow = $statusBeforeStmt->get_result()->fetch_assoc();
-    $beforeStatus = (string)($beforeRow['transaction_status'] ?? 'none');
+    $beforeStatus = (string)($beforeRow['payment_status'] ?? 'none');
 }
-$dupChk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND transaction_status = ? LIMIT 1');
+$dupChk = $conn->prepare('SELECT 1 FROM donation WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1');
 $done = 'completed';
 $dupChk->bind_param('ss', $chargeId, $done);
 $dupChk->execute();
@@ -200,12 +200,12 @@ if ($receiptDonateId > 0) {
     drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
 }
 $afterStatus = 'unknown';
-$statusAfterStmt = $conn->prepare('SELECT transaction_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
+$statusAfterStmt = $conn->prepare('SELECT payment_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
 if ($statusAfterStmt) {
     $statusAfterStmt->bind_param('s', $chargeId);
     $statusAfterStmt->execute();
     $afterRow = $statusAfterStmt->get_result()->fetch_assoc();
-    $afterStatus = (string)($afterRow['transaction_status'] ?? 'unknown');
+    $afterStatus = (string)($afterRow['payment_status'] ?? 'unknown');
 }
 error_log('[drawdream_webhook] ' . json_encode([
     'event_id' => $eventId,

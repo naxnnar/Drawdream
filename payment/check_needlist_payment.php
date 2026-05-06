@@ -68,7 +68,7 @@ if (!$is_mock && !$is_success && in_array($status, ['failed', 'expired'], true))
 
 // กันบันทึกซ้ำ
 $already_processed = false;
-$dup = $conn->prepare("SELECT donate_id FROM donation WHERE omise_charge_id = ? AND transaction_status = 'completed' LIMIT 1");
+$dup = $conn->prepare("SELECT donate_id FROM donation WHERE omise_charge_id = ? AND payment_status = 'completed' LIMIT 1");
 $dup->bind_param("s", $charge_id);
 $dup->execute();
 $already_processed = (bool)$dup->get_result()->fetch_assoc();
@@ -91,13 +91,13 @@ if ($is_success && !$already_processed && $fid > 0) {
                 $stmt = $conn->prepare("
                     INSERT INTO donation (
                         category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                        omise_charge_id, transaction_status, donate_type, recurring_plan_code
-                    ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?, ?)
+                        omise_charge_id, donate_type, recurring_plan_code
+                    ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
                 ");
                 if (!$stmt) {
                     throw new RuntimeException('prepare_insert_donation');
                 }
-                $stmt->bind_param("iiidsssss", $category_id, $fid, $donor_uid, $amount, $completed, $charge_id, $completed, $dtNeed, $planOnce);
+                $stmt->bind_param("iiidssss", $category_id, $fid, $donor_uid, $amount, $completed, $charge_id, $dtNeed, $planOnce);
                 $stmt->execute();
                 $donate_id = (int)$conn->insert_id;
                 if ($donate_id <= 0) {

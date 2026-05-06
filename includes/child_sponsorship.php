@@ -45,6 +45,91 @@ function drawdream_child_plan_months_by_code(string $planCode): int
     return 0;
 }
 
+function drawdream_child_plan_code_from_amount(float $amountBaht): string
+{
+    $a = round($amountBaht, 2);
+    if (abs($a - 700.0) < 0.01) {
+        return 'monthly';
+    }
+    if (abs($a - 4200.0) < 0.01) {
+        return 'semiannual';
+    }
+    if (abs($a - 8400.0) < 0.01) {
+        return 'yearly';
+    }
+    return '';
+}
+
+/**
+ * ช่วงสิทธิ์ของผู้บริจาครายคนสำหรับเด็กคนหนึ่ง (anniversary + stack)
+ * @return array{current:bool,start:?DateTimeImmutable,end:?DateTimeImmutable}
+ */
+function drawdream_child_donor_plan_coverage_window(mysqli $conn, int $childId, int $donorUserId): array
+{
+    $out = ['current' => false, 'start' => null, 'end' => null];
+    if ($childId <= 0 || $donorUserId <= 0) {
+        return $out;
+    }
+    require_once __DIR__ . '/donate_category_resolve.php';
+    $catId = drawdream_get_or_create_child_donate_category_id($conn);
+    if ($catId <= 0) {
+        return $out;
+    }
+    $st = $conn->prepare(
+        "SELECT recurring_plan_code, amount, transfer_datetime, donate_id
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND donor_id = ? AND payment_status = 'completed'
+           AND (
+               recurring_plan_code IN ('monthly','semiannual','yearly')
+               OR donate_type = 'child_subscription_charge'
+           )
+         ORDER BY transfer_datetime ASC, donate_id ASC"
+    );
+    if (!$st) {
+        return $out;
+    }
+    $st->bind_param('iii', $catId, $childId, $donorUserId);
+    $st->execute();
+    $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
+    if ($rows === []) {
+        return $out;
+    }
+    $tz = new DateTimeZone('Asia/Bangkok');
+    $now = new DateTimeImmutable('now', $tz);
+    $coverageStart = null;
+    $coverageEnd = null;
+    foreach ($rows as $r) {
+        $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
+        if ($planCode === '') {
+            $planCode = drawdream_child_plan_code_from_amount((float)($r['amount'] ?? 0));
+        }
+        $months = drawdream_child_plan_months_by_code($planCode);
+        if ($months <= 0) {
+            continue;
+        }
+        $dtRaw = trim((string)($r['transfer_datetime'] ?? ''));
+        if ($dtRaw === '') {
+            continue;
+        }
+        try {
+            $paidAt = new DateTimeImmutable($dtRaw, $tz);
+        } catch (Exception $e) {
+            continue;
+        }
+        $coverageStart = ($coverageEnd === null || $paidAt >= $coverageEnd) ? $paidAt : $coverageEnd;
+        $coverageEnd = $coverageStart->modify('+' . $months . ' months');
+        if ($now >= $coverageStart && $now < $coverageEnd) {
+            $out['current'] = true;
+            $out['start'] = $coverageStart;
+            $out['end'] = $coverageEnd;
+            return $out;
+        }
+    }
+    $out['start'] = $coverageStart;
+    $out['end'] = $coverageEnd;
+    return $out;
+}
+
 /**
  * คำนวณช่วงสิทธิ์อุปการะแบบเป๊ะตามวัน/เวลา (anniversary model)
  * - ใช้เวลาจ่ายจริงเป็น anchor ของสิทธิ์แต่ละรอบ
@@ -65,10 +150,13 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
         return $out;
     }
     $st = $conn->prepare(
-        "SELECT recurring_plan_code, transfer_datetime, donate_id
+        "SELECT recurring_plan_code, amount, transfer_datetime, donate_id
          FROM donation
          WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'
-           AND recurring_plan_code IN ('monthly','semiannual','yearly')
+           AND (
+               recurring_plan_code IN ('monthly','semiannual','yearly')
+               OR donate_type = 'child_subscription_charge'
+           )
          ORDER BY transfer_datetime ASC, donate_id ASC"
     );
     if (!$st) {
@@ -90,6 +178,9 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
     $activePlanCode = '';
     foreach ($rows as $r) {
         $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
+        if ($planCode === '') {
+            $planCode = drawdream_child_plan_code_from_amount((float)($r['amount'] ?? 0));
+        }
         $months = drawdream_child_plan_months_by_code($planCode);
         if ($months <= 0) {
             continue;
@@ -144,18 +235,13 @@ function drawdream_child_cycle_target_amount(mysqli $conn, int $childId): float
     if ($childId <= 0) {
         return DRAWDREAM_CHILD_DEFAULT_PLAN_AMOUNT;
     }
-    require_once __DIR__ . '/child_omise_subscription.php';
-    drawdream_child_omise_subscription_ensure_schema($conn);
     $st = $conn->prepare(
         "SELECT recurring_plan_code AS plan_code
-         FROM donation
-         WHERE target_id = ?
-           AND donate_type = 'child_subscription'
-           AND recurring_status IN ('active', 'paused', 'cancelled')
-         ORDER BY
-            CASE WHEN recurring_status = 'active' THEN 0 WHEN recurring_status = 'paused' THEN 1 ELSE 2 END,
-            COALESCE(recurring_next_charge_at, transfer_datetime) DESC,
-            donate_id DESC
+         FROM child_subscription_history
+         WHERE child_id = ?
+           AND recurring_plan_code IS NOT NULL
+           AND TRIM(recurring_plan_code) <> ''
+         ORDER BY history_id DESC
          LIMIT 1"
     );
     if (!$st) {
@@ -395,17 +481,17 @@ function drawdream_child_foundation_sponsor_display_list(mysqli $conn, int $chil
 
     $latestSubByDonor = [];
     $st = $conn->prepare(
-        'SELECT donor_id, recurring_status, recurring_plan_code, donate_id, transfer_datetime, recurring_next_charge_at
-         FROM donation
-         WHERE target_id = ? AND donate_type = \'child_subscription\' AND donor_id IS NOT NULL
-         ORDER BY donate_id DESC'
+        "SELECT donor_user_id, current_status, recurring_plan_code, donate_id, recurring_next_charge_at, created_at
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id IS NOT NULL
+         ORDER BY history_id DESC"
     );
     if ($st) {
         $st->bind_param('i', $childId);
         $st->execute();
         $rs = $st->get_result();
         while ($row = $rs->fetch_assoc()) {
-            $uid = (int)($row['donor_id'] ?? 0);
+            $uid = (int)($row['donor_user_id'] ?? 0);
             if ($uid <= 0) {
                 continue;
             }
@@ -449,36 +535,41 @@ function drawdream_child_foundation_sponsor_display_list(mysqli $conn, int $chil
         $subRow = $latestSubByDonor[$uid] ?? null;
 
         $subTs = 0;
+        $coverage = drawdream_child_donor_plan_coverage_window($conn, $childId, $uid);
+        $coverageEndTs = 0;
+        if (($coverage['end'] ?? null) instanceof DateTimeImmutable) {
+            $coverageEndTs = (int)$coverage['end']->format('U');
+        }
         if (is_array($subRow)) {
             $raw = trim((string)($subRow['recurring_next_charge_at'] ?? ''));
             if ($raw === '') {
-                $raw = trim((string)($subRow['transfer_datetime'] ?? ''));
+                $raw = trim((string)($subRow['created_at'] ?? ''));
             }
             if ($raw !== '') {
                 $ts = strtotime($raw);
                 $subTs = $ts !== false ? $ts : 0;
             }
         }
-        $sortTs = $subTs;
+        $sortTs = max($subTs, $coverageEndTs);
 
         $status = 'other';
         $statusLabel = '';
         $detailLine = '';
 
         if (is_array($subRow)) {
-            $rs = (string)($subRow['recurring_status'] ?? '');
+            $rs = strtolower(trim((string)($subRow['current_status'] ?? '')));
             $pc = strtolower(trim((string)($subRow['recurring_plan_code'] ?? '')));
             $planText = $planLabels[$pc] ?? ($pc !== '' ? $pc : 'รายรอบ');
 
-            if ($rs === 'active') {
+            if ($rs === 'active' || !empty($coverage['current'])) {
                 $status = 'active';
                 $activeRecurring++;
                 $statusLabel = 'กำลังอุปการะ — ' . $planText;
-                $detailLine = $subTs > 0 ? ('อัปเดตแผนล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
-            } elseif ($rs === 'paused') {
-                $status = 'paused';
-                $statusLabel = 'กำลังอุปการะ — พักชำระชั่วคราว — ' . $planText;
-                $detailLine = $subTs > 0 ? ('อัปเดตล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
+                if ($rs === 'cancelled' && !empty($coverage['current']) && ($coverage['end'] ?? null) instanceof DateTimeImmutable) {
+                    $detailLine = 'ยกเลิกการต่ออายุแล้ว · สิทธิ์ถึง ' . $coverage['end']->format('d/m/Y H:i');
+                } else {
+                    $detailLine = $subTs > 0 ? ('อัปเดตแผนล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
+                }
             } elseif ($rs === 'cancelled') {
                 $status = 'cancelled';
                 $statusLabel = 'เคยอุปการะ — ' . $planText . ' · ยกเลิกแล้ว';
@@ -694,76 +785,36 @@ function drawdream_child_current_sponsor_user_ids(mysqli $conn, int $childId): a
         return $out;
     }
 
-    $stActive = $conn->prepare(
-        "SELECT DISTINCT donor_id
-         FROM donation
-         WHERE target_id = ? AND donate_type = 'child_subscription'
-           AND donor_id IS NOT NULL AND recurring_status IN ('active', 'paused')"
+    $stHist = $conn->prepare(
+        "SELECT donor_user_id, current_status
+         FROM child_subscription_history
+         WHERE child_id = ?
+         ORDER BY history_id DESC"
     );
-    if ($stActive) {
-        $stActive->bind_param('i', $childId);
-        $stActive->execute();
-        $rsA = $stActive->get_result();
-        while ($r = $rsA->fetch_assoc()) {
-            $uid = (int)($r['donor_id'] ?? 0);
-            if ($uid > 0) {
-                $out[$uid] = true;
-            }
-        }
-    }
-
-    $stPaid = $conn->prepare(
-        "SELECT donor_id, recurring_plan_code, transfer_datetime, donate_id
-         FROM donation
-         WHERE target_id = ? AND payment_status = 'completed'
-           AND donor_id IS NOT NULL
-           AND recurring_plan_code IN ('monthly','semiannual','yearly')
-         ORDER BY donor_id ASC, transfer_datetime ASC, donate_id ASC"
-    );
-    if (!$stPaid) {
+    if (!$stHist) {
         return $out;
     }
-    $stPaid->bind_param('i', $childId);
-    $stPaid->execute();
-    $rows = $stPaid->get_result()->fetch_all(MYSQLI_ASSOC);
-    if ($rows === []) {
-        return $out;
-    }
-
-    $tz = new DateTimeZone('Asia/Bangkok');
-    $now = new DateTimeImmutable('now', $tz);
-    $byDonor = [];
-    foreach ($rows as $row) {
-        $uid = (int)($row['donor_id'] ?? 0);
+    $stHist->bind_param('i', $childId);
+    $stHist->execute();
+    $rows = $stHist->get_result()->fetch_all(MYSQLI_ASSOC);
+    $latestByDonor = [];
+    foreach ($rows as $r) {
+        $uid = (int)($r['donor_user_id'] ?? 0);
         if ($uid <= 0) {
             continue;
         }
-        $byDonor[$uid][] = $row;
+        if (!isset($latestByDonor[$uid])) {
+            $latestByDonor[$uid] = strtolower(trim((string)($r['current_status'] ?? '')));
+        }
     }
-
-    foreach ($byDonor as $uid => $donorRows) {
-        $coverageEnd = null;
-        foreach ($donorRows as $r) {
-            $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
-            $months = drawdream_child_plan_months_by_code($planCode);
-            if ($months <= 0) {
-                continue;
-            }
-            $dtRaw = trim((string)($r['transfer_datetime'] ?? ''));
-            if ($dtRaw === '') {
-                continue;
-            }
-            try {
-                $paidAt = new DateTimeImmutable($dtRaw, $tz);
-            } catch (Exception $e) {
-                continue;
-            }
-            $coverageStart = ($coverageEnd === null || $paidAt >= $coverageEnd) ? $paidAt : $coverageEnd;
-            $coverageEnd = $coverageStart->modify('+' . $months . ' months');
-            if ($now >= $coverageStart && $now < $coverageEnd) {
-                $out[(int)$uid] = true;
-                break;
-            }
+    foreach ($latestByDonor as $uid => $st) {
+        if ($st === 'active') {
+            $out[(int)$uid] = true;
+            continue;
+        }
+        $coverage = drawdream_child_donor_plan_coverage_window($conn, $childId, (int)$uid);
+        if (!empty($coverage['current'])) {
+            $out[(int)$uid] = true;
         }
     }
 
