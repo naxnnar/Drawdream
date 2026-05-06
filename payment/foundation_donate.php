@@ -132,6 +132,60 @@ function drawdream_need_item_lines_from_row(array $item): array
     return [];
 }
 
+/**
+ * สร้างรายการสิ่งของรวมสำหรับคำนวณตัวอย่างการจัดสรรเงินบริจาค
+ * @param array<int,array<string,mixed>> $items
+ * @return array<int,array{name:string,qty_needed:float,price:float}>
+ */
+function drawdream_build_need_catalog(array $items): array
+{
+    $catalog = [];
+    $order = 0;
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        foreach (drawdream_need_item_lines_from_row($item) as $line) {
+            $name = trim((string)($line['item_name'] ?? ''));
+            $qty = (float)($line['qty_needed'] ?? 0);
+            $price = (float)($line['price_estimate'] ?? 0);
+            if ($name === '' || $qty <= 0 || $price <= 0) {
+                continue;
+            }
+            $key = mb_strtolower($name, 'UTF-8') . '|' . number_format($price, 4, '.', '');
+            if (!isset($catalog[$key])) {
+                $catalog[$key] = [
+                    'name' => $name,
+                    'qty_needed' => 0.0,
+                    'price' => $price,
+                    '_order' => $order++,
+                ];
+            }
+            $catalog[$key]['qty_needed'] += $qty;
+        }
+    }
+
+    usort($catalog, static function (array $a, array $b): int {
+        $ordA = (int)($a['_order'] ?? 0);
+        $ordB = (int)($b['_order'] ?? 0);
+        return $ordA <=> $ordB;
+    });
+
+    return array_map(static function (array $row): array {
+        return [
+            'name' => (string)$row['name'],
+            'qty_needed' => (float)$row['qty_needed'],
+            'price' => (float)$row['price'],
+        ];
+    }, $catalog);
+}
+
+$needCatalog = drawdream_build_need_catalog($items);
+$needCatalogJson = json_encode($needCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+if (!is_string($needCatalogJson)) {
+    $needCatalogJson = '[]';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     $rawAmt = (string)($_POST['amount'] ?? '');
     $rawAmt = str_replace([',', ' ', "\xC2\xA0"], '', $rawAmt);
@@ -273,7 +327,11 @@ function _omise_local_mock(string $path, array $data): array {
                      class="fd-cover" alt="">
             <?php endif; ?>
 
-            <h2 class="fd-name"><?= htmlspecialchars($foundation['foundation_name']) ?></h2>
+            <h2 class="fd-name">
+                <a class="fd-name-link" href="../foundation_public_profile.php?id=<?= (int)$fid ?>">
+                    <?= htmlspecialchars($foundation['foundation_name']) ?>
+                </a>
+            </h2>
             <?php if ($goal <= 0 || empty($items)): ?>
                 <div class="fd-alert fd-alert-error" role="status">ขณะนี้ไม่มีรายการสิ่งของที่เปิดรับบริจาค (ครบระยะเวลาหรือยังไม่มีรายการที่อนุมัติ)</div>
             <?php endif; ?>
@@ -376,6 +434,10 @@ function _omise_local_mock(string $path, array $data): array {
                             <span>PromptPay QR</span>
                         </div>
                     </div>
+                    <div class="fd-impact-preview" id="donationImpactPreview" aria-live="polite">
+                        <div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>
+                        <p class="fd-impact-preview__empty">กรอกจำนวนเงินเพื่อดูรายการสิ่งของและจำนวนชิ้นที่ซื้อได้</p>
+                    </div>
                     <button type="submit" name="pay" class="btn-pay"<?= $donateDisabled ? ' disabled' : '' ?>>บริจาค</button>
                 </form>
         </div><!-- /.fd-right -->
@@ -411,6 +473,7 @@ function fdSelectPreset(amt) {
     var inp = document.getElementById('amountInput');
     if (inp) {
         inp.value = String(useAmt);
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
     }
     document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
         var v = parseInt(b.getAttribute('data-amt'), 10);
@@ -418,16 +481,85 @@ function fdSelectPreset(amt) {
     });
 }
 document.addEventListener('DOMContentLoaded', function () {
-    var maxB = fdGetMaxDonateBaht();
-    if (maxB === null) return;
-    document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
-        var v = parseInt(b.getAttribute('data-amt'), 10);
-        if (v > maxB) {
-            b.disabled = true;
-            b.style.opacity = '0.45';
-            b.title = 'เกินยอดที่เหลือจะครบเป้าหมาย';
+    var needCatalog = <?= $needCatalogJson ?>;
+    var impactRoot = document.getElementById('donationImpactPreview');
+    var amtInput = document.getElementById('amountInput');
+
+    function fdFormatBaht(n) {
+        return Number(n || 0).toLocaleString('th-TH');
+    }
+    function fdEscapeHtml(s) {
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function fdRenderImpactPreview() {
+        if (!impactRoot || !amtInput || !Array.isArray(needCatalog) || needCatalog.length === 0) return;
+        var amount = fdParseBahtAmount(amtInput.value);
+        if (!amount || isNaN(amount) || amount < 20) {
+            impactRoot.innerHTML =
+                '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
+                '<p class="fd-impact-preview__empty">กรอกจำนวนเงินอย่างน้อย 20 บาทเพื่อคำนวณรายการ</p>';
+            return;
         }
-    });
+
+        var remain = amount;
+        var rows = [];
+        needCatalog.forEach(function (it) {
+            var price = Number(it.price || 0);
+            var maxQty = Math.floor(Number(it.qty_needed || 0));
+            if (price <= 0 || maxQty <= 0 || remain < price) return;
+            var buyQty = Math.min(maxQty, Math.floor(remain / price));
+            if (buyQty <= 0) return;
+            var cost = buyQty * price;
+            remain -= cost;
+            rows.push({
+                name: String(it.name || 'รายการสิ่งของ'),
+                qty: buyQty,
+                cost: cost
+            });
+        });
+
+        if (rows.length === 0) {
+            impactRoot.innerHTML =
+                '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
+                '<p class="fd-impact-preview__empty">ยอดนี้ยังไม่เพียงพอสำหรับราคาต่อชิ้นของรายการที่มี</p>';
+            return;
+        }
+
+        var listHtml = rows.map(function (r) {
+            return '<li><span>' + fdEscapeHtml(r.name) + '</span><strong>' + fdFormatBaht(r.qty) + ' ชิ้น</strong></li>';
+        }).join('');
+        var used = amount - remain;
+        var remainText = remain > 0
+            ? ' · เหลือ ' + fdFormatBaht(remain) + ' บาท'
+            : '';
+        impactRoot.innerHTML =
+            '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
+            '<ul class="fd-impact-preview__list">' + listHtml + '</ul>' +
+            '<div class="fd-impact-preview__meta">ใช้เงินประมาณ ' + fdFormatBaht(used) + ' บาท' + remainText + '</div>';
+    }
+
+    var maxB = fdGetMaxDonateBaht();
+    if (maxB !== null) {
+        document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
+            var v = parseInt(b.getAttribute('data-amt'), 10);
+            if (v > maxB) {
+                b.disabled = true;
+                b.style.opacity = '0.45';
+                b.title = 'เกินยอดที่เหลือจะครบเป้าหมาย';
+            }
+        });
+    }
+    if (amtInput) {
+        amtInput.addEventListener('input', fdRenderImpactPreview);
+        amtInput.addEventListener('change', fdRenderImpactPreview);
+    }
+    fdRenderImpactPreview();
 });
 document.getElementById('foundationDonateForm').addEventListener('submit', function (e) {
     var inp = document.getElementById('amountInput');

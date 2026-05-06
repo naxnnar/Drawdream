@@ -1167,6 +1167,17 @@ body.foundation-donate-page {
     margin: 0 0 16px 0;
     line-height: 1.2;
 }
+.fd-name-link {
+    color: inherit;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease;
+}
+.fd-name-link:hover,
+.fd-name-link:focus-visible {
+    color: #2e3f7f;
+    border-bottom-color: #2e3f7f;
+}
 .fd-foundation-desc {
     margin: -6px 0 16px;
     color: #475569;
@@ -1197,6 +1208,50 @@ body.foundation-donate-page {
     color: #CC583F;
     font-size: 28px;
     font-weight: 800;
+}
+
+.fd-impact-preview {
+    margin: 12px 0 14px;
+    padding: 10px 12px;
+    border: 1px solid #d7deff;
+    border-radius: 10px;
+    background: #f8faff;
+}
+.fd-impact-preview__title {
+    margin: 0 0 6px;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #2e3f7f;
+}
+.fd-impact-preview__empty {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #64748b;
+}
+.fd-impact-preview__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.fd-impact-preview__list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    color: #1f2937;
+}
+.fd-impact-preview__list li strong {
+    color: #0f766e;
+    white-space: nowrap;
+}
+.fd-impact-preview__meta {
+    margin-top: 7px;
+    font-size: 0.82rem;
+    color: #475569;
 }
 
 /* items list */
