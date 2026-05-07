@@ -232,7 +232,7 @@ function drawdream_foundation_analytics_popular_categories(mysqli $conn, int $fo
 }
 
 /**
- * อุปการะเด็ก (Sponsorship) ต่อมูลนิธิ — นับแถว donate_type = child_subscription
+ * อุปการะเด็ก (Sponsorship) ต่อมูลนิธิ — นับจาก child_subscription_history
  *
  * @return array{
  *   monthly: array{cancelled:int,active:int,paused:int,other:int,denom:int,cancel_pct:?float},
@@ -241,24 +241,21 @@ function drawdream_foundation_analytics_popular_categories(mysqli $conn, int $fo
  */
 function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundationId, int $childCat): array
 {
-    $baseChildIn = 'd.target_id IN (SELECT child_id FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL)';
     $sqlMonthly = "
-    SELECT LOWER(TRIM(COALESCE(d.recurring_status, ''))) AS rs, COUNT(*) AS c
-    FROM donation d
-    WHERE d.donate_type = 'child_subscription'
-      AND d.category_id = ?
-      AND LOWER(TRIM(COALESCE(d.recurring_plan_code, ''))) = 'monthly'
-      AND (LOWER(TRIM(COALESCE(d.payment_status, ''))) IN ('completed', 'subscription'))
-      AND {$baseChildIn}
+    SELECT LOWER(TRIM(COALESCE(h.current_status, ''))) AS rs, COUNT(*) AS c
+    FROM child_subscription_history h
+    WHERE LOWER(TRIM(COALESCE(h.recurring_plan_code, ''))) = 'monthly'
+      AND h.child_id IN (
+        SELECT child_id FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL
+      )
     GROUP BY rs
     ";
     $sqlAll = "
-    SELECT LOWER(TRIM(COALESCE(d.recurring_status, ''))) AS rs, COUNT(*) AS c
-    FROM donation d
-    WHERE d.donate_type = 'child_subscription'
-      AND d.category_id = ?
-      AND (LOWER(TRIM(COALESCE(d.payment_status, ''))) IN ('completed', 'subscription'))
-      AND {$baseChildIn}
+    SELECT LOWER(TRIM(COALESCE(h.current_status, ''))) AS rs, COUNT(*) AS c
+    FROM child_subscription_history h
+    WHERE h.child_id IN (
+        SELECT child_id FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL
+    )
     GROUP BY rs
     ";
 
@@ -293,12 +290,12 @@ function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundatio
         ];
     };
 
-    $run = static function (mysqli $conn, string $sql, int $childCat, int $foundationId) use ($parse): array {
+    $run = static function (mysqli $conn, string $sql, int $foundationId) use ($parse): array {
         $st = $conn->prepare($sql);
         if (!$st) {
             return $parse([]);
         }
-        $st->bind_param('ii', $childCat, $foundationId);
+        $st->bind_param('i', $foundationId);
         $st->execute();
         $agg = $st->get_result()->fetch_all(MYSQLI_ASSOC);
 
@@ -306,7 +303,7 @@ function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundatio
     };
 
     return [
-        'monthly' => $run($conn, $sqlMonthly, $childCat, $foundationId),
-        'all_plans' => $run($conn, $sqlAll, $childCat, $foundationId),
+        'monthly' => $run($conn, $sqlMonthly, $foundationId),
+        'all_plans' => $run($conn, $sqlAll, $foundationId),
     ];
 }

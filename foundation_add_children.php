@@ -47,14 +47,12 @@ $needed_columns = [
     'status' => "ALTER TABLE foundation_children ADD COLUMN status VARCHAR(100) NULL",
     'photo_child' => "ALTER TABLE foundation_children ADD COLUMN photo_child VARCHAR(255) NULL",
     'approve_profile' => "ALTER TABLE foundation_children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
-    'pending_edit_json' => "ALTER TABLE foundation_children ADD COLUMN pending_edit_json LONGTEXT NULL",
     'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL",
     'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL",
     'update_text' => "ALTER TABLE foundation_children ADD COLUMN update_text LONGTEXT NULL",
     'update_at' => "ALTER TABLE foundation_children ADD COLUMN update_at DATETIME NULL",
     'update_images' => "ALTER TABLE foundation_children ADD COLUMN update_images LONGTEXT NULL",
     'deleted_at' => "ALTER TABLE foundation_children ADD COLUMN deleted_at DATETIME NULL",
-    'delete_reason' => "ALTER TABLE foundation_children ADD COLUMN delete_reason TEXT NULL",
 ];
 foreach ($needed_columns as $col => $ddl) {
     $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
@@ -76,17 +74,6 @@ if ($editChildId > 0) {
         $editChild = $stmtEdit->get_result()->fetch_assoc();
     }
     if ($editChild) {
-        if (!empty($editChild['pending_edit_json'])) {
-            $pj = json_decode((string)$editChild['pending_edit_json'], true);
-            if (is_array($pj)) {
-                foreach (['child_name', 'birth_date', 'age', 'education', 'dream', 'likes', 'wish', 'wish_cat', 'bank_name', 'child_bank', 'photo_child'] as $k) {
-                    if (array_key_exists($k, $pj)) {
-                        $editChild[$k] = $pj[$k];
-                    }
-                }
-            }
-        }
-
         require_once __DIR__ . '/includes/child_sponsorship.php';
         $lockAp = (string)($editChild['approve_profile'] ?? '');
         $lockCycle = drawdream_child_cycle_total($conn, $editChildId, $editChild);
@@ -203,38 +190,9 @@ if (isset($_POST['submit'])) {
     }
 
     if ($isEditForm && $editChildId > 0 && $editChild) {
-        $currentAp = (string)($editChild['approve_profile'] ?? '');
-        $isPublished = in_array($currentAp, ['อนุมัติ', 'กำลังดำเนินการ'], true);
-        if ($isPublished) {
-            $payload = [
-                'child_name' => $child_name,
-                'birth_date' => $birth_date_raw,
-                'age' => $age,
-                'education' => $education,
-                'dream' => $dream,
-                'likes' => $likes,
-                'wish' => $wish,
-                'wish_cat' => $wish_cat,
-                'bank_name' => $bank_name,
-                'child_bank' => $child_bank,
-                'photo_child' => $newName,
-            ];
-            $json = json_encode($payload, JSON_UNESCAPED_UNICODE);
-            $stEd = $conn->prepare("UPDATE foundation_children SET pending_edit_json=?, approve_profile='กำลังดำเนินการ', reject_reason=NULL WHERE child_id=? AND foundation_id=?");
-            if (!$stEd) {
-                die("MySQL Error: " . $conn->error);
-            }
-            $stEd->bind_param('sii', $json, $editChildId, $f_id);
-            if ($stEd->execute()) {
-                header('Location: children_.php?msg=' . urlencode('ส่งคำขอแก้ไขให้แอดมินตรวจสอบแล้ว — ข้อมูลที่แสดงต่อสาธารณะยังเป็นชุดเดิมจนกว่าจะได้รับการอนุมัติ'));
-                exit();
-            }
-            die("MySQL Error: " . $stEd->error);
-        }
-
         $stEd = $conn->prepare(
             "UPDATE foundation_children
-             SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, photo_child=?, approve_profile='รอดำเนินการ', reject_reason=NULL, pending_edit_json=NULL
+             SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, photo_child=?
              WHERE child_id=? AND foundation_id=?"
         );
         if (!$stEd) {

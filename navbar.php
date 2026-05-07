@@ -146,7 +146,7 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
 
             $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
             $existExpr = "(EXISTS (SELECT 1 FROM donation d WHERE d.category_id = {$childCategoryId} AND d.target_id = c.child_id AND d.payment_status = 'completed' AND d.donor_id IS NOT NULL)
-              OR EXISTS (SELECT 1 FROM donation ds WHERE ds.target_id = c.child_id AND ds.donate_type = 'child_subscription' AND ds.recurring_status IN ('active','paused') AND ds.donor_id IS NOT NULL))";
+              OR EXISTS (SELECT 1 FROM child_subscription_history hs WHERE hs.child_id = c.child_id AND hs.current_status = 'active' AND hs.donor_user_id IS NOT NULL))";
             $stmtPending = $conn->prepare("
               SELECT COUNT(*) AS cnt
               FROM foundation_children c

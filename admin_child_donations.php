@@ -41,7 +41,7 @@ $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
 $stRows = $conn->prepare(
     "SELECT d.donate_id, d.amount, d.transfer_datetime, d.payment_status,
             d.omise_charge_id, dn.tax_id, d.donor_id,
-            d.donate_type, d.recurring_plan_code, d.recurring_status,
+            d.donate_type,
             dn.first_name, dn.last_name, u.email AS donor_email
      FROM donation d
      LEFT JOIN donor dn ON dn.user_id = d.donor_id
@@ -88,6 +88,21 @@ function admin_child_plan_label(string $code): string
     ];
     $k = strtolower(trim($code));
     return $m[$k] ?? ($k !== '' ? $k : '-');
+}
+
+function admin_child_plan_label_from_row(array $row): string
+{
+    $dt = strtolower(trim((string)($row['donate_type'] ?? '')));
+    $amt = (float)($row['amount'] ?? 0);
+    if ($dt === 'child_subscription_charge') {
+        if (abs($amt - 4200.0) < 0.01) return 'ราย 6 เดือน';
+        if (abs($amt - 8400.0) < 0.01) return 'รายปี';
+        return 'รายเดือน';
+    }
+    if ($dt === 'child_one_time') {
+        return 'รายวัน (QR)';
+    }
+    return '-';
 }
 ?>
 <!DOCTYPE html>
@@ -142,11 +157,13 @@ function admin_child_plan_label(string $code): string
                     $dt = strtolower(trim((string)($row['donate_type'] ?? '')));
                     $isSub = in_array($dt, ['child_subscription', 'child_subscription_charge'], true);
                     $channel = drawdream_donate_type_label_thai($dt);
-                    $planCodeRaw = (string)($row['recurring_plan_code'] ?? '');
-                    $planSpec = $isSub ? drawdream_child_subscription_plan($planCodeRaw) : null;
-                    $planLabel = $isSub
-                        ? admin_child_plan_label($planCodeRaw)
-                        : ($dt === 'child_one_time' ? admin_child_plan_label($planCodeRaw) : '-');
+                    $planLabel = admin_child_plan_label_from_row($row);
+                    $planSpec = null;
+                    if ($isSub) {
+                        $amt = (float)($row['amount'] ?? 0);
+                        $planCodeRaw = abs($amt - 4200.0) < 0.01 ? 'semiannual' : (abs($amt - 8400.0) < 0.01 ? 'yearly' : 'monthly');
+                        $planSpec = drawdream_child_subscription_plan($planCodeRaw);
+                    }
                     if ($isSub && is_array($planSpec) && ($planSpec['amount_thb'] ?? 0) > 0) {
                         $planLabel .= ' · ' . number_format((float)$planSpec['amount_thb'], 0) . ' บ.';
                     }

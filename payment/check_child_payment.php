@@ -104,12 +104,6 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
         $metaRecurring = trim((string)($chargeMeta['recurring_plan_code'] ?? ''));
         $metaSubId = trim((string)($chargeMeta['subscription_id'] ?? ''));
         if ($metaRecurring !== '' || $metaSubId !== '') {
-            $updMeta = $conn->prepare('UPDATE donation SET recurring_plan_code = ? WHERE donate_id = ?');
-            if ($updMeta) {
-                $planCode = $metaRecurring !== '' ? $metaRecurring : DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
-                $updMeta->bind_param('si', $planCode, $donate_id_from_pt);
-                $updMeta->execute();
-            }
             error_log('[drawdream_child_check] ' . json_encode([
                 'charge_id' => $charge_id,
                 'donate_id' => $donate_id_from_pt,
@@ -148,12 +142,11 @@ if ($is_success && $has_pending && !$already_completed && $child_id > 0) {
         $stmt = $conn->prepare('
             INSERT INTO donation (
                 category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                omise_charge_id, donate_type, recurring_plan_code
-            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
+                omise_charge_id, donate_type
+            ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)
         ');
         $donateType = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
-        $planDaily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
-        $stmt->bind_param('iiidssss', $category_id, $child_id, $donor_id, $amount, $completed, $charge_id, $donateType, $planDaily);
+        $stmt->bind_param('iiidsss', $category_id, $child_id, $donor_id, $amount, $completed, $charge_id, $donateType);
         $stmt->execute();
         $donate_id = (int)$conn->insert_id;
         $receiptDonateId = $donate_id;

@@ -76,13 +76,10 @@ function drawdream_child_donor_plan_coverage_window(mysqli $conn, int $childId, 
         return $out;
     }
     $st = $conn->prepare(
-        "SELECT recurring_plan_code, amount, transfer_datetime, donate_id
+        "SELECT amount, transfer_datetime, donate_id
          FROM donation
          WHERE category_id = ? AND target_id = ? AND donor_id = ? AND payment_status = 'completed'
-           AND (
-               recurring_plan_code IN ('monthly','semiannual','yearly')
-               OR donate_type = 'child_subscription_charge'
-           )
+          AND donate_type = 'child_subscription_charge'
          ORDER BY transfer_datetime ASC, donate_id ASC"
     );
     if (!$st) {
@@ -99,10 +96,7 @@ function drawdream_child_donor_plan_coverage_window(mysqli $conn, int $childId, 
     $coverageStart = null;
     $coverageEnd = null;
     foreach ($rows as $r) {
-        $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
-        if ($planCode === '') {
-            $planCode = drawdream_child_plan_code_from_amount((float)($r['amount'] ?? 0));
-        }
+        $planCode = drawdream_child_plan_code_from_amount((float)($r['amount'] ?? 0));
         $months = drawdream_child_plan_months_by_code($planCode);
         if ($months <= 0) {
             continue;
@@ -150,13 +144,10 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
         return $out;
     }
     $st = $conn->prepare(
-        "SELECT recurring_plan_code, amount, transfer_datetime, donate_id
+        "SELECT amount, transfer_datetime, donate_id
          FROM donation
          WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'
-           AND (
-               recurring_plan_code IN ('monthly','semiannual','yearly')
-               OR donate_type = 'child_subscription_charge'
-           )
+          AND donate_type = 'child_subscription_charge'
          ORDER BY transfer_datetime ASC, donate_id ASC"
     );
     if (!$st) {
@@ -177,10 +168,7 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
     $activeEnd = null;
     $activePlanCode = '';
     foreach ($rows as $r) {
-        $planCode = strtolower(trim((string)($r['recurring_plan_code'] ?? '')));
-        if ($planCode === '') {
-            $planCode = drawdream_child_plan_code_from_amount((float)($r['amount'] ?? 0));
-        }
+        $planCode = drawdream_child_plan_code_from_amount((float)($r['amount'] ?? 0));
         $months = drawdream_child_plan_months_by_code($planCode);
         if ($months <= 0) {
             continue;
@@ -210,7 +198,7 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
     if ($coverageStart !== null && $coverageEnd !== null && $activeStart === null) {
         $activeStart = $coverageStart;
         $activeEnd = $coverageEnd;
-        $activePlanCode = trim((string)($rows[count($rows) - 1]['recurring_plan_code'] ?? ''));
+        $activePlanCode = drawdream_child_plan_code_from_amount((float)($rows[count($rows) - 1]['amount'] ?? 0));
     }
     $out['current'] = $activeNow;
     $out['start'] = $activeStart;
@@ -438,7 +426,7 @@ function drawdream_child_is_monthly_fully_sponsored(mysqli $conn, int $childId, 
 
 /**
  * เด็กอยู่ในโซน "มีผู้อุปการะ" สาธารณะ:
- * - มีแผน Omise (รายเดือน / 6 เดือน / รายปี) ที่ recurring_status = active หรือ
+ * - มีแผน Omise (รายเดือน / 6 เดือน / รายปี) ที่สถานะในประวัติยัง active หรือ
  * - แผนถูกยกเลิกแล้วแต่ยังอยู่ในช่วงสิทธิ์ตามระยะที่จ่ายไปแล้ว (คำนวณจาก drawdream_child_plan_coverage_window)
  * ไม่นับแค่บริจาคครั้งเดียว (รายวัน PromptPay) ที่ครบเกณฑ์รอบเดือนโดยไม่มีแผนรายรอบ
  *
@@ -773,7 +761,7 @@ function drawdream_child_sync_sponsorship_status(mysqli $conn, int $childId): vo
 
 /**
  * รายชื่อ donor_user_id ที่ถือเป็น "ผู้อุปการะปัจจุบัน" ของเด็ก
- * - มี recurring_status active/paused หรือ
+ * - มีสถานะ active ในตารางประวัติอุปการะ หรือ
  * - ยกเลิกแล้วแต่ยังอยู่ในช่วงสิทธิ์ตามระยะที่ชำระจริง (coverage ยังไม่หมด)
  *
  * @return array<int,true> key = donor_user_id

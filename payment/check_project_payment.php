@@ -204,14 +204,12 @@ function drawdream_finalize_project_donation(
     try {
         $completed = 'completed';
         $dtProj = DRAWDREAM_DONATE_TYPE_PROJECT;
-        $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
         $upt = $conn->prepare(
             'UPDATE donation
-             SET amount = ?, payment_status = ?, transfer_datetime = NOW(), donate_type = ?,
-                 recurring_plan_code = ?
+             SET amount = ?, payment_status = ?, transfer_datetime = NOW(), donate_type = ?
              WHERE donate_id = ? AND payment_status = ?'
         );
-        $upt->bind_param('dsssis', $amountBaht, $completed, $dtProj, $planOnce, $ptDonateId, $pend);
+        $upt->bind_param('dssis', $amountBaht, $completed, $dtProj, $ptDonateId, $pend);
         $upt->execute();
         if ($upt->affected_rows < 1) {
             throw new RuntimeException('update donation');
@@ -259,14 +257,13 @@ if ($is_success && $has_pending && !$already_completed && $project_id > 0) {
     $dtProj = DRAWDREAM_DONATE_TYPE_PROJECT;
     if ($conn->begin_transaction()) {
         try {
-            $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
             $stmt = $conn->prepare("
                 INSERT INTO donation (
                     category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                    omise_charge_id, donate_type, recurring_plan_code
-                ) VALUES (?, ?, ?, ?, 'completed', NOW(), ?, ?, ?)
+                    omise_charge_id, donate_type
+                ) VALUES (?, ?, ?, ?, 'completed', NOW(), ?, ?)
             ");
-            $stmt->bind_param('iiidsss', $category_id, $target_id, $donor_id, $amount, $charge_id, $dtProj, $planOnce);
+            $stmt->bind_param('iiidss', $category_id, $target_id, $donor_id, $amount, $charge_id, $dtProj);
             $stmt->execute();
             $receiptDonateId = (int)$conn->insert_id;
 

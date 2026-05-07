@@ -62,9 +62,6 @@ if (!empty($child['birth_date'] ?? '')) {
 
 $rawApprove = trim((string)($child['approve_profile'] ?? ''));
 $reviewStatusLabel = $rawApprove !== '' ? $rawApprove : 'รอดำเนินการ';
-if ($rawApprove === 'กำลังดำเนินการ' && !empty($child['pending_edit_json'])) {
-    $reviewStatusLabel = 'รอตรวจสอบการแก้ไข';
-}
 
 $sponsorshipLabel = drawdream_child_is_cycle_sponsored($conn, $child_id, $child) ? 'อุปการะแล้ว' : 'รออุปการะ';
 $displayCycleAmount = (float)($donationStats['cycle_amount'] ?? 0);

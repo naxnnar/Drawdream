@@ -103,7 +103,7 @@ function drawdream_child_persist_subscription_paid_charge(
         'INSERT INTO donation (
             category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
             omise_charge_id, donate_type
-        ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)'
+        ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)'
     );
     if (!$ins) {
         return false;

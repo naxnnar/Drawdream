@@ -34,27 +34,25 @@ function drawdream_insert_pending_child_donation(
     }
     $pending = 'pending';
     $paymentPending = 'pending';
-    $planDaily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
     $ins = $conn->prepare(
         'INSERT INTO donation (
             category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-            omise_charge_id, donate_type, recurring_plan_code
-        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)'
+            omise_charge_id, donate_type
+        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
     );
     if (!$ins) {
         return 0;
     }
     $donateType = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
     $ins->bind_param(
-        'iiidssss',
+        'iiidsss',
         $categoryId,
         $childId,
         $donorUserId,
         $amountBaht,
         $paymentPending,
         $omiseChargeId,
-        $donateType,
-        $planDaily
+        $donateType
     );
     if (!$ins->execute()) {
         return 0;
@@ -107,17 +105,16 @@ function drawdream_finalize_child_donation(
     }
     try {
         $dtOne = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
-        $planDaily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
         $up = $conn->prepare(
             'UPDATE donation
              SET amount = ?, payment_status = ?, transfer_datetime = NOW(),
-                 donate_type = ?, recurring_plan_code = ?
+                 donate_type = ?
              WHERE donate_id = ? AND payment_status = ?'
         );
         if (!$up) {
             throw new RuntimeException('prepare update donation');
         }
-        $up->bind_param('dsssis', $amountBaht, $completed, $dtOne, $planDaily, $rowDonateId, $pending);
+        $up->bind_param('dssis', $amountBaht, $completed, $dtOne, $rowDonateId, $pending);
         $up->execute();
         if ($up->affected_rows < 1) {
             throw new RuntimeException('update donation');

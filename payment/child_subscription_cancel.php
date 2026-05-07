@@ -73,7 +73,7 @@ if ($scheduleId !== '' && str_starts_with($scheduleId, 'schd_')) {
 
 $up = $conn->prepare(
     "UPDATE donation
-     SET donate_type = 'child_subscription_charge', recurring_status = NULL, recurring_next_charge_at = NULL, recurring_schedule_id = NULL, recurring_plan_code = NULL
+     SET donate_type = 'child_subscription_charge'
      WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription'"
 );
 if (!$up) {

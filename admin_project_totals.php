@@ -43,7 +43,7 @@ if ($projCat <= 0) {
 $stRows = $conn->prepare(
     "SELECT d.donate_id, d.amount, d.transfer_datetime, d.payment_status,
             d.omise_charge_id, dn.tax_id, d.donor_id,
-            d.donate_type, d.recurring_plan_code, d.recurring_status,
+            d.donate_type,
             dn.first_name, dn.last_name, u.email AS donor_email
      FROM donation d
      LEFT JOIN donor dn ON dn.user_id = d.donor_id
@@ -133,8 +133,7 @@ function admin_project_totals_plan_label(string $code): string
                     }
                     $dt = strtolower(trim((string)($row['donate_type'] ?? '')));
                     $channel = drawdream_donate_type_label_thai($dt);
-                    $planCodeRaw = (string)($row['recurring_plan_code'] ?? '');
-                    $planLabel = admin_project_totals_plan_label($planCodeRaw);
+                    $planLabel = 'ครั้งเดียว';
                     $chargeId = trim((string)($row['omise_charge_id'] ?? ''));
                     $taxId = trim((string)($row['tax_id'] ?? ''));
                     ?>

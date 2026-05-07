@@ -43,25 +43,11 @@ function drawdream_donation_backfill_donate_type(mysqli $conn): void
         return;
     }
 
-    $chg = DRAWDREAM_DONATE_TYPE_CHILD_SUBSCRIPTION_CHARGE;
-    $charged = 'charged';
-    $st = $conn->prepare('UPDATE donation SET donate_type = ? WHERE donate_type IS NULL AND recurring_status = ? AND category_id = ?');
-    if ($st) {
-        $st->bind_param('ssi', $chg, $charged, $childCat);
-        $st->execute();
-    }
-
     $sub = DRAWDREAM_DONATE_TYPE_CHILD_SUBSCRIPTION;
     $st2 = $conn->prepare(
         "UPDATE donation SET donate_type = ?
          WHERE donate_type IS NULL AND category_id = ?
-           AND (
-             LOWER(TRIM(COALESCE(payment_status, ''))) = 'subscription'
-             OR (
-               recurring_status IN ('active', 'paused', 'cancelled')
-               AND (recurring_schedule_id IS NOT NULL AND TRIM(recurring_schedule_id) <> '')
-             )
-           )"
+           AND LOWER(TRIM(COALESCE(payment_status, ''))) = 'subscription'"
     );
     if ($st2) {
         $st2->bind_param('si', $sub, $childCat);
@@ -100,10 +86,6 @@ function drawdream_payment_transaction_ensure_schema(mysqli $conn): void
     $cols = [
         'omise_charge_id' => 'VARCHAR(80) NULL DEFAULT NULL',
         'donate_type' => 'VARCHAR(40) NULL DEFAULT NULL',
-        'recurring_status' => 'VARCHAR(20) NULL DEFAULT NULL',
-        'recurring_plan_code' => 'VARCHAR(24) NULL DEFAULT NULL',
-        'recurring_next_charge_at' => 'DATETIME NULL DEFAULT NULL',
-        'recurring_schedule_id' => 'VARCHAR(64) NULL DEFAULT NULL',
     ];
     foreach ($cols as $name => $def) {
         $c = @$conn->query("SHOW COLUMNS FROM donation LIKE '" . $conn->real_escape_string($name) . "'");
@@ -113,7 +95,7 @@ function drawdream_payment_transaction_ensure_schema(mysqli $conn): void
     }
     $indexDefs = [
         'idx_donation_omise_charge' => '(omise_charge_id)',
-        'idx_donation_recurring' => '(donate_type, recurring_status, target_id, donor_id)',
+        'idx_donation_recurring' => '(donate_type, target_id, donor_id)',
     ];
     foreach ($indexDefs as $indexName => $expr) {
         $idxChk = @$conn->query(
@@ -126,56 +108,4 @@ function drawdream_payment_transaction_ensure_schema(mysqli $conn): void
     }
 
     drawdream_donation_backfill_donate_type($conn);
-    drawdream_donation_backfill_recurring_plan_code($conn);
-}
-
-/**
- * เติม recurring_plan_code ให้แถวเก่าที่ยังว่าง (ไม่ทับค่าที่มีอยู่แล้ว เช่น monthly/yearly)
- */
-function drawdream_donation_backfill_recurring_plan_code(mysqli $conn): void
-{
-    $one = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
-    $daily = DRAWDREAM_DONATION_RECURRING_PLAN_DAILY;
-    $proj = DRAWDREAM_DONATE_TYPE_PROJECT;
-    $need = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
-    $childOne = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
-
-    $st = $conn->prepare(
-        "UPDATE donation SET recurring_plan_code = ?
-         WHERE (recurring_plan_code IS NULL OR TRIM(recurring_plan_code) = '')
-           AND donate_type = ?"
-    );
-    if ($st) {
-        $st->bind_param('ss', $one, $proj);
-        $st->execute();
-    }
-    $st2 = $conn->prepare(
-        "UPDATE donation SET recurring_plan_code = ?
-         WHERE (recurring_plan_code IS NULL OR TRIM(recurring_plan_code) = '')
-           AND donate_type = ?"
-    );
-    if ($st2) {
-        $st2->bind_param('ss', $one, $need);
-        $st2->execute();
-    }
-    $st3 = $conn->prepare(
-        "UPDATE donation SET recurring_plan_code = ?
-         WHERE (recurring_plan_code IS NULL OR TRIM(recurring_plan_code) = '')
-           AND donate_type = ?
-           AND omise_charge_id IS NOT NULL AND TRIM(omise_charge_id) <> ''"
-    );
-    if ($st3) {
-        $st3->bind_param('ss', $daily, $childOne);
-        $st3->execute();
-    }
-    $st4 = $conn->prepare(
-        "UPDATE donation SET recurring_plan_code = ?
-         WHERE (recurring_plan_code IS NULL OR TRIM(recurring_plan_code) = '')
-           AND donate_type = ?
-           AND (omise_charge_id IS NULL OR TRIM(omise_charge_id) = '')"
-    );
-    if ($st4) {
-        $st4->bind_param('ss', $one, $childOne);
-        $st4->execute();
-    }
 }

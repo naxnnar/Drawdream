@@ -74,7 +74,7 @@ if ($stP) {
 $sql = "
 SELECT d.donate_id, d.amount, d.transfer_datetime, d.payment_status,
        d.omise_charge_id, dn.tax_id, d.donor_id,
-       d.donate_type, d.recurring_plan_code, d.recurring_status,
+       d.donate_type,
        d.category_id, d.target_id,
        dn.first_name, dn.last_name, u.email AS donor_email
 FROM donation d
@@ -251,12 +251,10 @@ $verifiedLabel = (int)($fp['account_verified'] ?? 0) === 1 ? 'ยืนยัน
                     }
                     $targetCell = $targetKind . ': ' . $targetDetail;
                     $isSub = in_array($dt, ['child_subscription', 'child_subscription_charge'], true);
-                    $planCodeRaw = (string)($row['recurring_plan_code'] ?? '');
+                    $amtRow = (float)($row['amount'] ?? 0);
+                    $planCodeRaw = abs($amtRow - 4200.0) < 0.01 ? 'semiannual' : (abs($amtRow - 8400.0) < 0.01 ? 'yearly' : 'monthly');
                     $planSpec = $isSub ? drawdream_child_subscription_plan($planCodeRaw) : null;
-                    $planLabel = admin_foundation_plan_label($planCodeRaw);
-                    if ($planLabel === '-' && $planCodeRaw === '' && in_array($dt, ['project', 'need_item'], true)) {
-                        $planLabel = 'ครั้งเดียว';
-                    }
+                    $planLabel = $isSub ? admin_foundation_plan_label($planCodeRaw) : 'ครั้งเดียว';
                     if ($isSub && is_array($planSpec) && ($planSpec['amount_thb'] ?? 0) > 0) {
                         $planLabel .= ' · ' . number_format((float)$planSpec['amount_thb'], 0) . ' บ.';
                     }

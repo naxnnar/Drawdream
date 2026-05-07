@@ -78,7 +78,7 @@ if ($stP) {
 $sql = "
 SELECT d.donate_id, d.amount, d.transfer_datetime, d.payment_status,
        d.omise_charge_id, dn.tax_id, d.donor_id,
-       d.donate_type, d.recurring_plan_code, d.recurring_status,
+       d.donate_type,
        d.category_id, d.target_id,
        dn.first_name, dn.last_name, u.email AS donor_email
 FROM donation d
@@ -97,14 +97,6 @@ WHERE LOWER(TRIM(COALESCE(d.payment_status, ''))) = 'completed'
     ))
     OR (d.category_id = ? AND d.target_id = ?)
   )
-  OR (
-    d.donate_type = 'child_subscription'
-    AND LOWER(TRIM(COALESCE(d.recurring_status, ''))) = 'cancelled'
-    AND d.target_id IN (
-        SELECT child_id FROM foundation_children
-        WHERE foundation_id = ? AND deleted_at IS NULL
-    )
-  )
 ORDER BY d.transfer_datetime DESC, d.donate_id DESC
 LIMIT 500
 ";
@@ -113,14 +105,13 @@ if (!$stRows) {
     die('ไม่สามารถเตรียมคำสั่ง SQL');
 }
 $stRows->bind_param(
-    'iiiiisii',
+    'iiiiisi',
     $childCat,
     $foundationId,
     $projCat,
     $foundationId,
     $foundationName,
     $needCat,
-    $foundationId,
     $foundationId
 );
 $stRows->execute();
@@ -413,18 +404,12 @@ function foundation_dashboard_plan_label(string $code): string
                     }
                     $targetCell = $targetKind . ': ' . $targetDetail;
                     $isSub = in_array($dt, ['child_subscription', 'child_subscription_charge'], true);
-                    $planCodeRaw = (string)($row['recurring_plan_code'] ?? '');
+                    $amtRow = (float)($row['amount'] ?? 0);
+                    $planCodeRaw = abs($amtRow - 4200.0) < 0.01 ? 'semiannual' : (abs($amtRow - 8400.0) < 0.01 ? 'yearly' : 'monthly');
                     $planSpec = $isSub ? drawdream_child_subscription_plan($planCodeRaw) : null;
-                    $planLabel = foundation_dashboard_plan_label($planCodeRaw);
-                    if ($planLabel === '-' && $planCodeRaw === '' && in_array($dt, ['project', 'need_item'], true)) {
-                        $planLabel = 'ครั้งเดียว';
-                    }
+                    $planLabel = $isSub ? foundation_dashboard_plan_label($planCodeRaw) : 'ครั้งเดียว';
                     if ($isSub && is_array($planSpec) && ($planSpec['amount_thb'] ?? 0) > 0) {
                         $planLabel .= ' · ' . number_format((float)$planSpec['amount_thb'], 0) . ' บ.';
-                    }
-                    $subStatus = strtolower(trim((string)($row['recurring_status'] ?? '')));
-                    if ($dt === 'child_subscription' && $subStatus === 'cancelled') {
-                        $planLabel .= ' (ยกเลิกแล้ว)';
                     }
                     $chargeId = trim((string)($row['omise_charge_id'] ?? ''));
                     ?>

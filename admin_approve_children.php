@@ -11,9 +11,9 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 }
 
 // หมายเหตุ: การไม่อนุมัติเป็นการ UPDATE สถานะเท่านั้น ไม่มีการลบแถวจาก foundation_children
+// ไม่มีระบบแก้ไขรออนุมัติแล้ว จึงไม่ใช้ pending_edit_json อีกต่อไป
 $needCols = [
     'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL AFTER approve_profile",
-    'pending_edit_json' => "ALTER TABLE foundation_children ADD COLUMN pending_edit_json LONGTEXT NULL AFTER approve_profile",
     'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL AFTER reject_reason",
 ];
 foreach ($needCols as $col => $ddl) {
@@ -65,70 +65,21 @@ if (!empty($rowFull['deleted_at'])) {
     exit();
 }
 
-$pendingRaw = trim((string)($rowFull['pending_edit_json'] ?? ''));
-
 if ($action === 'approve') {
-    if ($pendingRaw !== '') {
-        $p = json_decode($pendingRaw, true);
-        if (!is_array($p)) {
-            $p = [];
-        }
-        $c = $rowFull;
-        $cn = (string)($p['child_name'] ?? $c['child_name'] ?? '');
-        $bd = (string)($p['birth_date'] ?? $c['birth_date'] ?? '');
-        $ag = (int)($p['age'] ?? $c['age'] ?? 0);
-        $ed = (string)($p['education'] ?? $c['education'] ?? '');
-        $dr = (string)($p['dream'] ?? $c['dream'] ?? '');
-        $lk = (string)($p['likes'] ?? $c['likes'] ?? '');
-        $wi = (string)($p['wish'] ?? $c['wish'] ?? '');
-        $wc = (string)($p['wish_cat'] ?? $c['wish_cat'] ?? '');
-        $bn = (string)($p['bank_name'] ?? $c['bank_name'] ?? '');
-        $cb = (string)($p['child_bank'] ?? $c['child_bank'] ?? '');
-        $ph = (string)($p['photo_child'] ?? $c['photo_child'] ?? '');
-
-        $sql = "UPDATE foundation_children SET child_name=?, birth_date=?, age=?, education=?, dream=?, likes=?, wish=?, wish_cat=?, bank_name=?, child_bank=?, photo_child=?, pending_edit_json=NULL, approve_profile='อนุมัติ', reject_reason=NULL, approve_at=NOW() WHERE child_id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param(
-            'ssissssssssi',
-            $cn,
-            $bd,
-            $ag,
-            $ed,
-            $dr,
-            $lk,
-            $wi,
-            $wc,
-            $bn,
-            $cb,
-            $ph,
-            $child_id
-        );
-        $ok = $stmt->execute();
-        $alert_msg = $ok ? 'อนุมัติการแก้ไขโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
-    } else {
-        $new_status = 'อนุมัติ';
-        $reasonToSave = null;
-        $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssi", $new_status, $reasonToSave, $child_id);
-        $ok = $stmt->execute();
-        $alert_msg = $ok ? 'อนุมัติโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
-    }
+    $new_status = 'อนุมัติ';
+    $reasonToSave = null;
+    $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ssi", $new_status, $reasonToSave, $child_id);
+    $ok = $stmt->execute();
+    $alert_msg = $ok ? 'อนุมัติโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
 } else {
-    if ($pendingRaw !== '') {
-        $sql = "UPDATE foundation_children SET pending_edit_json=NULL, approve_profile='อนุมัติ', reject_reason=?, approve_at=NOW() WHERE child_id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("si", $rejectReason, $child_id);
-        $ok = $stmt->execute();
-        $alert_msg = $ok ? 'ไม่อนุมัติการแก้ไข — ข้อมูลที่แสดงต่อสาธารณะยังเป็นชุดเดิม' : 'เกิดข้อผิดพลาด';
-    } else {
-        $new_status = 'ไม่อนุมัติ';
-        $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssi", $new_status, $rejectReason, $child_id);
-        $ok = $stmt->execute();
-        $alert_msg = $ok ? 'ไม่อนุมัติโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
-    }
+    $new_status = 'ไม่อนุมัติ';
+    $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ssi", $new_status, $rejectReason, $child_id);
+    $ok = $stmt->execute();
+    $alert_msg = $ok ? 'ไม่อนุมัติโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
 }
 
 if ($ok) {
@@ -146,54 +97,28 @@ if ($ok) {
     $cname = (string)($fr['child_name'] ?? '');
     $childPublicLink = 'children_donate.php?id=' . $child_id;
     if ($action === 'approve') {
-        if ($pendingRaw !== '') {
-            drawdream_send_notification(
-                $conn,
-                $fu,
-                'child_edit_approved',
-                'อนุมัติการแก้ไขโปรไฟล์เด็ก',
-                'แอดมินอนุมัติการแก้ไขโปรไฟล์: ' . $cname,
-                $childPublicLink,
-                'fdn_child:' . $child_id
-            );
-            drawdream_log_admin_action($conn, $adminUid, 'Approve_Child', $child_id, '', $fu > 0 ? $fu : null, 'child_edit_approved');
-        } else {
-            drawdream_send_notification(
-                $conn,
-                $fu,
-                'child_approved',
-                'อนุมัติโปรไฟล์เด็ก',
-                'แอดมินอนุมัติโปรไฟล์เด็ก: ' . $cname,
-                $childPublicLink,
-                'fdn_child:' . $child_id
-            );
-            drawdream_log_admin_action($conn, $adminUid, 'Approve_Child', $child_id, '', $fu > 0 ? $fu : null, 'child_approved');
-        }
+        drawdream_send_notification(
+            $conn,
+            $fu,
+            'child_approved',
+            'อนุมัติโปรไฟล์เด็ก',
+            'แอดมินอนุมัติโปรไฟล์เด็ก: ' . $cname,
+            $childPublicLink,
+            'fdn_child:' . $child_id
+        );
+        drawdream_log_admin_action($conn, $adminUid, 'Approve_Child', $child_id, '', $fu > 0 ? $fu : null, 'child_approved');
     } else {
         $rejPart = $rejectReason !== '' ? $rejectReason : 'ไม่ผ่านการพิจารณา';
-        if ($pendingRaw !== '') {
-            drawdream_send_notification(
-                $conn,
-                $fu,
-                'child_edit_rejected',
-                'ไม่อนุมัติการแก้ไขโปรไฟล์เด็ก',
-                'โปรไฟล์ ' . $cname . ': ' . $rejPart,
-                $childPublicLink,
-                'fdn_child:' . $child_id
-            );
-            drawdream_log_admin_action($conn, $adminUid, 'Reject_Child', $child_id, $rejectReason, $fu > 0 ? $fu : null, 'child_edit_rejected');
-        } else {
-            drawdream_send_notification(
-                $conn,
-                $fu,
-                'child_rejected',
-                'ไม่อนุมัติโปรไฟล์เด็ก',
-                'โปรไฟล์ ' . $cname . ': ' . $rejPart,
-                $childPublicLink,
-                'fdn_child:' . $child_id
-            );
-            drawdream_log_admin_action($conn, $adminUid, 'Reject_Child', $child_id, $rejectReason, $fu > 0 ? $fu : null, 'child_rejected');
-        }
+        drawdream_send_notification(
+            $conn,
+            $fu,
+            'child_rejected',
+            'ไม่อนุมัติโปรไฟล์เด็ก',
+            'โปรไฟล์ ' . $cname . ': ' . $rejPart,
+            $childPublicLink,
+            'fdn_child:' . $child_id
+        );
+        drawdream_log_admin_action($conn, $adminUid, 'Reject_Child', $child_id, $rejectReason, $fu > 0 ? $fu : null, 'child_rejected');
     }
     $msgJs = json_encode($alert_msg, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     $urlJs = json_encode($returnUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);

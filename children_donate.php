@@ -68,12 +68,6 @@ if (!empty($child['birth_date'] ?? '')) {
 
 $reviewStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
 $reviewStatusLabel = $reviewStatus;
-if ($reviewStatus === 'กำลังดำเนินการ' && !empty($child['pending_edit_json'])) {
-    $reviewStatusLabel = 'รอตรวจสอบการแก้ไข';
-}
-if ($reviewStatus === 'กำลังดำเนินการ') {
-    $reviewStatus = 'รอดำเนินการ';
-}
 
 $canDonate = drawdream_child_can_receive_donation($conn, $child_id, $child);
 $donorUid = (int)($_SESSION['user_id'] ?? 0);

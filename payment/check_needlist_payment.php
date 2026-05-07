@@ -87,17 +87,16 @@ if ($is_success && !$already_processed && $fid > 0) {
             try {
                 $completed = 'completed';
                 $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
-                $planOnce = DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME;
                 $stmt = $conn->prepare("
                     INSERT INTO donation (
                         category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                        omise_charge_id, donate_type, recurring_plan_code
-                    ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)
+                        omise_charge_id, donate_type
+                    ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)
                 ");
                 if (!$stmt) {
                     throw new RuntimeException('prepare_insert_donation');
                 }
-                $stmt->bind_param("iiidssss", $category_id, $fid, $donor_uid, $amount, $completed, $charge_id, $dtNeed, $planOnce);
+                $stmt->bind_param("iiidsss", $category_id, $fid, $donor_uid, $amount, $completed, $charge_id, $dtNeed);
                 $stmt->execute();
                 $donate_id = (int)$conn->insert_id;
                 if ($donate_id <= 0) {

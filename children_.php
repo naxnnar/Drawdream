@@ -70,7 +70,7 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
         // ลบได้เฉพาะ "ยังไม่มีผู้อุปการะ" และ "ไม่เคยได้รับเงินบริจาคเลย (ยอดสะสม = 0)"
         $maySoftDelete = ($totalDon <= 0) && !$cycleSponsored && !$hasActiveSubscription;
         if ($maySoftDelete) {
-          $upd = $conn->prepare('UPDATE foundation_children SET deleted_at = NOW(), delete_reason = NULL WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL');
+          $upd = $conn->prepare('UPDATE foundation_children SET deleted_at = NOW() WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL');
           $upd->bind_param('ii', $foundationId, $cid);
           if ($upd->execute() && $upd->affected_rows >= 1) {
             $deleted++;
@@ -98,19 +98,7 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
 /** ป้ายสถานะโปรไฟล์เด็ก (การ์ดมูลนิธิ/ผู้บริจาค + ตารางแอดมิน) — admin_pill ใช้กับตารางแอดมิน (css/admin_directory.css) */
 function children_row_profile_status_meta(array $child): array
 {
-    $rawAp = $child['approve_profile'] ?? 'รอดำเนินการ';
-    if (!empty($child['pending_edit_json']) && $rawAp === 'กำลังดำเนินการ') {
-        return [
-            'text' => 'รอตรวจสอบการแก้ไข',
-            'class' => 'status-pending',
-            'raw' => 'รอดำเนินการ',
-            'admin_pill' => 'admin-pill admin-pill--warning',
-        ];
-    }
-    $rawStatus = $rawAp;
-    if ($rawStatus === 'กำลังดำเนินการ') {
-        $rawStatus = 'รอดำเนินการ';
-    }
+    $rawStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
     $statusClass = 'status-pending';
     $statusText = $rawStatus;
     $adminPill = 'admin-pill admin-pill--warning';
