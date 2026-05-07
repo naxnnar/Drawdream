@@ -63,6 +63,7 @@ function drawdream_project_result_image_path(string $filename): string {
 function drawdream_project_result_images(array $update): array {
     $images = [];
     $raw = trim((string)($update['update_images'] ?? ''));
+    // ลองอ่านรูปจาก update_images ก่อน (รูปแบบใหม่ — เก็บเป็น JSON array ได้หลายรูป)
     if ($raw !== '') {
         $arr = json_decode($raw, true);
         if (is_array($arr)) {
@@ -74,6 +75,7 @@ function drawdream_project_result_images(array $update): array {
             }
         }
     }
+    // ถ้าไม่มีเลย ให้ fallback ไปใช้ update_image (รูปแบบเก่า — รูปเดียว)
     if ($images === []) {
         $single = basename((string)($update['update_image'] ?? ''));
         if ($single !== '') {

@@ -16,6 +16,7 @@ function drawdream_ensure_foundation_project_update_columns(mysqli $conn): void
     ];
     foreach ($cols as $name => $sql) {
         $chk = @$conn->query("SHOW COLUMNS FROM foundation_project LIKE '" . $name . "'");
+        // ถามฐานข้อมูลว่ามีคอลัมน์นี้ไหม — ถ้าไม่มี (num_rows = 0) ก็สร้างให้เลย
         if ($chk && $chk->num_rows === 0) {
             @$conn->query($sql);
         }

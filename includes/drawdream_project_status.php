@@ -43,6 +43,8 @@ function drawdream_normalize_foundation_project_statuses(mysqli $conn): void
  */
 function drawdream_sql_project_is_pending(string $col = 'project_status'): string
 {
+    // ไม่ได้ query DB — แค่คืนข้อความ SQL ให้เอาไปใส่ใน WHERE ต่อ
+    // รับมือทั้ง "pending" / "รอดำเนินการ" / typo เก่าในฐานข้อมูล ไว้ที่เดียว
     $safe = preg_replace('/[^a-zA-Z0-9_.]/', '', $col);
     if ($safe === '') {
         $safe = 'project_status';
