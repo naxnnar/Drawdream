@@ -84,7 +84,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, desired_brand, brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, reviewed_at
+            SELECT item_id, item_name, desired_brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -249,9 +249,15 @@ $hasAnySlides = !empty($foundationSlides);
               $status = $nl['approve_item'] ?? 'pending';
               $nlImages = foundation_needlist_item_filenames_from_row($nl);
               $nlImgItem = $nlImages[0] ?? '';
-              $nlFdn = trim((string)($nl['need_foundation_image'] ?? ''));
-              /* หน้ามูลนิธิ: โชว์เฉพาะรูปมูลนิธิถ้ามี ไม่แบ่งคู่กับรูปสิ่งของ */
-              $nlImg = $nlFdn !== '' ? $nlFdn : $nlImgItem;
+              $nlFdn = foundation_needlist_normalize_filename((string)($nl['need_foundation_image'] ?? ''));
+              $needUploadDirAbs = __DIR__ . '/uploads/needs/';
+              /* ถ้ารูปมูลนิธิไม่มีไฟล์จริง ให้ fallback ไปใช้รูปสิ่งของรูปแรก */
+              $nlImg = '';
+              if ($nlFdn !== '' && is_file($needUploadDirAbs . $nlFdn)) {
+                  $nlImg = $nlFdn;
+              } elseif ($nlImgItem !== '' && is_file($needUploadDirAbs . $nlImgItem)) {
+                  $nlImg = $nlImgItem;
+              }
               $statusLabel = ['pending' => 'รอการอนุมัติ', 'approved' => 'อนุมัติแล้ว', 'rejected' => 'ไม่อนุมัติ'][$status] ?? $status;
               /* คลาสสอดคล้องกับ .foundation-status-pill ในโครงการ (project.css) */
               $statusPillClass = ['pending' => 'st-pending', 'approved' => 'st-approved', 'rejected' => 'st-rejected'][$status] ?? 'st-pending';
@@ -286,9 +292,6 @@ $hasAnySlides = !empty($foundationSlides);
                   <span class="need-window-hint" title="วันปิดรับบริจาคอัตโนมัติ 1 เดือน">ปิดรับอัตโนมัติครบ 1 เดือน (<?= htmlspecialchars(date('d/m/Y H:i', strtotime($dweRaw))) ?>)</span>
                 <?php endif; ?>
                 <div class="need-card-name"><?= htmlspecialchars($nl['item_name']) ?></div>
-                <?php if ($nl['brand']): ?>
-                  <div class="need-card-cat"><?= htmlspecialchars($nl['brand']) ?></div>
-                <?php endif; ?>
                 <div class="need-card-goal">
                   เป้าหมาย: <?= number_format($cardGoal, 0) ?> บาท
                   <span class="need-period">/ รอบละ 1 เดือน</span>
@@ -331,9 +334,10 @@ $hasAnySlides = !empty($foundationSlides);
           $foundationImage = $f['foundation_image'] ?? '';
           $facebookUrl = $f['facebook_url'] ?? '';
           $heroProposalImage = '';
+          $needUploadDirAbs = __DIR__ . '/uploads/needs/';
           foreach ($items as $itHero) {
-            $nfHero = trim((string)($itHero['need_foundation_image'] ?? ''));
-            if ($nfHero !== '') {
+            $nfHero = foundation_needlist_normalize_filename((string)($itHero['need_foundation_image'] ?? ''));
+            if ($nfHero !== '' && is_file($needUploadDirAbs . $nfHero)) {
               $heroProposalImage = $nfHero;
               break;
             }
@@ -343,7 +347,7 @@ $hasAnySlides = !empty($foundationSlides);
             foreach ($items as $itHero) {
               $needImgs = foundation_needlist_item_filenames_from_row($itHero);
               foreach ($needImgs as $bn) {
-                if ($bn !== '' && $bn !== '.' && $bn !== '..') {
+                if ($bn !== '' && $bn !== '.' && $bn !== '..' && is_file($needUploadDirAbs . $bn)) {
                   $heroProposalImage = $bn;
                   break 2;
                 }

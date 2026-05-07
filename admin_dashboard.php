@@ -91,12 +91,12 @@ if ($rdrRes) {
 $recent_need_price_changes = [];
 $nphRes = mysqli_query($conn, "
     SELECT nl.item_id, nl.item_name, nl.total_price, nl.submitted_total_price, nl.approved_total_price,
-           nl.price_reviewed_by_user_id, nl.price_reviewed_at, nl.reviewed_at,
+           nl.price_reviewed_at,
            fp.foundation_name
     FROM foundation_needlist nl
     JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
     WHERE nl.approved_total_price IS NOT NULL
-    ORDER BY COALESCE(nl.price_reviewed_at, nl.reviewed_at, nl.created_at) DESC, nl.item_id DESC
+    ORDER BY COALESCE(nl.price_reviewed_at, nl.created_at) DESC, nl.item_id DESC
     LIMIT 100
 ");
 if ($nphRes) {
@@ -402,14 +402,9 @@ $chart_initial_to = date('Y-m-d');
                             $isChanged = abs($delta) > 0.0001;
                             $deltaPrefix = $delta > 0 ? '+' : '';
                             $reviewTsRaw = trim((string)($nh['price_reviewed_at'] ?? ''));
-                            if ($reviewTsRaw === '' || str_starts_with($reviewTsRaw, '0000-00-00')) {
-                                $reviewTsRaw = trim((string)($nh['reviewed_at'] ?? ''));
-                            }
                             $reviewTs = ($reviewTsRaw !== '' && !str_starts_with($reviewTsRaw, '0000-00-00') && strtotime($reviewTsRaw) !== false)
                                 ? date('d/m/Y H:i', strtotime($reviewTsRaw))
                                 : '-';
-                            $reviewedByUid = (int)($nh['price_reviewed_by_user_id'] ?? 0);
-                            $reviewByLabel = $reviewedByUid > 0 ? ('Admin #' . $reviewedByUid) : '-';
                             $need_extra = $idx >= 5;
                         ?>
                         <div class="needprice-item<?= $need_extra ? ' needprice-item--extra' : '' ?>">
@@ -426,7 +421,7 @@ $chart_initial_to = date('Y-m-d');
                                     <span class="needprice-badge needprice-badge--same">ไม่เปลี่ยน</span>
                                 <?php endif; ?>
                             </div>
-                            <div class="needprice-meta">โดย <?= htmlspecialchars($reviewByLabel) ?> · <?= htmlspecialchars($reviewTs) ?></div>
+                            <div class="needprice-meta">อัปเดตเมื่อ <?= htmlspecialchars($reviewTs) ?></div>
                         </div>
                     <?php endforeach; ?>
                 </div>

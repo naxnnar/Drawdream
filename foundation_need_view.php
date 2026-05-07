@@ -71,8 +71,14 @@ $remainingToGoal = ($goal > 0) ? max(0.0, $goal - $raised) : 0.0;
 
 $nlImages = foundation_needlist_item_filenames_from_row($n);
 $nlImgItem = $nlImages[0] ?? '';
-$nlFdn = trim((string)($n['need_foundation_image'] ?? ''));
-$heroFile = $nlFdn !== '' ? $nlFdn : $nlImgItem;
+$nlFdn = foundation_needlist_normalize_filename((string)($n['need_foundation_image'] ?? ''));
+$needUploadDirAbs = __DIR__ . '/uploads/needs/';
+$heroFile = '';
+if ($nlFdn !== '' && is_file($needUploadDirAbs . $nlFdn)) {
+    $heroFile = $nlFdn;
+} elseif ($nlImgItem !== '' && is_file($needUploadDirAbs . $nlImgItem)) {
+    $heroFile = $nlImgItem;
+}
 $heroUrl = $heroFile !== '' ? ('uploads/needs/' . $heroFile) : '';
 
 $rawNote = trim((string)($n['note'] ?? ''));
@@ -89,12 +95,7 @@ if ($rawNote !== '') {
     }
 }
 
-$brand = trim((string)($n['brand'] ?? ''));
-$catLine = $brand !== '' ? str_replace(' | ', ' · ', $brand) : '';
-$legacyCat = trim((string)($n['category'] ?? ''));
-if ($catLine === '' && $legacyCat !== '') {
-    $catLine = $legacyCat;
-}
+$catLine = '';
 
 $dweRaw = trim((string)($n['donate_window_end_at'] ?? ''));
 $donateWindowExpired = (($n['approve_item'] ?? '') === 'approved'
@@ -102,12 +103,6 @@ $donateWindowExpired = (($n['approve_item'] ?? '') === 'approved'
     && !str_starts_with($dweRaw, '0000-00-00')
     && strtotime($dweRaw) !== false
     && strtotime($dweRaw) < time());
-
-$reviewedAt = trim((string)($n['reviewed_at'] ?? ''));
-$reviewedAtFmt = '';
-if ($reviewedAt !== '' && !str_starts_with($reviewedAt, '0000-00-00') && strtotime($reviewedAt) !== false) {
-    $reviewedAtFmt = date('d/m/Y H:i', strtotime($reviewedAt));
-}
 
 $dweFmt = '';
 if ($dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false) {
@@ -141,49 +136,90 @@ if ($priceReviewedRaw !== '' && !str_starts_with($priceReviewedRaw, '0000-00-00'
 }
 $adminChangedPrice = $priceReviewedFmt !== '' || abs($submittedTotal - $currentTotal) > 0.01;
 
-// helper: parse need_items_json / submitted_items_json
-function fnv_parse_items(string $raw): array {
+// helper: parse need_items_json
+function fnv_parse_items(string $raw, string $rawPricing, float $fallbackTotal = 0.0): array {
     if ($raw === '') return [];
     try { $dec = json_decode($raw, true, 512, JSON_THROW_ON_ERROR); } catch (Throwable $e) { return []; }
     if (!is_array($dec)) return [];
+    $pricingByOrder = [];
+    if ($rawPricing !== '') {
+        try {
+            $pd = json_decode($rawPricing, true, 512, JSON_THROW_ON_ERROR);
+        } catch (Throwable $e) {
+            $pd = [];
+        }
+        if (is_array($pd)) {
+            foreach ($pd as $idxP => $prow) {
+                if (!is_array($prow)) continue;
+                $ord = (int)($prow['ลำดับ'] ?? ($idxP + 1));
+                $pricingByOrder[$ord] = [
+                    'price' => (float)($prow['ราคาต่อชิ้น'] ?? ($prow['price_estimate'] ?? ($prow['price'] ?? 0))),
+                    'sum' => (float)($prow['ราคารวม'] ?? ($prow['line_total'] ?? 0)),
+                ];
+            }
+        }
+    }
     $out = [];
-    foreach ($dec as $li) {
+    foreach ($dec as $idx => $li) {
         if (!is_array($li)) continue;
-        $slot = (int)($li['slot'] ?? 0);
-        $qty  = (float)($li['qty_needed'] ?? ($li['qty'] ?? 0));
+        $slot = (int)($li['slot'] ?? ($idx + 1));
+        $qty  = (float)($li['จำนวนสิ่งของ'] ?? ($li['qty_needed'] ?? ($li['qty'] ?? 0)));
         if ($slot <= 0 || $qty <= 0) continue;
-        $price = (float)($li['price_estimate'] ?? ($li['price'] ?? 0));
+        $pricing = $pricingByOrder[$slot] ?? [];
+        $price = (float)($pricing['price'] ?? ($li['ราคาต่อชิ้น'] ?? ($li['price_estimate'] ?? ($li['price'] ?? 0))));
         $out[$slot] = [
             'slot'       => $slot,
-            'category'   => (string)($li['category'] ?? ''),
+            'category'   => (string)($li['หมวดหมู่สิ่งของ'] ?? ($li['category'] ?? '')),
             'qty'        => $qty,
             'price'      => $price,
-            'line_total' => (float)($li['line_total'] ?? ($qty * $price)),
+            'line_total' => (float)($pricing['sum'] ?? ($li['ราคารวม'] ?? ($li['line_total'] ?? ($qty * $price)))),
         ];
     }
-    return array_values($out);
+    $rows = array_values($out);
+    $hasPrice = false;
+    $qtySum = 0.0;
+    foreach ($rows as $r) {
+        if ((float)($r['price'] ?? 0) > 0) {
+            $hasPrice = true;
+        }
+        $qtySum += max(0.0, (float)($r['qty'] ?? 0));
+    }
+    if (!$hasPrice && $fallbackTotal > 0 && $qtySum > 0) {
+        $u = $fallbackTotal / $qtySum;
+        foreach ($rows as $i => $r) {
+            $q = (float)($r['qty'] ?? 0);
+            $rows[$i]['price'] = $u;
+            $rows[$i]['line_total'] = $q * $u;
+        }
+    }
+    return $rows;
 }
 
 // ราคาปัจจุบัน (admin-adjusted)
-$lineItemsView = fnv_parse_items(trim((string)($n['need_items_json'] ?? '')));
-// ราคาเก่าที่มูลนิธิเสนอ (snapshot ก่อน admin แก้)
-$lineItemsOld  = fnv_parse_items(trim((string)($n['submitted_items_json'] ?? '')));
+$lineItemsView = fnv_parse_items(
+    trim((string)($n['need_items_json'] ?? '')),
+    trim((string)($n['need_items_pricing_json'] ?? '')),
+    (float)($n['total_price'] ?? 0)
+);
+$lineCatsView = [];
+foreach ($lineItemsView as $lv) {
+    $cv = trim((string)($lv['category'] ?? ''));
+    if ($cv !== '') {
+        $lineCatsView[] = $cv;
+    }
+}
+$catLine = implode(' | ', array_values(array_unique($lineCatsView)));
 $itemNamesView = array_values(array_filter(array_map('trim', explode(',', (string)($n['item_name'] ?? '')))));
 
 // สร้าง slot-keyed map สำหรับเปรียบเทียบราคา
 $newBySlot = [];
 foreach ($lineItemsView as $li) { $newBySlot[$li['slot']] = $li; }
-$oldBySlot = [];
-foreach ($lineItemsOld as $li) { $oldBySlot[$li['slot']] = $li; }
-$hasPriceComparison = count($lineItemsOld) > 0 && $adminChangedPrice;
+$hasPriceComparison = false;
 
 // timeline
 $createdRaw  = trim((string)($n['created_at'] ?? ''));
 $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00') && strtotime($createdRaw) !== false)
     ? date('d/m/Y H:i', strtotime($createdRaw)) : '';
-$reviewedRaw = trim((string)($n['reviewed_at'] ?? ''));
-$reviewedFmt2 = ($reviewedRaw !== '' && !str_starts_with($reviewedRaw, '0000-00-00') && strtotime($reviewedRaw) !== false)
-    ? date('d/m/Y H:i', strtotime($reviewedRaw)) : '';
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -437,19 +473,6 @@ $reviewedFmt2 = ($reviewedRaw !== '' && !str_starts_with($reviewedRaw, '0000-00-
         </div>
     <?php endif; ?>
 
-    <?php
-        $prevPrice = isset($n['previous_total_price']) && $n['previous_total_price'] !== null
-            ? (float)$n['previous_total_price']
-            : null;
-        $priceWasEdited = $prevPrice !== null && $prevPrice > 0 && $prevPrice != $goal;
-    ?>
-    <?php if ($priceWasEdited): ?>
-    <div class="foundation-project-view-note foundation-project-view-note--price-change">
-        <strong>ราคาเป้าหมายถูกแก้ไข</strong>
-        — ราคาเดิม <span class="price-old"><?= number_format($prevPrice, 0) ?> บาท</span>
-        → ราคาใหม่ <span class="price-new"><?= number_format($goal, 0) ?> บาท</span>
-    </div>
-    <?php endif; ?>
 
     <div class="foundation-project-view-progress">
         <div class="foundation-progress-meta">
@@ -492,12 +515,6 @@ $reviewedFmt2 = ($reviewedRaw !== '' && !str_starts_with($reviewedRaw, '0000-00-
         <div class="foundation-project-view-row">
             <dt>วันสิ้นสุดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</dt>
             <dd><?= htmlspecialchars($dweFmt) ?></dd>
-        </div>
-        <?php endif; ?>
-        <?php if ($reviewedAtFmt !== ''): ?>
-        <div class="foundation-project-view-row">
-            <dt>วันที่ตรวจสอบล่าสุด</dt>
-            <dd><?= htmlspecialchars($reviewedAtFmt) ?></dd>
         </div>
         <?php endif; ?>
         <div class="foundation-project-view-row foundation-project-view-row--block">
@@ -543,60 +560,25 @@ $reviewedFmt2 = ($reviewedRaw !== '' && !str_starts_with($reviewedRaw, '0000-00-
                 <tr>
                     <th>รายการ</th>
                     <th style="text-align:center">จำนวน</th>
-                    <?php if ($hasPriceComparison): ?>
-                        <th style="text-align:right">ราคาเก่า/ชิ้น</th>
-                        <th style="text-align:right">ราคาใหม่/ชิ้น</th>
-                        <th style="text-align:right">ส่วนต่าง</th>
-                    <?php else: ?>
-                        <th style="text-align:right">ราคา/ชิ้น</th>
-                    <?php endif; ?>
+                    <th style="text-align:right">ราคา/ชิ้น</th>
                     <th style="text-align:right">รวม</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($lineItemsView as $idx => $li): ?>
-                <?php
-                    $slot     = $li['slot'];
-                    $oldLi    = $oldBySlot[$slot] ?? null;
-                    $oldPrice = $oldLi ? $oldLi['price'] : null;
-                    $priceDiff = ($oldPrice !== null) ? ($li['price'] - $oldPrice) : null;
-                    $priceChanged = $priceDiff !== null && abs($priceDiff) > 0.01;
-                ?>
                 <tr>
                     <td><?= htmlspecialchars($itemNamesView[$idx] ?? $li['category'], ENT_QUOTES, 'UTF-8') ?></td>
                     <td style="text-align:center"><?= number_format($li['qty'], 0) ?></td>
-                    <?php if ($hasPriceComparison): ?>
-                        <td style="text-align:right;color:#6b7280;<?= $priceChanged ? 'text-decoration:line-through' : '' ?>">
-                            <?= $oldPrice !== null ? number_format($oldPrice, 2) . ' บาท' : '—' ?>
-                        </td>
-                        <td style="text-align:right;font-weight:600"><?= number_format($li['price'], 2) ?> บาท</td>
-                        <td style="text-align:right">
-                            <?php if ($priceChanged): ?>
-                                <span class="<?= $priceDiff > 0 ? 'fnv-diff-up' : 'fnv-diff-down' ?>">
-                                    <?= $priceDiff > 0 ? '+' : '' ?><?= number_format($priceDiff, 2) ?>
-                                </span>
-                            <?php else: ?>
-                                <span style="color:#9ca3af">—</span>
-                            <?php endif; ?>
-                        </td>
-                    <?php else: ?>
-                        <td style="text-align:right"><?= number_format($li['price'], 2) ?> บาท</td>
-                    <?php endif; ?>
+                    <td style="text-align:right"><?= number_format($li['price'], 2) ?> บาท</td>
                     <td style="text-align:right"><?= number_format($li['line_total'], 2) ?> บาท</td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="<?= $hasPriceComparison ? 5 : 3 ?>" style="text-align:right">รวมทั้งหมด</td>
+                    <td colspan="3" style="text-align:right">รวมทั้งหมด</td>
                     <td style="text-align:right"><?= number_format($currentTotal, 2) ?> บาท</td>
                 </tr>
-                <?php if ($hasPriceComparison && abs($submittedTotal - $currentTotal) > 0.01): ?>
-                <tr style="font-size:.83rem">
-                    <td colspan="5" style="text-align:right;color:#6b7280">ราคาที่เสนอ (เดิม)</td>
-                    <td style="text-align:right;color:#6b7280;text-decoration:line-through"><?= number_format($submittedTotal, 2) ?> บาท</td>
-                </tr>
-                <?php endif; ?>
             </tfoot>
         </table>
         <?php endif; ?>
@@ -623,83 +605,12 @@ $reviewedFmt2 = ($reviewedRaw !== '' && !str_starts_with($reviewedRaw, '0000-00-
             </li>
             <?php endif; ?>
 
-            <?php if ($reviewedFmt2 !== '' && in_array($n['approve_item'] ?? '', ['approved', 'rejected'], true)): ?>
-            <li class="fnv-timeline-item">
-                <span class="fnv-timeline-dot <?= ($n['approve_item'] ?? '') === 'approved' ? 'fnv-timeline-dot--approve' : 'fnv-timeline-dot--close' ?>">
-                    <?= ($n['approve_item'] ?? '') === 'approved' ? '✅' : '⛔' ?>
-                </span>
-                <div class="fnv-timeline-body">
-                    <div class="fnv-timeline-label">
-                        <?= ($n['approve_item'] ?? '') === 'approved' ? 'แอดมินอนุมัติรายการ' : 'แอดมินไม่อนุมัติรายการ' ?>
-                    </div>
-                    <div class="fnv-timeline-date"><?= htmlspecialchars($reviewedFmt2) ?></div>
-                </div>
-            </li>
-            <?php endif; ?>
-
             <?php if ($priceReviewedFmt !== ''): ?>
             <li class="fnv-timeline-item">
                 <span class="fnv-timeline-dot fnv-timeline-dot--price">💰</span>
                 <div class="fnv-timeline-body">
                     <div class="fnv-timeline-label">แอดมินปรับราคาสิ่งของ</div>
                     <div class="fnv-timeline-date"><?= htmlspecialchars($priceReviewedFmt) ?></div>
-                    <?php if (count($lineItemsView) > 0 && count($lineItemsOld) > 0): ?>
-                    <details class="fnv-timeline-details">
-                        <summary>ดูรายละเอียดการเปลี่ยนแปลง ▸</summary>
-                        <table class="fnv-timeline-change-table">
-                            <thead>
-                                <tr>
-                                    <th>รายการ</th>
-                                    <th style="text-align:right">ราคาเก่า/ชิ้น</th>
-                                    <th style="text-align:right">ราคาใหม่/ชิ้น</th>
-                                    <th style="text-align:right">ส่วนต่าง</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($lineItemsView as $idx => $li): ?>
-                                <?php
-                                    $slot2      = $li['slot'];
-                                    $oldLi2     = $oldBySlot[$slot2] ?? null;
-                                    $oldPrice2  = $oldLi2 ? $oldLi2['price'] : null;
-                                    $diff2      = ($oldPrice2 !== null) ? ($li['price'] - $oldPrice2) : null;
-                                    $changed2   = $diff2 !== null && abs($diff2) > 0.01;
-                                ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($itemNamesView[$idx] ?? $li['category'], ENT_QUOTES, 'UTF-8') ?></td>
-                                    <td style="text-align:right;color:#6b7280;<?= $changed2 ? 'text-decoration:line-through' : '' ?>">
-                                        <?= $oldPrice2 !== null ? number_format($oldPrice2, 2) . ' บาท' : '—' ?>
-                                    </td>
-                                    <td style="text-align:right;font-weight:600"><?= number_format($li['price'], 2) ?> บาท</td>
-                                    <td style="text-align:right">
-                                        <?php if ($changed2): ?>
-                                            <span class="<?= $diff2 > 0 ? 'fnv-diff-up' : 'fnv-diff-down' ?>">
-                                                <?= $diff2 > 0 ? '+' : '' ?><?= number_format($diff2, 2) ?> บาท
-                                            </span>
-                                        <?php else: ?>
-                                            <span style="color:#9ca3af">ไม่เปลี่ยน</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                            <?php $totalDiff2 = $currentTotal - $submittedTotal; ?>
-                            <?php if (abs($totalDiff2) > 0.01): ?>
-                            <tfoot>
-                                <tr>
-                                    <td><strong>ราคารวม</strong></td>
-                                    <td style="text-align:right;color:#6b7280;text-decoration:line-through"><?= number_format($submittedTotal, 2) ?> บาท</td>
-                                    <td style="text-align:right;font-weight:700"><?= number_format($currentTotal, 2) ?> บาท</td>
-                                    <td style="text-align:right">
-                                        <span class="<?= $totalDiff2 > 0 ? 'fnv-diff-up' : 'fnv-diff-down' ?>">
-                                            <?= $totalDiff2 > 0 ? '+' : '' ?><?= number_format($totalDiff2, 2) ?> บาท
-                                        </span>
-                                    </td>
-                                </tr>
-                            </tfoot>
-                            <?php endif; ?>
-                        </table>
-                    </details>
-                    <?php endif; ?>
                 </div>
             </li>
             <?php endif; ?>

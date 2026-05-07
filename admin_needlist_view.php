@@ -197,10 +197,6 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                             <span class="value"><?= htmlspecialchars(trim((string)($row['desired_brand'] ?? '')) !== '' ? (string)$row['desired_brand'] : '—') ?></span>
                         </div>
                         <div class="data-item">
-                            <span class="label">หมวดหมู่สิ่งของ</span>
-                            <span class="value"><?= htmlspecialchars(trim((string)($row['brand'] ?? '')) !== '' ? (string)$row['brand'] : '—') ?></span>
-                        </div>
-                        <div class="data-item">
                             <span class="label">ยอดเงินเป้าหมายรวม (บาท)</span>
                             <?php
                                 $vTotal = (float)($row['total_price'] ?? 0);
@@ -210,10 +206,6 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                         <div class="data-item full">
                             <span class="label">หมายเหตุจากมูลนิธิ</span>
                             <span class="value"><?= htmlspecialchars(trim((string)($row['note'] ?? '')) !== '' ? (string)$row['note'] : '—') ?></span>
-                        </div>
-                        <div class="data-item">
-                            <span class="label">วันตรวจสอบล่าสุด</span>
-                            <span class="value"><?= htmlspecialchars(admin_needlist_view_format_date(isset($row['reviewed_at']) ? (string)$row['reviewed_at'] : '')) ?></span>
                         </div>
                         <div class="data-item">
                             <span class="label">ปิดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</span>
@@ -257,11 +249,11 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <form method="post" action="admin_approve_needlist.php" class="admin-review-actions-form">
                         <input type="hidden" name="item_id" value="<?= (int)$itemId ?>">
                         <div class="admin-review-actions-grid">
-                            <textarea name="note" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>
+                            <textarea name="reject_note" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>
                             <button type="submit" name="action" value="approve" class="btn btn-success admin-review-action-btn"
                                     onclick="return confirm('ยืนยันอนุมัติรายการนี้?');">อนุมัติ</button>
                             <button type="submit" name="action" value="reject" class="btn btn-danger admin-review-action-btn"
-                                    onclick="var t=this.form.querySelector('[name=note]');if(!t||!t.value.trim()){alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');if(t)t.focus();return false;}return confirm('ยืนยันไม่อนุมัติรายการนี้?');">ไม่อนุมัติ</button>
+                                    onclick="var t=this.form.querySelector('[name=reject_note]');if(!t||!t.value.trim()){alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');if(t)t.focus();return false;}return confirm('ยืนยันไม่อนุมัติรายการนี้?');">ไม่อนุมัติ</button>
                         </div>
                     </form>
                     <?php endif; ?>

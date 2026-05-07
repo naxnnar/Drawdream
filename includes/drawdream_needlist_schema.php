@@ -34,23 +34,20 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_items_json'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN need_items_json LONGTEXT NULL DEFAULT NULL AFTER total_price');
     }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_items_pricing_json'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN need_items_pricing_json LONGTEXT NULL DEFAULT NULL AFTER need_items_json');
+    }
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'desired_brand'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN desired_brand VARCHAR(200) NULL DEFAULT NULL');
     }
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_total_price'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN submitted_total_price DECIMAL(12,2) NULL DEFAULT NULL AFTER total_price');
     }
-    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_items_json'")) && $c->num_rows === 0) {
-        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN submitted_items_json LONGTEXT NULL DEFAULT NULL AFTER need_items_json');
-    }
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'approved_total_price'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN approved_total_price DECIMAL(12,2) NULL DEFAULT NULL AFTER submitted_total_price');
     }
-    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'price_reviewed_by_user_id'")) && $c->num_rows === 0) {
-        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN price_reviewed_by_user_id INT NULL DEFAULT NULL AFTER approved_total_price');
-    }
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'price_reviewed_at'")) && $c->num_rows === 0) {
-        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN price_reviewed_at DATETIME NULL DEFAULT NULL AFTER price_reviewed_by_user_id');
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN price_reviewed_at DATETIME NULL DEFAULT NULL AFTER approved_total_price');
     }
     $hasItemDesc = false;
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'item_desc'")) && $c->num_rows > 0) {
@@ -69,10 +66,6 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     }
     if ($hasItemDesc) {
         @$conn->query('ALTER TABLE foundation_needlist DROP COLUMN item_desc');
-    }
-
-    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'previous_total_price'")) && $c->num_rows === 0) {
-        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN previous_total_price DECIMAL(12,2) NULL DEFAULT NULL AFTER total_price');
     }
 
     $addedDonateWindowEnd = false;
@@ -100,18 +93,102 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     );
     @$conn->query(
         "UPDATE foundation_needlist
-         SET price_reviewed_by_user_id = reviewed_by_user_id
-         WHERE price_reviewed_by_user_id IS NULL
-           AND reviewed_by_user_id IS NOT NULL
-           AND approve_item IN ('approved','purchasing','done')"
-    );
-    @$conn->query(
-        "UPDATE foundation_needlist
-         SET price_reviewed_at = reviewed_at
+         SET price_reviewed_at = created_at
          WHERE price_reviewed_at IS NULL
-           AND reviewed_at IS NOT NULL
+           AND created_at IS NOT NULL
            AND approve_item IN ('approved','purchasing','done')"
     );
+
+    // แปลง need_items_json รูปแบบเก่า -> คีย์ไทย 3 ฟิลด์ และแยกราคาไป need_items_pricing_json
+    $rsItems = @$conn->query("SELECT item_id, need_items_json, total_price, qty_needed FROM foundation_needlist WHERE need_items_json IS NOT NULL AND TRIM(need_items_json) <> ''");
+    if ($rsItems) {
+        while ($row = $rsItems->fetch_assoc()) {
+            $itemId = (int)($row['item_id'] ?? 0);
+            if ($itemId <= 0) {
+                continue;
+            }
+            $rawJson = trim((string)($row['need_items_json'] ?? ''));
+            try {
+                $decoded = json_decode($rawJson, true, 512, JSON_THROW_ON_ERROR);
+            } catch (Throwable $e) {
+                continue;
+            }
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $out = [];
+            $pricingOut = [];
+            $qtySum = 0.0;
+            foreach ($decoded as $idx => $li) {
+                if (!is_array($li)) {
+                    continue;
+                }
+                $cat = trim((string)($li['หมวดหมู่สิ่งของ'] ?? ($li['category'] ?? '')));
+                $name = trim((string)($li['ชื่อสิ่งของ'] ?? ($li['item_name'] ?? '')));
+                $qty = (float)($li['จำนวนสิ่งของ'] ?? ($li['qty_needed'] ?? ($li['qty'] ?? 0)));
+                $price = (float)($li['ราคาต่อชิ้น'] ?? ($li['price_estimate'] ?? ($li['price'] ?? 0)));
+                $sum = (float)($li['ราคารวม'] ?? ($li['line_total'] ?? ($qty * $price)));
+                if ($cat === '' && $name === '' && $qty <= 0 && $price <= 0 && $sum <= 0) {
+                    continue;
+                }
+                $out[] = [
+                    'หมวดหมู่สิ่งของ' => $cat,
+                    'ชื่อสิ่งของ' => $name,
+                    'จำนวนสิ่งของ' => $qty,
+                ];
+                $qtySum += max(0.0, $qty);
+                $pricingOut[] = [
+                    'ลำดับ' => ((int)$idx + 1),
+                    'ราคาต่อชิ้น' => $price,
+                    'ราคารวม' => $sum,
+                ];
+            }
+            $totalFromRow = (float)($row['total_price'] ?? 0);
+            $fallbackUnit = ($qtySum > 0 && $totalFromRow > 0) ? ($totalFromRow / $qtySum) : 0.0;
+            if ($fallbackUnit > 0) {
+                foreach ($pricingOut as $k => $pr) {
+                    $p = (float)($pr['ราคาต่อชิ้น'] ?? 0);
+                    $s = (float)($pr['ราคารวม'] ?? 0);
+                    $lineQty = (float)($out[$k]['จำนวนสิ่งของ'] ?? 0);
+                    if ($p <= 0) {
+                        $p = $fallbackUnit;
+                    }
+                    if ($s <= 0 && $lineQty > 0) {
+                        $s = $lineQty * $p;
+                    }
+                    $pricingOut[$k]['ราคาต่อชิ้น'] = $p;
+                    $pricingOut[$k]['ราคารวม'] = $s;
+                }
+            }
+            $encoded = json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $pricingEncoded = json_encode($pricingOut, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (!is_string($encoded) || !is_string($pricingEncoded)) {
+                continue;
+            }
+            $up = $conn->prepare("UPDATE foundation_needlist SET need_items_json = ?, need_items_pricing_json = ? WHERE item_id = ?");
+            if ($up) {
+                $up->bind_param('ssi', $encoded, $pricingEncoded, $itemId);
+                @$up->execute();
+            }
+        }
+    }
+
+    // คอลัมน์ที่ยกเลิกใช้งาน
+    foreach ([
+        'brand',
+        'category',
+        'previous_total_price',
+        'submitted_items_json',
+        'reviewed_by_user_id',
+        'reviewed_at',
+        'price_reviewed_by_user_id',
+        'created_by_user_id',
+    ] as $dropCol) {
+        $c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE '" . mysqli_real_escape_string($conn, $dropCol) . "'");
+        if ($c && $c->num_rows > 0) {
+            @$conn->query("ALTER TABLE foundation_needlist DROP COLUMN `{$dropCol}`");
+        }
+    }
 }
 
 /**
@@ -143,6 +220,24 @@ function foundation_parse_need_item_filenames(string $raw): array
 }
 
 /**
+ * ทำให้ค่ารูปใน DB เหลือเป็นชื่อไฟล์เดียวเสมอ
+ * รองรับข้อมูลเก่าที่อาจเก็บ path เต็มมา เช่น uploads/needs/xxx.png
+ */
+function foundation_needlist_normalize_filename(string $raw): string
+{
+    $raw = trim($raw);
+    if ($raw === '' || $raw === '.' || $raw === '..') {
+        return '';
+    }
+    $raw = str_replace('\\', '/', $raw);
+    $qPos = strpos($raw, '?');
+    if ($qPos !== false) {
+        $raw = substr($raw, 0, $qPos);
+    }
+    return basename($raw);
+}
+
+/**
  * รวมชื่อไฟล์รูปสิ่งของจากแถว needlist (รองรับทั้งแบบ pipe ใน item_image แบบเก่า และ 3 คอลัมน์)
  *
  * @param array<string,mixed> $row
@@ -161,7 +256,10 @@ function foundation_needlist_item_filenames_from_row(array $row): array
         if ($v === '' || $v === '.' || $v === '..') {
             continue;
         }
-        $out[] = basename($v);
+        $v = foundation_needlist_normalize_filename($v);
+        if ($v !== '') {
+            $out[] = $v;
+        }
     }
     return array_slice($out, 0, 3);
 }

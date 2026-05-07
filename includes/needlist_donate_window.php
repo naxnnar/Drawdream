@@ -95,10 +95,9 @@ function drawdream_foundation_needlist_propose_blocked(mysqli $conn, int $founda
  */
 function drawdream_needlist_backfill_donate_window_ends(mysqli $conn): void
 {
-    $sql = "SELECT item_id, note, reviewed_at FROM foundation_needlist
+    $sql = "SELECT item_id, note, created_at FROM foundation_needlist
             WHERE approve_item = 'approved'
-              AND (donate_window_end_at IS NULL)
-              AND reviewed_at IS NOT NULL";
+              AND (donate_window_end_at IS NULL)";
     $res = @$conn->query($sql);
     if (!$res) {
         return;
@@ -108,7 +107,7 @@ function drawdream_needlist_backfill_donate_window_ends(mysqli $conn): void
         if ($rid <= 0) {
             continue;
         }
-        $rv = trim((string)($row['reviewed_at'] ?? ''));
+        $rv = trim((string)($row['created_at'] ?? ''));
         if ($rv === '' || str_starts_with($rv, '0000-00-00')) {
             continue;
         }

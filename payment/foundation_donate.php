@@ -57,7 +57,7 @@ $items = $items_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $fdCoverNeedImage = '';
 foreach ($items as $itCov) {
-    $nfCov = trim((string)($itCov['need_foundation_image'] ?? ''));
+    $nfCov = foundation_needlist_normalize_filename((string)($itCov['need_foundation_image'] ?? ''));
     if ($nfCov !== '') {
         $fdCoverNeedImage = $nfCov;
         break;
@@ -72,6 +72,7 @@ $donateDisabled = ($goal <= 0 || count($items) === 0 || ($goal > 0 && $remaining
 function drawdream_need_item_lines_from_row(array $item): array
 {
     $raw = trim((string)($item['need_items_json'] ?? ''));
+    $rawPricing = trim((string)($item['need_items_pricing_json'] ?? ''));
     $lines = [];
     $nameTokens = [];
     $rawNames = trim((string)($item['item_name'] ?? ''));
@@ -86,6 +87,20 @@ function drawdream_need_item_lines_from_row(array $item): array
             }
         }
     }
+    $pricingByOrder = [];
+    if ($rawPricing !== '') {
+        $pricingDecoded = json_decode($rawPricing, true);
+        if (is_array($pricingDecoded)) {
+            foreach ($pricingDecoded as $idxP => $prow) {
+                if (!is_array($prow)) continue;
+                $ord = (int)($prow['ลำดับ'] ?? ($idxP + 1));
+                $pricingByOrder[$ord] = [
+                    'price' => (float)($prow['ราคาต่อชิ้น'] ?? ($prow['price_estimate'] ?? ($prow['price'] ?? 0))),
+                    'sum' => (float)($prow['ราคารวม'] ?? ($prow['line_total'] ?? 0)),
+                ];
+            }
+        }
+    }
     if ($raw !== '') {
         $decoded = json_decode($raw, true);
         if (is_array($decoded)) {
@@ -93,16 +108,18 @@ function drawdream_need_item_lines_from_row(array $item): array
                 if (!is_array($row)) {
                     continue;
                 }
-                $qty = (float)($row['qty_needed'] ?? ($row['qty'] ?? 0));
-                $price = (float)($row['price_estimate'] ?? ($row['price'] ?? 0));
-                $lineTotal = (float)($row['line_total'] ?? 0);
+                $qty = (float)($row['จำนวนสิ่งของ'] ?? ($row['qty_needed'] ?? ($row['qty'] ?? 0)));
+                $slot = (int)($row['ลำดับ'] ?? ($row['slot'] ?? ($idx + 1)));
+                $pricing = $pricingByOrder[$slot] ?? [];
+                $price = (float)($pricing['price'] ?? ($row['ราคาต่อชิ้น'] ?? ($row['price_estimate'] ?? ($row['price'] ?? 0))));
+                $lineTotal = (float)($pricing['sum'] ?? ($row['ราคารวม'] ?? ($row['line_total'] ?? 0)));
                 if ($lineTotal <= 0 && $qty > 0 && $price > 0) {
                     $lineTotal = $qty * $price;
                 }
                 if ($qty <= 0 || $price <= 0) {
                     continue;
                 }
-                $name = trim((string)($row['item_name'] ?? ''));
+                $name = trim((string)($row['ชื่อสิ่งของ'] ?? ($row['item_name'] ?? '')));
                 if ($name === '') {
                     $name = $nameTokens[$idx] ?? ('รายการที่ ' . ((int)$idx + 1));
                 }
@@ -116,6 +133,25 @@ function drawdream_need_item_lines_from_row(array $item): array
         }
     }
     if ($lines !== []) {
+        $hasPrice = false;
+        $qtySum = 0.0;
+        foreach ($lines as $r) {
+            if ((float)($r['price_estimate'] ?? 0) > 0) {
+                $hasPrice = true;
+            }
+            $qtySum += max(0.0, (float)($r['qty_needed'] ?? 0));
+        }
+        if (!$hasPrice) {
+            $fallbackTotal = (float)($item['total_price'] ?? 0);
+            $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0) ? ($fallbackTotal / $qtySum) : 0.0;
+            if ($fallbackUnit > 0) {
+                foreach ($lines as $i => $r) {
+                    $q = (float)($r['qty_needed'] ?? 0);
+                    $lines[$i]['price_estimate'] = $fallbackUnit;
+                    $lines[$i]['line_total'] = $q * $fallbackUnit;
+                }
+            }
+        }
         return $lines;
     }
     $fallbackQty = (float)($item['qty_needed'] ?? 0);

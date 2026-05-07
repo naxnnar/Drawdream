@@ -145,25 +145,60 @@ function drawdream_need_items_from_json($raw): array
         if (!is_array($row)) {
             continue;
         }
-        $cat = trim((string)($row['category'] ?? ''));
-        $qty = (float)($row['qty_needed'] ?? ($row['qty'] ?? 0));
-        $price = (float)($row['price_estimate'] ?? ($row['price'] ?? 0));
-        if ($cat === '' || $qty <= 0 || $price <= 0) {
+        $cat = trim((string)($row['หมวดหมู่สิ่งของ'] ?? ($row['category'] ?? '')));
+        $itemName = trim((string)($row['ชื่อสิ่งของ'] ?? ($row['item_name'] ?? '')));
+        $qty = (float)($row['จำนวนสิ่งของ'] ?? ($row['qty_needed'] ?? ($row['qty'] ?? 0)));
+        $price = (float)($row['ราคาต่อชิ้น'] ?? ($row['price_estimate'] ?? ($row['price'] ?? 0)));
+        if ($cat === '' || $qty <= 0) {
             continue;
         }
         $out[] = [
             'category' => $cat,
+            'item_name' => $itemName,
             'qty' => $qty,
-            'price' => $price,
+            'price' => $price > 0 ? $price : 0.0,
+        ];
+    }
+    return $out;
+}
+
+/**
+ * @return array<int,array{price:float,line_total:float}>
+ */
+function drawdream_need_pricing_from_json($raw): array
+{
+    $txt = trim((string)$raw);
+    if ($txt === '') {
+        return [];
+    }
+    try {
+        $decoded = json_decode($txt, true, 512, JSON_THROW_ON_ERROR);
+    } catch (Throwable $e) {
+        return [];
+    }
+    if (!is_array($decoded)) {
+        return [];
+    }
+    $out = [];
+    foreach ($decoded as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $price = (float)($row['ราคาต่อชิ้น'] ?? ($row['price_estimate'] ?? ($row['price'] ?? 0)));
+        $sum = (float)($row['ราคารวม'] ?? ($row['line_total'] ?? 0));
+        $out[] = [
+            'price' => $price > 0 ? $price : 0.0,
+            'line_total' => $sum > 0 ? $sum : 0.0,
         ];
     }
     return $out;
 }
 
 if ($editRow && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-    $cats = drawdream_need_tokens_from_db($editRow['brand'] ?? '');
+    $cats = [];
     $opts = drawdream_need_tokens_from_db($editRow['item_name'] ?? '');
     $itemRowsFromJson = drawdream_need_items_from_json($editRow['need_items_json'] ?? '');
+    $itemPricingRows = drawdream_need_pricing_from_json($editRow['need_items_pricing_json'] ?? '');
     for ($i = 1; $i <= 5; $i++) {
         $_POST['item_category_' . $i] = '';
         $_POST['item_option_' . $i] = '';
@@ -199,7 +234,8 @@ if ($editRow && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         $itemName = trim((string)($rowData['item_name'] ?? $fallbackName));
         $rowCat = trim((string)($rowData['category'] ?? ''));
         $rowQty = (float)($rowData['qty'] ?? 0);
-        $rowPrice = (float)($rowData['price'] ?? 0);
+        $pricingData = $itemPricingRows[$slotIdx - 1] ?? [];
+        $rowPrice = (float)($pricingData['price'] ?? ($rowData['price'] ?? 0));
         if ($rowQty <= 0) {
             $rowQty = $qtyFromDb;
         }
@@ -289,7 +325,6 @@ if (isset($_POST['submit'])) {
     } else {
 
     $lineItems = [];
-    $selectedCategories = [];
     $itemNames = [];
     $goal = 0.0;
     for ($slot = 1; $slot <= 5; $slot++) {
@@ -347,7 +382,6 @@ if (isset($_POST['submit'])) {
             'qty' => $qtySlot,
             'line_total' => $lineTotal,
         ];
-        $selectedCategories[] = $cat;
         $itemNames[] = $itemName;
     }
 
@@ -359,7 +393,6 @@ if (isset($_POST['submit'])) {
     }
 
     $desiredBrand = trim((string)($_POST['desired_brand'] ?? ''));
-    $brand       = implode(' | ', array_values(array_unique($selectedCategories)));
     $allow_other = isset($_POST['allow_any_brand']) ? 1 : 0;
     $urgent      = isset($_POST['urgent']) ? 1 : 0;
     $note        = trim($_POST['note'] ?? '');
@@ -367,6 +400,7 @@ if (isset($_POST['submit'])) {
     $price       = 0.0;
     $item_name = implode(', ', $itemNames);
     $needItemsJson = '';
+    $needItemsPricingJson = '';
     foreach ($lineItems as $li) {
         $qty += (float)$li['qty'];
     }
@@ -396,16 +430,26 @@ if (isset($_POST['submit'])) {
         $lineItemsForJson = [];
         foreach ($lineItems as $li) {
             $lineItemsForJson[] = [
-                'slot' => (int)($li['slot'] ?? 0),
-                'category' => (string)($li['category'] ?? ''),
-                'qty_needed' => (float)($li['qty'] ?? 0),
-                'price_estimate' => (float)($li['price'] ?? 0),
-                'line_total' => (float)($li['line_total'] ?? 0),
+                'หมวดหมู่สิ่งของ' => (string)($li['category'] ?? ''),
+                'ชื่อสิ่งของ' => (string)($li['item_name'] ?? ''),
+                'จำนวนสิ่งของ' => (float)($li['qty'] ?? 0),
             ];
         }
         $needItemsJson = json_encode($lineItemsForJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_string($needItemsJson) || $needItemsJson === '') {
             $needItemsJson = '[]';
+        }
+        $pricingRows = [];
+        foreach ($lineItems as $idx => $li) {
+            $pricingRows[] = [
+                'ลำดับ' => $idx + 1,
+                'ราคาต่อชิ้น' => (float)($li['price'] ?? 0),
+                'ราคารวม' => (float)($li['line_total'] ?? 0),
+            ];
+        }
+        $needItemsPricingJson = json_encode($pricingRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (!is_string($needItemsPricingJson) || $needItemsPricingJson === '') {
+            $needItemsPricingJson = '[]';
         }
         $_POST['goal_amount'] = (string)round($goal, 2);
         $_POST['desired_brand'] = $desiredBrand;
@@ -540,31 +584,30 @@ if (isset($_POST['submit'])) {
             $im1 = $merged[1] ?? '';
             $im2 = $merged[2] ?? '';
 
-            $nfFinal = trim((string)($existingNeedRow['need_foundation_image'] ?? ''));
+            $nfFinal = foundation_needlist_normalize_filename((string)($existingNeedRow['need_foundation_image'] ?? ''));
             if ($needFoundationImageDb !== '') {
                 $nfFinal = $needFoundationImageDb;
             }
 
             $sqlU = "UPDATE foundation_needlist SET
-                item_name = ?, desired_brand = ?, brand = ?, allow_other_brand = ?,
+                item_name = ?, desired_brand = ?, allow_other_brand = ?,
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
                 note = ?, total_price = ?, submitted_total_price = COALESCE(submitted_total_price, ?),
-                previous_total_price = IF(? != total_price, total_price, previous_total_price),
-                need_items_json = ?
+                need_items_json = ?, need_items_pricing_json = ?
                 WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'sss' . 'idi' . str_repeat('s', 5) . 'ddds' . 'ii';
+                $updTypes = 'ss' . 'idi' . str_repeat('s', 5) . 'ddss' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
-                    $item_name, $desiredBrand, $brand,
+                    $item_name, $desiredBrand,
                     $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
-                    $note, $total_price, $total_price, $total_price, $needItemsJson,
+                    $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson,
                     $itemIdEdit, $foundation_id
                 );
 
@@ -573,7 +616,7 @@ if (isset($_POST['submit'])) {
                     if ($prevApproveItem === 'rejected') {
                         $stPend = $conn->prepare(
                             "UPDATE foundation_needlist
-                             SET approve_item='pending', review_note=NULL, reviewed_at=NULL, reviewed_by_user_id=NULL
+                             SET approve_item='pending', review_note=NULL
                              WHERE item_id = ? AND foundation_id = ?"
                         );
                         if ($stPend) {
@@ -592,11 +635,8 @@ if (isset($_POST['submit'])) {
                     }
                     if (($existingNeedRow['approve_item'] ?? '') === 'approved') {
                         require_once __DIR__ . '/includes/needlist_donate_window.php';
-                        $rv = trim((string)($existingNeedRow['reviewed_at'] ?? ''));
                         try {
-                            $from = ($rv !== '' && !str_starts_with($rv, '0000-00-00'))
-                                ? new DateTimeImmutable($rv)
-                                : new DateTimeImmutable('now');
+                            $from = new DateTimeImmutable('now');
                         } catch (Throwable $e) {
                             $from = new DateTimeImmutable('now');
                         }
@@ -621,9 +661,9 @@ if (isset($_POST['submit'])) {
             $im2 = $slot2;
 
             $sql  = "INSERT INTO foundation_needlist 
-                 (foundation_id, item_name, desired_brand, brand, allow_other_brand,
-                  qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, submitted_total_price, approve_item)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                 (foundation_id, item_name, desired_brand, allow_other_brand,
+                  qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, note, total_price, submitted_total_price, approve_item)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
             $stmt = $conn->prepare($sql);
 
             if (!$stmt) {
@@ -631,15 +671,29 @@ if (isset($_POST['submit'])) {
             } else {
                 // รองรับทั้ง schema ใหม่ (มี need_items_json) และ schema เก่าที่ยังไม่ migration
                 $hasNeedItemsJson = false;
+                $hasNeedItemsPricingJson = false;
                 $chkNeedJson = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_items_json'");
                 if ($chkNeedJson && $chkNeedJson->num_rows > 0) {
                     $hasNeedItemsJson = true;
                 }
-                if ($hasNeedItemsJson) {
+                $chkNeedPricingJson = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'need_items_pricing_json'");
+                if ($chkNeedPricingJson && $chkNeedPricingJson->num_rows > 0) {
+                    $hasNeedItemsPricingJson = true;
+                }
+                if ($hasNeedItemsJson && $hasNeedItemsPricingJson) {
                     $sql = "INSERT INTO foundation_needlist
-                        (foundation_id, item_name, desired_brand, brand, allow_other_brand,
-                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, created_by_user_id, note, total_price, submitted_total_price, need_items_json, approve_item)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                        (foundation_id, item_name, desired_brand, allow_other_brand,
+                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, note, total_price, submitted_total_price, need_items_json, need_items_pricing_json, approve_item)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                    $stmt = $conn->prepare($sql);
+                    if (!$stmt) {
+                        $error = "Prepare failed: " . $conn->error;
+                    }
+                } elseif ($hasNeedItemsJson) {
+                    $sql = "INSERT INTO foundation_needlist
+                        (foundation_id, item_name, desired_brand, allow_other_brand,
+                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, note, total_price, submitted_total_price, need_items_json, approve_item)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
                     $stmt = $conn->prepare($sql);
                     if (!$stmt) {
                         $error = "Prepare failed: " . $conn->error;
@@ -648,17 +702,23 @@ if (isset($_POST['submit'])) {
             }
 
             if ($error === '' && $stmt) {
-                if ($hasNeedItemsJson) {
+                if ($hasNeedItemsJson && $hasNeedItemsPricingJson) {
                     $stmt->bind_param(
-                        "isssidissssisdds",
-                        $foundation_id, $item_name, $desiredBrand, $brand,
-                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $total_price, $needItemsJson
+                        "issidisssisddss",
+                        $foundation_id, $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson
+                    );
+                } elseif ($hasNeedItemsJson) {
+                    $stmt->bind_param(
+                        "issidisssisdds",
+                        $foundation_id, $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price, $needItemsJson
                     );
                 } else {
                     $stmt->bind_param(
-                        "isssidissssisdd",
-                        $foundation_id, $item_name, $desiredBrand, $brand,
-                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $uid, $note, $total_price, $total_price
+                        "issidisssisdd",
+                        $foundation_id, $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price
                     );
                 }
 
@@ -796,11 +856,12 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                     <small style="color:#6b7280;">อัปโหลดรูปใหม่เพื่อแทนที่ตามลำดับ (ช่อง 1–3)</small>
                 </div>
                 <?php endif; ?>
-                <?php if ($thumbRow && trim((string)($thumbRow['need_foundation_image'] ?? '')) !== ''): ?>
+                <?php $currentFoundationNeedImage = $thumbRow ? foundation_needlist_normalize_filename((string)($thumbRow['need_foundation_image'] ?? '')) : ''; ?>
+                <?php if ($currentFoundationNeedImage !== ''): ?>
                 <div class="form-group need-current-files">
                     <label>รูปมูลนิธิปัจจุบัน</label>
                     <div class="need-current-thumbs">
-                        <img src="uploads/needs/<?= htmlspecialchars($thumbRow['need_foundation_image']) ?>" alt="" class="need-current-thumb">
+                        <img src="uploads/needs/<?= htmlspecialchars($currentFoundationNeedImage) ?>" alt="" class="need-current-thumb">
                     </div>
                 </div>
                 <?php endif; ?>
