@@ -4,8 +4,8 @@
 /**
  * แจ้งเตือน (notifications) + บันทึกคิว/audit ฝั่งแอดมิน (ตาราง admin)
  *
- * drawdream_send_notification(..., $entityKey) แทนที่แถวเดิมต่อ (user_id, entity_key)
- * ลดการสะสมซ้ำ | legacy titles “ส่ง…แล้ว” ถูกลบ boot ผ่าน db.php
+ * drawdream_send_notification(..., $entityKey) รองรับพารามิเตอร์เดิมเพื่อ backward compatible
+ * โครงสร้าง notifications ปัจจุบันไม่มี entity_key/is_read แล้ว
  *
  * @see README.md
  */
@@ -25,27 +25,100 @@ function drawdream_ensure_notifications_table(mysqli $conn): void
             title VARCHAR(255) NOT NULL DEFAULT '',
             message TEXT,
             link VARCHAR(512) DEFAULT '',
-            is_read TINYINT(1) NOT NULL DEFAULT 0,
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            KEY idx_user_read (user_id, is_read),
+            KEY idx_user (user_id),
             KEY idx_created (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
-    drawdream_notifications_ensure_entity_key_column($conn);
+    // ลบคอลัมน์/ดัชนีเก่าที่ไม่ใช้แล้ว
+    $c = @$conn->query("SHOW COLUMNS FROM `notifications` LIKE 'entity_key'");
+    if ($c && $c->num_rows > 0) {
+        @$conn->query("ALTER TABLE `notifications` DROP COLUMN entity_key");
+    }
+    $c2 = @$conn->query("SHOW COLUMNS FROM `notifications` LIKE 'is_read'");
+    if ($c2 && $c2->num_rows > 0) {
+        @$conn->query("ALTER TABLE `notifications` DROP COLUMN is_read");
+    }
+    $i1 = @$conn->query("SHOW INDEX FROM `notifications` WHERE Key_name = 'idx_notif_user_entity'");
+    if ($i1 && $i1->num_rows > 0) {
+        @$conn->query("ALTER TABLE `notifications` DROP INDEX idx_notif_user_entity");
+    }
+    $i2 = @$conn->query("SHOW INDEX FROM `notifications` WHERE Key_name = 'idx_user_read'");
+    if ($i2 && $i2->num_rows > 0) {
+        @$conn->query("ALTER TABLE `notifications` DROP INDEX idx_user_read");
+    }
+
+    // ตารางสถานะการอ่านแจ้งเตือนรายผู้ใช้ (แทนคอลัมน์ is_read เดิม)
+    @$conn->query(
+        "CREATE TABLE IF NOT EXISTS notification_read_state (
+            user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+            last_read_at DATETIME NULL DEFAULT NULL,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_last_read_at (last_read_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    );
 }
 
-/** เพิ่มคอลัมน์ entity_key สำหรับแทนที่แจ้งเตือนเดิม (ไม่สะสมซ้ำต่อคิว / ต่อเด็ก ฯลฯ) */
-function drawdream_notifications_ensure_entity_key_column(mysqli $conn): void
+function drawdream_notifications_mark_all_read(mysqli $conn, int $userId): bool
 {
-    $c = @$conn->query("SHOW COLUMNS FROM `notifications` LIKE 'entity_key'");
-    if ($c && $c->num_rows === 0) {
-        @$conn->query("ALTER TABLE `notifications` ADD COLUMN entity_key VARCHAR(96) NULL DEFAULT NULL AFTER link");
-        @$conn->query("ALTER TABLE `notifications` ADD INDEX idx_notif_user_entity (user_id, entity_key)");
+    if ($userId <= 0) {
+        return false;
     }
+    drawdream_ensure_notifications_table($conn);
+    $stmt = $conn->prepare(
+        "INSERT INTO notification_read_state (user_id, last_read_at)
+         VALUES (?, NOW())
+         ON DUPLICATE KEY UPDATE last_read_at = VALUES(last_read_at)"
+    );
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('i', $userId);
+    return (bool)$stmt->execute();
+}
+
+function drawdream_notifications_unread_count(mysqli $conn, int $userId): int
+{
+    if ($userId <= 0) {
+        return 0;
+    }
+    drawdream_ensure_notifications_table($conn);
+
+    $lastReadAt = null;
+    $stRead = $conn->prepare('SELECT last_read_at FROM notification_read_state WHERE user_id = ? LIMIT 1');
+    if ($stRead) {
+        $stRead->bind_param('i', $userId);
+        $stRead->execute();
+        $rowRead = $stRead->get_result()->fetch_assoc();
+        $lastReadAt = trim((string)($rowRead['last_read_at'] ?? ''));
+        if ($lastReadAt === '') {
+            $lastReadAt = null;
+        }
+    }
+
+    if ($lastReadAt === null) {
+        $stAll = $conn->prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ?');
+        if (!$stAll) {
+            return 0;
+        }
+        $stAll->bind_param('i', $userId);
+        $stAll->execute();
+        $row = $stAll->get_result()->fetch_assoc();
+        return (int)($row['cnt'] ?? 0);
+    }
+
+    $st = $conn->prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND created_at > ?');
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('is', $userId, $lastReadAt);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    return (int)($row['cnt'] ?? 0);
 }
 
 /**
- * เรียกจาก db.php ครั้งแรกที่ยังมีข้อมูลเก่า: เพิ่ม entity_key + ลบแจ้งเตือน “ส่ง…แล้ว” ที่ระบบไม่สร้างแล้ว
+ * เรียกจาก db.php ครั้งแรกที่ยังมีข้อมูลเก่า: ลบแจ้งเตือน “ส่ง…แล้ว” ที่ระบบไม่สร้างแล้ว
  * หลังลบครั้งแรก จะไม่มีแถวค้าง → ไม่มีผลต่อ performance รอบถัดไป
  */
 function drawdream_notifications_migrate_legacy_on_boot(mysqli $conn): void
@@ -66,17 +139,37 @@ function drawdream_notifications_migrate_legacy_on_boot(mysqli $conn): void
     @$conn->query("DELETE FROM notifications WHERE title IN ({$inList})");
 }
 
-/** ลบแจ้งเตือนทุกผู้รับที่ใช้ entity_key เดียวกัน (เช่น ล้าง “รออนุมัติ” ของแอดมินหลังตัดสินแล้ว) */
+/** ลบแจ้งเตือนคิวงานที่เคยอ้างด้วย entity_key (คงชื่อฟังก์ชันเดิมไว้เพื่อไม่ให้จุดเรียกพัง) */
 function drawdream_notifications_delete_by_entity_key(mysqli $conn, string $entityKey): void
 {
     if ($entityKey === '') {
         return;
     }
     drawdream_ensure_notifications_table($conn);
-    $st = $conn->prepare('DELETE FROM notifications WHERE entity_key = ?');
-    if ($st) {
-        $st->bind_param('s', $entityKey);
-        @$st->execute();
+    $link = '';
+    $title = '';
+    if (str_starts_with($entityKey, 'adm_pending_project:')) {
+        $id = (int)substr($entityKey, strlen('adm_pending_project:'));
+        $link = 'admin_approve_projects.php?id=' . $id;
+        $title = 'มีโครงการรออนุมัติ';
+    } elseif (str_starts_with($entityKey, 'adm_pending_need:')) {
+        $link = 'admin_approve_needlist.php';
+        $title = 'รายการสิ่งของรออนุมัติ';
+    } elseif (str_starts_with($entityKey, 'adm_pending_child:')) {
+        $id = (int)substr($entityKey, strlen('adm_pending_child:'));
+        $link = 'children_donate.php?id=' . $id;
+        $title = 'โปรไฟล์เด็กรออนุมัติ';
+    } elseif (str_starts_with($entityKey, 'fdn_need_round_open:')) {
+        $link = 'foundation_add_need.php';
+        $title = 'ถึงเวลาเสนอรายการสิ่งของรอบใหม่';
+    }
+
+    if ($link !== '' && $title !== '') {
+        $st = $conn->prepare('DELETE FROM notifications WHERE link = ? AND title = ?');
+        if ($st) {
+            $st->bind_param('ss', $link, $title);
+            @$st->execute();
+        }
     }
 }
 
@@ -110,23 +203,8 @@ function drawdream_send_notification(
     }
     drawdream_ensure_notifications_table($conn);
     $typeTh = drawdream_normalize_notif_type_to_th($type);
-    $key = ($entityKey !== null && $entityKey !== '') ? $entityKey : null;
-    if ($key !== null) {
-        $del = $conn->prepare('DELETE FROM notifications WHERE user_id = ? AND entity_key = ?');
-        if ($del) {
-            $del->bind_param('is', $userId, $key);
-            $del->execute();
-        }
-        $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, entity_key, is_read) VALUES (?, ?, ?, ?, ?, ?, 0)');
-        if ($stmt) {
-            $stmt->bind_param('isssss', $userId, $typeTh, $title, $message, $link, $key);
-            if ($stmt->execute()) {
-                return true;
-            }
-        }
-        // Fallback: entity_key column ยังไม่มีหรือ INSERT ล้มเหลว — ใช้ INSERT แบบธรรมดา
-    }
-    $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
+    // เก็บ param $entityKey ไว้เพื่อ backward compatibility แต่ไม่ใช้แล้ว
+    $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)');
     if (!$stmt) {
         return false;
     }

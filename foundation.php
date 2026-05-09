@@ -60,14 +60,52 @@ $q2 = mysqli_query($conn, "
 ");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
+$needOutcomeFoundations = [];
+$needDoneFoundations = [];
+$qOutcome = mysqli_query($conn, "
+    SELECT DISTINCT foundation_id
+    FROM foundation_needlist
+    WHERE approve_item = 'done'
+      AND (
+        COALESCE(TRIM(update_text), '') <> ''
+        OR (update_images IS NOT NULL AND TRIM(update_images) <> '' AND TRIM(update_images) <> '[]')
+      )
+");
+if ($qOutcome) {
+    while ($r = mysqli_fetch_assoc($qOutcome)) {
+        $needOutcomeFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+    }
+}
+$qDone = mysqli_query($conn, "
+    SELECT DISTINCT foundation_id
+    FROM foundation_needlist
+    WHERE approve_item = 'done'
+");
+if ($qDone) {
+    while ($r = mysqli_fetch_assoc($qDone)) {
+        $needDoneFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+    }
+}
+
 /* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — LIMIT 3 เดิมทำให้แถวที่มีรูปถูกตัดออก */
-$stmtAll = $conn->prepare("SELECT item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE foundation_id=? AND $needOpenPub ORDER BY urgent DESC, item_id DESC LIMIT 120");
+$stmtAll = $conn->prepare("
+    SELECT item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image
+    FROM foundation_needlist
+    WHERE foundation_id = ?
+      AND (
+        approve_item IN ('approved', 'purchasing')
+        OR approve_item = 'done'
+      )
+    ORDER BY urgent DESC, item_id DESC
+    LIMIT 120
+");
 if (!$stmtAll) die("Prepare failed: " . $conn->error);
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
 $myNeedlist = [];
 $myFoundationId = 0;
 $myNeedlistGoalMet = false;
+$myNeedlistResultReady = false;
 $myNeedProposeBlock = ['blocked' => false, 'reason' => '', 'donate_end_at' => null];
 if (($_SESSION['role'] ?? '') === 'foundation') {
     // ดึง foundation_id จาก foundation_profile ก่อน
@@ -80,6 +118,13 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
         $myNeedlistGoalMet = $mg > 0 && $mc >= $mg;
 
         $myNeedProposeBlock = drawdream_foundation_needlist_propose_blocked($conn, $myFoundationId);
+
+        $readyStmt = $conn->prepare("SELECT 1 FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'done' LIMIT 1");
+        if ($readyStmt) {
+            $readyStmt->bind_param("i", $myFoundationId);
+            $readyStmt->execute();
+            $myNeedlistResultReady = (bool)$readyStmt->get_result()->fetch_row();
+        }
     }
 
     if ($myFoundationId > 0) {
@@ -202,10 +247,10 @@ $hasAnySlides = !empty($foundationSlides);
                 <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอสิ่งของมูลนิธิได้</span>
               <?php endif; ?>
               <button type="button" id="toggleEditNeedBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขรายการสิ่งของ</button>
-              <?php if ($is_verified && $myNeedlistGoalMet): ?>
+              <?php if ($is_verified && $myNeedlistResultReady): ?>
                 <a href="foundation_post_needlist_result.php" class="foundation-manage-btn foundation-manage-btn-update">อัปเดตผลลัพธ์สิ่งของ</a>
               <?php elseif ($is_verified): ?>
-                <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="เมื่อยอดรวมรายการสิ่งของครบเป้าหมายแล้ว จึงจะอัปเดตผลลัพธ์ได้">อัปเดตผลลัพธ์สิ่งของ</span>
+                <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="อัปเดตได้เมื่อแอดมินยืนยันจัดส่งสิ่งของแล้ว (สถานะ done)">อัปเดตผลลัพธ์สิ่งของ</span>
               <?php endif; ?>
             </div>
           </div>
@@ -248,15 +293,12 @@ $hasAnySlides = !empty($foundationSlides);
             <?php
               $status = $nl['approve_item'] ?? 'pending';
               $nlImages = foundation_needlist_item_filenames_from_row($nl);
-              $nlImgItem = $nlImages[0] ?? '';
               $nlFdn = foundation_needlist_normalize_filename((string)($nl['need_foundation_image'] ?? ''));
               $needUploadDirAbs = __DIR__ . '/uploads/needs/';
-              /* ถ้ารูปมูลนิธิไม่มีไฟล์จริง ให้ fallback ไปใช้รูปสิ่งของรูปแรก */
+              /* แสดงเฉพาะรูปมูลนิธิที่อัปโหลดเท่านั้น */
               $nlImg = '';
               if ($nlFdn !== '' && is_file($needUploadDirAbs . $nlFdn)) {
                   $nlImg = $nlFdn;
-              } elseif ($nlImgItem !== '' && is_file($needUploadDirAbs . $nlImgItem)) {
-                  $nlImg = $nlImgItem;
               }
               $statusLabel = ['pending' => 'รอการอนุมัติ', 'approved' => 'อนุมัติแล้ว', 'rejected' => 'ไม่อนุมัติ'][$status] ?? $status;
               /* คลาสสอดคล้องกับ .foundation-status-pill ในโครงการ (project.css) */
@@ -331,6 +373,8 @@ $hasAnySlides = !empty($foundationSlides);
           $goal = $slide['goal'];
           $percent = $slide['percent'];
           $needGoalMet = $goal > 0 && $current >= $goal;
+          $hasNeedOutcome = !empty($needOutcomeFoundations[$fid]);
+          $hasNeedDone = !empty($needDoneFoundations[$fid]);
           $foundationImage = $f['foundation_image'] ?? '';
           $facebookUrl = $f['facebook_url'] ?? '';
           $heroProposalImage = '';
@@ -342,18 +386,7 @@ $hasAnySlides = !empty($foundationSlides);
               break;
             }
           }
-          /* ถ้าไม่มีรูปประกอบจากมูลนิธิ ให้ใช้รูปสิ่งของใบแรกที่มี (ไม่บังคับติ๊กด่วน) */
-          if ($heroProposalImage === '') {
-            foreach ($items as $itHero) {
-              $needImgs = foundation_needlist_item_filenames_from_row($itHero);
-              foreach ($needImgs as $bn) {
-                if ($bn !== '' && $bn !== '.' && $bn !== '..' && is_file($needUploadDirAbs . $bn)) {
-                  $heroProposalImage = $bn;
-                  break 2;
-                }
-              }
-            }
-          }
+          /* ใช้เฉพาะรูปมูลนิธิที่อัปโหลด ไม่ fallback เป็นรูปสิ่งของ */
           /* แสดงรูปสิ่งของด้านซ้ายสูงสุด 3 รายการ — ทั้งด่วนและไม่ด่วน (เรียงตาม query: urgent ก่อน) */
           $itemShowcaseEntries = [];
           foreach ($items as $itRow) {
@@ -409,7 +442,7 @@ $hasAnySlides = !empty($foundationSlides);
               </div>
               <?php endif; ?>
             </div>
-            <?php if ($needGoalMet): ?>
+            <?php if ($needGoalMet || $hasNeedOutcome || $hasNeedDone): ?>
               <a class="btn-donate" href="needlist_result.php?fid=<?= $fid ?>">ผลลัพธ์ของมูลนิธิ</a>
             <?php else: ?>
               <a class="btn-donate" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
@@ -435,6 +468,8 @@ $hasAnySlides = !empty($foundationSlides);
         <?php endforeach; ?>
       </div>
       <?php if (count($foundationSlides) > 1): ?>
+      <button type="button" class="foundation-hero-nav foundation-hero-nav--prev" data-hero-prev aria-label="มูลนิธิก่อนหน้า">‹</button>
+      <button type="button" class="foundation-hero-nav foundation-hero-nav--next" data-hero-next aria-label="มูลนิธิถัดไป">›</button>
       <div class="foundation-hero-dots" role="tablist" aria-label="เลือกมูลนิธิ">
         <?php foreach ($foundationSlides as $idx => $_): ?>
         <button type="button" class="foundation-hero-dot<?= $idx === 0 ? ' is-active' : '' ?>" data-go="<?= (int)$idx ?>" role="tab" aria-selected="<?= $idx === 0 ? 'true' : 'false' ?>" aria-label="สไลด์ <?= (int)$idx + 1 ?>"></button>
@@ -595,10 +630,13 @@ $hasAnySlides = !empty($foundationSlides);
     if (!root) return;
     var slides = [].slice.call(root.querySelectorAll('.foundation-slide'));
     var dots = [].slice.call(root.querySelectorAll('.foundation-hero-dot'));
+    var prevBtn = root.querySelector('[data-hero-prev]');
+    var nextBtn = root.querySelector('[data-hero-next]');
     var n = slides.length;
     if (n <= 1) return;
     var i = 0;
     var ms = parseInt(root.getAttribute('data-interval') || '10000', 10);
+    var timer = null;
     function go(to) {
       i = ((to % n) + n) % n;
       slides.forEach(function(s, j) {
@@ -612,12 +650,35 @@ $hasAnySlides = !empty($foundationSlides);
         d.setAttribute('aria-selected', on ? 'true' : 'false');
       });
     }
-    setInterval(function() { go(i + 1); }, ms);
+    function startAuto() {
+      stopAuto();
+      timer = setInterval(function() { go(i + 1); }, ms);
+    }
+    function stopAuto() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    }
+    startAuto();
     dots.forEach(function(d) {
       d.addEventListener('click', function() {
         go(parseInt(d.getAttribute('data-go') || '0', 10));
+        startAuto();
       });
     });
+    if (prevBtn) {
+      prevBtn.addEventListener('click', function () {
+        go(i - 1);
+        startAuto();
+      });
+    }
+    if (nextBtn) {
+      nextBtn.addEventListener('click', function () {
+        go(i + 1);
+        startAuto();
+      });
+    }
 
     // ถ้ามี hash เช่น #f12 ให้เปิดสไลด์ของมูลนิธินั้นทันที
     var hash = window.location.hash || '';

@@ -70,14 +70,11 @@ $progress = ($goal > 0) ? min(100.0, ($raised / $goal) * 100.0) : 0.0;
 $remainingToGoal = ($goal > 0) ? max(0.0, $goal - $raised) : 0.0;
 
 $nlImages = foundation_needlist_item_filenames_from_row($n);
-$nlImgItem = $nlImages[0] ?? '';
 $nlFdn = foundation_needlist_normalize_filename((string)($n['need_foundation_image'] ?? ''));
 $needUploadDirAbs = __DIR__ . '/uploads/needs/';
 $heroFile = '';
 if ($nlFdn !== '' && is_file($needUploadDirAbs . $nlFdn)) {
     $heroFile = $nlFdn;
-} elseif ($nlImgItem !== '' && is_file($needUploadDirAbs . $nlImgItem)) {
-    $heroFile = $nlImgItem;
 }
 $heroUrl = $heroFile !== '' ? ('uploads/needs/' . $heroFile) : '';
 
@@ -114,9 +111,6 @@ foreach ($nlImages as $fn) {
     if ($fn !== '') {
         $allThumbs[] = $fn;
     }
-}
-if ($nlFdn !== '' && !in_array($nlFdn, $allThumbs, true)) {
-    $allThumbs[] = $nlFdn;
 }
 
 $pageTitle = 'รายการสิ่งของ';
@@ -512,7 +506,7 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
         </div>
         <?php endif; ?>
         <?php if ($dweFmt !== ''): ?>
-        <div class="foundation-project-view-row">
+        <div class="foundation-project-view-row foundation-project-view-row--end-date">
             <dt>วันสิ้นสุดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</dt>
             <dd><?= htmlspecialchars($dweFmt) ?></dd>
         </div>

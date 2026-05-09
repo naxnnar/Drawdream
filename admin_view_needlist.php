@@ -121,12 +121,14 @@ function admin_view_parse_line_items(array $row): array {
     }
     if (!$hasPrice) {
         $fallbackTotal = (float)($row['total_price'] ?? 0);
-        $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0) ? ($fallbackTotal / $qtySum) : 0.0;
+        $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0)
+            ? drawdream_needlist_round_money($fallbackTotal / $qtySum)
+            : 0.0;
         if ($fallbackUnit > 0) {
             foreach ($out as $i => $r) {
                 $q = (float)($r['qty'] ?? 0);
                 $out[$i]['price'] = $fallbackUnit;
-                $out[$i]['line_total'] = $q * $fallbackUnit;
+                $out[$i]['line_total'] = drawdream_needlist_round_money($q * $fallbackUnit);
             }
         }
     }
@@ -154,13 +156,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             $slot     = $li['slot'];
             $qty      = $li['qty'];
             $rawPrice = str_replace([',', ' '], '', trim((string)($_POST['item_price_' . $slot] ?? '')));
-            $newPrice = (float)$rawPrice;
+            $newPrice = drawdream_needlist_round_money((float)$rawPrice);
             if ($newPrice <= 0) {
                 $priceError = "ราคารายการที่ {$slot} ต้องมากกว่า 0";
                 break;
             }
-            $lineTotal  = $qty * $newPrice;
-            $newTotal  += $lineTotal;
+            $lineTotal = drawdream_needlist_round_money($qty * $newPrice);
+            $newTotal += $lineTotal;
             $newLineItemsForJson[] = [
                 'หมวดหมู่สิ่งของ' => (string)$li['category'],
                 'ชื่อสิ่งของ' => (string)($adminItemNames[$idx] ?? ''),
@@ -175,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         if ($priceError !== '') {
             $flashErr = $priceError;
         } else {
+            $newTotal = drawdream_needlist_round_money($newTotal);
             $newJsonStr = json_encode($newLineItemsForJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $newPricingStr = json_encode($newPricingJsonRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $upd = $conn->prepare(

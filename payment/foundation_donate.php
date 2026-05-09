@@ -111,10 +111,10 @@ function drawdream_need_item_lines_from_row(array $item): array
                 $qty = (float)($row['จำนวนสิ่งของ'] ?? ($row['qty_needed'] ?? ($row['qty'] ?? 0)));
                 $slot = (int)($row['ลำดับ'] ?? ($row['slot'] ?? ($idx + 1)));
                 $pricing = $pricingByOrder[$slot] ?? [];
-                $price = (float)($pricing['price'] ?? ($row['ราคาต่อชิ้น'] ?? ($row['price_estimate'] ?? ($row['price'] ?? 0))));
-                $lineTotal = (float)($pricing['sum'] ?? ($row['ราคารวม'] ?? ($row['line_total'] ?? 0)));
+                $price = drawdream_needlist_round_money((float)($pricing['price'] ?? ($row['ราคาต่อชิ้น'] ?? ($row['price_estimate'] ?? ($row['price'] ?? 0)))));
+                $lineTotal = drawdream_needlist_round_money((float)($pricing['sum'] ?? ($row['ราคารวม'] ?? ($row['line_total'] ?? 0))));
                 if ($lineTotal <= 0 && $qty > 0 && $price > 0) {
-                    $lineTotal = $qty * $price;
+                    $lineTotal = drawdream_needlist_round_money($qty * $price);
                 }
                 if ($qty <= 0 || $price <= 0) {
                     continue;
@@ -143,12 +143,14 @@ function drawdream_need_item_lines_from_row(array $item): array
         }
         if (!$hasPrice) {
             $fallbackTotal = (float)($item['total_price'] ?? 0);
-            $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0) ? ($fallbackTotal / $qtySum) : 0.0;
+            $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0)
+                ? drawdream_needlist_round_money($fallbackTotal / $qtySum)
+                : 0.0;
             if ($fallbackUnit > 0) {
                 foreach ($lines as $i => $r) {
                     $q = (float)($r['qty_needed'] ?? 0);
                     $lines[$i]['price_estimate'] = $fallbackUnit;
-                    $lines[$i]['line_total'] = $q * $fallbackUnit;
+                    $lines[$i]['line_total'] = drawdream_needlist_round_money($q * $fallbackUnit);
                 }
             }
         }
@@ -156,7 +158,7 @@ function drawdream_need_item_lines_from_row(array $item): array
     }
     $fallbackQty = (float)($item['qty_needed'] ?? 0);
     $fallbackTotal = (float)($item['total_price'] ?? 0);
-    $fallbackPrice = $fallbackQty > 0 ? ($fallbackTotal / $fallbackQty) : 0.0;
+    $fallbackPrice = $fallbackQty > 0 ? drawdream_needlist_round_money($fallbackTotal / $fallbackQty) : 0.0;
     if ($fallbackQty > 0 && $fallbackPrice > 0) {
         return [[
             'item_name' => trim((string)($item['item_name'] ?? '')) !== '' ? (string)$item['item_name'] : 'รายการสิ่งของ',
@@ -188,7 +190,7 @@ function drawdream_build_need_catalog(array $items): array
             if ($name === '' || $qty <= 0 || $price <= 0) {
                 continue;
             }
-            $key = mb_strtolower($name, 'UTF-8') . '|' . number_format($price, 4, '.', '');
+            $key = mb_strtolower($name, 'UTF-8') . '|' . number_format($price, 2, '.', '');
             if (!isset($catalog[$key])) {
                 $catalog[$key] = [
                     'name' => $name,
@@ -344,7 +346,7 @@ function _omise_local_mock(string $path, array $data): array {
     <title>บริจาครายการสิ่งของ | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css">
     <link rel="stylesheet" href="../css/payment.css">
-    <link rel="stylesheet" href="../css/foundation.css?v=21">
+    <link rel="stylesheet" href="../css/foundation.css?v=23">
 </head>
 <body class="foundation-donate-page">
 
@@ -397,15 +399,59 @@ function _omise_local_mock(string $path, array $data): array {
                     $total = number_format((float)($item['total_price'] ?? 0), 0);
                     $urgent = !empty($item['urgent']);
                 ?>
+                    <?php
+                    $slidesNeed = [];
+                    foreach ($imgsThree as $imn) {
+                        if (trim((string)$imn) !== '') {
+                            $slidesNeed[] = $imn;
+                        }
+                    }
+                    if ($slidesNeed === []) {
+                        $slidesNeed = [''];
+                    }
+                    $nNeedSlides = count($slidesNeed);
+                    $needCarouselCtrl = $nNeedSlides > 1;
+                ?>
                 <div class="fd-item-row<?= $urgent ? ' fd-item-urgent' : '' ?>">
-                    <div class="fd-item-thumbs">
-                    <?php foreach ($imgsThree as $imn): ?>
-                        <?php if ($imn !== ''): ?>
-                        <img src="../uploads/needs/<?= htmlspecialchars($imn) ?>" class="fd-item-thumb" alt="">
-                        <?php else: ?>
-                        <div class="fd-item-noimg fd-item-noimg--small" title="ไม่มีรูป">—</div>
+                    <div class="fd-item-carousel<?= !$needCarouselCtrl ? ' fd-item-carousel--single' : '' ?>">
+                        <div
+                            id="fd-need-carousel-<?= (int)($item['item_id'] ?? 0) ?>"
+                            class="fd-item-carousel-viewport"
+                            role="region"
+                            aria-roledescription="carousel"
+                            aria-label="ภาพสิ่งของ"
+                            <?= $needCarouselCtrl ? ' tabindex="0"' : '' ?>
+                        >
+                            <?php foreach ($slidesNeed as $imnSlide): ?>
+                            <div class="fd-item-carousel-slide">
+                                <?php if ($imnSlide !== ''): ?>
+                                <img src="../uploads/needs/<?= htmlspecialchars($imnSlide) ?>" class="fd-item-carousel-img" alt="" loading="lazy" decoding="async">
+                                <?php else: ?>
+                                <div class="fd-item-carousel-placeholder" aria-hidden="true">—</div>
+                                <?php endif; ?>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php if ($needCarouselCtrl): ?>
+                        <div class="fd-item-carousel-footer">
+                            <button type="button" class="fd-item-carousel-btn fd-item-carousel-prev" aria-controls="fd-need-carousel-<?= (int)($item['item_id'] ?? 0) ?>" aria-label="ภาพก่อนหน้า">
+                                ‹
+                            </button>
+                            <div class="fd-item-carousel-dots" role="group" aria-label="เลื่อนภาพ">
+                                <?php for ($dsi = 0; $dsi < $nNeedSlides; $dsi++): ?>
+                                    <button
+                                        type="button"
+                                        class="fd-item-carousel-dot<?= $dsi === 0 ? ' is-active' : '' ?>"
+                                        aria-label="ภาพที่ <?= $dsi + 1 ?>"
+                                        <?= $dsi === 0 ? ' aria-current="true"' : '' ?>
+                                        data-slide-index="<?= $dsi ?>"></button>
+                                <?php endfor; ?>
+                            </div>
+                            <button type="button" class="fd-item-carousel-btn fd-item-carousel-next" aria-controls="fd-need-carousel-<?= (int)($item['item_id'] ?? 0) ?>" aria-label="ภาพถัดไป">
+                                ›
+                            </button>
+                        </div>
                         <?php endif; ?>
-                    <?php endforeach; ?>
                     </div>
                     <div class="fd-item-detail">
                         <div class="fd-item-name">
@@ -470,6 +516,9 @@ function _omise_local_mock(string $path, array $data): array {
                             <span>PromptPay QR</span>
                         </div>
                     </div>
+                    <p class="fd-impact-preview-intro" style="margin:12px 0 6px;font-size:0.88rem;color:#64748b;line-height:1.45;font-family:'Sarabun',sans-serif;">
+                        จำลองการจัดซื้อตามลำดับรายการและราคาต่อชิ้น (ซื้อเป็นชิ้นเต็มเท่านั้น)
+                    </p>
                     <div class="fd-impact-preview" id="donationImpactPreview" aria-live="polite">
                         <div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>
                         <p class="fd-impact-preview__empty">กรอกจำนวนเงินเพื่อดูรายการสิ่งของและจำนวนชิ้นที่ซื้อได้</p>
@@ -551,8 +600,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (price <= 0 || maxQty <= 0 || remain < price) return;
             var buyQty = Math.min(maxQty, Math.floor(remain / price));
             if (buyQty <= 0) return;
-            var cost = buyQty * price;
-            remain -= cost;
+            var cost = Math.round(buyQty * price * 100) / 100;
+            remain = Math.round((remain - cost) * 100) / 100;
             rows.push({
                 name: String(it.name || 'รายการสิ่งของ'),
                 qty: buyQty,
@@ -570,14 +619,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var listHtml = rows.map(function (r) {
             return '<li><span>' + fdEscapeHtml(r.name) + '</span><strong>' + fdFormatBaht(r.qty) + ' ชิ้น</strong></li>';
         }).join('');
-        var used = amount - remain;
-        var remainText = remain > 0
-            ? ' · เหลือ ' + fdFormatBaht(remain) + ' บาท'
-            : '';
         impactRoot.innerHTML =
             '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
-            '<ul class="fd-impact-preview__list">' + listHtml + '</ul>' +
-            '<div class="fd-impact-preview__meta">ใช้เงินประมาณ ' + fdFormatBaht(used) + ' บาท' + remainText + '</div>';
+            '<ul class="fd-impact-preview__list">' + listHtml + '</ul>';
     }
 
     var maxB = fdGetMaxDonateBaht();
@@ -596,6 +640,93 @@ document.addEventListener('DOMContentLoaded', function () {
         amtInput.addEventListener('change', fdRenderImpactPreview);
     }
     fdRenderImpactPreview();
+
+    (function fdInitNeedItemCarousels() {
+        document.querySelectorAll('.fd-item-carousel .fd-item-carousel-footer').forEach(function (footer) {
+            var carousel = footer.closest('.fd-item-carousel');
+            var vp = carousel ? carousel.querySelector('.fd-item-carousel-viewport') : null;
+            if (!carousel || !vp) return;
+            var dots = footer.querySelectorAll('.fd-item-carousel-dot');
+            var btnPrev = footer.querySelector('.fd-item-carousel-prev');
+            var btnNext = footer.querySelector('.fd-item-carousel-next');
+            function slideCount() {
+                return vp.querySelectorAll('.fd-item-carousel-slide').length;
+            }
+            function slideSpan() {
+                var w = vp.clientWidth;
+                return w > 0 ? w : 1;
+            }
+            function clampIdx(i) {
+                var n = slideCount();
+                if (n <= 0) return 0;
+                return ((i % n) + n) % n;
+            }
+            function syncDots(idx) {
+                dots.forEach(function (d, di) {
+                    var on = di === idx;
+                    d.classList.toggle('is-active', on);
+                    if (on) d.setAttribute('aria-current', 'true');
+                    else d.removeAttribute('aria-current');
+                });
+            }
+            function currentIdx() {
+                var sp = slideSpan();
+                return clampIdx(Math.round(vp.scrollLeft / sp));
+            }
+            function go(targetIdx) {
+                var n = slideCount();
+                if (n <= 1) return;
+                var idx = clampIdx(targetIdx);
+                vp.scrollTo({ left: idx * slideSpan(), behavior: 'smooth' });
+                syncDots(idx);
+            }
+            var scrollT = null;
+            vp.addEventListener('scroll', function () {
+                if (scrollT) window.cancelAnimationFrame(scrollT);
+                scrollT = window.requestAnimationFrame(function () {
+                    scrollT = null;
+                    syncDots(currentIdx());
+                });
+            }, { passive: true });
+            var resizeTO = null;
+            window.addEventListener('resize', function () {
+                if (resizeTO) window.clearTimeout(resizeTO);
+                resizeTO = window.setTimeout(function () {
+                    resizeTO = null;
+                    var ix = currentIdx();
+                    vp.scrollLeft = ix * slideSpan();
+                    syncDots(ix);
+                }, 120);
+            });
+            if (btnPrev) {
+                btnPrev.addEventListener('click', function () {
+                    go(currentIdx() - 1);
+                });
+            }
+            if (btnNext) {
+                btnNext.addEventListener('click', function () {
+                    go(currentIdx() + 1);
+                });
+            }
+            dots.forEach(function (dot) {
+                dot.addEventListener('click', function () {
+                    var raw = dot.getAttribute('data-slide-index');
+                    var i = raw == null ? NaN : parseInt(raw, 10);
+                    if (!isNaN(i)) go(i);
+                });
+            });
+            vp.addEventListener('keydown', function (e) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    go(currentIdx() - 1);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    go(currentIdx() + 1);
+                }
+            });
+            syncDots(0);
+        });
+    }());
 });
 document.getElementById('foundationDonateForm').addEventListener('submit', function (e) {
     var inp = document.getElementById('amountInput');

@@ -385,6 +385,7 @@ if (($sres['object'] ?? '') === 'error') {
             ]
         );
         drawdream_send_e_receipt_notification_by_donate_id($conn, $firstDonateId);
+        drawdream_child_sync_sponsorship_status($conn, $childId);
     }
 
     $nextThai = $nextAt->format('d/m/Y') . ' เวลา 08:00 น. (เวลาไทย)';
@@ -425,6 +426,7 @@ drawdream_child_subscription_history_log(
         'bill_day' => $billDay,
     ]
 );
+drawdream_child_sync_sponsorship_status($conn, $childId);
 
 $updCard2 = $conn->prepare('UPDATE donor SET omise_card_id = ? WHERE user_id = ?');
 if ($updCard2) {

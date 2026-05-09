@@ -81,7 +81,6 @@ if (!empty($p['project_image'])) {
 
 $endDate = trim(substr((string)($p['end_date'] ?? ''), 0, 10));
 $startDate = trim(substr((string)($p['start_date'] ?? ''), 0, 10));
-$mergedInto = (int)($p['merged_into_project_id'] ?? 0);
 
 $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงการ'), ENT_QUOTES, 'UTF-8');
 ?>
@@ -120,12 +119,6 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
         <div class="foundation-status-alert st-pending">โครงการนี้รอแอดมินตรวจสอบ</div>
     <?php elseif (($p['project_status'] ?? '') === 'rejected'): ?>
         <div class="foundation-status-alert st-rejected">โครงการนี้ไม่ผ่านการอนุมัติ<?= $remark !== '' ? ': ' . htmlspecialchars($remark) : '' ?></div>
-    <?php endif; ?>
-
-    <?php if ($mergedInto > 0): ?>
-        <div class="foundation-project-view-note foundation-project-view-note--merge">
-            <strong>สมทบยอดแล้ว</strong> — ยอดบริจาคถูกนำไปรวมกับโครงการหมายเลข <?= (int)$mergedInto ?>
-        </div>
     <?php endif; ?>
 
     <div class="foundation-project-view-progress">

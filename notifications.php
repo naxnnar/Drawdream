@@ -17,25 +17,15 @@ if (!isset($_SESSION['user_id']) || !in_array($role, ['foundation', 'donor'], tr
 
 $uid = (int)$_SESSION['user_id'];
 
-if (isset($_GET['mark_read'])) {
-    $stmt = $conn->prepare('UPDATE notifications SET is_read = 1 WHERE user_id = ?');
-    if ($stmt) {
-        $stmt->bind_param('i', $uid);
-        $stmt->execute();
-    }
-    header('Location: notifications.php');
-    exit();
-}
-
 $result = mysqli_query(
     $conn,
     'SELECT * FROM notifications WHERE user_id = ' . (int)$uid . ' ORDER BY created_at DESC LIMIT 200'
 );
 
-$unreadRow = mysqli_fetch_assoc(
-    mysqli_query($conn, 'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ' . (int)$uid . ' AND is_read = 0')
+$countRow = mysqli_fetch_assoc(
+    mysqli_query($conn, 'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ' . (int)$uid)
 );
-$unread_count = (int)($unreadRow['cnt'] ?? 0);
+$notif_count = (int)($countRow['cnt'] ?? 0);
 
 ?>
 <!DOCTYPE html>
@@ -90,22 +80,6 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
             font-family: 'Sarabun', sans-serif;
         }
 
-        .btn-markall {
-            padding: 8px 20px;
-            background: white;
-            border: 2px solid #4A5BA8;
-            border-radius: 20px;
-            color: #4A5BA8;
-            font-family: 'Prompt', sans-serif;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-
-        .btn-markall:hover { background: #4A5BA8; color: white; }
-
         .notif-list {
             display: flex;
             flex-direction: column;
@@ -134,19 +108,14 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
             box-shadow: 0 4px 14px rgba(0,0,0,0.1);
         }
 
-        .notif-card.unread {
-            border-left-color: #4A5BA8;
-            background: #f0f4ff;
-        }
-
         .notif-card.type-project_funded { border-left-color: #4CAF50; }
-        .notif-card.unread.type-project_funded { background: #f0fff4; }
+        .notif-card.type-project_funded { background: #f0fff4; }
 
         .notif-card.type-needlist_done { border-left-color: #FF9800; }
-        .notif-card.unread.type-needlist_done { background: #fff8f0; }
+        .notif-card.type-needlist_done { background: #fff8f0; }
 
         .notif-card.type-broadcast { border-left-color: #5c6bc0; }
-        .notif-card.unread.type-broadcast { background: #eef1ff; }
+        .notif-card.type-broadcast { background: #eef1ff; }
 
         .notif-icon {
             font-size: 28px;
@@ -177,15 +146,6 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
             font-family: 'Sarabun', sans-serif;
         }
 
-        .notif-dot {
-            width: 10px;
-            height: 10px;
-            background: #4A5BA8;
-            border-radius: 50%;
-            flex-shrink: 0;
-            margin-top: 6px;
-        }
-
         .empty {
             text-align: center;
             padding: 60px 20px;
@@ -204,7 +164,6 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
             .notif-icon { font-size: 22px; }
             .notif-title { font-size: 14px; }
             .notif-message { font-size: 12px; }
-            .btn-markall { padding: 7px 14px; font-size: 12px; }
         }
     </style>
 </head>
@@ -215,20 +174,16 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
     <div class="page-header">
         <div class="page-title">
             🔔 การแจ้งเตือน
-            <?php if ($unread_count > 0): ?>
-                <span class="badge-unread"><?= (int)$unread_count ?> ใหม่</span>
+            <?php if ($notif_count > 0): ?>
+                <span class="badge-unread"><?= (int)$notif_count ?> รายการ</span>
             <?php endif; ?>
         </div>
-        <?php if ($unread_count > 0): ?>
-            <a href="?mark_read=all" class="btn-markall">อ่านทั้งหมดแล้ว</a>
-        <?php endif; ?>
     </div>
     <p class="page-sub">แสดงประวัติล่าสุดไม่เกิน 200 รายการ</p>
 
     <?php if ($result && mysqli_num_rows($result) > 0): ?>
         <div class="notif-list">
         <?php while ($row = mysqli_fetch_assoc($result)):
-            $is_unread = !(bool)$row['is_read'];
             $type = $row['type'] ?? '';
             $typeBucket = drawdream_normalize_notif_type_to_th($type);
             $icon = match ($typeBucket) {
@@ -264,7 +219,7 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
                 && strpos($rawLink, 'view=outcome') === false) {
                 $rawLink .= (str_contains($rawLink, '?') ? '&' : '?') . 'view=outcome';
             }
-            $cardClasses = 'notif-card ' . ($is_unread ? 'unread' : '') . ' type-' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8');
+            $cardClasses = 'notif-card type-' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8');
         ?>
             <?php if ($rawLink !== ''): ?>
             <a href="<?= htmlspecialchars($rawLink, ENT_QUOTES, 'UTF-8') ?>" class="<?= $cardClasses ?>">
@@ -277,9 +232,6 @@ $unread_count = (int)($unreadRow['cnt'] ?? 0);
                     <div class="notif-message"><?= htmlspecialchars((string)$row['message']) ?></div>
                     <div class="notif-time"><?= htmlspecialchars($time_diff) ?></div>
                 </div>
-                <?php if ($is_unread): ?>
-                    <div class="notif-dot"></div>
-                <?php endif; ?>
             <?php if ($rawLink !== ''): ?>
             </a>
             <?php else: ?>

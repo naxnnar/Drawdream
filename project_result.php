@@ -3,7 +3,9 @@
 // แสดงผลลัพธ์โครงการที่เสร็จสิ้น (สำหรับผู้บริจาค/บุคคลทั่วไป)
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project result
 include 'db.php';
+require_once __DIR__ . '/includes/drawdream_project_updates_schema.php';
 session_start();
+drawdream_ensure_foundation_project_update_columns($conn);
 
 $project_id = isset($_GET['project_id']) ? (int)$_GET['project_id'] : 0;
 if ($project_id <= 0) {
@@ -40,10 +42,20 @@ if ($text !== '' || $rawUpdImg !== '') {
         'update_image' => '',
     ];
 } else {
-    $stmt2 = $conn->prepare("SELECT * FROM project_updates WHERE project_id = ? ORDER BY update_id DESC LIMIT 1");
-    $stmt2->bind_param("i", $project_id);
-    $stmt2->execute();
-    $update = $stmt2->get_result()->fetch_assoc() ?: null;
+    // รองรับฐานข้อมูลที่ไม่มีตาราง project_updates (ใช้คอลัมน์ update_* ใน foundation_project เป็นหลัก)
+    $hasLegacyUpdatesTable = false;
+    $chkUpdates = @$conn->query("SHOW TABLES LIKE 'project_updates'");
+    if ($chkUpdates && $chkUpdates->num_rows > 0) {
+        $hasLegacyUpdatesTable = true;
+    }
+    if ($hasLegacyUpdatesTable) {
+        $stmt2 = $conn->prepare("SELECT * FROM project_updates WHERE project_id = ? ORDER BY update_id DESC LIMIT 1");
+        if ($stmt2) {
+            $stmt2->bind_param("i", $project_id);
+            $stmt2->execute();
+            $update = $stmt2->get_result()->fetch_assoc() ?: null;
+        }
+    }
 }
 
 function drawdream_project_result_image_path(string $filename): string {

@@ -316,7 +316,18 @@ if ($role === 'foundation') {
                     $profMeta = children_row_profile_status_meta($r);
                     $cycleAmtRow = (float)($cycleTotals[$cid] ?? 0);
                     $sponsoredRow = drawdream_child_is_showcase_sponsored($conn, $cid, $r, $cycleAmtRow, $planSponsoredMap);
-                    $sponsorLabel = $sponsoredRow ? 'มีผู้อุปการะ' : 'รออุปการะ';
+                    $uiSponsor = drawdream_child_sponsorship_ui_status($conn, $cid);
+                    $sponsorLabel = trim((string)($uiSponsor['label'] ?? ''));
+                    if ($sponsorLabel === '') {
+                        $sponsorLabel = $sponsoredRow ? 'อุปการะแล้ว' : 'รออุปการะ';
+                    }
+                    $sponsorDetail = trim((string)($uiSponsor['detail'] ?? ''));
+                    $sponsorPillClass = 'admin-pill--danger';
+                    if ($sponsorLabel === 'อุปการะแล้ว' || $sponsorLabel === 'มีผู้อุปการะ') {
+                        $sponsorPillClass = 'admin-pill--success';
+                    } elseif ($sponsorLabel === 'ยกเลิกแล้ว') {
+                        $sponsorPillClass = 'admin-pill--warning';
+                    }
                     $imgSrc = $photo !== '' ? 'uploads/childern/' . rawurlencode($photo) : '';
                     ?>
                     <tr>
@@ -335,9 +346,12 @@ if ($role === 'foundation') {
                             </span>
                         </td>
                         <td>
-                            <span class="admin-pill <?php echo $sponsoredRow ? 'admin-pill--success' : 'admin-pill--danger'; ?>">
+                            <span class="admin-pill <?php echo htmlspecialchars($sponsorPillClass); ?>">
                                 <?php echo htmlspecialchars($sponsorLabel); ?>
                             </span>
+                            <?php if ($sponsorDetail !== ''): ?>
+                                <div class="b--muted" style="margin-top:4px;font-size:12px;line-height:1.35;"><?php echo htmlspecialchars($sponsorDetail); ?></div>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <div class="admin-dir-actions">

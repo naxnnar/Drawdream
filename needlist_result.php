@@ -32,16 +32,30 @@ $agg->execute();
 $rowAgg = $agg->get_result()->fetch_assoc();
 $current = (float)($rowAgg['c'] ?? 0);
 $goal = (float)($rowAgg['g'] ?? 0);
-$goalMet = $goal > 0 && $current >= $goal;
-
-if (!$goalMet) {
-    echo '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ผลลัพธ์สิ่งของ</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center;">ยังไม่ครบเป้าหมายการระดมทุนสิ่งของ หรือไม่มีรายการที่เปิดรับบริจาค<br><a href="foundation.php">กลับหน้ามูลนิธิ</a></body></html>';
-    exit;
+$latest = $conn->prepare("
+    SELECT update_text, update_images, update_at
+    FROM foundation_needlist
+    WHERE foundation_id = ? AND approve_item = 'done'
+      AND (
+        COALESCE(TRIM(update_text), '') <> ''
+        OR (update_images IS NOT NULL AND TRIM(update_images) <> '' AND TRIM(update_images) <> '[]')
+      )
+    ORDER BY update_at DESC, item_id DESC
+    LIMIT 1
+");
+$text = '';
+$rawImg = '';
+$updateAt = null;
+if ($latest) {
+    $latest->bind_param('i', $fid);
+    $latest->execute();
+    $latestRow = $latest->get_result()->fetch_assoc();
+    if (is_array($latestRow)) {
+        $text = trim((string)($latestRow['update_text'] ?? ''));
+        $rawImg = trim((string)($latestRow['update_images'] ?? ''));
+        $updateAt = $latestRow['update_at'] ?? null;
+    }
 }
-
-$text = trim((string)($fp['needlist_result_text'] ?? ''));
-$rawImg = trim((string)($fp['needlist_result_images'] ?? ''));
-$updateAt = $fp['needlist_result_at'] ?? null;
 
 function drawdream_needlist_result_image_path(string $filename): string
 {
@@ -78,6 +92,7 @@ function drawdream_needlist_result_images_from_profile(string $raw): array
 
 $imageList = drawdream_needlist_result_images_from_profile($rawImg);
 $hasContent = $text !== '' || $imageList !== [];
+$goalMet = $goal > 0 && $current >= $goal;
 $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
 
 ?><!DOCTYPE html>

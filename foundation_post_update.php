@@ -40,39 +40,12 @@ if (!$readonly) {
 }
 
 /**
- * โครงการที่อนุญาตให้อัปเดตผลลัพธ์ (ให้ตรงกับเงื่อนไขใน project.php)
- * - completed/done/purchasing: อัปเดตได้ทันที
- * - approved: ต้องถึงเป้าและเลยวันปิดรับแล้ว
+ * โครงการที่อนุญาตให้อัปเดตผลลัพธ์
+ * - purchasing/done เท่านั้น (หลังแอดมินยืนยัน escrow แล้ว)
  */
 function drawdream_project_allow_outcome_update(array $project): bool {
     $status = strtolower(trim((string)($project['project_status'] ?? '')));
-    if (in_array($status, ['completed', 'done', 'purchasing'], true)) {
-        return true;
-    }
-
-    if ($status !== 'approved') {
-        return false;
-    }
-
-    $goal = (float)($project['goal_amount'] ?? 0);
-    $raised = (float)($project['current_donate'] ?? 0);
-    if ($goal <= 0 || $raised < $goal) {
-        return false;
-    }
-
-    $endRaw = (string)($project['end_date'] ?? '');
-    if ($endRaw === '') {
-        return false;
-    }
-
-    try {
-        $tz = new DateTimeZone('Asia/Bangkok');
-        $endDate = new DateTimeImmutable(substr($endRaw, 0, 10), $tz);
-        $today = new DateTimeImmutable('now', $tz);
-        return $endDate->format('Y-m-d') <= $today->format('Y-m-d');
-    } catch (Exception $e) {
-        return false;
-    }
+    return in_array($status, ['purchasing', 'done'], true);
 }
 
 // ✅ รับ project_id จาก URL (มาจากแจ้งเตือน)
@@ -85,7 +58,7 @@ if ($locked_project_id > 0) {
         $lk = $conn->prepare("
             SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
             FROM foundation_project 
-            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('approved','completed','done','purchasing') AND deleted_at IS NULL
+            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('purchasing','done') AND deleted_at IS NULL
             LIMIT 1
         ");
         $lk->bind_param("is", $locked_project_id, $foundation['foundation_name']);
@@ -96,7 +69,7 @@ if ($locked_project_id > 0) {
         $lk = $conn->prepare("
             SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
             FROM foundation_project 
-            WHERE project_id = ? AND project_status IN ('approved','completed','done','purchasing') AND deleted_at IS NULL
+            WHERE project_id = ? AND project_status IN ('purchasing','done') AND deleted_at IS NULL
             LIMIT 1
         ");
         $lk->bind_param("i", $locked_project_id);
@@ -117,7 +90,7 @@ if ($locked_project_id > 0 && $locked_project) {
     $stmt2 = $conn->prepare("
         SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
         FROM foundation_project 
-        WHERE foundation_id = ? AND project_status IN ('approved','completed','done','purchasing') AND deleted_at IS NULL
+        WHERE foundation_id = ? AND project_status IN ('purchasing','done') AND deleted_at IS NULL
         ORDER BY project_id DESC
     ");
     $stmt2->bind_param("i", $fid);
@@ -203,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
                 UPDATE foundation_project
                 SET update_text = ?, update_at = NOW(), update_images = ?
                 WHERE project_id = ? AND foundation_name = ?
-                  AND LOWER(TRIM(COALESCE(project_status,''))) IN ('approved','completed','done','purchasing')
+                  AND LOWER(TRIM(COALESCE(project_status,''))) IN ('purchasing','done')
                   AND deleted_at IS NULL
                 LIMIT 1
             ");
@@ -285,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
     <?php if (empty($projects)): ?>
         <div class="no-project">
             ยังไม่มีโครงการที่พร้อมอัปเดตผลลัพธ์<br>
-            <small style="color:#bbb;">โครงการจะปรากฏเมื่อสถานะเป็นเสร็จสิ้น หรือระดมทุนครบและเลยวันปิดรับแล้ว</small>
+            <small style="color:#bbb;">โครงการจะปรากฏเมื่อแอดมินยืนยัน escrow แล้ว (สถานะกำลังจัดซื้อ/เสร็จสิ้น)</small>
         </div>
     <?php else: ?>
         <?php

@@ -19,7 +19,7 @@ require_once __DIR__ . '/includes/foundation_account_verified.php';
 drawdream_foundation_require_account_verified($conn);
 
 $user_id = (int)$_SESSION['user_id'];
-$stmt = $conn->prepare('SELECT foundation_id, foundation_name, needlist_result_text, needlist_result_images, needlist_result_at FROM foundation_profile WHERE user_id = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT foundation_id, foundation_name FROM foundation_profile WHERE user_id = ? LIMIT 1');
 $stmt->bind_param('i', $user_id);
 $stmt->execute();
 $foundation = $stmt->get_result()->fetch_assoc();
@@ -29,19 +29,41 @@ if (!$foundation) {
 }
 
 $fid = (int)$foundation['foundation_id'];
-$needOpen = drawdream_needlist_sql_open_for_donation();
-$agg = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
+$agg = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g FROM foundation_needlist WHERE foundation_id = ?");
 $agg->bind_param('i', $fid);
 $agg->execute();
 $rowAgg = $agg->get_result()->fetch_assoc();
 $current = (float)($rowAgg['c'] ?? 0);
 $goal = (float)($rowAgg['g'] ?? 0);
-$goalMet = $goal > 0 && $current >= $goal;
+
+$readyStmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'done'");
+$readyStmt->bind_param('i', $fid);
+$readyStmt->execute();
+$readyRow = $readyStmt->get_result()->fetch_assoc();
+$resultReady = ((int)($readyRow['cnt'] ?? 0)) > 0;
+
+$latestOutcome = null;
+$latestStmt = $conn->prepare("
+    SELECT update_text, update_images, update_at
+    FROM foundation_needlist
+    WHERE foundation_id = ? AND approve_item = 'done'
+      AND (
+        COALESCE(TRIM(update_text), '') <> ''
+        OR (update_images IS NOT NULL AND TRIM(update_images) <> '' AND TRIM(update_images) <> '[]')
+      )
+    ORDER BY update_at DESC, item_id DESC
+    LIMIT 1
+");
+if ($latestStmt) {
+    $latestStmt->bind_param('i', $fid);
+    $latestStmt->execute();
+    $latestOutcome = $latestStmt->get_result()->fetch_assoc() ?: null;
+}
 
 $success = '';
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $goalMet) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resultReady) {
     $description = trim((string)($_POST['outcome_text'] ?? ''));
     $newImageNames = [];
     $uploadDir = __DIR__ . '/uploads/evidence';
@@ -106,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $goalMet) {
 
     if (!$error) {
         $existingImages = [];
-        $rawImages = trim((string)($foundation['needlist_result_images'] ?? ''));
+        $rawImages = trim((string)($latestOutcome['update_images'] ?? ''));
         if ($rawImages !== '') {
             $arr = json_decode($rawImages, true);
             if (is_array($arr)) {
@@ -127,14 +149,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $goalMet) {
         } else {
             $finalImagesJson = json_encode(array_values(array_unique($finalImages)), JSON_UNESCAPED_UNICODE);
 
-            $up = $conn->prepare('UPDATE foundation_profile SET needlist_result_text = ?, needlist_result_at = NOW(), needlist_result_images = ? WHERE foundation_id = ? AND user_id = ? LIMIT 1');
-            $up->bind_param('ssii', $description, $finalImagesJson, $fid, $user_id);
+            $up = $conn->prepare("
+                UPDATE foundation_needlist
+                SET update_text = ?, update_at = NOW(), update_images = ?
+                WHERE foundation_id = ? AND approve_item = 'done'
+            ");
+            $up->bind_param('ssi', $description, $finalImagesJson, $fid);
             $up->execute();
 
             $success = 'บันทึกผลลัพธ์เรียบร้อยแล้ว';
-            $foundation['needlist_result_text'] = $description;
-            $foundation['needlist_result_images'] = $finalImagesJson;
-            $foundation['needlist_result_at'] = date('Y-m-d H:i:s');
+            $latestOutcome = [
+                'update_text' => $description,
+                'update_images' => $finalImagesJson,
+                'update_at' => date('Y-m-d H:i:s'),
+            ];
         }
     }
 
@@ -148,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $goalMet) {
     }
 }
 
-$prefillDesc = (string)($foundation['needlist_result_text'] ?? '');
+$prefillDesc = (string)($latestOutcome['update_text'] ?? '');
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
     $prefillDesc = trim((string)($_POST['outcome_text'] ?? ''));
 }
@@ -177,10 +205,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
         <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 
-    <?php if (!$goalMet): ?>
+    <?php if (!$resultReady): ?>
         <div class="no-project">
-            ยังไม่ครบเป้าหมายการระดมทุนสิ่งของตามรายการที่เปิดรับบริจาคอยู่<br>
-            <small style="color:#bbb;">เมื่อยอดรวมครบเป้าหมายแล้ว คุณจะโพสต์ผลลัพธ์ได้ที่หน้านี้</small>
+            ยังไม่ถึงขั้นอัปเดตผลลัพธ์สิ่งของ<br>
+            <small style="color:#bbb;">หน้านี้จะเปิดให้โพสต์ได้เมื่อแอดมินยืนยันจัดส่งสิ่งของแล้ว (สถานะ done)</small>
         </div>
     <?php else: ?>
         <div class="form-box">
@@ -198,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
                 <div class="outcome-target-card__label">รายการสิ่งของที่ครบเป้าหมาย</div>
                 <div class="outcome-target-card__name"><?= htmlspecialchars((string)($foundation['foundation_name'] ?? 'มูลนิธิของคุณ')) ?></div>
                 <div class="outcome-target-card__meta">
-                    ได้รับเงิน <?= number_format($current, 0) ?> / <?= number_format($goal, 0) ?> บาท
+                    ยอดรวมรายการสิ่งของ <?= number_format($current, 0) ?> / <?= number_format($goal, 0) ?> บาท
                 </div>
             </div>
             <p style="color:#666;font-size:0.95rem;margin-bottom:1rem;">ข้อความและรูปจะแสดงในหน้า <a href="needlist_result.php?fid=<?= (int)$fid ?>">ผลลัพธ์ของมูลนิธิ (สาธารณะ)</a></p>

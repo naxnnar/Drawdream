@@ -235,6 +235,25 @@
 .foundation-hero-track {
     position: relative;
 }
+.foundation-hero-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #2e3f7f;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16);
+    z-index: 4;
+}
+.foundation-hero-nav--prev { left: 10px; }
+.foundation-hero-nav--next { right: 10px; }
+.foundation-hero-nav:hover { background: #fff; }
 /* ต้องชนะ .foundation-card { display: grid } มิฉะนั้นสไลด์ที่ปิดจะยังกินพื้นที่ → เห็นการ์ดซ้อนลงมา */
 .foundation-hero-track .foundation-card.foundation-slide:not(.is-active) {
     display: none;
@@ -415,6 +434,13 @@
         padding-right: 16px;
         font-size: clamp(1rem, 4vw, 1.15rem);
     }
+    .foundation-hero-nav {
+        width: 36px;
+        height: 36px;
+        font-size: 22px;
+    }
+    .foundation-hero-nav--prev { left: 4px; }
+    .foundation-hero-nav--next { right: 4px; }
 }
 
 @media (max-width: 480px) {
@@ -1150,14 +1176,17 @@ body.foundation-donate-page {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 .fd-cover {
-    width: 100%;
-    max-height: 260px;
+    display: block;
+    width: calc(100% + 56px);
+    margin: -28px -28px 20px -28px;
+    height: clamp(240px, 31vw, 360px);
+    max-height: none;
     object-fit: cover;
     border-radius: 0;
-    margin-bottom: 20px;
 }
 
 .fd-name {
@@ -1248,11 +1277,6 @@ body.foundation-donate-page {
     color: #0f766e;
     white-space: nowrap;
 }
-.fd-impact-preview__meta {
-    margin-top: 7px;
-    font-size: 0.82rem;
-    color: #475569;
-}
 
 /* items list */
 .fd-items-wrap {
@@ -1266,33 +1290,134 @@ body.foundation-donate-page {
 .fd-item-row {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 16px;
     padding: 10px 0;
     border-bottom: 1px solid #ebebeb;
 }
 .fd-item-row:last-child { border-bottom: none; padding-bottom: 0; }
 .fd-item-row.fd-item-urgent { background: #fff9f8; border-radius: 8px; padding: 10px 8px; margin-bottom: 4px; border-bottom: 1px solid #fde0d8; }
 
-.fd-item-thumbs {
+/* รูปสิ่งของหน้าบริจาคมูลนิธิ — carousel ภาพเดียว (เลื่อน/เลื่อนสัมผัสได้) */
+.fd-item-carousel {
+    flex-shrink: 0;
+    width: clamp(100px, 24vw, 128px);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+.fd-item-carousel-viewport {
     display: flex;
     flex-direction: row;
-    align-items: flex-start;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    aspect-ratio: 1;
+    border-radius: 10px;
+    background: #eaeaea;
+    box-sizing: border-box;
+    scrollbar-width: thin;
+}
+@media (prefers-reduced-motion: reduce) {
+    .fd-item-carousel-viewport {
+        scroll-behavior: auto;
+    }
+}
+.fd-item-carousel-viewport::-webkit-scrollbar {
+    height: 4px;
+}
+.fd-item-carousel-viewport::-webkit-scrollbar-thumb {
+    background: #bcc3cc;
+    border-radius: 4px;
+}
+.fd-item-carousel-slide {
+    flex: 0 0 100%;
+    min-width: 100%;
+    min-height: 0;
+    align-self: stretch;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    box-sizing: border-box;
+}
+.fd-item-carousel-img {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    object-fit: cover;
+    display: block;
+    border-radius: 10px;
+}
+.fd-item-carousel-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f0f0f0;
+    color: #b0b0b0;
+    font-size: 1rem;
+    border-radius: 10px;
+    box-sizing: border-box;
+}
+.fd-item-carousel-footer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
     gap: 6px;
     flex-shrink: 0;
 }
-.fd-item-thumb { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
-.fd-item-thumb--fdn {
-    width: 44px;
-    height: 44px;
-    object-fit: cover;
-    border-radius: 8px;
+.fd-item-carousel-btn {
     flex-shrink: 0;
-    border: 2px solid #e8dc9a;
-    box-sizing: border-box;
+    border: none;
+    background: #e2e8f0;
+    width: 28px;
+    height: 26px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0;
+    color: #1e293b;
+    font-family: inherit;
 }
-.fd-item-noimg { width: 54px; height: 54px; background: #f0f0f0; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
-.fd-item-noimg--small { width: 44px; height: 44px; font-size: 12px; color: #b0b0b0; }
-
+.fd-item-carousel-btn:hover {
+    background: #cbd5e1;
+}
+.fd-item-carousel-dots {
+    display: flex;
+    flex-direction: row;
+    gap: 5px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+}
+.fd-item-carousel-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: none;
+    padding: 0;
+    background: #cbd5e1;
+    cursor: pointer;
+}
+.fd-item-carousel-dot.is-active {
+    background: #3c5099;
+    transform: scale(1.1);
+}
+.fd-item-carousel-viewport:focus-visible {
+    outline: 2px solid #3c5099;
+    outline-offset: 2px;
+}
+.fd-item-carousel-viewport:focus:not(:focus-visible) {
+    outline: none;
+}
 .fd-item-detail { flex: 1; min-width: 0; }
 .fd-item-name { font-size: 14px; font-weight: 700; color: #1f2937; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .fd-item-meta { font-size: 12px; color: #888; line-height: 1.6; }
@@ -1348,11 +1473,11 @@ body.foundation-donate-page {
     position: relative;
     flex: 1 1 46%;
     min-width: 0;
-    padding: 28px 28px 18px 28px;
+    padding: calc(clamp(240px, 31vw, 360px) + 20px) 28px 18px 28px;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     background: #fff;
     border-left: 1.5px solid #F1CF54;
 }
@@ -1386,7 +1511,7 @@ body.foundation-donate-page .fd-donate-back-circle span {
 
 /* หัวข้อฝั่งฟอร์ม ให้สไตล์ใกล้ .payment-box h3 */
 .fd-donate-section-title {
-    font-size: 1.1em;
+    font-size: 1.26em;
     font-weight: 700;
     color: #222;
     margin: 0 0 10px 0;
@@ -1495,6 +1620,11 @@ body.foundation-donate-page #foundationDonateForm .payment-method {
         border-right: none;
         border-bottom: 1.5px solid #F1CF54;
         padding: 24px 20px;
+    }
+    .fd-cover {
+        width: calc(100% + 40px);
+        margin: -24px -20px 18px -20px;
+        height: clamp(210px, 44vw, 300px);
     }
     .fd-right {
         border-left: none;

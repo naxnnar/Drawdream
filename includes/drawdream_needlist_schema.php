@@ -4,6 +4,12 @@
 // สรุปสั้น: ตรวจและปรับ schema ตาราง needlist ให้รองรับฟีเจอร์ปัจจุบัน
 declare(strict_types=1);
 
+/** ปัดจำนวนเงินเป็นบาททศนิยม 2 ตำแหน่ง (เก็บใน JSON / DB ให้ตรงที่มูลนิธิกรอก ไม่มี float ยาว) */
+function drawdream_needlist_round_money(float $amount): float
+{
+    return round($amount, 2);
+}
+
 /**
  * โครงสร้าง foundation_needlist: รูปสิ่งของได้หลายไฟล์ (คอลัมน์ 3 + item_image เป็น TEXT)
  */
@@ -48,6 +54,24 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     }
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'price_reviewed_at'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN price_reviewed_at DATETIME NULL DEFAULT NULL AFTER approved_total_price');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'update_text'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN update_text LONGTEXT NULL DEFAULT NULL');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'update_images'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN update_images LONGTEXT NULL DEFAULT NULL');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'update_at'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN update_at DATETIME NULL DEFAULT NULL');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'admin_delivery_text'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN admin_delivery_text LONGTEXT NULL DEFAULT NULL');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'admin_delivery_images'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN admin_delivery_images LONGTEXT NULL DEFAULT NULL');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'admin_delivery_at'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN admin_delivery_at DATETIME NULL DEFAULT NULL');
     }
     $hasItemDesc = false;
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'item_desc'")) && $c->num_rows > 0) {
@@ -139,22 +163,24 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
                 $qtySum += max(0.0, $qty);
                 $pricingOut[] = [
                     'ลำดับ' => ((int)$idx + 1),
-                    'ราคาต่อชิ้น' => $price,
-                    'ราคารวม' => $sum,
+                    'ราคาต่อชิ้น' => drawdream_needlist_round_money($price),
+                    'ราคารวม' => drawdream_needlist_round_money($sum),
                 ];
             }
             $totalFromRow = (float)($row['total_price'] ?? 0);
-            $fallbackUnit = ($qtySum > 0 && $totalFromRow > 0) ? ($totalFromRow / $qtySum) : 0.0;
+            $fallbackUnit = ($qtySum > 0 && $totalFromRow > 0)
+                ? drawdream_needlist_round_money($totalFromRow / $qtySum)
+                : 0.0;
             if ($fallbackUnit > 0) {
                 foreach ($pricingOut as $k => $pr) {
-                    $p = (float)($pr['ราคาต่อชิ้น'] ?? 0);
-                    $s = (float)($pr['ราคารวม'] ?? 0);
+                    $p = drawdream_needlist_round_money((float)($pr['ราคาต่อชิ้น'] ?? 0));
+                    $s = drawdream_needlist_round_money((float)($pr['ราคารวม'] ?? 0));
                     $lineQty = (float)($out[$k]['จำนวนสิ่งของ'] ?? 0);
                     if ($p <= 0) {
                         $p = $fallbackUnit;
                     }
                     if ($s <= 0 && $lineQty > 0) {
-                        $s = $lineQty * $p;
+                        $s = drawdream_needlist_round_money($lineQty * $p);
                     }
                     $pricingOut[$k]['ราคาต่อชิ้น'] = $p;
                     $pricingOut[$k]['ราคารวม'] = $s;

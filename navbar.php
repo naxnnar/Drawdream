@@ -41,14 +41,16 @@ $user_notifs      = [];
 $is_logged_in = isset($_SESSION['user_id']);
 if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])) {
   include_once 'db.php';
+  require_once __DIR__ . '/includes/notification_audit.php';
   $uid = (int)$_SESSION['user_id'];
   try {
+    drawdream_ensure_notifications_table($conn);
     $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
     $hasNotificationsTable = $tableCheck && mysqli_num_rows($tableCheck) > 0;
 
     if ($hasNotificationsTable) {
       $stmtNotif = $conn->prepare(
-        "SELECT notif_id, title, message, link, is_read, created_at
+        "SELECT notif_id, title, message, link, created_at
          FROM notifications
          WHERE user_id = ?
          ORDER BY created_at DESC
@@ -62,7 +64,7 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
         while ($n = mysqli_fetch_assoc($notifResult)) {
           $user_notifs[] = $n;
         }
-        $user_notif_count = count(array_filter($user_notifs, fn($n) => !$n['is_read']));
+        $user_notif_count = drawdream_notifications_unread_count($conn, $uid);
       }
     }
 
@@ -70,7 +72,6 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
     if (($_SESSION['role'] ?? '') === 'foundation') {
       require_once __DIR__ . '/includes/donate_category_resolve.php';
       require_once __DIR__ . '/includes/payment_transaction_schema.php';
-      require_once __DIR__ . '/includes/notification_audit.php';
       drawdream_ensure_notifications_table($conn);
       drawdream_payment_transaction_ensure_schema($conn);
       $stmtFid = $conn->prepare("SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1");
@@ -80,6 +81,8 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
         $fidRow = $stmtFid->get_result()->fetch_assoc();
         $fid = (int)($fidRow['foundation_id'] ?? 0);
         if ($fid > 0) {
+            $dismissNeedRoundAuto = (int)($_SESSION['dismiss_auto_need_round_open'] ?? 0) === 1;
+            $dismissChildOutcomeAuto = (int)($_SESSION['dismiss_auto_child_outcome'] ?? 0) === 1;
             // แจ้งเตือนรอบรายการสิ่งของใหม่: ระบบปิดรับอัตโนมัติที่ 1 เดือน และเปิดให้เสนอรอบถัดไป
             $openRoundCount = 0;
             $stOpenRound = $conn->prepare(
@@ -124,24 +127,29 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
               if ($closedNeedTs !== false) {
                 $entityKey = 'fdn_need_round_open:' . date('YmdHis', $closedNeedTs);
                 $alreadyHas = false;
-                $stHasNotif = $conn->prepare("SELECT notif_id FROM notifications WHERE user_id = ? AND entity_key = ? LIMIT 1");
+                $titleNeedRound = 'ถึงเวลาเสนอรายการสิ่งของรอบใหม่';
+                $linkNeedRound = 'foundation_add_need.php';
+                $stHasNotif = $conn->prepare("SELECT notif_id FROM notifications WHERE user_id = ? AND title = ? AND link = ? LIMIT 1");
                 if ($stHasNotif) {
-                  $stHasNotif->bind_param("is", $uid, $entityKey);
+                  $stHasNotif->bind_param("iss", $uid, $titleNeedRound, $linkNeedRound);
                   $stHasNotif->execute();
                   $alreadyHas = (bool)$stHasNotif->get_result()->fetch_assoc();
                 }
-                if (!$alreadyHas) {
+                if (!$alreadyHas && !$dismissNeedRoundAuto) {
                   drawdream_send_notification(
                     $conn,
                     $uid,
                     'need_round_open',
-                    'ถึงเวลาเสนอรายการสิ่งของรอบใหม่',
+                    $titleNeedRound,
                     'รอบก่อนหน้าปิดรับครบ 1 เดือนแล้ว ตอนนี้คุณสามารถเสนอรายการสิ่งของรอบใหม่ได้',
-                    'foundation_add_need.php',
+                    $linkNeedRound,
                     $entityKey
                   );
                 }
               }
+            } else {
+              // เงื่อนไขหมดไปแล้ว: reset dismissal เพื่อให้รอบถัดไปแจ้งเตือนได้อีก
+              unset($_SESSION['dismiss_auto_need_round_open']);
             }
 
             $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
@@ -161,15 +169,19 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
             $stmtPending->execute();
             $pendingCnt = (int)(($stmtPending->get_result()->fetch_assoc()['cnt'] ?? 0));
             if ($pendingCnt > 0) {
-              array_unshift($user_notifs, [
-                'notif_id' => 0,
-                'title' => 'อัปเดตผลลัพธ์เด็ก',
-                'message' => "มีเด็กที่มีผู้อุปการะแล้ว {$pendingCnt} รายการ รออัปเดตผลลัพธ์",
-                'link' => 'children_.php',
-                'is_read' => 0,
-                'created_at' => date('Y-m-d H:i:s'),
-              ]);
-              $user_notif_count += 1;
+              if (!$dismissChildOutcomeAuto) {
+                array_unshift($user_notifs, [
+                  'notif_id' => 0,
+                  'title' => 'อัปเดตผลลัพธ์เด็ก',
+                  'message' => "มีเด็กที่มีผู้อุปการะแล้ว {$pendingCnt} รายการ รออัปเดตผลลัพธ์",
+                  'link' => 'children_.php',
+                  'created_at' => date('Y-m-d H:i:s'),
+                ]);
+                $user_notif_count += 1;
+              }
+            } else {
+              // เงื่อนไขหมดไปแล้ว: reset dismissal เพื่อให้สถานะใหม่แจ้งเตือนได้อีก
+              unset($_SESSION['dismiss_auto_child_outcome']);
             }
           }
         }
@@ -447,8 +459,7 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
                   }
                 ?>
                 <a href="<?= htmlspecialchars($_nav_base . $rawNotifLink, ENT_QUOTES, 'UTF-8') ?>"
-                   class="notif-item <?= $n['is_read'] ? '' : 'unread' ?>"
-                   onclick="<?php echo ((int)($n['notif_id'] ?? 0) > 0) ? 'markRead(' . (int)$n['notif_id'] . ')' : ''; ?>">
+                   class="notif-item">
                   <div class="notif-item-title"><?= htmlspecialchars($n['title']) ?></div>
                   <div class="notif-item-msg"><?= htmlspecialchars($n['message']) ?></div>
                   <div class="notif-item-time"><?= date('d/m/Y H:i', strtotime($n['created_at'])) ?></div>
@@ -579,7 +590,4 @@ document.addEventListener('click', function() {
   if (w) w.classList.remove('open');
   closeNavProfileMenu();
 });
-function markRead(id) {
-  fetch('<?= $_nav_base ?>mark_notif_read.php?id=' + id);
-}
 </script>

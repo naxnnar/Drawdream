@@ -30,32 +30,24 @@ if ($chkPe && $chkPe->num_rows > 0) {
     $conn->query('ALTER TABLE foundation_project DROP COLUMN pending_edit_json');
 }
 
-$chkMrg = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'merged_into_project_id'");
-if ($chkMrg && $chkMrg->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_project ADD COLUMN merged_into_project_id INT UNSIGNED NULL DEFAULT NULL");
-}
-
 $chkNeed = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'need_info'");
 if ($chkNeed && $chkNeed->num_rows === 0) {
     $conn->query("ALTER TABLE foundation_project ADD COLUMN need_info TEXT NULL DEFAULT NULL");
-}
-$chkUpdInf = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'update_info'");
-if ($chkUpdInf && $chkUpdInf->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_project ADD COLUMN update_info TEXT NULL DEFAULT NULL");
 }
 
 $chkProjLoc = $conn->query("SHOW COLUMNS FROM foundation_project WHERE Field = 'location'");
 if ($chkProjLoc && $chkProjLoc->num_rows === 0) {
     $conn->query("ALTER TABLE foundation_project ADD COLUMN location TEXT NULL DEFAULT NULL AFTER need_info");
 }
-// เคยบันทึกพื้นที่ผิดลง update_info — ย้ายไป location ถ้ายังว่าง แล้วล้าง update_info บนโครงการที่ยังไม่จบ
-$conn->query(
-    "UPDATE foundation_project SET location = TRIM(update_info)
-     WHERE LOWER(TRIM(COALESCE(project_status,''))) NOT IN ('completed','done')
-       AND (location IS NULL OR TRIM(COALESCE(location,'')) = '')
-       AND update_info IS NOT NULL AND TRIM(update_info) <> ''"
-);
-$conn->query("UPDATE foundation_project SET update_info = NULL WHERE LOWER(TRIM(COALESCE(project_status,''))) NOT IN ('completed','done')");
+// ล้างคอลัมน์เก่าที่ไม่ใช้แล้ว
+$chkDropMrg = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'merged_into_project_id'");
+if ($chkDropMrg && $chkDropMrg->num_rows > 0) {
+    $conn->query("ALTER TABLE foundation_project DROP COLUMN merged_into_project_id");
+}
+$chkDropUpd = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'update_info'");
+if ($chkDropUpd && $chkDropUpd->num_rows > 0) {
+    $conn->query("ALTER TABLE foundation_project DROP COLUMN update_info");
+}
 
 $conn->query(
     "UPDATE foundation_project p
@@ -138,6 +130,8 @@ if ($editProjectId > 0) {
 
 $project_thai_addr_init_json = 'null';
 $project_addr_parsed = null;
+$tzBangkok = new DateTimeZone('Asia/Bangkok');
+$todayProposalMin = (new DateTimeImmutable('now', $tzBangkok))->format('Y-m-d');
 if ($isEditMode && trim((string)($editingProject['location'] ?? '')) !== '') {
     $project_addr_parsed = drawdream_parse_saved_thai_address($editingProject['location']);
     if ($project_addr_parsed) {
@@ -183,10 +177,13 @@ if (isset($_POST['submit'])) {
         exit();
     }
 
-    $tzBangkok = new DateTimeZone('Asia/Bangkok');
     $dEndDt = DateTimeImmutable::createFromFormat('Y-m-d', $enddate, $tzBangkok);
     if (!$dEndDt || $dEndDt->format('Y-m-d') !== $enddate) {
         echo "<script>alert('รูปแบบวันที่ไม่ถูกต้อง'); history.back();</script>";
+        exit();
+    }
+    if ($dEndDt->format('Y-m-d') < $todayProposalMin) {
+        echo "<script>alert('วันสิ้นสุดรับบริจาคต้องเป็นวันนี้หรือหลังจากวันนี้เท่านั้น'); history.back();</script>";
         exit();
     }
 
@@ -462,7 +459,7 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
 
             <div class="form-group">
                 <label>วันสิ้นสุดรับบริจาค </label>
-                <input type="date" name="end_date" id="donationEndDate" value="<?= htmlspecialchars(substr((string)($editingProject['end_date'] ?? ''), 0, 10)) ?>" required>
+                <input type="date" name="end_date" id="donationEndDate" min="<?= htmlspecialchars($todayProposalMin, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars(substr((string)($editingProject['end_date'] ?? ''), 0, 10)) ?>" required>
             </div>
 
             <div class="form-group">

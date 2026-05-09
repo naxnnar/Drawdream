@@ -553,12 +553,12 @@ function drawdream_child_foundation_sponsor_display_list(mysqli $conn, int $chil
                 $status = 'active';
                 $activeRecurring++;
                 $statusLabel = 'กำลังอุปการะ — ' . $planText;
-                if ($rs === 'cancelled' && !empty($coverage['current']) && ($coverage['end'] ?? null) instanceof DateTimeImmutable) {
+                if (in_array($rs, ['cancelled', 'cancle', 'canceled'], true) && !empty($coverage['current']) && ($coverage['end'] ?? null) instanceof DateTimeImmutable) {
                     $detailLine = 'ยกเลิกการต่ออายุแล้ว · สิทธิ์ถึง ' . $coverage['end']->format('d/m/Y H:i');
                 } else {
                     $detailLine = $subTs > 0 ? ('อัปเดตแผนล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
                 }
-            } elseif ($rs === 'cancelled') {
+            } elseif (in_array($rs, ['cancelled', 'cancle', 'canceled'], true)) {
                 $status = 'cancelled';
                 $statusLabel = 'เคยอุปการะ — ' . $planText . ' · ยกเลิกแล้ว';
                 $detailLine = $subTs > 0 ? ('อัปเดตสถานะล่าสุด: ' . date('d/m/Y H:i', $subTs)) : '';
@@ -750,13 +750,78 @@ function drawdream_child_sync_sponsorship_status(mysqli $conn, int $childId): vo
     if (!empty($row['deleted_at'])) {
         return;
     }
-    $cycle = drawdream_child_cycle_total($conn, $childId, $row);
-    $target = drawdream_child_cycle_target_amount($conn, $childId);
+    // สถานะคอลัมน์ status ต้องสะท้อน "มีผู้อุปการะแบบแพ็กเกจรายรอบ" เท่านั้น
+    // - อุปการะแล้ว: มี subscription active หรือยังอยู่ใน coverage ที่จ่ายไปแล้ว
+    // - รออุปการะ: ไม่เข้าเงื่อนไขข้างบน
+    // ไม่นับยอดบริจาคครั้งเดียวในเดือน (one-time) เพื่อไม่ให้สถานะเพี้ยน
+    if (!function_exists('drawdream_child_has_any_active_subscription')) {
+        require_once __DIR__ . '/child_omise_subscription.php';
+    }
+    $hasActiveSub = function_exists('drawdream_child_has_any_active_subscription')
+        ? drawdream_child_has_any_active_subscription($conn, $childId)
+        : false;
     $hasCoverage = drawdream_child_has_plan_coverage_now($conn, $childId);
-    $status = ($hasCoverage || $cycle >= $target) ? 'อุปการะแล้ว' : 'รออุปการะ';
+    $status = ($hasActiveSub || $hasCoverage) ? 'อุปการะแล้ว' : 'รออุปการะ';
     $stmt = $conn->prepare('UPDATE foundation_children SET status = ? WHERE child_id = ?');
     $stmt->bind_param('si', $status, $childId);
     $stmt->execute();
+}
+
+/**
+ * สถานะอุปการะเพื่อแสดงใน UI ฝั่งมูลนิธิ/แอดมิน (ยึดแพ็กเกจรายรอบจริง)
+ *
+ * @return array{code:string,label:string,detail:string,next_open_at:?DateTimeImmutable}
+ */
+function drawdream_child_sponsorship_ui_status(mysqli $conn, int $childId): array
+{
+    $out = ['code' => 'waiting', 'label' => 'รออุปการะ', 'detail' => '', 'next_open_at' => null];
+    if ($childId <= 0) {
+        return $out;
+    }
+
+    $latest = null;
+    $st = $conn->prepare(
+        "SELECT current_status, recurring_plan_code, recurring_next_charge_at, created_at
+         FROM child_subscription_history
+         WHERE child_id = ?
+         ORDER BY history_id DESC
+         LIMIT 1"
+    );
+    if ($st) {
+        $st->bind_param('i', $childId);
+        $st->execute();
+        $latest = $st->get_result()->fetch_assoc() ?: null;
+    }
+
+    $tz = new DateTimeZone('Asia/Bangkok');
+    $now = new DateTimeImmutable('now', $tz);
+    $coverage = drawdream_child_plan_coverage_window($conn, $childId);
+    $coverageEnd = (($coverage['end'] ?? null) instanceof DateTimeImmutable) ? $coverage['end'] : null;
+    $hasCoverageNow = !empty($coverage['current']);
+    $latestStatus = strtolower(trim((string)($latest['current_status'] ?? '')));
+
+    if (in_array($latestStatus, ['cancelled', 'cancle', 'canceled'], true)) {
+        $out['code'] = 'cancelled';
+        $out['label'] = 'ยกเลิกแล้ว';
+        if ($coverageEnd instanceof DateTimeImmutable && $coverageEnd > $now) {
+            $out['next_open_at'] = $coverageEnd;
+            $out['detail'] = 'เปิดอุปการะรอบถัดไปได้วันที่ ' . $coverageEnd->format('d/m/Y H:i');
+        } else {
+            $out['detail'] = 'สามารถเริ่มอุปการะใหม่ได้ทันที';
+        }
+        return $out;
+    }
+
+    if ($hasCoverageNow) {
+        $out['code'] = 'active';
+        $out['label'] = 'อุปการะแล้ว';
+        if ($coverageEnd instanceof DateTimeImmutable) {
+            $out['detail'] = 'สิทธิ์ปัจจุบันถึง ' . $coverageEnd->format('d/m/Y H:i');
+        }
+        return $out;
+    }
+
+    return $out;
 }
 
 /**

@@ -63,7 +63,7 @@ if (isset($_POST['submit'])) {
     $wish          = trim($_POST['wish'] ?? '');
     $bank_name     = trim($_POST['bank_name'] ?? '');
     $child_bank    = trim($_POST['child_bank'] ?? '');
-    $status        = "ยังไม่มีผู้อุปการะ"; // ค่าเริ่มต้นตามตัวอย่าง
+    $status        = "รออุปการะ";
     $approve_status = "รอดำเนินการ";
 
     // คำนวณอายุจากวันเกิด

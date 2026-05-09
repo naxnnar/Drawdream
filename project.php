@@ -166,26 +166,12 @@ function projectStatusThai($status) {
 /** โครงการนี้เปิดให้อัปเดตผลลัพธ์ได้หรือไม่ (ใช้ทั้งปุ่มบนแถบและปุ่มในการ์ด) */
 function foundation_project_allow_outcome_update(array $row): bool
 {
-    $goal = (float)($row['goal_amount'] ?? 0);
-    $raised = projectRaisedForDisplay($row);
     $pst = strtolower(trim((string)($row['project_status'] ?? '')));
     if ($pst === '') {
         $pst = 'pending';
     }
-    $tzB = new DateTimeZone('Asia/Bangkok');
-    $endRaw = $row['end_date'] ?? null;
-    $ended = false;
-    if (!empty($endRaw)) {
-        try {
-            $endD = new DateTimeImmutable(substr((string)$endRaw, 0, 10), $tzB);
-            $ended = $endD->format('Y-m-d') <= (new DateTimeImmutable('now', $tzB))->format('Y-m-d');
-        } catch (Exception $e) {
-            $ended = false;
-        }
-    }
-    $isCompletedStatus = in_array($pst, ['completed', 'done', 'purchasing'], true);
-    $qualifiedFundraising = ($pst === 'approved' && $goal > 0 && $raised >= $goal && $ended);
-    return ($isCompletedStatus || $qualifiedFundraising);
+    // อัปเดตผลลัพธ์ได้หลังแอดมินทำ escrow แล้วเท่านั้น
+    return in_array($pst, ['purchasing', 'done'], true);
 }
 
 /** มีข้อมูลผลลัพธ์ใน foundation_project (update_text / update_images) แล้วหรือไม่ */
@@ -602,23 +588,9 @@ if ($isFoundationOwnView) {
                                     $ended = false;
                                 }
                             }
-                            $halfGoal = ($goal > 0) ? ($goal * 0.5) : 0.0;
-                            $mergedIntoId = (int)($row['merged_into_project_id'] ?? 0);
-                            $canMergeFunds = ($pst === 'approved' && $ended && $goal > 0 && $raised > 0 && $raised < $halfGoal && $mergedIntoId <= 0);
                             $allowOutcomeCard = foundation_project_allow_outcome_update($row);
                             $hasOutcomePosted = foundation_project_has_outcome_posted($row);
                         ?>
-                        <?php if ($mergedIntoId > 0): ?>
-                            <div class="foundation-merge-hint" style="background:#ecfdf5;">
-                                <span class="foundation-merge-note" style="color:#065f46;"><strong>สมทบยอดแล้ว</strong> — ยอดบริจาคถูกนำไปรวมกับโครงการหมายเลข <?= (int)$mergedIntoId ?></span>
-                            </div>
-                        <?php endif; ?>
-                        <?php if ($canMergeFunds): ?>
-                            <div class="foundation-merge-hint">
-                                <a class="foundation-manage-btn foundation-manage-btn-merge" href="foundation_merge_project.php?from=<?= (int)$row['project_id'] ?>">สมทบยอดที่ได้รับเข้าโครงการอื่น</a>
-                                <span class="foundation-merge-note">ครบกำหนดแล้วแต่ยอดบริจาคยังไม่ถึง 50% ของเป้าหมาย — สามารถรวมยอดไปนับเป็นโครงการที่สำเร็จร่วมกันได้</span>
-                            </div>
-                        <?php endif; ?>
                         <div class="project-edit-wrap" data-allow-edit="<?= $allowEditCard ? '1' : '0' ?>">
                             <a class="foundation-project-pill-edit" href="foundation_add_project.php?edit=<?= (int)$row['project_id'] ?>">แก้ไขโครงการ</a>
                         </div>

@@ -21,4 +21,13 @@ function drawdream_ensure_foundation_project_update_columns(mysqli $conn): void
             @$conn->query($sql);
         }
     }
+
+    // ล้างคอลัมน์เก่าที่ไม่ใช้แล้ว
+    $dropCols = ['merged_into_project_id', 'update_info'];
+    foreach ($dropCols as $dropCol) {
+        $chk = @$conn->query("SHOW COLUMNS FROM foundation_project LIKE '" . $dropCol . "'");
+        if ($chk && $chk->num_rows > 0) {
+            @$conn->query("ALTER TABLE foundation_project DROP COLUMN `{$dropCol}`");
+        }
+    }
 }

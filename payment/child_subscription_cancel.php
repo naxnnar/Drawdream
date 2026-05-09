@@ -42,7 +42,7 @@ if ($donorUid <= 0 || $childId <= 0) {
 drawdream_child_omise_subscription_ensure_schema($conn);
 
 $st = $conn->prepare(
-    "SELECT donate_id, recurring_schedule_id, recurring_plan_code
+    "SELECT history_id, donate_id, recurring_schedule_id, recurring_plan_code
      FROM child_subscription_history
      WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'
      ORDER BY history_id DESC
@@ -59,8 +59,7 @@ if (!$sub) {
 }
 
 $scheduleId = trim((string)($sub['recurring_schedule_id'] ?? ''));
-$planCode = strtolower(trim((string)($sub['recurring_plan_code'] ?? '')));
-$activeDonateId = (int)($sub['donate_id'] ?? 0);
+$activeHistoryId = (int)($sub['history_id'] ?? 0);
 
 // omise_schedule: เรียก revoke schedule เพื่อตัดรอบอนาคต
 if ($scheduleId !== '' && str_starts_with($scheduleId, 'schd_')) {
@@ -82,30 +81,37 @@ if (!$up) {
 $up->bind_param('ii', $childId, $donorUid);
 $up->execute();
 
-if ($up->affected_rows > 0) {
-    drawdream_child_subscription_history_log(
-        $conn,
-        $childId,
-        $donorUid,
-        $activeDonateId > 0 ? $activeDonateId : null,
-        $scheduleId !== '' ? $scheduleId : null,
-        null,
-        'subscription_cancelled',
-        'active',
-        'cancelled',
-        $planCode !== '' ? $planCode : null,
-        null,
-        'web_cancel',
-        'cancelled_by_donor',
-        [
-            'request_method' => (string)($_SERVER['REQUEST_METHOD'] ?? ''),
-            'ip' => (string)($_SERVER['REMOTE_ADDR'] ?? ''),
-            'user_agent' => (string)($_SERVER['HTTP_USER_AGENT'] ?? ''),
-        ]
+// อัปเดต "แถวเดิม" ในประวัติให้เป็น cancelled และรีเซ็ตเวลา created_at เป็นเวลายกเลิกจริง
+// (ไม่เพิ่มแถวใหม่ตามข้อกำหนด)
+$cancelApplied = false;
+$upHist = $conn->prepare(
+    "UPDATE child_subscription_history
+     SET event_type = 'subscription_cancelled',
+         current_status = 'cancelled',
+         created_at = NOW()
+     WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'"
+);
+if ($upHist) {
+    $upHist->bind_param('ii', $childId, $donorUid);
+    $upHist->execute();
+    $cancelApplied = $upHist->affected_rows > 0;
+}
+if (!$cancelApplied && $activeHistoryId > 0) {
+    $upHistOne = $conn->prepare(
+        "UPDATE child_subscription_history
+         SET event_type = 'subscription_cancelled',
+             current_status = 'cancelled',
+             created_at = NOW()
+         WHERE history_id = ? LIMIT 1"
     );
+    if ($upHistOne) {
+        $upHistOne->bind_param('i', $activeHistoryId);
+        $upHistOne->execute();
+        $cancelApplied = $upHistOne->affected_rows > 0;
+    }
 }
 
-if ($up->affected_rows > 0) {
+if ($cancelApplied) {
     $stChild = $conn->prepare(
         'SELECT child_name, foundation_id FROM foundation_children WHERE child_id = ? LIMIT 1'
     );
@@ -117,17 +123,25 @@ if ($up->affected_rows > 0) {
         $foundationId = (int)($childRow['foundation_id'] ?? 0);
         $foundationUserId = drawdream_foundation_user_id_by_foundation_id($conn, $foundationId);
         if ($foundationUserId > 0) {
+            $coverage = drawdream_child_donor_plan_coverage_window($conn, $childId, $donorUid);
+            $nextOpenText = 'สามารถเปิดอุปการะรอบใหม่ได้ทันที';
+            if (($coverage['end'] ?? null) instanceof DateTimeImmutable) {
+                /** @var DateTimeImmutable $endAt */
+                $endAt = $coverage['end'];
+                $nextOpenText = 'เปิดอุปการะรอบถัดไปได้วันที่ ' . $endAt->format('d/m/Y H:i');
+            }
             $title = 'มีการยกเลิกอุปการะเด็ก';
             $message = 'ผู้บริจาคได้ยกเลิกการอุปการะเด็ก'
                 . ($childName !== '' ? ' "' . $childName . '"' : '')
-                . ' แล้ว';
+                . ' แล้ว · ' . $nextOpenText;
             drawdream_send_notification(
                 $conn,
                 $foundationUserId,
                 'child_subscription_cancelled',
                 $title,
                 $message,
-                'children_donate.php?id=' . $childId
+                'children_donate.php?id=' . $childId,
+                'child_subscription_cancelled:' . $childId
             );
         }
     }

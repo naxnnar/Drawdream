@@ -9,6 +9,7 @@ error_reporting(E_ALL);
 
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -82,7 +83,7 @@ $categoryItems = [
     'สุขภาพและเวชภัณฑ์พื้นฐาน' => [
         'ยาพาราเซตามอล', 'ยาแก้ไอ', 'ผงเกลือแร่ ORS', 'ยาใส่แผล',
         'สำลี', 'แอลกอฮอล์ล้างแผล', 'พลาสเตอร์ปิดแผล', 'หน้ากากอนามัย',
-        'รถเข็นผู้ป่วย', 'ไม้เท้า', 'แผ่นรองซับ'
+        'รถเข็นผู้ป่วย', 'แผ่นรองซับ'
     ],
     'เสื้อผ้าและเครื่องนุ่งห่ม' => [
         'เสื้อยืด', 'กางเกงขาสั้น', 'กางเกงขายาว', 'กางเกงในใหม่', 'เสื้อซับใหม่',
@@ -187,8 +188,8 @@ function drawdream_need_pricing_from_json($raw): array
         $price = (float)($row['ราคาต่อชิ้น'] ?? ($row['price_estimate'] ?? ($row['price'] ?? 0)));
         $sum = (float)($row['ราคารวม'] ?? ($row['line_total'] ?? 0));
         $out[] = [
-            'price' => $price > 0 ? $price : 0.0,
-            'line_total' => $sum > 0 ? $sum : 0.0,
+            'price' => drawdream_needlist_round_money($price > 0 ? $price : 0.0),
+            'line_total' => drawdream_needlist_round_money($sum > 0 ? $sum : 0.0),
         ];
     }
     return $out;
@@ -397,15 +398,11 @@ if (isset($_POST['submit'])) {
     $urgent      = isset($_POST['urgent']) ? 1 : 0;
     $note        = trim($_POST['note'] ?? '');
     $qty         = 0.0;
-    $price       = 0.0;
     $item_name = implode(', ', $itemNames);
     $needItemsJson = '';
     $needItemsPricingJson = '';
     foreach ($lineItems as $li) {
         $qty += (float)$li['qty'];
-    }
-    if ($qty > 0) {
-        $price = $goal / $qty;
     }
     if ($error === '') {
         $lineSummary = [];
@@ -443,8 +440,8 @@ if (isset($_POST['submit'])) {
         foreach ($lineItems as $idx => $li) {
             $pricingRows[] = [
                 'ลำดับ' => $idx + 1,
-                'ราคาต่อชิ้น' => (float)($li['price'] ?? 0),
-                'ราคารวม' => (float)($li['line_total'] ?? 0),
+                'ราคาต่อชิ้น' => drawdream_needlist_round_money((float)($li['price'] ?? 0)),
+                'ราคารวม' => drawdream_needlist_round_money((float)($li['line_total'] ?? 0)),
             ];
         }
         $needItemsPricingJson = json_encode($pricingRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

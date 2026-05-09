@@ -63,7 +63,9 @@ if (!empty($child['birth_date'] ?? '')) {
 $rawApprove = trim((string)($child['approve_profile'] ?? ''));
 $reviewStatusLabel = $rawApprove !== '' ? $rawApprove : 'รอดำเนินการ';
 
-$sponsorshipLabel = drawdream_child_is_cycle_sponsored($conn, $child_id, $child) ? 'อุปการะแล้ว' : 'รออุปการะ';
+$sponsorshipUi = drawdream_child_sponsorship_ui_status($conn, $child_id);
+$sponsorshipLabel = (string)($sponsorshipUi['label'] ?? 'รออุปการะ');
+$sponsorshipDetail = trim((string)($sponsorshipUi['detail'] ?? ''));
 $displayCycleAmount = (float)($donationStats['cycle_amount'] ?? 0);
 $displayTotalAmount = (float)($donationStats['total_amount'] ?? 0);
 $displayDonorCount = (int)($donationStats['donor_count'] ?? 0);
@@ -155,6 +157,12 @@ $photo = htmlspecialchars((string)($child['photo_child'] ?? ''), ENT_QUOTES, 'UT
                     <div class="admin-record-k">สถานะการอุปการะ (เดือนปฏิทินปัจจุบัน)</div>
                     <div class="admin-record-v"><?= htmlspecialchars($sponsorshipLabel, ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
+                <?php if ($sponsorshipDetail !== ''): ?>
+                <div class="admin-record-field">
+                    <div class="admin-record-k">อุปการะรอบถัดไป</div>
+                    <div class="admin-record-v"><?= htmlspecialchars($sponsorshipDetail, ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+                <?php endif; ?>
                 <div class="admin-record-field admin-record-field--full">
                     <div class="admin-record-k">สถานะการตรวจสอบ</div>
                     <div class="admin-record-v"><?= htmlspecialchars($reviewStatusLabel, ENT_QUOTES, 'UTF-8') ?></div>

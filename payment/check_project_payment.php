@@ -151,7 +151,7 @@ function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id
             VALUES (?, ?, ?, ?, ?)
         ');
         $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
-        $notif_msg = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท กรุณาโพสต์ความคืบหน้าให้ผู้บริจาคทราบภายใน 30 วัน";
+        $notif_msg = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท ตอนนี้ระบบกำลังรอแอดมินยืนยัน escrow ก่อนเปิดให้อัปเดตผลลัพธ์";
         $notif_link = 'foundation_post_update.php?project_id=' . $project_id;
         $notif->bind_param('issss', $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
         $notif->execute();

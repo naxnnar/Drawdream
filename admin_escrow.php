@@ -8,6 +8,7 @@ include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/escrow_funds_schema.php';
+require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -17,6 +18,9 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 $admin_id = (int)$_SESSION['user_id'];
 $success  = "";
 $error    = "";
+
+drawdream_escrow_funds_ensure_schema($conn);
+drawdream_ensure_needlist_schema($conn);
 
 // รับ success message จาก redirect
 if (isset($_GET['success']) && $_GET['success'] === 'transferred') {
@@ -45,11 +49,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upd->bind_param('i', $project_id);
             $upd->execute();
             drawdream_escrow_funds_release_holding_for_project($conn, $project_id);
-            $title   = "ยอดบริจาคโครงการครบแล้ว!";
-            $message = "โครงการ \"{$proj['project_name']}\" ได้รับยอดบริจาคครบแล้ว กรุณาอัปเดตความคืบหน้าของโครงการ";
-            $link    = "notifications.php";
+            $title   = "พร้อมอัปเดตผลลัพธ์โครงการแล้ว";
+            $message = "แอดมินยืนยันโอนเงิน escrow ให้โครงการ \"{$proj['project_name']}\" แล้ว คุณสามารถเข้าไปอัปเดตผลลัพธ์โครงการได้ทันที";
+            $link    = "foundation_post_update.php?project_id=" . (int)$project_id;
             $type_th = drawdream_normalize_notif_type_to_th('project_funded');
-            $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
+            $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)');
             $stmt->bind_param("issss", $proj['user_id'], $type_th, $title, $message, $link);
             $stmt->execute();
             header("Location: admin_escrow.php?success=transferred");
@@ -84,14 +88,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else { $error = "กรุณาเลือกรูปหลักฐาน"; }
 
         if (!$error) {
-            $full_desc = "[needlist_item_id:{$item_id}] " . $desc;
-            $stmt = $conn->prepare("INSERT INTO evidence (project_id, admin_id, evidence_image, description, uploaded_at) VALUES (0, ?, ?, ?, NOW())");
-            $stmt->bind_param("iss", $admin_id, $evidence_image, $full_desc);
-            $stmt->execute();
-
-            $stmt2 = $conn->prepare("UPDATE foundation_needlist SET approve_item = 'done' WHERE item_id = ?");
-            $stmt2->bind_param("i", $item_id);
+            $imgJson = json_encode([$evidence_image], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (!is_string($imgJson) || $imgJson === '') {
+                $imgJson = '[]';
+            }
+            $stmt2 = $conn->prepare("UPDATE foundation_needlist SET approve_item = 'done', admin_delivery_text = ?, admin_delivery_images = ?, admin_delivery_at = NOW() WHERE item_id = ?");
+            $stmt2->bind_param("ssi", $desc, $imgJson, $item_id);
             $stmt2->execute();
+            drawdream_escrow_funds_release_holding_for_need_item($conn, $item_id);
 
             $need = mysqli_fetch_assoc(mysqli_query($conn,
                 "SELECT nl.item_name, fp.user_id FROM foundation_needlist nl
@@ -99,11 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  WHERE nl.item_id = $item_id"
             ));
             if ($need) {
-                $title   = "จัดส่งสิ่งของเรียบร้อยแล้ว!";
-                $message = "รายการ \"{$need['item_name']}\" ถูกจัดซื้อและจัดส่งให้มูลนิธิเรียบร้อยแล้ว";
-                $link    = "notifications.php";
+                $title   = "พร้อมอัปเดตผลลัพธ์สิ่งของแล้ว";
+                $message = "รายการ \"{$need['item_name']}\" ถูกจัดซื้อและจัดส่งเรียบร้อยแล้ว คุณสามารถอัปเดตผลลัพธ์สิ่งของให้ผู้บริจาคทราบได้";
+                $link    = "foundation_post_needlist_result.php";
                 $type_nd = drawdream_normalize_notif_type_to_th('needlist_done');
-                $stmt3 = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link, is_read) VALUES (?, ?, ?, ?, ?, 0)');
+                $stmt3 = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)');
                 $stmt3->bind_param("issss", $need['user_id'], $type_nd, $title, $message, $link);
                 $stmt3->execute();
             }
@@ -125,17 +129,11 @@ $active_projects = mysqli_query($conn, "
     WHERE p.project_status = 'approved' AND p.deleted_at IS NULL ORDER BY p.project_id DESC
 ");
 $done_projects = mysqli_query($conn, "
-    SELECT p.*, fp.foundation_name, e.evidence_image, e.description AS evidence_desc, e.uploaded_at AS evidence_date
+    SELECT p.*, fp.foundation_name, p.update_images, p.update_text, p.update_at
     FROM foundation_project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    LEFT JOIN evidence e ON e.project_id = p.project_id
     WHERE p.project_status = 'done' AND p.deleted_at IS NULL ORDER BY p.project_id DESC LIMIT 10
 ");
 $escrow_project_total = drawdream_escrow_project_holding_total_display($conn);
-
-$escrow_needlist_category_id = drawdream_donate_category_id_for_needitem($conn);
-if ($escrow_needlist_category_id <= 0) {
-    $escrow_needlist_category_id = drawdream_get_or_create_needitem_donate_category_id($conn);
-}
 
 // ======== ดึงข้อมูล: สิ่งของ ========
 // ยอดต่อรายการมาจาก current_donate (สะสมจากบริจาครวมของมูลนิธิตาม check_needlist_payment)
@@ -158,10 +156,61 @@ $done_needs = mysqli_query($conn, "
     JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
     WHERE nl.approve_item = 'done' ORDER BY nl.item_id DESC LIMIT 10
 ");
-$escrow_need_total = mysqli_fetch_assoc(mysqli_query($conn,
-    'SELECT COALESCE(SUM(d.amount),0) AS total FROM donation d
-     WHERE d.category_id = ' . (int)$escrow_needlist_category_id . " AND d.payment_status = 'completed'"
-))['total'];
+$escrow_need_total = drawdream_escrow_need_item_holding_total_display($conn);
+
+/**
+ * @param array<string,mixed> $need
+ * @return array<int, array{name:string, qty:float, unit_price:float, line_total:float}>
+ */
+function drawdream_needlist_delivery_lines(array $need): array
+{
+    $lines = [];
+    $namesRaw = trim((string)($need['need_items_json'] ?? ''));
+    $pricingRaw = trim((string)($need['need_items_pricing_json'] ?? ''));
+    $names = json_decode($namesRaw, true);
+    $pricing = json_decode($pricingRaw, true);
+
+    if (is_array($names) && is_array($pricing) && count($names) > 0) {
+        foreach ($names as $idx => $nameRow) {
+            if (!is_array($nameRow)) {
+                continue;
+            }
+            $name = trim((string)($nameRow['ชื่อสิ่งของ'] ?? $nameRow['item_name'] ?? ''));
+            $qty = (float)($nameRow['จำนวนสิ่งของ'] ?? $nameRow['qty'] ?? 0);
+            $priceRow = is_array($pricing[$idx] ?? null) ? $pricing[$idx] : [];
+            $unit = (float)($priceRow['ราคาต่อชิ้น'] ?? $priceRow['unit_price'] ?? 0);
+            $sum = (float)($priceRow['ราคารวม'] ?? $priceRow['line_total'] ?? 0);
+            if ($sum <= 0 && $qty > 0 && $unit > 0) {
+                $sum = $qty * $unit;
+            }
+            if ($name !== '' || $qty > 0 || $unit > 0 || $sum > 0) {
+                $lines[] = [
+                    'name' => $name !== '' ? $name : 'รายการที่ ' . ((int)$idx + 1),
+                    'qty' => $qty,
+                    'unit_price' => $unit,
+                    'line_total' => $sum,
+                ];
+            }
+        }
+    }
+
+    if ($lines === []) {
+        $fallbackName = trim((string)($need['item_name'] ?? ''));
+        $fallbackQty = (float)($need['qty_needed'] ?? 0);
+        $fallbackTotal = (float)($need['total_price'] ?? 0);
+        $fallbackUnit = ($fallbackQty > 0) ? ($fallbackTotal / $fallbackQty) : 0.0;
+        if ($fallbackName !== '' || $fallbackQty > 0 || $fallbackTotal > 0) {
+            $lines[] = [
+                'name' => $fallbackName !== '' ? $fallbackName : 'รายการสิ่งของ',
+                'qty' => $fallbackQty,
+                'unit_price' => $fallbackUnit,
+                'line_total' => $fallbackTotal,
+            ];
+        }
+    }
+
+    return $lines;
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -284,18 +333,29 @@ $escrow_need_total = mysqli_fetch_assoc(mysqli_query($conn,
 
         <div class="section-title" style="margin-top:40px;">โครงการที่เสร็จสมบูรณ์แล้ว</div>
         <?php if ($done_projects && mysqli_num_rows($done_projects) > 0):
-            while ($proj = mysqli_fetch_assoc($done_projects)): ?>
+            while ($proj = mysqli_fetch_assoc($done_projects)):
+                $projImgs = json_decode((string)($proj['update_images'] ?? ''), true);
+                $projImg = '';
+                if (is_array($projImgs)) {
+                    foreach ($projImgs as $pi) {
+                        $bn = basename((string)$pi);
+                        if ($bn !== '') { $projImg = $bn; break; }
+                    }
+                }
+                $projDesc = trim((string)($proj['update_text'] ?? ''));
+                $projDateRaw = trim((string)($proj['update_at'] ?? ''));
+                ?>
             <div class="done-card">
                 <div class="done-name"><?= htmlspecialchars($proj['project_name']) ?></div>
                 <div class="done-foundation"><?= htmlspecialchars($proj['foundation_name'] ?? '-') ?></div>
-                <?php if (!empty($proj['evidence_image'])): ?>
-                    <img src="uploads/evidence/<?= htmlspecialchars($proj['evidence_image']) ?>" class="evidence-img" alt="หลักฐาน">
+                <?php if ($projImg !== ''): ?>
+                    <img src="uploads/evidence/<?= htmlspecialchars($projImg) ?>" class="evidence-img" alt="หลักฐาน">
                 <?php endif; ?>
-                <?php if (!empty($proj['evidence_desc'])): ?>
-                    <div class="done-desc"><?= htmlspecialchars($proj['evidence_desc']) ?></div>
+                <?php if ($projDesc !== ''): ?>
+                    <div class="done-desc"><?= htmlspecialchars($projDesc) ?></div>
                 <?php endif; ?>
-                <?php if (!empty($proj['evidence_date'])): ?>
-                    <div class="done-date">จัดส่งเมื่อ: <?= date('d/m/Y H:i', strtotime($proj['evidence_date'])) ?></div>
+                <?php if ($projDateRaw !== '' && strtotime($projDateRaw) !== false): ?>
+                    <div class="done-date">จัดส่งเมื่อ: <?= date('d/m/Y H:i', strtotime($projDateRaw)) ?></div>
                 <?php endif; ?>
             </div>
         <?php endwhile; else: ?>
@@ -323,7 +383,8 @@ $escrow_need_total = mysqli_fetch_assoc(mysqli_query($conn,
             while ($need = mysqli_fetch_assoc($ready_needs)):
                 $donated = (float)$need['donated_sum'];
                 $total   = (float)$need['total_price'];
-                $is_purchasing = $need['approve_item'] === 'purchasing'; ?>
+                $is_purchasing = $need['approve_item'] === 'purchasing';
+                $deliveryLines = drawdream_needlist_delivery_lines($need); ?>
             <div class="proj-card <?= $is_purchasing ? 'purchasing' : 'completed' ?>">
                 <div class="proj-header">
                     <div>
@@ -348,6 +409,23 @@ $escrow_need_total = mysqli_fetch_assoc(mysqli_query($conn,
                         <div class="money-value orange"><?= number_format($donated * 0.05, 2) ?> บาท</div>
                     </div>
                 </div>
+                <?php if ($deliveryLines !== []): ?>
+                <div class="delivery-items-box">
+                    <div class="delivery-title">รายการที่ต้องจัดส่งให้มูลนิธิ</div>
+                    <div class="delivery-items-head">
+                        <span>ชื่อสิ่งของ</span>
+                        <span>จำนวนชิ้น</span>
+                        <span>ราคาต่อชิ้น</span>
+                    </div>
+                    <?php foreach ($deliveryLines as $line): ?>
+                        <div class="delivery-items-row">
+                            <span><?= htmlspecialchars((string)$line['name']) ?></span>
+                            <span><?= number_format((float)$line['qty'], ((float)$line['qty'] === floor((float)$line['qty'])) ? 0 : 2) ?></span>
+                            <span><?= number_format((float)$line['unit_price'], 2) ?> บาท</span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
                 <div class="delivery-info">
                     <div class="delivery-title">ข้อมูลสำหรับจัดส่ง</div>
                     <div class="delivery-grid">

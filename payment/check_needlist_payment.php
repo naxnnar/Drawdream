@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/needlist_donate_window.php';
 require_once __DIR__ . '/../includes/payment_transaction_schema.php';
+require_once __DIR__ . '/../includes/escrow_funds_schema.php';
 require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/../includes/donate_type.php';
 require_once __DIR__ . '/../includes/notification_audit.php';
@@ -140,14 +141,20 @@ if ($is_success && !$already_processed && $fid > 0) {
                     $items->execute();
                     $item_rows = $items->get_result();
                     while ($item = $item_rows->fetch_assoc()) {
+                        $itemId = (int)($item['item_id'] ?? 0);
                         $ratio       = (float)$item['total_price'] / $grand_total;
                         $item_amount = round($amount * $ratio, 2);
                         $upd = $conn->prepare("UPDATE foundation_needlist SET current_donate = current_donate + ? WHERE item_id = ?");
                         if (!$upd) {
                             throw new RuntimeException('prepare_need_update_failed');
                         }
-                        $upd->bind_param("di", $item_amount, $item['item_id']);
+                        $upd->bind_param("di", $item_amount, $itemId);
                         $upd->execute();
+                        if ($itemId > 0 && $item_amount > 0) {
+                            if (!drawdream_escrow_funds_try_insert_holding_for_target($conn, 'need_item', $itemId, $donate_id, $charge_id, $item_amount)) {
+                                throw new RuntimeException('escrow_insert_need_item_failed');
+                            }
+                        }
                     }
 
                     $sumAfter = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
@@ -171,7 +178,7 @@ if ($is_success && !$already_processed && $fid > 0) {
                                         $totalFmt = number_format($new_c, 2, '.', ',');
                                         $dispName = $foundation_nm !== '' ? '"' . $foundation_nm . '"' : 'มูลนิธิของคุณ';
                                         $title = 'รายการสิ่งของได้รับเงินครบเป้าหมายแล้ว! 🎉';
-                                        $msg = 'รายการสิ่งของของ ' . $dispName . ' ได้รับเงินบริจาครวม ' . $totalFmt . ' บาท กรุณาอัปเดตผลลัพธ์สิ่งของให้ผู้บริจาคทราบภายใน 30 วัน';
+                                        $msg = 'รายการสิ่งของของ ' . $dispName . ' ได้รับเงินบริจาครวม ' . $totalFmt . ' บาท ตอนนี้ระบบกำลังรอแอดมินยืนยันการจัดส่งก่อนเปิดให้อัปเดตผลลัพธ์';
                                         $link = 'foundation_post_needlist_result.php';
                                         $sigStmt = $conn->prepare("SELECT GROUP_CONCAT(item_id ORDER BY item_id) AS sig FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
                                         $sig = '';

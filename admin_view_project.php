@@ -163,15 +163,6 @@ $endStatLabel = ($endStatRaw === '—') ? '—' : $endStatRaw;
                     <div class="admin-record-k">วันปิดรับบริจาค</div>
                     <div class="admin-record-v"><?= htmlspecialchars(admin_view_project_fmt_date(isset($row['end_date']) ? (string)$row['end_date'] : ''), ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
-                <?php
-                $merged = (int)($row['merged_into_project_id'] ?? 0);
-                if ($merged > 0):
-                ?>
-                <div class="admin-record-field admin-record-field--full">
-                    <div class="admin-record-k">สมทบยอดไปโครงการ</div>
-                    <div class="admin-record-v">โครงการหมายเลข <?= $merged ?></div>
-                </div>
-                <?php endif; ?>
             </div>
 
             <div class="admin-record-stats donation-stats-panel" aria-label="สรุปตัวเลขโครงการ">

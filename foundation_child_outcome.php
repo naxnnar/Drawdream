@@ -129,6 +129,8 @@ function drawdream_outcome_upload_ext(string $tmpPath, int $maxBytes): ?string
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$success) {
     $text = trim((string)($_POST['outcome_text'] ?? ''));
+    // บางเครื่องยังเป็น utf8mb3: ตัดอักขระ 4-byte (เช่น emoji) เพื่อกัน SQL collation/charset exception
+    $text = (string)preg_replace('/[\x{10000}-\x{10FFFF}]/u', '', $text);
     $currentList = drawdream_child_outcome_images_parse($child['update_images'] ?? null);
 
     $remove = [];
@@ -194,7 +196,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$success) {
             'UPDATE foundation_children SET update_text = ?, update_images = ?, update_at = NOW() WHERE child_id = ? AND foundation_id = ?'
         );
         $upd->bind_param('ssii', $text, $json, $childId, $foundationId);
-        if ($upd->execute()) {
+        try {
+            $ok = $upd->execute();
+        } catch (mysqli_sql_exception $e) {
+            $ok = false;
+            $error = 'บันทึกไม่สำเร็จ: กรุณาลองลบอีโมจิหรืออักขระพิเศษ แล้วบันทึกอีกครั้ง';
+        }
+        if ($ok) {
             foreach ($remove as $b) {
                 $p = drawdream_outcome_image_existing_path($b, $outcomeDir, $legacyOutcomeDir);
                 if (is_file($p)) {
@@ -223,7 +231,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$success) {
             header('Location: foundation_child_outcome.php?id=' . $childId . '&saved=1');
             exit;
         }
-        $error = 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
+        if ($error === '') {
+            $error = 'บันทึกไม่สำเร็จ กรุณาลองใหม่';
+        }
         foreach ($pendingUploads as $f) {
             $p = drawdream_outcome_image_existing_path($f, $outcomeDir, $legacyOutcomeDir);
             if (is_file($p)) {

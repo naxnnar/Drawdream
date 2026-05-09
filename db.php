@@ -88,6 +88,14 @@ if (function_exists('mysqli_init') && function_exists('mysqli_real_connect')) {
 
 mysqli_set_charset($conn, 'utf8mb4');
 
+/*
+ * เวลาในตารางและฟังก์ชันเช่น NOW(): ใช้เขตไทยเท่านั้น (ไม่มี DST — +07:00 เสถียร)
+ * - PHP date()/strtotime ให้สอดคล้องกับที่เก็บผ่าน MySQL
+ * - SESSION time_zone ทำให้ NOW(), CURRENT_TIMESTAMP ในการเชื่อมต่อนี้เป็นเวลาไทย
+ */
+date_default_timezone_set('Asia/Bangkok');
+@mysqli_query($conn, "SET time_zone = '+07:00'");
+
 require_once __DIR__ . '/includes/drawdream_project_status.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/drawdream_soft_delete.php';

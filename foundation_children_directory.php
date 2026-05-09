@@ -6,6 +6,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 include 'db.php';
+require_once __DIR__ . '/includes/child_sponsorship.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') {
     header('Location: index.php');
@@ -39,6 +40,15 @@ if ($stRows) {
     $stRows->bind_param('i', $foundationId);
     $stRows->execute();
     $rows = $stRows->get_result()->fetch_all(MYSQLI_ASSOC);
+    // รีเฟรชสถานะจากแพ็กเกจรายรอบ (monthly/6m/yearly) ทุกครั้งก่อนแสดงตาราง
+    foreach ($rows as $rSync) {
+        $cidSync = (int)($rSync['child_id'] ?? 0);
+        if ($cidSync > 0) {
+            drawdream_child_sync_sponsorship_status($conn, $cidSync);
+        }
+    }
+    $stRows->execute();
+    $rows = $stRows->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 function foundation_child_profile_status_th(string $ap): string
@@ -66,8 +76,11 @@ function foundation_child_profile_status_class(string $ap): string
 function foundation_child_sponsor_status_class(string $st): string
 {
     $txt = trim($st);
-    if ($txt === 'มีผู้อุปการะ') {
+    if ($txt === 'อุปการะแล้ว' || $txt === 'มีผู้อุปการะ') {
         return 'admin-pill admin-pill--success';
+    }
+    if ($txt === 'ยกเลิกแล้ว') {
+        return 'admin-pill admin-pill--warning';
     }
     return 'admin-pill admin-pill--danger';
 }
@@ -108,10 +121,10 @@ function foundation_child_sponsor_status_class(string $st): string
                     $cid = (int)($r['child_id'] ?? 0);
                     $img = trim((string)($r['photo_child'] ?? ''));
                     $approve = (string)($r['approve_profile'] ?? '');
-                    $sponsor = trim((string)($r['status'] ?? ''));
-                    if ($sponsor === '') {
-                        $sponsor = 'รออุปการะ';
-                    }
+                    $uiSponsor = drawdream_child_sponsorship_ui_status($conn, $cid);
+                    $sponsor = trim((string)($uiSponsor['label'] ?? ''));
+                    if ($sponsor === '') { $sponsor = 'รออุปการะ'; }
+                    $sponsorDetail = trim((string)($uiSponsor['detail'] ?? ''));
                     ?>
                     <tr>
                         <td>
@@ -124,7 +137,12 @@ function foundation_child_sponsor_status_class(string $st): string
                         <td><?= htmlspecialchars((string)($r['child_name'] ?? '')) ?></td>
                         <td><?= htmlspecialchars($foundationName) ?></td>
                         <td><span class="<?= htmlspecialchars(foundation_child_profile_status_class($approve)) ?>"><?= htmlspecialchars(foundation_child_profile_status_th($approve)) ?></span></td>
-                        <td><span class="<?= htmlspecialchars(foundation_child_sponsor_status_class($sponsor)) ?>"><?= htmlspecialchars($sponsor) ?></span></td>
+                        <td>
+                            <span class="<?= htmlspecialchars(foundation_child_sponsor_status_class($sponsor)) ?>"><?= htmlspecialchars($sponsor) ?></span>
+                            <?php if ($sponsorDetail !== ''): ?>
+                                <div class="b--muted" style="margin-top:4px;font-size:12px;line-height:1.35;"><?= htmlspecialchars($sponsorDetail) ?></div>
+                            <?php endif; ?>
+                        </td>
                         <td>
                             <a class="admin-dir-btn admin-dir-btn--primary" href="children_donate.php?id=<?= $cid ?>">โปรไฟล์เด็ก</a>
                         </td>

@@ -2365,6 +2365,22 @@ body.foundation-project-view-page {
     font-family: 'Prompt', sans-serif;
 }
 
+.foundation-project-view-row--end-date dt,
+.foundation-project-view-row--end-date dd {
+    white-space: nowrap;
+}
+
+.foundation-project-view-row--end-date {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px 14px;
+}
+
+.foundation-project-view-row--end-date dt {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .foundation-project-view-row dd {
     margin: 0;
     color: #1e293b;

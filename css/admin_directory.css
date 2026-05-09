@@ -110,20 +110,24 @@ body.admin-sidebar-page .admin-directory-page {
 /* หน้ามูลนิธิ: จัดปุ่มให้ขนาด/ตำแหน่งเท่ากัน ไม่เยื้อง */
 .admin-dir-actions--foundation {
     display: grid;
-    grid-template-columns: repeat(2, minmax(124px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     width: 100%;
-    max-width: 264px;
+    max-width: 244px;
 }
 
 .admin-dir-actions--foundation .admin-dir-btn {
     width: 100%;
-    min-height: 40px;
+    min-height: 38px;
     justify-content: center;
     white-space: nowrap;
-    padding: 9px 15px;
-    border-radius: 10px;
-    font-size: 0.95rem;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.15;
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-weight: 400;
 }
 
@@ -135,8 +139,45 @@ body.admin-sidebar-page .admin-directory-page {
 .admin-dir-table--foundations th.admin-dir-num,
 .admin-dir-table--foundations td.admin-dir-num {
     width: 84px;
-    min-width: 84px;
+    min-width: 62px;
     text-align: center;
+}
+
+/* หน้าภาพรวมมูลนิธิ: บังคับให้พอดีกรอบโดยไม่ต้องเลื่อนแนวนอน */
+.admin-dir-table--foundations {
+    table-layout: fixed;
+    width: 100%;
+}
+.admin-dir-table--foundations th,
+.admin-dir-table--foundations td {
+    padding: 10px 8px;
+    font-size: 0.96rem;
+}
+.admin-dir-table--foundations th:nth-child(1),
+.admin-dir-table--foundations td:nth-child(1) { width: 15%; }
+.admin-dir-table--foundations th:nth-child(2),
+.admin-dir-table--foundations td:nth-child(2) { width: 10%; }
+.admin-dir-table--foundations th:nth-child(3),
+.admin-dir-table--foundations td:nth-child(3) { width: 18%; }
+.admin-dir-table--foundations th:nth-child(4),
+.admin-dir-table--foundations td:nth-child(4),
+.admin-dir-table--foundations th:nth-child(5),
+.admin-dir-table--foundations td:nth-child(5),
+.admin-dir-table--foundations th:nth-child(6),
+.admin-dir-table--foundations td:nth-child(6) { width: 8%; }
+.admin-dir-table--foundations th:nth-child(7),
+.admin-dir-table--foundations td:nth-child(7) { width: 12%; }
+.admin-dir-table--foundations th:nth-child(8),
+.admin-dir-table--foundations td:nth-child(8) { width: 21%; }
+.admin-dir-table--foundations td:nth-child(1),
+.admin-dir-table--foundations td:nth-child(3) {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* เมื่อบังคับ fixed layout แล้ว ไม่ต้องมีแถบเลื่อนแนวนอนในหน้ามูลนิธิ */
+.admin-dir-table-wrap--foundations {
+    overflow-x: hidden;
 }
 
 /* ปุ่มคู่ในตารางโครงการ/สิ่งของ: ขนาดเท่ากันและวางข้างกัน */

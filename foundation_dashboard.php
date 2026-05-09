@@ -9,6 +9,7 @@ include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/donate_type.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
+require_once __DIR__ . '/includes/child_sponsorship.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') {
     header('Location: index.php');
@@ -186,6 +187,45 @@ if ($childIds !== []) {
     $activeMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIds);
     $activeSponsoredChildCnt = count($activeMap);
 }
+$recentCancelledChildren = [];
+if ($childIds !== []) {
+    $ph = implode(',', array_fill(0, count($childIds), '?'));
+    $types = str_repeat('i', count($childIds));
+    $sqlCancelled = "
+        SELECT h.child_id, h.recurring_plan_code, h.created_at
+        FROM child_subscription_history h
+        INNER JOIN (
+            SELECT child_id, MAX(history_id) AS max_id
+            FROM child_subscription_history
+            WHERE LOWER(TRIM(COALESCE(current_status,''))) IN ('cancelled','cancle','canceled')
+              AND child_id IN ($ph)
+            GROUP BY child_id
+        ) x ON x.max_id = h.history_id
+        ORDER BY h.created_at DESC
+        LIMIT 8
+    ";
+    $stCancelled = $conn->prepare($sqlCancelled);
+    if ($stCancelled) {
+        $stCancelled->bind_param($types, ...$childIds);
+        $stCancelled->execute();
+        $rowsCancelled = $stCancelled->get_result()->fetch_all(MYSQLI_ASSOC);
+        foreach ($rowsCancelled as $rc) {
+            $cid = (int)($rc['child_id'] ?? 0);
+            if ($cid <= 0) {
+                continue;
+            }
+            $coverage = drawdream_child_plan_coverage_window($conn, $cid);
+            $nextOpen = (($coverage['end'] ?? null) instanceof DateTimeImmutable) ? $coverage['end'] : null;
+            $recentCancelledChildren[] = [
+                'child_id' => $cid,
+                'child_name' => (string)($childMap[$cid] ?? ('เด็ก #' . $cid)),
+                'plan_label' => foundation_dashboard_plan_label((string)($rc['recurring_plan_code'] ?? '')),
+                'cancelled_at' => (string)($rc['created_at'] ?? ''),
+                'next_open_at' => $nextOpen ? $nextOpen->format('d/m/Y H:i') : 'ได้ทันที',
+            ];
+        }
+    }
+}
 
 $projectOpenCnt = 0;
 $projectCompletedCnt = 0;
@@ -322,6 +362,30 @@ function foundation_dashboard_plan_label(string $code): string
                 รายการบริจาค <?= $rowCountChild ?> รายการ · ยอดรวม <?= number_format($sumChild, 2) ?> บาท
                 <?php if ($latestByCat['child'] !== ''): ?>
                     · อัปเดตล่าสุด <?= date('d/m/Y H:i', strtotime($latestByCat['child'])) ?>
+                <?php endif; ?>
+            </div>
+            <div style="margin-top:12px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;padding:10px 12px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <strong style="font-size:.95rem;color:#1f2937;">เด็กที่ถูกยกเลิกล่าสุด</strong>
+                    <a href="foundation_children_directory.php" style="font-size:.82rem;color:#3c5099;text-decoration:none;">ดูทั้งหมด</a>
+                </div>
+                <?php if ($recentCancelledChildren !== []): ?>
+                    <div style="margin-top:8px;display:grid;gap:8px;">
+                        <?php foreach ($recentCancelledChildren as $cc): ?>
+                            <div style="border:1px dashed #d1d5db;border-radius:8px;padding:8px 10px;background:#fff;">
+                                <div style="font-weight:700;color:#111827;"><?= htmlspecialchars((string)$cc['child_name']) ?></div>
+                                <div style="font-size:.83rem;color:#475569;">
+                                    แผน <?= htmlspecialchars((string)$cc['plan_label']) ?>
+                                    · ยกเลิกเมื่อ <?= htmlspecialchars($cc['cancelled_at'] !== '' ? date('d/m/Y H:i', strtotime((string)$cc['cancelled_at'])) : '-') ?>
+                                </div>
+                                <div style="font-size:.83rem;color:#9a3412;">
+                                    เปิดอุปการะรอบถัดไป: <?= htmlspecialchars((string)$cc['next_open_at']) ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="b--muted" style="margin-top:8px;">ยังไม่มีรายการยกเลิกอุปการะล่าสุด</div>
                 <?php endif; ?>
             </div>
         </div>

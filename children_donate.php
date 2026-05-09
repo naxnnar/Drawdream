@@ -113,7 +113,7 @@ $cycleMonthLabel = date('m/Y');
         "SELECT recurring_plan_code AS plan_code,
                 recurring_next_charge_at AS last_charge_at, created_at
          FROM child_subscription_history
-         WHERE child_id = ? AND current_status = 'cancelled'
+         WHERE child_id = ? AND LOWER(TRIM(current_status)) IN ('cancelled','cancle','canceled')
          ORDER BY history_id DESC
          LIMIT 1"
     );
@@ -127,7 +127,7 @@ $cycleMonthLabel = date('m/Y');
             "SELECT recurring_plan_code AS plan_code,
                     recurring_next_charge_at AS last_charge_at, created_at
              FROM child_subscription_history
-             WHERE child_id = ? AND donor_user_id = ? AND current_status = 'cancelled'
+             WHERE child_id = ? AND donor_user_id = ? AND LOWER(TRIM(current_status)) IN ('cancelled','cancle','canceled')
              ORDER BY history_id DESC
              LIMIT 1"
         );
