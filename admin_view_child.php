@@ -10,6 +10,7 @@ include 'db.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
+require_once __DIR__ . '/includes/notification_audit.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
     header('Location: login.php');
@@ -62,6 +63,15 @@ if (!empty($child['birth_date'] ?? '')) {
 
 $rawApprove = trim((string)($child['approve_profile'] ?? ''));
 $reviewStatusLabel = $rawApprove !== '' ? $rawApprove : 'รอดำเนินการ';
+
+$childRejectReasonUi = '';
+if ($rawApprove === 'ไม่อนุมัติ') {
+    $childRejectReasonUi = drawdream_foundation_child_profile_reject_reason_for_ui(
+        $conn,
+        $child_id,
+        (string)($child['child_name'] ?? '')
+    );
+}
 
 $sponsorshipUi = drawdream_child_sponsorship_ui_status($conn, $child_id);
 $sponsorshipLabel = (string)($sponsorshipUi['label'] ?? 'รออุปการะ');
@@ -167,10 +177,10 @@ $photo = htmlspecialchars((string)($child['photo_child'] ?? ''), ENT_QUOTES, 'UT
                     <div class="admin-record-k">สถานะการตรวจสอบ</div>
                     <div class="admin-record-v"><?= htmlspecialchars($reviewStatusLabel, ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
-                <?php if ($rawApprove === 'ไม่อนุมัติ' && trim((string)($child['reject_reason'] ?? '')) !== ''): ?>
+                <?php if ($rawApprove === 'ไม่อนุมัติ' && trim($childRejectReasonUi) !== ''): ?>
                 <div class="admin-record-field admin-record-field--full">
                     <div class="admin-record-k">เหตุผลไม่อนุมัติ</div>
-                    <div class="admin-record-v"><?= htmlspecialchars((string)$child['reject_reason'], ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="admin-record-v"><?= htmlspecialchars($childRejectReasonUi, ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
                 <?php endif; ?>
             </div>

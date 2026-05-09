@@ -10,6 +10,7 @@ require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/payment/config.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
+require_once __DIR__ . '/includes/notification_audit.php';
 drawdream_child_sponsorship_ensure_columns($conn);
 drawdream_child_outcome_ensure_columns($conn);
 drawdream_child_omise_subscription_ensure_schema($conn);
@@ -68,6 +69,15 @@ if (!empty($child['birth_date'] ?? '')) {
 
 $reviewStatus = $child['approve_profile'] ?? 'รอดำเนินการ';
 $reviewStatusLabel = $reviewStatus;
+
+$childRejectReasonUi = '';
+if ($reviewStatus === 'ไม่อนุมัติ') {
+    $childRejectReasonUi = drawdream_foundation_child_profile_reject_reason_for_ui(
+        $conn,
+        $child_id,
+        (string)($child['child_name'] ?? '')
+    );
+}
 
 $canDonate = drawdream_child_can_receive_donation($conn, $child_id, $child);
 $donorUid = (int)($_SESSION['user_id'] ?? 0);
@@ -358,7 +368,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         <?php if ($reviewStatus === 'ไม่อนุมัติ'): ?>
                         <div class="data-item full">
                             <span class="label">เหตุผลไม่อนุมัติ</span>
-                            <span class="value"><?php echo htmlspecialchars($child['reject_reason'] ?? '-'); ?></span>
+                            <span class="value"><?php echo htmlspecialchars($childRejectReasonUi !== '' ? $childRejectReasonUi : '-'); ?></span>
                         </div>
                         <?php endif; ?>
                     </div>
@@ -447,8 +457,8 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         <button type="submit" class="btn-subscription-cancel btn-subscription-cancel--large">ยกเลิกอุปการะเด็กคนนี้</button>
                     </form>
                     <?php endif; ?>
-                    <?php if (($role === 'foundation' || $role === 'admin') && $reviewStatus === 'ไม่อนุมัติ' && !empty($child['reject_reason'] ?? '')): ?>
-                    <p style="color:#b32525;"><strong>เหตุผลไม่อนุมัติ:</strong> <?php echo htmlspecialchars($child['reject_reason']); ?></p>
+                    <?php if (($role === 'foundation' || $role === 'admin') && $reviewStatus === 'ไม่อนุมัติ' && $childRejectReasonUi !== ''): ?>
+                    <p style="color:#b32525;"><strong>เหตุผลไม่อนุมัติ:</strong> <?php echo htmlspecialchars($childRejectReasonUi); ?></p>
                     <?php endif; ?>
                 </div>
             </div>

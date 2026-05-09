@@ -12,9 +12,14 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
 
 // หมายเหตุ: การไม่อนุมัติเป็นการ UPDATE สถานะเท่านั้น ไม่มีการลบแถวจาก foundation_children
 // ไม่มีระบบแก้ไขรออนุมัติแล้ว จึงไม่ใช้ pending_edit_json อีกต่อไป
+// เหตุผลไม่อนุมัติไม่เก็บใน foundation_children — ส่งในแจ้งเตือน + audit แอดมิน แล้วดึงมาแสดงใน UI
+$cDropReject = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'reject_reason'");
+if ($cDropReject && $cDropReject->num_rows > 0) {
+    @$conn->query('ALTER TABLE foundation_children DROP COLUMN reject_reason');
+}
+
 $needCols = [
-    'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL AFTER approve_profile",
-    'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL AFTER reject_reason",
+    'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL",
 ];
 foreach ($needCols as $col => $ddl) {
     $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
@@ -67,17 +72,16 @@ if (!empty($rowFull['deleted_at'])) {
 
 if ($action === 'approve') {
     $new_status = 'อนุมัติ';
-    $reasonToSave = null;
-    $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
+    $sql = "UPDATE foundation_children SET approve_profile = ?, approve_at = NOW() WHERE child_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssi", $new_status, $reasonToSave, $child_id);
+    $stmt->bind_param('si', $new_status, $child_id);
     $ok = $stmt->execute();
     $alert_msg = $ok ? 'อนุมัติโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
 } else {
     $new_status = 'ไม่อนุมัติ';
-    $sql = "UPDATE foundation_children SET approve_profile = ?, reject_reason = ?, approve_at = NOW() WHERE child_id = ?";
+    $sql = "UPDATE foundation_children SET approve_profile = ?, approve_at = NOW() WHERE child_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("ssi", $new_status, $rejectReason, $child_id);
+    $stmt->bind_param('si', $new_status, $child_id);
     $ok = $stmt->execute();
     $alert_msg = $ok ? 'ไม่อนุมัติโปรไฟล์เรียบร้อยแล้ว' : 'เกิดข้อผิดพลาด';
 }

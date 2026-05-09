@@ -47,7 +47,6 @@ $needed_columns = [
     'status' => "ALTER TABLE foundation_children ADD COLUMN status VARCHAR(100) NULL",
     'photo_child' => "ALTER TABLE foundation_children ADD COLUMN photo_child VARCHAR(255) NULL",
     'approve_profile' => "ALTER TABLE foundation_children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
-    'reject_reason' => "ALTER TABLE foundation_children ADD COLUMN reject_reason TEXT NULL",
     'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL",
     'update_text' => "ALTER TABLE foundation_children ADD COLUMN update_text LONGTEXT NULL",
     'update_at' => "ALTER TABLE foundation_children ADD COLUMN update_at DATETIME NULL",
@@ -59,6 +58,10 @@ foreach ($needed_columns as $col => $ddl) {
     if ($chk && $chk->num_rows === 0) {
         $conn->query($ddl);
     }
+}
+$cDropReject = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'reject_reason'");
+if ($cDropReject && $cDropReject->num_rows > 0) {
+    @$conn->query('ALTER TABLE foundation_children DROP COLUMN reject_reason');
 }
 $has_birth_date_column = true; // migration ensures it exists
 $dreamChoices = ['คุณหมอ', 'คุณครู', 'พยาบาล', 'ทหาร', 'ตำรวจ', 'นักบิน', 'นักร้อง', 'นักเต้น', 'จิตรกร', 'แม่ค้า'];

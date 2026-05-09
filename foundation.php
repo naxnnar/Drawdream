@@ -60,6 +60,33 @@ $q2 = mysqli_query($conn, "
 ");
 if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
 
+/* ยอดรวม «แถบความคืบหน้าในการ์ดสไลด์» — รายการเดียวกับที่โชว์ (approved/purchasing/done)
+ * เมื่อไม่มีรอบเปิดรับอยู่ การใช้เฉพาะยอด open จะได้ 0/0 ทั้งที่ครบเป้าแล้ว */
+$donationTotalsSlideTrack = [];
+$qTrack = mysqli_query($conn, "
+    SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
+    FROM foundation_needlist
+    WHERE approve_item IN ('approved', 'purchasing', 'done')
+    GROUP BY foundation_id
+");
+if ($qTrack) {
+    while ($r = mysqli_fetch_assoc($qTrack)) {
+        $donationTotalsSlideTrack[(int)$r['foundation_id']] = (float)$r['total'];
+    }
+}
+$goalTotalsSlideTrack = [];
+$qTrackG = mysqli_query($conn, "
+    SELECT foundation_id, COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
+    FROM foundation_needlist
+    WHERE approve_item IN ('approved', 'purchasing', 'done')
+    GROUP BY foundation_id
+");
+if ($qTrackG) {
+    while ($r = mysqli_fetch_assoc($qTrackG)) {
+        $goalTotalsSlideTrack[(int)$r['foundation_id']] = (float)$r['goal'];
+    }
+}
+
 $needOutcomeFoundations = [];
 $needDoneFoundations = [];
 $qOutcome = mysqli_query($conn, "
@@ -198,8 +225,20 @@ foreach ($foundationRows as $f) {
         continue;
     }
 
-    $current = $donationTotals[$fid] ?? 0;
-    $goal = $goalTotals[$fid] ?? 0;
+    $currentOpen = $donationTotals[$fid] ?? 0;
+    $goalOpen = $goalTotals[$fid] ?? 0;
+    $currentTrack = $donationTotalsSlideTrack[$fid] ?? 0;
+    $goalTrack = $goalTotalsSlideTrack[$fid] ?? 0;
+    if ($goalOpen > 0) {
+        $current = $currentOpen;
+        $goal = $goalOpen;
+    } elseif ($goalTrack > 0) {
+        $current = $currentTrack;
+        $goal = $goalTrack;
+    } else {
+        $current = 0;
+        $goal = 0;
+    }
     $percent = ($goal > 0) ? min(100, round(($current / $goal) * 100, 2)) : 0;
 
     $foundationSlides[] = [
@@ -224,7 +263,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=37">
+  <link rel="stylesheet" href="css/foundation.css?v=38">
 </head>
 <body class="foundation-page">
 
@@ -443,9 +482,9 @@ $hasAnySlides = !empty($foundationSlides);
               <?php endif; ?>
             </div>
             <?php if ($needGoalMet || $hasNeedOutcome || $hasNeedDone): ?>
-              <a class="btn-donate" href="needlist_result.php?fid=<?= $fid ?>">ผลลัพธ์ของมูลนิธิ</a>
+              <a class="btn-donate btn-donate--outcome" href="needlist_result.php?fid=<?= $fid ?>">ผลลัพธ์ของมูลนิธิ</a>
             <?php else: ?>
-              <a class="btn-donate" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
+              <a class="btn-donate btn-donate--primary-cta" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
             <?php endif; ?>
           </div>
           <div class="fc-right">

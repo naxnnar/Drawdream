@@ -152,6 +152,11 @@ if ($result && $result->num_rows > 0) {
     $all_list_rows[] = $row;
   }
 }
+$childRejectReasonUi = [];
+if ($role === 'foundation' && $all_list_rows !== []) {
+    require_once __DIR__ . '/includes/notification_audit.php';
+    $childRejectReasonUi = drawdream_foundation_child_profile_reject_reasons_for_children_batch($conn, $all_list_rows);
+}
 $cycleTotals = drawdream_child_cycle_totals_batch($conn, $all_list_rows);
 $childIdsForTotals = array_map(static fn ($r) => (int)($r['child_id'] ?? 0), $all_list_rows);
 $childDonationTotals = ($role === 'foundation' && $childIdsForTotals !== [])
@@ -447,8 +452,11 @@ if ($role === 'foundation') {
                   </div>
                 <?php endif; ?>
               <?php endif; ?>
-              <?php if ($role === 'foundation' && $rawStatus === 'ไม่อนุมัติ' && !empty($child['reject_reason'] ?? '')): ?>
-                <p class="reject-reason">เหตุผลไม่อนุมัติ: <?php echo htmlspecialchars($child['reject_reason']); ?></p>
+              <?php
+                $rejectUiCard = trim((string)($childRejectReasonUi[(int)($child['child_id'] ?? 0)] ?? ''));
+              ?>
+              <?php if ($role === 'foundation' && $rawStatus === 'ไม่อนุมัติ' && $rejectUiCard !== ''): ?>
+                <p class="reject-reason">เหตุผลไม่อนุมัติ: <?php echo htmlspecialchars($rejectUiCard); ?></p>
               <?php endif; ?>
               <?php if ($role === 'foundation' && $foundationAccountVerified): ?>
                 <div class="edit-pill-wrap">

@@ -173,6 +173,186 @@ function drawdream_notifications_delete_by_entity_key(mysqli $conn, string $enti
     }
 }
 
+/** แยกข้อความเหตุผลจากเนื้อหาแจ้งเตือนรูปแบบ "โปรไฟล์ {ชื่อ}: {เหตุผล}" */
+function drawdream_parse_child_reject_notification_message(string $message, string $childName): string
+{
+    $message = trim($message);
+    if ($message === '') {
+        return '';
+    }
+    $childName = trim($childName);
+    if ($childName !== '') {
+        $prefix = 'โปรไฟล์ ' . $childName . ': ';
+        if (str_starts_with($message, $prefix)) {
+            return trim(substr($message, strlen($prefix)));
+        }
+    }
+    if (preg_match('/^โปรไฟล์\s*.+?:\s*(.+)$/us', $message, $m)) {
+        return trim((string)$m[1]);
+    }
+
+    return $message;
+}
+
+/** ดึงเหตุผลจาก remark ตาราง admin หลัง merge (ข้อความส่งตรวจ | เหตุผลไม่อนุมัติ) */
+function drawdream_child_reject_reason_from_admin_remark(string $remark): string
+{
+    $remark = trim($remark);
+    if ($remark === '') {
+        return '';
+    }
+    if (str_contains($remark, ' | ')) {
+        $parts = explode(' | ', $remark);
+
+        return trim((string)end($parts));
+    }
+    if (str_starts_with($remark, 'มูลนิธิ')) {
+        return '';
+    }
+
+    return $remark;
+}
+
+/**
+ * เหตุผลไม่อนุมัติโปรไฟล์เด็กสำหรับแสดงใน UI — ไม่เก็บใน foundation_children
+ * ลำดับ: แจ้งเตือนล่าสุด → remark ใน audit แอดมิน
+ */
+function drawdream_foundation_child_profile_reject_reason_for_ui(mysqli $conn, int $childId, string $childName): string
+{
+    if ($childId <= 0) {
+        return '';
+    }
+    drawdream_ensure_notifications_table($conn);
+    $title = 'ไม่อนุมัติโปรไฟล์เด็ก';
+    $link = 'children_donate.php?id=' . $childId;
+    $stmt = $conn->prepare('SELECT message FROM notifications WHERE title = ? AND link = ? ORDER BY created_at DESC LIMIT 1');
+    if ($stmt) {
+        $stmt->bind_param('ss', $title, $link);
+        if ($stmt->execute()) {
+            $row = $stmt->get_result()->fetch_assoc();
+            $msg = trim((string)($row['message'] ?? ''));
+            if ($msg !== '') {
+                $parsed = drawdream_parse_child_reject_notification_message($msg, $childName);
+                if ($parsed !== '') {
+                    return $parsed;
+                }
+            }
+        }
+    }
+
+    drawdream_ensure_admin_audit_table($conn);
+    $stmt2 = $conn->prepare(
+        'SELECT remark FROM `admin` WHERE target_id = ? AND target_entity = ? AND notif_type = ? ORDER BY action_at DESC, id DESC LIMIT 1'
+    );
+    if ($stmt2) {
+        $ent = 'child';
+        $nt = 'ไม่อนุมัติ';
+        $stmt2->bind_param('iss', $childId, $ent, $nt);
+        if ($stmt2->execute()) {
+            $row2 = $stmt2->get_result()->fetch_assoc();
+
+            return drawdream_child_reject_reason_from_admin_remark((string)($row2['remark'] ?? ''));
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @param array<int, array<string, mixed>> $childRows
+ * @return array<int, string> child_id => เหตุผล (ว่างได้)
+ */
+function drawdream_foundation_child_profile_reject_reasons_for_children_batch(mysqli $conn, array $childRows): array
+{
+    $rejected = [];
+    foreach ($childRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (($row['approve_profile'] ?? '') !== 'ไม่อนุมัติ') {
+            continue;
+        }
+        $cid = (int)($row['child_id'] ?? 0);
+        if ($cid <= 0) {
+            continue;
+        }
+        $rejected[$cid] = trim((string)($row['child_name'] ?? ''));
+    }
+    if ($rejected === []) {
+        return [];
+    }
+
+    drawdream_ensure_notifications_table($conn);
+    $out = [];
+    foreach (array_keys($rejected) as $cid) {
+        $out[$cid] = '';
+    }
+
+    $title = 'ไม่อนุมัติโปรไฟล์เด็ก';
+    $linkList = [];
+    foreach (array_keys($rejected) as $cid) {
+        $linkList[] = 'children_donate.php?id=' . $cid;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($linkList), '?'));
+    $sql = "SELECT link, message, created_at FROM notifications WHERE title = ? AND link IN ($placeholders) ORDER BY created_at DESC";
+    $stmt = $conn->prepare($sql);
+    if ($stmt) {
+        $types = 's' . str_repeat('s', count($linkList));
+        $stmt->bind_param($types, $title, ...$linkList);
+        if ($stmt->execute()) {
+            $res = $stmt->get_result();
+            while ($row = $res->fetch_assoc()) {
+                $link = (string)($row['link'] ?? '');
+                $message = (string)($row['message'] ?? '');
+                if (!preg_match('/children_donate\\.php\\?id=(\\d+)/', $link, $m)) {
+                    continue;
+                }
+                $cid = (int)$m[1];
+                if (!array_key_exists($cid, $out) || $out[$cid] !== '') {
+                    continue;
+                }
+                $parsed = drawdream_parse_child_reject_notification_message($message, $rejected[$cid] ?? '');
+                if ($parsed !== '') {
+                    $out[$cid] = $parsed;
+                }
+            }
+        }
+    }
+
+    $missing = [];
+    foreach ($out as $cid => $reason) {
+        if ($reason === '') {
+            $missing[] = $cid;
+        }
+    }
+    if ($missing !== []) {
+        drawdream_ensure_admin_audit_table($conn);
+        $placeholders2 = implode(',', array_fill(0, count($missing), '?'));
+        $sql2 = "SELECT target_id, remark, action_at, id FROM `admin` WHERE target_entity = 'child' AND notif_type = 'ไม่อนุมัติ' AND target_id IN ($placeholders2) ORDER BY action_at DESC, id DESC";
+        $stmt2 = $conn->prepare($sql2);
+        if ($stmt2) {
+            $types2 = str_repeat('i', count($missing));
+            $stmt2->bind_param($types2, ...$missing);
+            if ($stmt2->execute()) {
+                $res2 = $stmt2->get_result();
+                while ($row2 = $res2->fetch_assoc()) {
+                    $tid = (int)($row2['target_id'] ?? 0);
+                    if ($tid <= 0 || !array_key_exists($tid, $out) || $out[$tid] !== '') {
+                        continue;
+                    }
+                    $parsed = drawdream_child_reject_reason_from_admin_remark((string)($row2['remark'] ?? ''));
+                    if ($parsed !== '') {
+                        $out[$tid] = $parsed;
+                    }
+                }
+            }
+        }
+    }
+
+    return $out;
+}
+
 function drawdream_ensure_admin_notif_columns(mysqli $conn): void
 {
     $c = @$conn->query("SHOW COLUMNS FROM `admin` WHERE Field = 'notif_recipient_user_id'");

@@ -1123,8 +1123,22 @@ body.foundation-page .site-footer .social-link:hover {
 .item-name { font-weight: 600; font-size: 14px; color: #333; margin-bottom: 8px; }
 .item-meta { font-size: 12px; color: #666; line-height: 1.5; }
 
-.btn-donate { background: #3C5099; color: white; padding: 14px 48px; border-radius: 15px; font-size: 22px; font-weight: bold; text-align: center; text-decoration: none; display: inline-block; transition: all 0.3s; box-shadow: 0 4px 15px rgba(60,80,153,0.3); }
+.btn-donate { background: #3C5099; color: white; padding: 14px 48px; border-radius: 15px; font-size: 22px; font-weight: bold; text-align: center; text-decoration: none; display: inline-block; transition: all 0.3s; box-shadow: 0 4px 15px rgba(60,80,153,0.3); border: 2px solid transparent; box-sizing: border-box; }
 .btn-donate:hover { background: #2e3d78; transform: translateY(-2px); }
+/* การ์ดสไลด์หน้ามูลนิธิ: ปุ่มบริจาคหลัก vs ปุ่มดูผลลัพธ์ (ไม่ชนกับ CTA เดิม) */
+.btn-donate.btn-donate--primary-cta { border-color: #3C5099; }
+.btn-donate.btn-donate--outcome {
+    background: #fff;
+    color: #2e3f7f;
+    border-color: #3C5099;
+    box-shadow: 0 2px 12px rgba(60, 80, 153, 0.14);
+}
+.btn-donate.btn-donate--outcome:hover {
+    background: #eef2ff;
+    color: #1f2d5c;
+    border-color: #2e3d78;
+    transform: translateY(-2px);
+}
 
 .cover { max-width: 100%; width: 100%; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); max-height: 400px; object-fit: cover; }
 .cover-empty { width: 100%; height: 300px; background: #f0f0f0; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 14px; }
