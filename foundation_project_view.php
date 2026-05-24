@@ -5,6 +5,9 @@
 
 session_start();
 include 'db.php';
+require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
+require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
+drawdream_ensure_foundation_project_service_charge_columns($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: project.php');
@@ -74,6 +77,57 @@ $raised = (float)($p['current_donate'] ?? 0);
 $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0.0;
 $remainingToGoal = ($goal > 0) ? max(0.0, $goal - $raised) : 0.0;
 
+if ($goal > 0 && $raised >= $goal - 1e-6) {
+    drawdream_project_sync_service_charge_for_project($conn, $projectId);
+    $stRefresh = $conn->prepare(
+        'SELECT service_charge, service_charge_paid_at FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1'
+    );
+    if ($stRefresh) {
+        $stRefresh->bind_param('i', $projectId);
+        $stRefresh->execute();
+        $ref = $stRefresh->get_result()->fetch_assoc();
+        if (is_array($ref)) {
+            $p['service_charge'] = $ref['service_charge'] ?? $p['service_charge'];
+            $p['service_charge_paid_at'] = $ref['service_charge_paid_at'] ?? $p['service_charge_paid_at'];
+        }
+    }
+}
+$serviceChargeItem = (float)($p['service_charge'] ?? 0);
+if ($serviceChargeItem <= 0 && $goal > 0 && $raised >= $goal - 1e-6) {
+    $serviceChargeItem = drawdream_needlist_compute_service_charge($raised);
+}
+$goalMet = drawdream_project_goal_met($raised, $goal);
+$serviceChargePaid = !empty($p['service_charge_paid_at']);
+$serviceChargePayAmount = (int) round($serviceChargeItem);
+$showServiceChargeBlock = $goalMet && ($serviceChargeItem > 0 || $serviceChargePaid);
+$canPayServiceCharge = $goalMet && !$serviceChargePaid && $serviceChargeItem > 0 && $serviceChargePayAmount >= 20;
+$waitingAdminAfterScPaid = $goalMet && $serviceChargePaid && !in_array(
+    strtolower(trim((string)($p['project_status'] ?? ''))),
+    ['purchasing', 'done', 'completed'],
+    true
+);
+$serviceChargePctLabel = (int) round(drawdream_needlist_service_charge_rate() * 100);
+$scFlash = '';
+if (isset($_GET['sc_paid'])) {
+    $scFlash = 'ชำระค่าบริการระบบสำหรับโครงการนี้เรียบร้อยแล้ว';
+} elseif (isset($_GET['sc_err'])) {
+    $scErr = (string)($_GET['sc_err'] ?? '');
+    $scFlash = match ($scErr) {
+        'min' => 'ยอดค่าบริการต่ำกว่าขั้นต่ำการชำระ (20 บาท) — ติดต่อแอดมิน',
+        'no_amount' => 'ยังไม่มียอดค่าบริการให้ชำระ',
+        'not_ready' => 'ชำระค่าบริการได้เมื่อผู้บริจาคบริจาคครบเป้าหมายแล้วเท่านั้น',
+        default => 'ไม่สามารถเริ่มชำระค่าบริการได้ กรุณาลองใหม่',
+    };
+}
+$scPaidFmt = '';
+$scPaidRaw = trim((string)($p['service_charge_paid_at'] ?? ''));
+if ($scPaidRaw !== '') {
+    $ts = strtotime($scPaidRaw);
+    if ($ts !== false) {
+        $scPaidFmt = date('d/m/Y H:i', $ts);
+    }
+}
+
 $imgUrl = '';
 if (!empty($p['project_image'])) {
     $imgUrl = drawdream_project_image_url((string)$p['project_image'], 'uploads/');
@@ -92,7 +146,22 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>รายละเอียดโครงการ — <?= $pageTitle ?></title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=37">
+    <link rel="stylesheet" href="css/project.css?v=41">
+    <style>
+        .fnv-sc-section { margin: 20px 0 0; padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .fnv-sc-section__title { margin: 0 0 8px; font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+        .fnv-sc-section__lead { margin: 0 0 14px; font-size: 0.9rem; color: #64748b; line-height: 1.5; }
+        .fnv-sc-section__wait { margin: 12px 0 0; font-size: 0.88rem; color: #0369a1; }
+        .fnv-delivery__fee-rows { list-style: none; margin: 0; padding: 0; }
+        .fnv-delivery__fee-rows li { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.92rem; color: #334155; }
+        .fnv-delivery__fee-total { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #cbd5e1; font-weight: 700; }
+        .fnv-delivery__fee-paid { margin: 12px 0 0; color: #15803d; font-weight: 600; font-size: 0.9rem; }
+        .fnv-delivery__pay-btn { display: inline-block; margin-top: 14px; padding: 12px 20px; background: #1e3a5f; color: #fff !important; border-radius: 10px; text-decoration: none; font-weight: 600; }
+        .fnv-delivery__pay-btn:hover { background: #152a47; }
+        .fnv-delivery__sc-flash { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 0.9rem; }
+        .fnv-delivery__sc-flash--ok { background: #ecfdf5; color: #166534; border: 1px solid #bbf7d0; }
+        .fnv-delivery__sc-flash--err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    </style>
 </head>
 <body class="foundation-project-view-page">
 
@@ -137,6 +206,47 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
             <div class="foundation-progress-fill" style="width: <?= (float)$progress ?>%"></div>
         </div>
     </div>
+
+    <?php if ($showServiceChargeBlock): ?>
+    <section class="fnv-sc-section" aria-labelledby="fpv-sc-title">
+        <?php if ($scFlash !== ''): ?>
+        <p class="fnv-delivery__sc-flash <?= isset($_GET['sc_paid']) ? 'fnv-delivery__sc-flash--ok' : 'fnv-delivery__sc-flash--err' ?>">
+            <?= htmlspecialchars($scFlash, ENT_QUOTES, 'UTF-8') ?>
+        </p>
+        <?php endif; ?>
+        <h2 id="fpv-sc-title" class="fnv-sc-section__title">💳 ค่าบริการระบบ (<?= $serviceChargePctLabel ?>%)</h2>
+        <p class="fnv-sc-section__lead">
+            ชำระหลังจากผู้บริจาคบริจาคครบยอดเป้าหมายโครงการแล้ว
+            — แอดมินจะยืนยันโอนเงิน escrow ให้หลังมูลนิธิชำระค่าบริการเรียบร้อย
+        </p>
+        <div class="fnv-delivery__fee" style="margin:0;">
+            <ul class="fnv-delivery__fee-rows">
+                <li>
+                    <span>ยอดบริจาคที่ได้รับ (โครงการนี้)</span>
+                    <span><?= number_format($raised, 2) ?> บาท</span>
+                </li>
+                <li>
+                    <span>ค่าบริการ <?= $serviceChargePctLabel ?>%</span>
+                    <span><?= number_format($serviceChargeItem, 2) ?> บาท</span>
+                </li>
+            </ul>
+            <div class="fnv-delivery__fee-total">
+                <span>ยอดที่ต้องชำระหลังครบเป้าหมาย</span>
+                <span><?= number_format($serviceChargeItem, 2) ?> บาท</span>
+            </div>
+            <?php if ($serviceChargePaid): ?>
+            <p class="fnv-delivery__fee-paid">✅ ชำระค่าบริการระบบแล้ว<?= $scPaidFmt !== '' ? ' — ' . htmlspecialchars($scPaidFmt, ENT_QUOTES, 'UTF-8') : '' ?> — รอแอดมินยืนยันโอนเงิน</p>
+            <?php elseif ($canPayServiceCharge): ?>
+            <a href="payment/project_service_charge.php?project_id=<?= (int) $projectId ?>" class="fnv-delivery__pay-btn">
+                💳 ชำระค่าบริการ <?= number_format($serviceChargeItem, 2) ?> บาท
+            </a>
+            <?php endif; ?>
+        </div>
+        <?php if ($waitingAdminAfterScPaid): ?>
+        <p class="fnv-sc-section__wait">แอดมินได้รับแจ้งแล้วว่าคุณชำระค่าบริการ — จะดำเนินการยืนยันโอนเงินให้ในลำดับถัดไป</p>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
 
     <dl class="foundation-project-view-dl">
         <div class="foundation-project-view-row">

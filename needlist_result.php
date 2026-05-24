@@ -6,7 +6,6 @@
 declare(strict_types=1);
 
 include 'db.php';
-require_once __DIR__ . '/includes/needlist_donate_window.php';
 
 session_start();
 
@@ -25,8 +24,13 @@ if (!$fp) {
     exit;
 }
 
-$needOpen = drawdream_needlist_sql_open_for_donation();
-$agg = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
+// รวมยอดจากรายการที่เคย/กำลังระดม (ไม่ใช่แค่รายการที่ยังเปิดรับบริจาค — รายการ done จะหลุดจาก needOpen)
+$agg = $conn->prepare(
+    "SELECT COALESCE(SUM(current_donate), 0) AS c, COALESCE(SUM(total_price), 0) AS g
+     FROM foundation_needlist
+     WHERE foundation_id = ?
+       AND approve_item IN ('approved', 'purchasing', 'done')"
+);
 $agg->bind_param('i', $fid);
 $agg->execute();
 $rowAgg = $agg->get_result()->fetch_assoc();

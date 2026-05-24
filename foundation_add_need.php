@@ -50,6 +50,9 @@ if ($editItemPg > 0) {
     }
     if (!$editRow) {
         $editItemPg = 0;
+    } elseif (!in_array(strtolower(trim((string)($editRow['approve_item'] ?? ''))), ['pending', 'rejected'], true)) {
+        header('Location: foundation.php?need_edit_locked=1#my-needlist-section');
+        exit;
     }
 }
 $isCreateModeLocked = ($editItemPg <= 0 && !empty($needProposeBlock['blocked']));
@@ -317,6 +320,8 @@ if (isset($_POST['submit'])) {
             $existingNeedRow = $chkOwn->get_result()->fetch_assoc();
             if (!$existingNeedRow) {
                 $error = 'ไม่พบรายการสิ่งของหรือไม่มีสิทธิแก้ไข';
+            } elseif (!in_array(strtolower(trim((string)($existingNeedRow['approve_item'] ?? ''))), ['pending', 'rejected'], true)) {
+                $error = 'รายการนี้อนุมัติแล้ว ไม่สามารถแก้ไขได้';
             }
         }
     }
@@ -424,30 +429,18 @@ if (isset($_POST['submit'])) {
         if ($error === '' && mb_strlen($desiredBrand, 'UTF-8') > 200) {
             $error = 'แบรนด์ที่ต้องการต้องไม่เกิน 200 ตัวอักษร';
         }
-        $lineItemsForJson = [];
-        foreach ($lineItems as $li) {
-            $lineItemsForJson[] = [
-                'หมวดหมู่สิ่งของ' => (string)($li['category'] ?? ''),
-                'ชื่อสิ่งของ' => (string)($li['item_name'] ?? ''),
-                'จำนวนสิ่งของ' => (float)($li['qty'] ?? 0),
+        $encodedLines = foundation_needlist_encode_line_items_json(array_map(static function (array $li): array {
+            return [
+                'slot' => (int)($li['slot'] ?? 0),
+                'category' => (string)($li['category'] ?? ''),
+                'item_name' => (string)($li['item_name'] ?? ''),
+                'qty' => (float)($li['qty'] ?? 0),
+                'price' => (float)($li['price'] ?? 0),
+                'line_total' => (float)($li['line_total'] ?? 0),
             ];
-        }
-        $needItemsJson = json_encode($lineItemsForJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!is_string($needItemsJson) || $needItemsJson === '') {
-            $needItemsJson = '[]';
-        }
-        $pricingRows = [];
-        foreach ($lineItems as $idx => $li) {
-            $pricingRows[] = [
-                'ลำดับ' => $idx + 1,
-                'ราคาต่อชิ้น' => drawdream_needlist_round_money((float)($li['price'] ?? 0)),
-                'ราคารวม' => drawdream_needlist_round_money((float)($li['line_total'] ?? 0)),
-            ];
-        }
-        $needItemsPricingJson = json_encode($pricingRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!is_string($needItemsPricingJson) || $needItemsPricingJson === '') {
-            $needItemsPricingJson = '[]';
-        }
+        }, $lineItems));
+        $needItemsJson = foundation_needlist_items_json_strip_prices($encodedLines['items_json']);
+        $needItemsPricingJson = $encodedLines['pricing_json'];
         $_POST['goal_amount'] = (string)round($goal, 2);
         $_POST['desired_brand'] = $desiredBrand;
         if ($allow_other === 1) {
@@ -466,8 +459,10 @@ if (isset($_POST['submit'])) {
     // อัปโหลดรูป (ไม่บังคับ, สูงสุด 3 รูป)
     $uploadedImages = [];
     if ($error === "" && isset($_FILES['item_image']) && is_array($_FILES['item_image']['name'])) {
-        $uploadDir = "uploads/needs/";
-        if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
+        $uploadDir = drawdream_needlist_upload_dir();
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
 
         $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $names = $_FILES['item_image']['name'];
@@ -522,7 +517,7 @@ if (isset($_POST['submit'])) {
         $ff = $_FILES['foundation_need_image'];
         $errF = (int)($ff['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($errF === UPLOAD_ERR_OK) {
-            $uploadDir = "uploads/needs/";
+            $uploadDir = drawdream_needlist_upload_dir();
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
@@ -591,20 +586,20 @@ if (isset($_POST['submit'])) {
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
                 note = ?, total_price = ?, submitted_total_price = COALESCE(submitted_total_price, ?),
-                need_items_json = ?, need_items_pricing_json = ?
+                need_items_json = ?, need_items_pricing_json = ?, submitted_need_items_pricing_json = ?
                 WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'ss' . 'idi' . str_repeat('s', 5) . 'ddss' . 'ii';
+                $updTypes = 'ss' . 'idi' . str_repeat('s', 5) . 'sddsss' . 'ii';
                 $stmt->bind_param(
                     $updTypes,
                     $item_name, $desiredBrand,
                     $allow_other, $qty, $urgent,
                     $im0, $im1, $im2, $nfFinal,
-                    $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson,
+                    $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson,
                     $itemIdEdit, $foundation_id
                 );
 
@@ -680,8 +675,8 @@ if (isset($_POST['submit'])) {
                 if ($hasNeedItemsJson && $hasNeedItemsPricingJson) {
                     $sql = "INSERT INTO foundation_needlist
                         (foundation_id, item_name, desired_brand, allow_other_brand,
-                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, note, total_price, submitted_total_price, need_items_json, need_items_pricing_json, approve_item)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
+                         qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image, note, total_price, submitted_total_price, need_items_json, need_items_pricing_json, submitted_need_items_pricing_json, approve_item)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
                     $stmt = $conn->prepare($sql);
                     if (!$stmt) {
                         $error = "Prepare failed: " . $conn->error;
@@ -701,19 +696,19 @@ if (isset($_POST['submit'])) {
             if ($error === '' && $stmt) {
                 if ($hasNeedItemsJson && $hasNeedItemsPricingJson) {
                     $stmt->bind_param(
-                        "issidisssisddss",
+                        'issidisssssddsss',
                         $foundation_id, $item_name, $desiredBrand,
-                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson
+                        $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson
                     );
                 } elseif ($hasNeedItemsJson) {
                     $stmt->bind_param(
-                        "issidisssisdds",
+                        'issidisssssdds',
                         $foundation_id, $item_name, $desiredBrand,
                         $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price, $needItemsJson
                     );
                 } else {
                     $stmt->bind_param(
-                        "issidisssisdd",
+                        'issidisssssdd',
                         $foundation_id, $item_name, $desiredBrand,
                         $allow_other, $qty, $urgent, $im0, $im1, $im2, $needFoundationImageDb, $note, $total_price, $total_price
                     );

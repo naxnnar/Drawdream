@@ -4,8 +4,9 @@
 /**
  * แจ้งเตือน (notifications) + บันทึกคิว/audit ฝั่งแอดมิน (ตาราง admin)
  *
- * drawdream_send_notification(..., $entityKey) รองรับพารามิเตอร์เดิมเพื่อ backward compatible
- * โครงสร้าง notifications ปัจจุบันไม่มี entity_key/is_read แล้ว
+ * drawdream_send_notification — ไม่เก็บคอลัมน์ type ในตาราง notifications แล้ว
+ * พารามิเตอร์ $type (ถ้ามี) และ $entityKey รองรับ backward compatible แต่ไม่บันทึกลง DB
+ * โครงสร้าง notifications ปัจจุบันใช้ is_read รายแถว
  *
  * @see README.md
  */
@@ -21,7 +22,6 @@ function drawdream_ensure_notifications_table(mysqli $conn): void
         "CREATE TABLE IF NOT EXISTS notifications (
             notif_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
             user_id INT UNSIGNED NOT NULL,
-            type VARCHAR(64) NOT NULL DEFAULT 'general',
             title VARCHAR(255) NOT NULL DEFAULT '',
             message TEXT,
             link VARCHAR(512) DEFAULT '',
@@ -30,33 +30,40 @@ function drawdream_ensure_notifications_table(mysqli $conn): void
             KEY idx_created (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+    $cType = @$conn->query("SHOW COLUMNS FROM `notifications` LIKE 'type'");
+    if ($cType && $cType->num_rows > 0) {
+        @$conn->query('ALTER TABLE `notifications` DROP COLUMN `type`');
+    }
     // ลบคอลัมน์/ดัชนีเก่าที่ไม่ใช้แล้ว
     $c = @$conn->query("SHOW COLUMNS FROM `notifications` LIKE 'entity_key'");
     if ($c && $c->num_rows > 0) {
         @$conn->query("ALTER TABLE `notifications` DROP COLUMN entity_key");
     }
     $c2 = @$conn->query("SHOW COLUMNS FROM `notifications` LIKE 'is_read'");
-    if ($c2 && $c2->num_rows > 0) {
-        @$conn->query("ALTER TABLE `notifications` DROP COLUMN is_read");
+    if ($c2 && $c2->num_rows === 0) {
+        @$conn->query("ALTER TABLE `notifications` ADD COLUMN is_read TINYINT(1) NOT NULL DEFAULT 0 AFTER link");
     }
     $i1 = @$conn->query("SHOW INDEX FROM `notifications` WHERE Key_name = 'idx_notif_user_entity'");
     if ($i1 && $i1->num_rows > 0) {
         @$conn->query("ALTER TABLE `notifications` DROP INDEX idx_notif_user_entity");
     }
     $i2 = @$conn->query("SHOW INDEX FROM `notifications` WHERE Key_name = 'idx_user_read'");
-    if ($i2 && $i2->num_rows > 0) {
-        @$conn->query("ALTER TABLE `notifications` DROP INDEX idx_user_read");
+    if (!$i2 || $i2->num_rows === 0) {
+        @$conn->query("ALTER TABLE `notifications` ADD INDEX idx_user_read (user_id, is_read)");
     }
 
-    // ตารางสถานะการอ่านแจ้งเตือนรายผู้ใช้ (แทนคอลัมน์ is_read เดิม)
-    @$conn->query(
-        "CREATE TABLE IF NOT EXISTS notification_read_state (
-            user_id INT UNSIGNED NOT NULL PRIMARY KEY,
-            last_read_at DATETIME NULL DEFAULT NULL,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            KEY idx_last_read_at (last_read_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    );
+    // ย้ายสถานะอ่านจากตารางเก่า notification_read_state -> is_read รายแถว แล้วลบตารางเก่า
+    $legacyRead = @$conn->query("SHOW TABLES LIKE 'notification_read_state'");
+    if ($legacyRead && $legacyRead->num_rows > 0) {
+        @$conn->query(
+            "UPDATE notifications n
+             INNER JOIN notification_read_state rs ON rs.user_id = n.user_id
+             SET n.is_read = 1
+             WHERE rs.last_read_at IS NOT NULL
+               AND n.created_at <= rs.last_read_at"
+        );
+        @$conn->query("DROP TABLE notification_read_state");
+    }
 }
 
 function drawdream_notifications_mark_all_read(mysqli $conn, int $userId): bool
@@ -65,11 +72,7 @@ function drawdream_notifications_mark_all_read(mysqli $conn, int $userId): bool
         return false;
     }
     drawdream_ensure_notifications_table($conn);
-    $stmt = $conn->prepare(
-        "INSERT INTO notification_read_state (user_id, last_read_at)
-         VALUES (?, NOW())
-         ON DUPLICATE KEY UPDATE last_read_at = VALUES(last_read_at)"
-    );
+    $stmt = $conn->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ?");
     if (!$stmt) {
         return false;
     }
@@ -84,34 +87,11 @@ function drawdream_notifications_unread_count(mysqli $conn, int $userId): int
     }
     drawdream_ensure_notifications_table($conn);
 
-    $lastReadAt = null;
-    $stRead = $conn->prepare('SELECT last_read_at FROM notification_read_state WHERE user_id = ? LIMIT 1');
-    if ($stRead) {
-        $stRead->bind_param('i', $userId);
-        $stRead->execute();
-        $rowRead = $stRead->get_result()->fetch_assoc();
-        $lastReadAt = trim((string)($rowRead['last_read_at'] ?? ''));
-        if ($lastReadAt === '') {
-            $lastReadAt = null;
-        }
-    }
-
-    if ($lastReadAt === null) {
-        $stAll = $conn->prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ?');
-        if (!$stAll) {
-            return 0;
-        }
-        $stAll->bind_param('i', $userId);
-        $stAll->execute();
-        $row = $stAll->get_result()->fetch_assoc();
-        return (int)($row['cnt'] ?? 0);
-    }
-
-    $st = $conn->prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND created_at > ?');
+    $st = $conn->prepare('SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND is_read = 0');
     if (!$st) {
         return 0;
     }
-    $st->bind_param('is', $userId, $lastReadAt);
+    $st->bind_param('i', $userId);
     $st->execute();
     $row = $st->get_result()->fetch_assoc();
     return (int)($row['cnt'] ?? 0);
@@ -369,6 +349,33 @@ function drawdream_ensure_admin_notif_columns(mysqli $conn): void
     );
 }
 
+/**
+ * ไอคอน/คลาสการ์ดแจ้งเตือนจากหัวข้อและลิงก์ (ไม่ใช้คอลัมน์ type)
+ *
+ * @return array{icon: string, class: string}
+ */
+function drawdream_notification_card_meta(string $title, string $link = ''): array
+{
+    $t = trim($title);
+    if ($t !== '' && str_contains($t, 'อนุมัติ') && !str_contains($t, 'ไม่อนุมัติ')) {
+        return ['icon' => '✅', 'class' => 'approved'];
+    }
+    if ($t !== '' && (str_contains($t, 'ไม่อนุมัติ') || str_contains($t, 'ปฏิเสธ'))) {
+        return ['icon' => '⛔', 'class' => 'rejected'];
+    }
+    if ($t !== '' && (str_contains($t, 'รอ') || str_contains($t, 'ตรวจสอบ'))) {
+        return ['icon' => '⏳', 'class' => 'pending'];
+    }
+    if (str_contains($t, 'ประกาศ') || str_contains($link, 'broadcast')) {
+        return ['icon' => '📣', 'class' => 'broadcast'];
+    }
+    if (str_contains($t, 'ครบเป้า') || str_contains($t, 'ครบแล้ว') || str_contains($t, 'พร้อมอัปเดต')) {
+        return ['icon' => '🎉', 'class' => 'success'];
+    }
+
+    return ['icon' => '🔔', 'class' => 'other'];
+}
+
 function drawdream_send_notification(
     mysqli $conn,
     int $userId,
@@ -381,14 +388,13 @@ function drawdream_send_notification(
     if ($userId <= 0) {
         return false;
     }
+    unset($type, $entityKey);
     drawdream_ensure_notifications_table($conn);
-    $typeTh = drawdream_normalize_notif_type_to_th($type);
-    // เก็บ param $entityKey ไว้เพื่อ backward compatibility แต่ไม่ใช้แล้ว
-    $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)');
+    $stmt = $conn->prepare('INSERT INTO notifications (user_id, title, message, link) VALUES (?, ?, ?, ?)');
     if (!$stmt) {
         return false;
     }
-    $stmt->bind_param('issss', $userId, $typeTh, $title, $message, $link);
+    $stmt->bind_param('isss', $userId, $title, $message, $link);
     return $stmt->execute();
 }
 
@@ -522,6 +528,72 @@ function drawdream_notify_admins_need_submitted(
             $body,
             $link,
             'adm_pending_need:' . $itemId
+        );
+    }
+}
+
+/** แจ้งแอดมินทุกคนเมื่อมูลนิธิชำระค่าบริการรายการสิ่งของแล้ว */
+function drawdream_notify_admins_needlist_service_charge_paid(
+    mysqli $conn,
+    int $itemId,
+    string $itemName,
+    string $foundationName
+): void {
+    if ($itemId <= 0) {
+        return;
+    }
+    drawdream_ensure_notifications_table($conn);
+    $dispItem = trim($itemName) !== '' ? trim($itemName) : 'รายการสิ่งของ';
+    $dispFn = trim($foundationName) !== '' ? trim($foundationName) : 'มูลนิธิ';
+    $title = 'มูลนิธิชำระค่าบริการแล้ว';
+    $msg = $dispFn . ' ชำระค่าบริการระบบสำหรับรายการ "' . $dispItem . '" แล้ว '
+        . 'สามารถเริ่มจัดซื้อและยืนยันจัดส่งได้';
+    $link = 'admin_escrow.php';
+    foreach (drawdream_admin_user_ids($conn) as $adminUid) {
+        if ($adminUid <= 0) {
+            continue;
+        }
+        drawdream_send_notification(
+            $conn,
+            $adminUid,
+            'needlist_service_charge_paid',
+            $title,
+            $msg,
+            $link,
+            'needlist_sc_paid:' . $itemId
+        );
+    }
+}
+
+/** แจ้งแอดมินเมื่อมูลนิธิชำระค่าบริการโครงการแล้ว */
+function drawdream_notify_admins_project_service_charge_paid(
+    mysqli $conn,
+    int $projectId,
+    string $projectName,
+    string $foundationName
+): void {
+    if ($projectId <= 0) {
+        return;
+    }
+    drawdream_ensure_notifications_table($conn);
+    $dispProj = trim($projectName) !== '' ? trim($projectName) : 'โครงการ';
+    $dispFn = trim($foundationName) !== '' ? trim($foundationName) : 'มูลนิธิ';
+    $title = 'มูลนิธิชำระค่าบริการโครงการแล้ว';
+    $msg = $dispFn . ' ชำระค่าบริการระบบสำหรับโครงการ "' . $dispProj . '" แล้ว '
+        . 'สามารถยืนยันโอนเงิน escrow ได้';
+    $link = 'admin_escrow.php';
+    foreach (drawdream_admin_user_ids($conn) as $adminUid) {
+        if ($adminUid <= 0) {
+            continue;
+        }
+        drawdream_send_notification(
+            $conn,
+            $adminUid,
+            'project_service_charge_paid',
+            $title,
+            $msg,
+            $link,
+            'project_sc_paid:' . $projectId
         );
     }
 }

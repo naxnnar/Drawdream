@@ -105,7 +105,17 @@ if (isset($_POST['update'])) {
 
         if ($error === '') {
             if ($addrAllEmpty) {
-                $address = trim((string)($profile['address'] ?? ''));
+                $parsedExisting = drawdream_parse_saved_thai_address($profile['address'] ?? '');
+                if ($parsedExisting) {
+                    $address = drawdream_merge_foundation_address_from_post(array_merge($_POST, [
+                        'addr_province' => $parsedExisting['province'],
+                        'addr_amphoe'   => $parsedExisting['amphoe'],
+                        'addr_tambon'   => $parsedExisting['tambon'],
+                        'addr_zip'      => $parsedExisting['zip'],
+                    ]));
+                } else {
+                    $address = trim((string)($profile['address'] ?? ''));
+                }
             } else {
                 $address = drawdream_merge_foundation_address_from_post($_POST);
                 if ($address === '' || !preg_match('/\d{5}\s*$/u', $address)) {
@@ -318,10 +328,15 @@ if (isset($_POST['update'])) {
                 <input type="text" name="bank_account_name" class="form-input" value="<?= htmlspecialchars($profile['bank_account_name'] ?? '') ?>">
             </div>
 
-            <div class="update-form-section-title">ข้อมูลเพิ่มเติม</div>
+            <div class="update-form-section-title">ที่อยู่</div>
 
             <?php
-            $thai_address_options = ['require' => false];
+            $thai_address_line = [
+                'house_no' => $thai_addr_parsed['house_no'] ?? '',
+                'soi'      => $thai_addr_parsed['soi'] ?? '',
+                'road'     => $thai_addr_parsed['road'] ?? '',
+            ];
+            $thai_address_options = ['require' => false, 'line' => $thai_address_line];
             include __DIR__ . '/includes/thai_address_fields.php';
             ?>
             <?php if ($thai_addr_parsed === null && trim((string)($profile['address'] ?? '')) !== ''): ?>

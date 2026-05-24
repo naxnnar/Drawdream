@@ -2262,6 +2262,17 @@ body.foundation-page .need-card-edit-link {
     font-family: 'Prompt', 'Sarabun', sans-serif;
 }
 body.foundation-page .need-card-edit-link:hover { background: #e8c94a; color: #1f2937; }
+body.foundation-page .need-card-edit-link--disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.85;
+}
+body.foundation-page .need-card-edit-link--disabled:hover {
+    background: #d1d5db;
+    color: #6b7280;
+}
 body.foundation-page .needlist-flash {
     margin: 0 4px 14px;
     padding: 12px 16px;

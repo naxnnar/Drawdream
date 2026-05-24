@@ -30,6 +30,45 @@ function drawdream_clear_pending_payment_session(): void
     foreach ($sessionKeys as $k) {
         unset($_SESSION[$k]);
     }
+    drawdream_clear_pending_service_charge_session();
+    drawdream_clear_pending_project_service_charge_session();
+}
+
+/**
+ * ลบค่า session ที่ผูกกับหน้าชำระค่าบริการรายการสิ่งของ
+ */
+function drawdream_clear_pending_service_charge_session(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    foreach ([
+        'pending_sc_item_id',
+        'pending_sc_charge_id',
+        'pending_sc_amount',
+        'pending_sc_qr_image',
+        'pending_sc_foundation_id',
+        'pending_sc_item_name',
+    ] as $k) {
+        unset($_SESSION[$k]);
+    }
+}
+
+/** ลบ session ชำระค่าบริการโครงการ */
+function drawdream_clear_pending_project_service_charge_session(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    foreach ([
+        'pending_psc_project_id',
+        'pending_psc_charge_id',
+        'pending_psc_amount',
+        'pending_psc_qr_image',
+        'pending_psc_project_name',
+    ] as $k) {
+        unset($_SESSION[$k]);
+    }
 }
 
 /**

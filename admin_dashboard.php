@@ -90,12 +90,12 @@ if ($rdrRes) {
 
 $recent_need_price_changes = [];
 $nphRes = mysqli_query($conn, "
-    SELECT nl.item_id, nl.item_name, nl.total_price, nl.submitted_total_price, nl.approved_total_price,
+    SELECT nl.item_id, nl.item_name, nl.total_price, nl.submitted_total_price,
            nl.price_reviewed_at,
            fp.foundation_name
     FROM foundation_needlist nl
     JOIN foundation_profile fp ON nl.foundation_id = fp.foundation_id
-    WHERE nl.approved_total_price IS NOT NULL
+    WHERE nl.price_reviewed_at IS NOT NULL
     ORDER BY COALESCE(nl.price_reviewed_at, nl.created_at) DESC, nl.item_id DESC
     LIMIT 100
 ");
@@ -394,7 +394,7 @@ $chart_initial_to = date('Y-m-d');
                     <?php foreach ($recent_need_price_changes as $idx => $nh): ?>
                         <?php
                             $submitted = (float)($nh['submitted_total_price'] ?? 0);
-                            $approved = (float)($nh['approved_total_price'] ?? ($nh['total_price'] ?? 0));
+                            $approved = (float)($nh['total_price'] ?? 0);
                             if ($submitted <= 0 && $approved > 0) {
                                 $submitted = $approved;
                             }

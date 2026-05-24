@@ -7,6 +7,7 @@
 if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
+require_once __DIR__ . '/includes/notification_audit.php';
 
 // กำหนดค่า default ให้ $readonly ก่อนใช้งาน
 $readonly = isset($_GET['readonly']) && $_GET['readonly'] == '1';
@@ -199,30 +200,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
             $donor_users = $donors_q->get_result()->fetch_all(MYSQLI_ASSOC);
 
             foreach ($donor_users as $du) {
-                $notif_type_th = drawdream_normalize_notif_type_to_th('project_update');
-                $notif_stmt = $conn->prepare('
-                    INSERT INTO notifications (user_id, type, title, message, link)
-                    VALUES (?, ?, ?, ?, ?)
-                ');
-                $notif_title = "อัปเดตโครงการ: " . $proj_row['project_name'];
+                $notif_title = 'อัปเดตโครงการ: ' . $proj_row['project_name'];
                 $notif_snip = mb_strlen($description) > 160 ? mb_substr($description, 0, 160) . '…' : $description;
-                $notif_msg   = $foundation['foundation_name'] . " อัปเดตผลลัพธ์: " . $notif_snip;
-                $notif_link  = "project.php";
-                $notif_stmt->bind_param("issss", $du['user_id'], $notif_type_th, $notif_title, $notif_msg, $notif_link);
-                $notif_stmt->execute();
+                $notif_msg = $foundation['foundation_name'] . ' อัปเดตผลลัพธ์: ' . $notif_snip;
+                drawdream_send_notification($conn, (int)$du['user_id'], '', $notif_title, $notif_msg, 'project.php');
             }
 
-            // แจ้งเตือนมูลนิธิตัวเองด้วย (ยืนยันการโพสต์)
-            $self_type_th = drawdream_normalize_notif_type_to_th('post_success');
-            $self_notif = $conn->prepare('
-                INSERT INTO notifications (user_id, type, title, message, link)
-                VALUES (?, ?, ?, ?, ?)
-            ');
-            $self_title = "โพสต์ผลลัพธ์สำเร็จ";
-            $self_msg   = "คุณได้โพสต์ผลลัพธ์โครงการ \"" . $proj_row['project_name'] . "\" เรียบร้อยแล้ว";
-            $self_link  = "profile.php";
-            $self_notif->bind_param("issss", $user_id, $self_type_th, $self_title, $self_msg, $self_link);
-            $self_notif->execute();
+            $self_title = 'โพสต์ผลลัพธ์สำเร็จ';
+            $self_msg = 'คุณได้โพสต์ผลลัพธ์โครงการ "' . $proj_row['project_name'] . '" เรียบร้อยแล้ว';
+            drawdream_send_notification($conn, $user_id, '', $self_title, $self_msg, 'profile.php');
 
             $success = "โพสต์ผลลัพธ์สำเร็จแล้วค่ะ!";
         }

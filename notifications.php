@@ -8,6 +8,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
+require_once __DIR__ . '/includes/notification_audit.php';
+drawdream_ensure_notifications_table($conn);
 
 $role = $_SESSION['role'] ?? '';
 if (!isset($_SESSION['user_id']) || !in_array($role, ['foundation', 'donor'], true)) {
@@ -108,14 +110,11 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
             box-shadow: 0 4px 14px rgba(0,0,0,0.1);
         }
 
-        .notif-card.type-project_funded { border-left-color: #4CAF50; }
-        .notif-card.type-project_funded { background: #f0fff4; }
-
-        .notif-card.type-needlist_done { border-left-color: #FF9800; }
-        .notif-card.type-needlist_done { background: #fff8f0; }
-
-        .notif-card.type-broadcast { border-left-color: #5c6bc0; }
-        .notif-card.type-broadcast { background: #eef1ff; }
+        .notif-card.notif--approved { border-left-color: #4CAF50; background: #f0fff4; }
+        .notif-card.notif--success { border-left-color: #4CAF50; background: #f0fff4; }
+        .notif-card.notif--rejected { border-left-color: #e53935; background: #fff5f5; }
+        .notif-card.notif--pending { border-left-color: #FF9800; background: #fff8f0; }
+        .notif-card.notif--broadcast { border-left-color: #5c6bc0; background: #eef1ff; }
 
         .notif-icon {
             font-size: 28px;
@@ -184,22 +183,12 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
     <?php if ($result && mysqli_num_rows($result) > 0): ?>
         <div class="notif-list">
         <?php while ($row = mysqli_fetch_assoc($result)):
-            $type = $row['type'] ?? '';
-            $typeBucket = drawdream_normalize_notif_type_to_th($type);
-            $icon = match ($typeBucket) {
-                'อนุมัติ' => '✅',
-                'ไม่อนุมัติ' => '⛔',
-                'กำลังรอดำเนินการ' => '⏳',
-                'ประกาศจากผู้ดูแลระบบ' => '📣',
-                default => '🔔',
-            };
-            $typeClass = match ($typeBucket) {
-                'อนุมัติ' => 'approved',
-                'ไม่อนุมัติ' => 'rejected',
-                'กำลังรอดำเนินการ' => 'pending',
-                'ประกาศจากผู้ดูแลระบบ' => 'broadcast',
-                default => 'other',
-            };
+            $cardMeta = drawdream_notification_card_meta(
+                (string)($row['title'] ?? ''),
+                (string)($row['link'] ?? '')
+            );
+            $icon = $cardMeta['icon'];
+            $typeClass = $cardMeta['class'];
             $created = strtotime($row['created_at']);
             $diff = time() - (int)$created;
             if ($diff < 60) {
@@ -219,7 +208,7 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
                 && strpos($rawLink, 'view=outcome') === false) {
                 $rawLink .= (str_contains($rawLink, '?') ? '&' : '?') . 'view=outcome';
             }
-            $cardClasses = 'notif-card type-' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8');
+            $cardClasses = 'notif-card notif--' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8');
         ?>
             <?php if ($rawLink !== ''): ?>
             <a href="<?= htmlspecialchars($rawLink, ENT_QUOTES, 'UTF-8') ?>" class="<?= $cardClasses ?>">

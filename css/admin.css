@@ -325,6 +325,66 @@ body.admin-approve-needlist-page .need-line-item {
     border-radius: 8px;
 }
 
+body.admin-approve-needlist-page .need-approve-price-hint {
+    margin: 4px 0 10px;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+body.admin-approve-needlist-page .need-approve-price-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    background: #fff;
+    border: 1px solid #dbe3ee;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+body.admin-approve-needlist-page .need-approve-price-table th,
+body.admin-approve-needlist-page .need-approve-price-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #e8edf4;
+    vertical-align: middle;
+}
+
+body.admin-approve-needlist-page .need-approve-price-table thead th {
+    background: #f1f5f9;
+    font-weight: 700;
+    text-align: left;
+}
+
+body.admin-approve-needlist-page .need-approve-price-table tfoot td {
+    font-weight: 800;
+    background: #f8fafc;
+    border-bottom: none;
+}
+
+body.admin-approve-needlist-page .need-approve-price-table .need-approve-grand-label {
+    text-align: right;
+}
+
+body.admin-approve-needlist-page .need-approve-price-table .need-approve-grand-total {
+    text-align: right;
+    color: #0f766e;
+}
+
+body.admin-approve-needlist-page .need-approve-line-price {
+    width: 100%;
+    max-width: 120px;
+    border: 1px solid #b9c5dc;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-weight: 700;
+    text-align: right;
+}
+
+body.admin-approve-needlist-page .need-approve-line-total {
+    text-align: right;
+    white-space: nowrap;
+    font-weight: 700;
+}
+
 body.admin-approve-needlist-page .need-field input[type="number"] {
     border: 1px solid #b9c5dc;
     border-radius: 8px;

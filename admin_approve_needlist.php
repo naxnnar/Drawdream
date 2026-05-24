@@ -21,103 +21,50 @@ $msg = "";
 $error = "";
 
 /**
- * @return array<int,array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}>
+ * รวบรวมราคาต่อรายการจากฟอร์มอนุมัติ → JSON + ยอดรวม
+ *
+ * @param array<int,array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}> $lineItems
+ * @return array{error:string,total:float,items_json:?string,pricing_json:?string}
  */
-function admin_needlist_parse_items_json(array $row): array
+function admin_needlist_pricing_from_post(array $lineItems, array $post, array $namePool): array
 {
-    $raw = trim((string)($row['need_items_json'] ?? ''));
-    if ($raw === '') {
-        return [];
-    }
-    try {
-        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-    } catch (Throwable $e) {
-        return [];
-    }
-    if (!is_array($decoded)) {
-        return [];
-    }
-    $namePool = array_values(array_filter(array_map('trim', explode(',', (string)($row['item_name'] ?? '')))));
-    $out = [];
-    foreach ($decoded as $idx => $li) {
-        if (!is_array($li)) {
+    $rowsForEncode = [];
+    foreach ($lineItems as $idx => $li) {
+        $slot = (int)($li['slot'] ?? 0);
+        $qty = (float)($li['qty'] ?? 0);
+        if ($slot <= 0 || $qty <= 0) {
             continue;
         }
-        $slot = (int)($li['slot'] ?? ($idx + 1));
-        $qty = (float)($li['จำนวนสิ่งของ'] ?? ($li['qty_needed'] ?? ($li['qty'] ?? 0)));
-        $price = (float)($li['ราคาต่อชิ้น'] ?? ($li['price_estimate'] ?? ($li['price'] ?? 0)));
-        $lineTotal = (float)($li['ราคารวม'] ?? ($li['line_total'] ?? ($qty * $price)));
-        $cat = trim((string)($li['หมวดหมู่สิ่งของ'] ?? ($li['category'] ?? '')));
-        $itemName = trim((string)($li['ชื่อสิ่งของ'] ?? ($li['item_name'] ?? '')));
-        if ($itemName === '') {
-            $itemName = trim((string)($namePool[$idx] ?? ''));
+        $rawPrice = str_replace([',', ' '], '', trim((string)($post['item_price_' . $slot] ?? '')));
+        if ($rawPrice === '') {
+            $rawPrice = (string)($li['price'] ?? '0');
         }
-        $out[] = [
-            'slot' => $slot > 0 ? $slot : ($idx + 1),
-            'category' => $cat,
-            'item_name' => $itemName,
-            'qty' => $qty > 0 ? $qty : 0.0,
-            'price' => $price > 0 ? $price : 0.0,
-            'line_total' => $lineTotal > 0 ? $lineTotal : ($qty * $price),
+        $newPrice = drawdream_needlist_round_money((float)$rawPrice);
+        if ($newPrice <= 0) {
+            return ['error' => "ราคารายการที่ {$slot} ต้องมากกว่า 0", 'total' => 0.0, 'items_json' => null, 'pricing_json' => null];
+        }
+        $itemLabel = trim((string)($li['item_name'] ?? ''));
+        if ($itemLabel === '') {
+            $itemLabel = trim((string)($namePool[$idx] ?? ''));
+        }
+        $rowsForEncode[] = [
+            'slot' => $slot,
+            'category' => (string)($li['category'] ?? ''),
+            'item_name' => $itemLabel,
+            'qty' => $qty,
+            'price' => $newPrice,
         ];
     }
-    $hasPrice = false;
-    $qtySum = 0.0;
-    foreach ($out as $r) {
-        if ((float)($r['price'] ?? 0) > 0) {
-            $hasPrice = true;
-        }
-        $qtySum += max(0.0, (float)($r['qty'] ?? 0));
+    if ($rowsForEncode === []) {
+        return ['error' => 'ไม่พบรายการสิ่งของย่อยสำหรับปรับราคา', 'total' => 0.0, 'items_json' => null, 'pricing_json' => null];
     }
-    if (!$hasPrice) {
-        $fallbackTotal = (float)($row['total_price'] ?? 0);
-        $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0) ? ($fallbackTotal / $qtySum) : 0.0;
-        if ($fallbackUnit > 0) {
-            foreach ($out as $i => $r) {
-                $q = (float)($r['qty'] ?? 0);
-                $out[$i]['price'] = $fallbackUnit;
-                $out[$i]['line_total'] = $q * $fallbackUnit;
-            }
-        }
-    }
-    return $out;
-}
-
-/**
- * ลบข้อมูลราคาต่อหน่วยออกจาก need_items_json ก่อนบันทึก
- * คงไว้เฉพาะข้อมูลรายการและจำนวนตามที่ต้องใช้แสดงผล
- */
-function admin_needlist_strip_unit_price_json(?string $rawJson): ?string
-{
-    $raw = trim((string)$rawJson);
-    if ($raw === '') {
-        return null;
-    }
-    try {
-        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-    } catch (Throwable $e) {
-        return null;
-    }
-    if (!is_array($decoded)) {
-        return null;
-    }
-    $out = [];
-    foreach ($decoded as $idx => $li) {
-        if (!is_array($li)) {
-            continue;
-        }
-        $slot = (int)($li['slot'] ?? ($idx + 1));
-        $category = trim((string)($li['หมวดหมู่สิ่งของ'] ?? ($li['category'] ?? '')));
-        $itemName = trim((string)($li['ชื่อสิ่งของ'] ?? ($li['item_name'] ?? '')));
-        $qty = (float)($li['จำนวนสิ่งของ'] ?? ($li['qty_needed'] ?? ($li['qty'] ?? 0)));
-        $out[] = [
-            'หมวดหมู่สิ่งของ' => $category,
-            'ชื่อสิ่งของ' => $itemName,
-            'จำนวนสิ่งของ' => $qty > 0 ? $qty : 0.0,
-        ];
-    }
-    $encoded = json_encode($out, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    return is_string($encoded) ? $encoded : null;
+    $encoded = foundation_needlist_encode_line_items_json($rowsForEncode);
+    return [
+        'error' => '',
+        'total' => $encoded['total'],
+        'items_json' => $encoded['items_json'],
+        'pricing_json' => $encoded['pricing_json'],
+    ];
 }
 
 // อนุมัติ/ปฏิเสธ
@@ -129,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $adminTotalInput = trim((string)($_POST['admin_total_price'] ?? ''));
     $adminTotalPrice = null;
 
-    if ($adminTotalInput !== '') {
+    if ($adminTotalInput !== '' && $action === 'approve') {
         $adminTotalInput = str_replace([',', ' '], '', $adminTotalInput);
         $adminTotalPrice = (float)$adminTotalInput;
         if ($adminTotalPrice <= 0) {
@@ -142,26 +89,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'reject')  $newStatus = 'rejected';
 
     $submittedTotal = 0.0;
-    $needItemsJsonSanitized = null;
+    $needItemsPricingJson = null;
+    $oldRow = null;
     if ($item_id > 0) {
-        $stOld = $conn->prepare('SELECT total_price, submitted_total_price, need_items_json FROM foundation_needlist WHERE item_id = ? LIMIT 1');
+        $stOld = $conn->prepare(
+            'SELECT total_price, submitted_total_price, need_items_json, need_items_pricing_json, item_name
+             FROM foundation_needlist WHERE item_id = ? LIMIT 1'
+        );
         if ($stOld) {
             $stOld->bind_param('i', $item_id);
             $stOld->execute();
             $oldRow = $stOld->get_result()->fetch_assoc();
-            $submittedTotal = (float)($oldRow['submitted_total_price'] ?? 0);
-            if ($submittedTotal <= 0) {
-                $submittedTotal = (float)($oldRow['total_price'] ?? 0);
+            if ($oldRow) {
+                $submittedTotal = (float)($oldRow['submitted_total_price'] ?? 0);
+                if ($submittedTotal <= 0) {
+                    $submittedTotal = (float)($oldRow['total_price'] ?? 0);
+                }
+                $lineItemsApprove = foundation_needlist_line_items_from_row($oldRow, true);
+                if ($newStatus === 'approved' && count($lineItemsApprove) > 0) {
+                    $namePool = array_values(array_filter(array_map('trim', explode(',', (string)($oldRow['item_name'] ?? '')))));
+                    $built = admin_needlist_pricing_from_post($lineItemsApprove, $_POST, $namePool);
+                    if ($built['error'] !== '') {
+                        $error = $built['error'];
+                    } else {
+                        $adminTotalPrice = $built['total'];
+                        $needItemsPricingJson = $built['pricing_json'];
+                    }
+                }
             }
-            $needItemsJsonSanitized = admin_needlist_strip_unit_price_json((string)($oldRow['need_items_json'] ?? ''));
         }
     }
 
-    if ($item_id <= 0 || !in_array($newStatus, ['approved','rejected'], true)) {
+    if ($error === '' && ($item_id <= 0 || !in_array($newStatus, ['approved','rejected'], true))) {
         $error = "ข้อมูลไม่ถูกต้อง";
-    } elseif ($newStatus === 'rejected' && $rejectNote === '') {
+    } elseif ($error === '' && $newStatus === 'rejected' && $rejectNote === '') {
         $error = "กรุณากรอกเหตุผลเมื่อปฏิเสธ";
-    } else {
+    } elseif ($error === '') {
         require_once __DIR__ . '/includes/needlist_donate_window.php';
 
         $donateEndSql = null;
@@ -185,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($newStatus === 'approved' && $adminTotalPrice === null) {
+        if ($newStatus === 'approved' && $adminTotalPrice === null && $error === '') {
             $adminTotalPrice = $submittedTotal;
         }
         $reviewNoteForSave = ($newStatus === 'approved') ? $priceAdjustNote : $rejectNote;
@@ -198,17 +161,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SET approve_item=?,
                     review_note=?,
                     submitted_total_price = COALESCE(submitted_total_price, total_price),
+                    submitted_need_items_pricing_json = COALESCE(submitted_need_items_pricing_json, need_items_pricing_json),
                     total_price=?,
-                    approved_total_price=?,
                     price_reviewed_at=NOW(),
-                    need_items_json = COALESCE(?, need_items_json),
+                    need_items_pricing_json = COALESCE(?, need_items_pricing_json),
                     donate_window_end_at=?
                 WHERE item_id=? AND approve_item='pending'
             ");
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $stmt->bind_param("ssddssi", $newStatus, $reviewNoteForSave, $adminTotalPrice, $adminTotalPrice, $needItemsJsonSanitized, $donateEndSql, $item_id);
+                $stmt->bind_param(
+                    "ssdssi",
+                    $newStatus,
+                    $reviewNoteForSave,
+                    $adminTotalPrice,
+                    $needItemsPricingJson,
+                    $donateEndSql,
+                    $item_id
+                );
             }
         } elseif ($newStatus === 'approved') {
             $error = "ไม่สามารถคำนวณวันปิดรับบริจาคอัตโนมัติได้";
@@ -338,7 +309,15 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                 }
                 $itemImages = foundation_needlist_item_filenames_from_row($row);
                 $fdnNeedAdm = foundation_needlist_normalize_filename((string)($row['need_foundation_image'] ?? ''));
-                $lineItems = admin_needlist_parse_items_json($row);
+                $foundationLines = foundation_needlist_submitted_line_items_from_row($row);
+                if ($foundationLines === []) {
+                    $foundationLines = foundation_needlist_line_items_from_row($row, true);
+                }
+                $adminLines = foundation_needlist_admin_line_items_from_row($row);
+                $lineItems = $foundationLines;
+                if ($adminLines === [] && $foundationLines !== []) {
+                    $adminLines = $foundationLines;
+                }
                 $lineCats = [];
                 foreach ($lineItems as $liCat) {
                     $cv = trim((string)($liCat['category'] ?? ''));
@@ -388,23 +367,55 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                         <div class="need-field"><span>ยอดรวมที่ใช้ปัจจุบัน</span><strong><?= number_format($total, 2) ?> บาท</strong></div>
                         <?php if ($lineItems !== []): ?>
                         <div class="need-field need-field--full">
-                            <span>รายละเอียดรายการย่อยที่กรอก</span>
-                            <div class="need-line-items">
-                                <?php foreach ($lineItems as $li): ?>
-                                    <div class="need-line-item">
-                                        <b>#<?= (int)$li['slot'] ?></b>
-                                        <span><?= htmlspecialchars($li['item_name'] !== '' ? $li['item_name'] : ($li['category'] !== '' ? $li['category'] : '-')) ?></span>
-                                        <span><?= number_format((float)$li['qty'], 0) ?> ชิ้น</span>
-                                        <span></span>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
+                            <span>ปรับราคาตามรายการสิ่งของ (บาท/ชิ้น)</span>
+                            <p class="need-approve-price-hint">แก้ราคาได้ทีละรายการ ระบบจะรวมเป็นยอดสุดท้ายอัตโนมัติ</p>
+                            <table class="need-approve-price-table">
+                                <thead>
+                                    <tr>
+                                        <th>รายการ</th>
+                                        <th>จำนวน</th>
+                                        <th>ราคา/ชิ้น (มูลนิธิ)</th>
+                                        <th>ราคา/ชิ้น (แอดมิน)</th>
+                                        <th>รวม</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($lineItems as $idx => $li):
+                                        $adminLi = $adminLines[$idx] ?? $li;
+                                        $adminUnit = (float)($adminLi['price'] ?? $li['price']);
+                                        $adminLineTotal = (float)($adminLi['line_total'] ?? ($adminUnit * (float)$li['qty']));
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($li['item_name'] !== '' ? $li['item_name'] : ($li['category'] !== '' ? $li['category'] : '-'), ENT_QUOTES, 'UTF-8') ?></td>
+                                        <td><?= number_format((float)$li['qty'], 0) ?> ชิ้น</td>
+                                        <td><?= number_format((float)$li['price'], 2) ?> บาท</td>
+                                        <td>
+                                            <input
+                                                type="number"
+                                                name="item_price_<?= (int)$li['slot'] ?>"
+                                                class="need-approve-line-price"
+                                                data-qty="<?= (float)$li['qty'] ?>"
+                                                min="0.01"
+                                                step="0.01"
+                                                value="<?= htmlspecialchars(number_format($adminUnit, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
+                                                required
+                                            >
+                                        </td>
+                                        <td class="need-approve-line-total"><?= number_format($adminLineTotal, 2) ?> บาท</td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td colspan="4" class="need-approve-grand-label">ราคารวมที่อนุมัติ</td>
+                                        <td class="need-approve-grand-total" id="need-approve-grand-<?= (int)$row['item_id'] ?>">
+                                            <?= number_format(array_sum(array_column($adminLines ?: $lineItems, 'line_total')), 2) ?> บาท
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
-                        <?php endif; ?>
-                        <div class="need-field need-field--full">
-                            <span>หมายเหตุจากมูลนิธิ</span>
-                            <strong><?= $foundationNote !== '' ? nl2br(htmlspecialchars($foundationNote)) : '-' ?></strong>
-                        </div>
+                        <?php else: ?>
                         <div class="need-field">
                             <label for="admin_total_price_<?= (int)$row['item_id'] ?>">ราคาสุดท้าย (แอดมิน)</label>
                             <input
@@ -415,6 +426,11 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                                 step="0.01"
                                 value="<?= htmlspecialchars(number_format($total, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
                             >
+                        </div>
+                        <?php endif; ?>
+                        <div class="need-field need-field--full">
+                            <span>หมายเหตุจากมูลนิธิ</span>
+                            <strong><?= $foundationNote !== '' ? nl2br(htmlspecialchars($foundationNote)) : '-' ?></strong>
                         </div>
                         <div class="need-field">
                             <label for="need_price_note_<?= (int)$row['item_id'] ?>">เหตุผลการปรับราคา (ส่งแจ้งเตือนมูลนิธิ)</label>
@@ -440,6 +456,32 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
         <p>ตอนนี้ไม่มีรายการ pending ✅</p>
     <?php endif; ?>
 </div>
+
+<script>
+(function () {
+    document.querySelectorAll('.need-approve-card').forEach(function (form) {
+        var lineInputs = form.querySelectorAll('.need-approve-line-price');
+        if (!lineInputs.length) return;
+        var grandEl = form.querySelector('.need-approve-grand-total');
+        if (!grandEl) return;
+        function recalc() {
+            var total = 0;
+            lineInputs.forEach(function (inp) {
+                var qty = parseFloat(inp.dataset.qty || '0');
+                var price = parseFloat(inp.value || '0');
+                var lineTotal = qty * price;
+                total += lineTotal;
+                var lineCell = inp.closest('tr').querySelector('.need-approve-line-total');
+                if (lineCell) {
+                    lineCell.textContent = lineTotal.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' บาท';
+                }
+            });
+            grandEl.textContent = total.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' บาท';
+        }
+        lineInputs.forEach(function (inp) { inp.addEventListener('input', recalc); });
+    });
+})();
+</script>
 
 </body>
 </html>

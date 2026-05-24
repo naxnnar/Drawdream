@@ -150,6 +150,9 @@ if ($is_success && !$already_processed && $fid > 0) {
                         }
                         $upd->bind_param("di", $item_amount, $itemId);
                         $upd->execute();
+                        if ($itemId > 0) {
+                            drawdream_needlist_sync_service_charge_for_item($conn, $itemId);
+                        }
                         if ($itemId > 0 && $item_amount > 0) {
                             if (!drawdream_escrow_funds_try_insert_holding_for_target($conn, 'need_item', $itemId, $donate_id, $charge_id, $item_amount)) {
                                 throw new RuntimeException('escrow_insert_need_item_failed');
@@ -178,8 +181,10 @@ if ($is_success && !$already_processed && $fid > 0) {
                                         $totalFmt = number_format($new_c, 2, '.', ',');
                                         $dispName = $foundation_nm !== '' ? '"' . $foundation_nm . '"' : 'มูลนิธิของคุณ';
                                         $title = 'รายการสิ่งของได้รับเงินครบเป้าหมายแล้ว! 🎉';
-                                        $msg = 'รายการสิ่งของของ ' . $dispName . ' ได้รับเงินบริจาครวม ' . $totalFmt . ' บาท ตอนนี้ระบบกำลังรอแอดมินยืนยันการจัดส่งก่อนเปิดให้อัปเดตผลลัพธ์';
-                                        $link = 'foundation_post_needlist_result.php';
+                                        $msg = 'รายการสิ่งของของ ' . $dispName . ' ได้รับเงินบริจาครวม ' . $totalFmt . ' บาท '
+                                            . 'กรุณาชำระค่าบริการระบบตามรายการที่ครบเป้าหมาย '
+                                            . 'เพื่อให้แอดมินดำเนินการจัดส่งสิ่งของ';
+                                        $link = 'foundation.php#my-needlist-section';
                                         $sigStmt = $conn->prepare("SELECT GROUP_CONCAT(item_id ORDER BY item_id) AS sig FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
                                         $sig = '';
                                         if ($sigStmt) {

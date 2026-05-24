@@ -19,6 +19,8 @@ require_once __DIR__ . '/../includes/escrow_funds_schema.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/../includes/donate_type.php';
+require_once __DIR__ . '/../includes/notification_audit.php';
+require_once __DIR__ . '/../includes/drawdream_project_service_charge.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: ../login.php");
@@ -121,6 +123,8 @@ function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id
         return false;
     }
 
+    drawdream_project_sync_service_charge_for_project($conn, $project_id);
+
     $check = $conn->prepare("
         SELECT p.project_id, p.project_name, p.current_donate, fp.user_id AS foundation_user_id, fp.foundation_name
         FROM foundation_project p
@@ -145,16 +149,22 @@ function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id
         $proj_name = $completed_proj['project_name'];
         $total = number_format((float)$completed_proj['current_donate'], 2);
 
-        $notif_type_th = drawdream_normalize_notif_type_to_th('project_completed');
-        $notif = $conn->prepare('
-            INSERT INTO notifications (user_id, type, title, message, link)
-            VALUES (?, ?, ?, ?, ?)
-        ');
-        $notif_title = "โครงการของคุณได้รับเงินครบแล้ว! 🎉";
-        $notif_msg = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท ตอนนี้ระบบกำลังรอแอดมินยืนยัน escrow ก่อนเปิดให้อัปเดตผลลัพธ์";
+        $scRow = $conn->prepare(
+            'SELECT service_charge FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1'
+        );
+        $scAmt = 0.0;
+        if ($scRow) {
+            $scRow->bind_param('i', $project_id);
+            $scRow->execute();
+            $scAmt = (float)($scRow->get_result()->fetch_assoc()['service_charge'] ?? 0);
+        }
+        $scLabel = $scAmt > 0 ? number_format($scAmt, 2) : '0.00';
+        $notif_title = 'โครงการของคุณได้รับเงินครบแล้ว! 🎉';
+        $notif_msg = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท "
+            . "กรุณาชำระค่าบริการระบบ {$scLabel} บาท (5%) จากหน้ารายละเอียดโครงการ "
+            . 'ก่อนแอดมินยืนยันโอนเงิน escrow';
         $notif_link = 'foundation_post_update.php?project_id=' . $project_id;
-        $notif->bind_param('issss', $foundation_user_id, $notif_type_th, $notif_title, $notif_msg, $notif_link);
-        $notif->execute();
+        drawdream_send_notification($conn, $foundation_user_id, '', $notif_title, $notif_msg, $notif_link);
     }
 
     return true;

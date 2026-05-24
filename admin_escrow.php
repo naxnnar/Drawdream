@@ -9,6 +9,8 @@ require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/escrow_funds_schema.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
+require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
+require_once __DIR__ . '/includes/notification_audit.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -21,6 +23,7 @@ $error    = "";
 
 drawdream_escrow_funds_ensure_schema($conn);
 drawdream_ensure_needlist_schema($conn);
+drawdream_ensure_foundation_project_service_charge_columns($conn);
 
 // รับ success message จาก redirect
 if (isset($_GET['success']) && $_GET['success'] === 'transferred') {
@@ -36,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ===== โครงการ: ยืนยันโอนเงิน + แจ้งมูลนิธิ =====
     if ($action === 'confirm_transfer' && $project_id) {
         $ps = $conn->prepare(
-            "SELECT p.project_name, fp.user_id, fp.foundation_name
+            "SELECT p.project_name, fp.user_id, fp.foundation_name, p.service_charge_paid_at
              FROM foundation_project p
              JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
              WHERE p.project_id = ? AND p.deleted_at IS NULL"
@@ -44,7 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ps->bind_param('i', $project_id);
         $ps->execute();
         $proj = $ps->get_result()->fetch_assoc();
-        if ($proj) {
+        if ($proj && empty($proj['service_charge_paid_at'])) {
+            $error = 'มูลนิธิยังไม่ได้ชำระค่าบริการระบบ — รอมูลนิธิชำระก่อนยืนยันโอนเงิน';
+        } elseif ($proj) {
             $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = ? AND deleted_at IS NULL");
             $upd->bind_param('i', $project_id);
             $upd->execute();
@@ -52,10 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $title   = "พร้อมอัปเดตผลลัพธ์โครงการแล้ว";
             $message = "แอดมินยืนยันโอนเงิน escrow ให้โครงการ \"{$proj['project_name']}\" แล้ว คุณสามารถเข้าไปอัปเดตผลลัพธ์โครงการได้ทันที";
             $link    = "foundation_post_update.php?project_id=" . (int)$project_id;
-            $type_th = drawdream_normalize_notif_type_to_th('project_funded');
-            $stmt = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)');
-            $stmt->bind_param("issss", $proj['user_id'], $type_th, $title, $message, $link);
-            $stmt->execute();
+            drawdream_send_notification($conn, (int)$proj['user_id'], '', $title, $message, $link);
             header("Location: admin_escrow.php?success=transferred");
             exit();
         }
@@ -63,10 +65,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // ===== สิ่งของ: เริ่มจัดซื้อ =====
     if ($action === 'start_purchase' && $item_id) {
-        $stmt = $conn->prepare("UPDATE foundation_needlist SET approve_item = 'purchasing' WHERE item_id = ?");
-        $stmt->bind_param("i", $item_id);
-        $stmt->execute();
-        $success = "เริ่มดำเนินการจัดซื้อแล้ว";
+        $chk = $conn->prepare(
+            'SELECT service_charge_paid_at FROM foundation_needlist WHERE item_id = ? LIMIT 1'
+        );
+        $paidAt = null;
+        if ($chk) {
+            $chk->bind_param('i', $item_id);
+            $chk->execute();
+            $paidAt = $chk->get_result()->fetch_assoc()['service_charge_paid_at'] ?? null;
+        }
+        if (empty($paidAt)) {
+            $error = 'มูลนิธิยังไม่ได้ชำระค่าบริการระบบ — รอมูลนิธิชำระก่อนเริ่มจัดซื้อ';
+        } else {
+            $stmt = $conn->prepare("UPDATE foundation_needlist SET approve_item = 'purchasing' WHERE item_id = ?");
+            $stmt->bind_param("i", $item_id);
+            $stmt->execute();
+            $success = "เริ่มดำเนินการจัดซื้อแล้ว";
+        }
     }
 
     // ===== สิ่งของ: อัปโหลดหลักฐาน → done =====
@@ -88,6 +103,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else { $error = "กรุณาเลือกรูปหลักฐาน"; }
 
         if (!$error) {
+            $chk = $conn->prepare(
+                'SELECT service_charge_paid_at FROM foundation_needlist WHERE item_id = ? LIMIT 1'
+            );
+            $paidAt = null;
+            if ($chk) {
+                $chk->bind_param('i', $item_id);
+                $chk->execute();
+                $paidAt = $chk->get_result()->fetch_assoc()['service_charge_paid_at'] ?? null;
+            }
+            if (empty($paidAt)) {
+                $error = 'มูลนิธิยังไม่ได้ชำระค่าบริการระบบ — ไม่สามารถยืนยันจัดส่งได้';
+            }
+        }
+
+        if (!$error) {
             $imgJson = json_encode([$evidence_image], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             if (!is_string($imgJson) || $imgJson === '') {
                 $imgJson = '[]';
@@ -106,10 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $title   = "พร้อมอัปเดตผลลัพธ์สิ่งของแล้ว";
                 $message = "รายการ \"{$need['item_name']}\" ถูกจัดซื้อและจัดส่งเรียบร้อยแล้ว คุณสามารถอัปเดตผลลัพธ์สิ่งของให้ผู้บริจาคทราบได้";
                 $link    = "foundation_post_needlist_result.php";
-                $type_nd = drawdream_normalize_notif_type_to_th('needlist_done');
-                $stmt3 = $conn->prepare('INSERT INTO notifications (user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?)');
-                $stmt3->bind_param("issss", $need['user_id'], $type_nd, $title, $message, $link);
-                $stmt3->execute();
+                drawdream_send_notification($conn, (int)$need['user_id'], '', $title, $message, $link);
             }
             $success = "อัปโหลดหลักฐานสำเร็จ! รายการสิ่งของเสร็จสมบูรณ์แล้ว";
         }
@@ -165,32 +192,19 @@ $escrow_need_total = drawdream_escrow_need_item_holding_total_display($conn);
 function drawdream_needlist_delivery_lines(array $need): array
 {
     $lines = [];
-    $namesRaw = trim((string)($need['need_items_json'] ?? ''));
-    $pricingRaw = trim((string)($need['need_items_pricing_json'] ?? ''));
-    $names = json_decode($namesRaw, true);
-    $pricing = json_decode($pricingRaw, true);
-
-    if (is_array($names) && is_array($pricing) && count($names) > 0) {
-        foreach ($names as $idx => $nameRow) {
-            if (!is_array($nameRow)) {
-                continue;
-            }
-            $name = trim((string)($nameRow['ชื่อสิ่งของ'] ?? $nameRow['item_name'] ?? ''));
-            $qty = (float)($nameRow['จำนวนสิ่งของ'] ?? $nameRow['qty'] ?? 0);
-            $priceRow = is_array($pricing[$idx] ?? null) ? $pricing[$idx] : [];
-            $unit = (float)($priceRow['ราคาต่อชิ้น'] ?? $priceRow['unit_price'] ?? 0);
-            $sum = (float)($priceRow['ราคารวม'] ?? $priceRow['line_total'] ?? 0);
-            if ($sum <= 0 && $qty > 0 && $unit > 0) {
-                $sum = $qty * $unit;
-            }
-            if ($name !== '' || $qty > 0 || $unit > 0 || $sum > 0) {
-                $lines[] = [
-                    'name' => $name !== '' ? $name : 'รายการที่ ' . ((int)$idx + 1),
-                    'qty' => $qty,
-                    'unit_price' => $unit,
-                    'line_total' => $sum,
-                ];
-            }
+    $parsed = foundation_needlist_admin_line_items_from_row($need);
+    foreach ($parsed as $idx => $li) {
+        $name = trim((string)($li['item_name'] ?? ''));
+        $qty = (float)($li['qty'] ?? 0);
+        $unit = (float)($li['price'] ?? 0);
+        $sum = (float)($li['line_total'] ?? 0);
+        if ($name !== '' || $qty > 0 || $unit > 0 || $sum > 0) {
+            $lines[] = [
+                'name' => $name !== '' ? $name : 'รายการที่ ' . ((int)($li['slot'] ?? ($idx + 1))),
+                'qty' => $qty,
+                'unit_price' => $unit,
+                'line_total' => $sum,
+            ];
         }
     }
 
@@ -256,6 +270,12 @@ function drawdream_needlist_delivery_lines(array $need): array
             while ($proj = mysqli_fetch_assoc($completed_projects)):
                 $goal    = (float)($proj['goal_amount'] ?? 0);
                 $current = (float)($proj['current_donate'] ?? 0);
+                $serviceFee = (float)($proj['service_charge'] ?? 0);
+                if ($serviceFee <= 0 && $goal > 0 && $current >= $goal - 1e-6) {
+                    $serviceFee = drawdream_needlist_compute_service_charge($current);
+                }
+                $scPaid = !empty($proj['service_charge_paid_at']);
+                $scPaidFmt = $scPaid ? date('d/m/Y H:i', strtotime((string)$proj['service_charge_paid_at'])) : '';
                 $is_done = $proj['project_status'] === 'purchasing'; ?>
             <div class="proj-card <?= $is_done ? 'purchasing' : 'completed' ?>">
                 <div class="proj-header">
@@ -278,9 +298,18 @@ function drawdream_needlist_delivery_lines(array $need): array
                     </div>
                     <div class="money-item">
                         <div class="money-label">ค่าบริการ 5%</div>
-                        <div class="money-value orange"><?= number_format($current * 0.05, 2) ?> บาท</div>
+                        <div class="money-value orange"><?= number_format($serviceFee, 2) ?> บาท</div>
                     </div>
                 </div>
+                <?php if ($scPaid): ?>
+                    <p class="sc-block-hint" style="color:#15803d;font-weight:600;margin:0 0 12px;">
+                        ✅ มูลนิธิชำระค่าบริการแล้ว<?= $scPaidFmt !== '' ? ' — ' . htmlspecialchars($scPaidFmt) : '' ?>
+                    </p>
+                <?php else: ?>
+                    <p class="sc-block-hint" style="color:#b45309;margin:0 0 12px;">
+                        ⏳ รอมูลนิธิชำระค่าบริการ (<?= number_format($serviceFee, 2) ?> บาท) ก่อนยืนยันโอนเงิน
+                    </p>
+                <?php endif; ?>
                 <div class="delivery-info">
                     <div class="delivery-title">ข้อมูลมูลนิธิ</div>
                     <div class="delivery-grid">
@@ -294,7 +323,7 @@ function drawdream_needlist_delivery_lines(array $need): array
                     <form method="POST">
                         <input type="hidden" name="action" value="confirm_transfer">
                         <input type="hidden" name="project_id" value="<?= $proj['project_id'] ?>">
-                        <button type="submit" class="btn-purchase" onclick="return confirm('ยืนยันโอนเงิน + ส่งแจ้งเตือนให้มูลนิธิ?')">
+                        <button type="submit" class="btn-purchase"<?= $scPaid ? '' : ' disabled title="รอมูลนิธิชำระค่าบริการก่อน"' ?> onclick="return confirm('ยืนยันโอนเงิน + ส่งแจ้งเตือนให้มูลนิธิ?')">
                             ✅ ยืนยันโอนเงิน + แจ้งมูลนิธิ
                         </button>
                     </form>
@@ -383,7 +412,13 @@ function drawdream_needlist_delivery_lines(array $need): array
             while ($need = mysqli_fetch_assoc($ready_needs)):
                 $donated = (float)$need['donated_sum'];
                 $total   = (float)$need['total_price'];
+                $serviceFee = (float)($need['service_charge'] ?? 0);
+                if ($serviceFee <= 0 && $total > 0 && $donated >= $total) {
+                    $serviceFee = drawdream_needlist_compute_service_charge($donated);
+                }
                 $is_purchasing = $need['approve_item'] === 'purchasing';
+                $scPaid = !empty($need['service_charge_paid_at']);
+                $scPaidFmt = $scPaid ? date('d/m/Y H:i', strtotime((string)$need['service_charge_paid_at'])) : '';
                 $deliveryLines = drawdream_needlist_delivery_lines($need); ?>
             <div class="proj-card <?= $is_purchasing ? 'purchasing' : 'completed' ?>">
                 <div class="proj-header">
@@ -406,8 +441,15 @@ function drawdream_needlist_delivery_lines(array $need): array
                     </div>
                     <div class="money-item">
                         <div class="money-label">ค่าบริการ 5%</div>
-                        <div class="money-value orange"><?= number_format($donated * 0.05, 2) ?> บาท</div>
+                        <div class="money-value orange"><?= number_format($serviceFee, 2) ?> บาท</div>
                     </div>
+                </div>
+                <div class="sc-payment-status <?= $scPaid ? 'sc-payment-status--paid' : 'sc-payment-status--wait' ?>">
+                    <?php if ($scPaid): ?>
+                        ✅ มูลนิธิชำระค่าบริการแล้ว<?= $scPaidFmt !== '' ? ' — ' . htmlspecialchars($scPaidFmt) : '' ?>
+                    <?php else: ?>
+                        ⏳ รอมูลนิธิชำระค่าบริการก่อนแอดมินจัดส่ง
+                    <?php endif; ?>
                 </div>
                 <?php if ($deliveryLines !== []): ?>
                 <div class="delivery-items-box">
@@ -440,7 +482,9 @@ function drawdream_needlist_delivery_lines(array $need): array
                         </div>
                     <?php endif; ?>
                 </div>
-                <?php if (!$is_purchasing): ?>
+                <?php if (!$scPaid): ?>
+                    <p class="sc-block-hint">มูลนิธิต้องชำระค่าบริการระบบ (<?= number_format($serviceFee, 2) ?> บาท) ก่อนแอดมินจึงจะเริ่มจัดซื้อและยืนยันจัดส่งได้</p>
+                <?php elseif (!$is_purchasing): ?>
                     <form method="POST">
                         <input type="hidden" name="action" value="start_purchase">
                         <input type="hidden" name="item_id" value="<?= $need['item_id'] ?>">

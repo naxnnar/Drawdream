@@ -263,7 +263,7 @@ $hasAnySlides = !empty($foundationSlides);
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=38">
+  <link rel="stylesheet" href="css/foundation.css?v=39">
 </head>
 <body class="foundation-page">
 
@@ -304,6 +304,9 @@ $hasAnySlides = !empty($foundationSlides);
           <?php if (!empty($_GET['need_updated'])): ?>
             <div class="alert alert-success needlist-flash" role="status">อัปเดตรายการสิ่งของแล้ว</div>
           <?php endif; ?>
+          <?php if (!empty($_GET['need_edit_locked'])): ?>
+            <div class="alert alert-warning needlist-flash" role="status">รายการที่อนุมัติแล้วไม่สามารถแก้ไขได้</div>
+          <?php endif; ?>
           <?php if (!empty($_GET['need_round_wait'])): ?>
             <?php
               $nextCloseText = '';
@@ -333,7 +336,7 @@ $hasAnySlides = !empty($foundationSlides);
               $status = $nl['approve_item'] ?? 'pending';
               $nlImages = foundation_needlist_item_filenames_from_row($nl);
               $nlFdn = foundation_needlist_normalize_filename((string)($nl['need_foundation_image'] ?? ''));
-              $needUploadDirAbs = __DIR__ . '/uploads/needs/';
+              $needUploadDirAbs = drawdream_needlist_upload_dir();
               /* แสดงเฉพาะรูปมูลนิธิที่อัปโหลดเท่านั้น */
               $nlImg = '';
               if ($nlFdn !== '' && is_file($needUploadDirAbs . $nlFdn)) {
@@ -344,6 +347,7 @@ $hasAnySlides = !empty($foundationSlides);
               $statusPillClass = ['pending' => 'st-pending', 'approved' => 'st-approved', 'rejected' => 'st-rejected'][$status] ?? 'st-pending';
               $dweRaw = trim((string)($nl['donate_window_end_at'] ?? ''));
               $donateWindowExpired = ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false && strtotime($dweRaw) < time());
+              $canEditNeed = in_array($status, ['pending', 'rejected'], true);
             ?>
             <?php
               $cardGoal = (float)($nl['total_price'] ?? 0);
@@ -381,7 +385,11 @@ $hasAnySlides = !empty($foundationSlides);
                   <div class="need-card-desc">แบรนด์ที่ต้องการ: <?= htmlspecialchars((string)$nl['desired_brand']) ?></div>
                 <?php endif; ?>
                 <div class="need-edit-wrap">
-                  <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>" onclick="event.stopPropagation();">แก้ไขรายการนี้</a>
+                  <?php if ($canEditNeed): ?>
+                    <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>" onclick="event.stopPropagation();">แก้ไขรายการนี้</a>
+                  <?php else: ?>
+                    <span class="need-card-edit-link need-card-edit-link--disabled" aria-disabled="true" title="รายการอนุมัติแล้ว — ไม่สามารถแก้ไขได้">แก้ไขรายการนี้</span>
+                  <?php endif; ?>
                 </div>
               </div>
             </div>
@@ -417,7 +425,7 @@ $hasAnySlides = !empty($foundationSlides);
           $foundationImage = $f['foundation_image'] ?? '';
           $facebookUrl = $f['facebook_url'] ?? '';
           $heroProposalImage = '';
-          $needUploadDirAbs = __DIR__ . '/uploads/needs/';
+          $needUploadDirAbs = drawdream_needlist_upload_dir();
           foreach ($items as $itHero) {
             $nfHero = foundation_needlist_normalize_filename((string)($itHero['need_foundation_image'] ?? ''));
             if ($nfHero !== '' && is_file($needUploadDirAbs . $nfHero)) {

@@ -71,6 +71,23 @@ $donateDisabled = ($goal <= 0 || count($items) === 0 || ($goal > 0 && $remaining
  */
 function drawdream_need_item_lines_from_row(array $item): array
 {
+    $lines = foundation_needlist_admin_line_items_from_row($item);
+    if ($lines === []) {
+        $lines = foundation_needlist_line_items_from_row($item, false);
+    }
+    if ($lines !== []) {
+        $out = [];
+        foreach ($lines as $li) {
+            $out[] = [
+                'item_name' => (string)($li['item_name'] ?? ''),
+                'qty_needed' => (float)($li['qty'] ?? 0),
+                'price_estimate' => (float)($li['price'] ?? 0),
+                'line_total' => drawdream_needlist_round_money((float)($li['line_total'] ?? 0)),
+            ];
+        }
+        return $out;
+    }
+
     $raw = trim((string)($item['need_items_json'] ?? ''));
     $rawPricing = trim((string)($item['need_items_pricing_json'] ?? ''));
     $lines = [];

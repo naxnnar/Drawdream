@@ -110,3 +110,24 @@ function drawdream_get_or_create_needitem_donate_category_id(mysqli $conn): int
 
     return 0;
 }
+
+function drawdream_get_or_create_service_charge_donate_category_id(mysqli $conn): int
+{
+    $st = $conn->prepare(
+        "SELECT category_id FROM donate_category
+         WHERE TRIM(COALESCE(needitem_donate, '')) = 'ค่าบริการระบบ'
+         LIMIT 1"
+    );
+    if ($st) {
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        if ($row && (int)($row['category_id'] ?? 0) > 0) {
+            return (int)$row['category_id'];
+        }
+    }
+    if ($conn->query("INSERT INTO donate_category (needitem_donate) VALUES ('ค่าบริการระบบ')")) {
+        return (int)$conn->insert_id;
+    }
+
+    return 0;
+}

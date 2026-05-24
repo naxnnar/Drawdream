@@ -5,8 +5,9 @@ declare(strict_types=1);
  * donation_receipt.php
  * หน้าแสดงใบเสร็จอิเล็กทรอนิกส์ "1 รายการ"
  * เปิดได้เฉพาะ:
- * - เจ้าของรายการบริจาค
+ * - เจ้าของรายการบริจาค (ผู้บริจาค / donor เท่านั้น)
  * - admin
+ * มูลนิธิไม่มีใบเสร็จในระบบ
  *
  * รองรับใบเสร็จ 2 แบบ:
  * - บุคคลธรรมดา
@@ -19,6 +20,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/includes/e_receipt.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -28,6 +30,12 @@ if (!isset($_SESSION['user_id'])) {
 $viewerId = (int)($_SESSION['user_id'] ?? 0);
 $viewerRole = (string)($_SESSION['role'] ?? '');
 $donateId = (int)($_GET['donate_id'] ?? 0);
+
+if ($viewerRole === 'foundation' || drawdream_user_is_foundation_role($conn, $viewerId)) {
+    http_response_code(403);
+    echo 'มูลนิธิไม่มีใบเสร็จอิเล็กทรอนิกส์ในระบบ — ใบเสร็จสำหรับผู้บริจาคเท่านั้น';
+    exit;
+}
 
 if ($donateId <= 0) {
     http_response_code(400);
@@ -60,7 +68,12 @@ if (!$receipt) {
 }
 
 $ownerDonorId = (int)($receipt['donor_id'] ?? 0);
-// ความปลอดภัย: donor เห็นได้แค่ของตัวเอง, admin เห็นได้ทุกใบ
+if (!drawdream_donation_eligible_for_e_receipt($conn, $donateId)) {
+    http_response_code(403);
+    echo 'รายการนี้ไม่มีใบเสร็จอิเล็กทรอนิกส์ (เช่น ค่าบริการระบบของมูลนิธิ)';
+    exit;
+}
+// ความปลอดภัย: donor เห็นได้แค่ของตัวเอง, admin เห็นได้ทุกใบที่มีใบเสร็จ
 if ($viewerRole !== 'admin' && $viewerId !== $ownerDonorId) {
     http_response_code(403);
     echo 'คุณไม่มีสิทธิ์เข้าถึงใบเสร็จนี้';

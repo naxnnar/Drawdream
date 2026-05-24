@@ -18,6 +18,12 @@ const DRAWDREAM_DONATE_TYPE_PROJECT = 'project';
 /** บริจาคสิ่งของมูลนิธิ (ครั้งเดียว) */
 const DRAWDREAM_DONATE_TYPE_NEED_ITEM = 'need_item';
 
+/** มูลนิธิชำระค่าบริการระบบรายการสิ่งของ (5%) */
+const DRAWDREAM_DONATE_TYPE_NEED_SERVICE_CHARGE = 'need_service_charge';
+
+/** มูลนิธิชำระค่าบริการระบบโครงการ (5%) */
+const DRAWDREAM_DONATE_TYPE_PROJECT_SERVICE_CHARGE = 'project_service_charge';
+
 /** ค่า donation.recurring_plan_code — บริจาคครั้งเดียว (โครงการ / สิ่งของ / เด็กแบบยืนยันโอน) */
 const DRAWDREAM_DONATION_RECURRING_PLAN_ONE_TIME = 'one_time';
 
@@ -37,6 +43,8 @@ function drawdream_donate_type_label_thai(?string $code): string
         'child_one_time' => 'บริจาคเด็กครั้งเดียว',
         'project' => 'บริจาคโครงการ',
         'need_item' => 'บริจาคสิ่งของ',
+        'need_service_charge' => 'ค่าบริการระบบ (รายการสิ่งของ)',
+        'project_service_charge' => 'ค่าบริการระบบ (โครงการ)',
         '' => '-',
         default => $k,
     };

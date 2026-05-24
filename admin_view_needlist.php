@@ -73,68 +73,13 @@ if (!$row) {
 $flashOk = '';
 $flashErr = '';
 
-// Parse need_items_json สำหรับแก้ราคาทีละชิ้น
-function admin_view_parse_line_items(array $row): array {
-    $raw = trim((string)($row['need_items_json'] ?? ''));
-    $rawPricing = trim((string)($row['need_items_pricing_json'] ?? ''));
-    if ($raw === '' && $rawPricing === '') return [];
-    try {
-        $dec = $raw !== '' ? json_decode($raw, true, 512, JSON_THROW_ON_ERROR) : [];
-    } catch (Throwable $e) { $dec = []; }
-    try {
-        $decPricing = $rawPricing !== '' ? json_decode($rawPricing, true, 512, JSON_THROW_ON_ERROR) : [];
-    } catch (Throwable $e) { $decPricing = []; }
-    if (!is_array($dec)) $dec = [];
-    if (!is_array($decPricing)) $decPricing = [];
-    $pricingByOrder = [];
-    foreach ($decPricing as $idxP => $pp) {
-        if (!is_array($pp)) continue;
-        $ord = (int)($pp['ลำดับ'] ?? ($idxP + 1));
-        $pricingByOrder[$ord] = [
-            'price' => (float)($pp['ราคาต่อชิ้น'] ?? ($pp['price_estimate'] ?? ($pp['price'] ?? 0))),
-            'sum' => (float)($pp['ราคารวม'] ?? ($pp['line_total'] ?? 0)),
-        ];
-    }
-    $out = [];
-    foreach ($dec as $idx => $li) {
-        if (!is_array($li)) continue;
-        $slot = (int)($li['slot'] ?? ($idx + 1));
-        $qty  = (float)($li['จำนวนสิ่งของ'] ?? ($li['qty_needed'] ?? ($li['qty'] ?? 0)));
-        if ($slot <= 0 || $qty <= 0) continue;
-        $pricing = $pricingByOrder[$slot] ?? [];
-        $price = (float)($pricing['price'] ?? ($li['ราคาต่อชิ้น'] ?? ($li['price_estimate'] ?? ($li['price'] ?? 0))));
-        $out[] = [
-            'slot'       => $slot,
-            'category'   => (string)($li['หมวดหมู่สิ่งของ'] ?? ($li['category'] ?? '')),
-            'qty'        => $qty,
-            'price'      => $price,
-            'line_total' => (float)($pricing['sum'] ?? ($li['ราคารวม'] ?? ($li['line_total'] ?? ($qty * $price)))),
-        ];
-    }
-    $hasPrice = false;
-    $qtySum = 0.0;
-    foreach ($out as $r) {
-        if ((float)($r['price'] ?? 0) > 0) {
-            $hasPrice = true;
-        }
-        $qtySum += max(0.0, (float)($r['qty'] ?? 0));
-    }
-    if (!$hasPrice) {
-        $fallbackTotal = (float)($row['total_price'] ?? 0);
-        $fallbackUnit = ($qtySum > 0 && $fallbackTotal > 0)
-            ? drawdream_needlist_round_money($fallbackTotal / $qtySum)
-            : 0.0;
-        if ($fallbackUnit > 0) {
-            foreach ($out as $i => $r) {
-                $q = (float)($r['qty'] ?? 0);
-                $out[$i]['price'] = $fallbackUnit;
-                $out[$i]['line_total'] = drawdream_needlist_round_money($q * $fallbackUnit);
-            }
-        }
-    }
-    return $out;
+$foundationLineItems = foundation_needlist_submitted_line_items_from_row($row);
+$adminLineItems = foundation_needlist_admin_line_items_from_row($row);
+$apStatusView = strtolower(trim((string)($row['approve_item'] ?? '')));
+$priceReviewedView = trim((string)($row['price_reviewed_at'] ?? ''));
+if ($adminLineItems === [] && $foundationLineItems !== [] && ($apStatusView === 'pending' || $priceReviewedView === '')) {
+    $adminLineItems = $foundationLineItems;
 }
-$adminLineItems = admin_view_parse_line_items($row);
 $adminItemNames = array_values(array_filter(array_map('trim', explode(',', (string)($row['item_name'] ?? '')))));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'update_need_price') {
@@ -148,43 +93,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         $flashErr = 'รายการที่ไม่อนุมัติแล้วไม่สามารถแก้ราคาได้';
     } elseif (count($adminLineItems) > 0) {
         // แก้ราคาทีละชิ้น
-        $newLineItemsForJson = [];
-        $newPricingJsonRows = [];
-        $newTotal   = 0.0;
         $priceError = '';
+        $rowsForEncode = [];
         foreach ($adminLineItems as $idx => $li) {
-            $slot     = $li['slot'];
-            $qty      = $li['qty'];
+            $slot = (int)$li['slot'];
+            $qty = (float)$li['qty'];
             $rawPrice = str_replace([',', ' '], '', trim((string)($_POST['item_price_' . $slot] ?? '')));
             $newPrice = drawdream_needlist_round_money((float)$rawPrice);
             if ($newPrice <= 0) {
                 $priceError = "ราคารายการที่ {$slot} ต้องมากกว่า 0";
                 break;
             }
-            $lineTotal = drawdream_needlist_round_money($qty * $newPrice);
-            $newTotal += $lineTotal;
-            $newLineItemsForJson[] = [
-                'หมวดหมู่สิ่งของ' => (string)$li['category'],
-                'ชื่อสิ่งของ' => (string)($adminItemNames[$idx] ?? ''),
-                'จำนวนสิ่งของ' => $qty,
-            ];
-            $newPricingJsonRows[] = [
-                'ลำดับ' => $slot,
-                'ราคาต่อชิ้น' => $newPrice,
-                'ราคารวม' => $lineTotal,
+            $rowsForEncode[] = [
+                'slot' => $slot,
+                'category' => (string)$li['category'],
+                'item_name' => (string)($adminItemNames[$idx] ?? $li['item_name'] ?? ''),
+                'qty' => $qty,
+                'price' => $newPrice,
             ];
         }
         if ($priceError !== '') {
             $flashErr = $priceError;
         } else {
-            $newTotal = drawdream_needlist_round_money($newTotal);
-            $newJsonStr = json_encode($newLineItemsForJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            $newPricingStr = json_encode($newPricingJsonRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $encoded = foundation_needlist_encode_line_items_json($rowsForEncode);
+            $newTotal = $encoded['total'];
+            $newJsonStr = foundation_needlist_items_json_strip_prices($encoded['items_json']);
+            $newPricingStr = $encoded['pricing_json'];
             $upd = $conn->prepare(
                 "UPDATE foundation_needlist
                  SET submitted_total_price  = COALESCE(submitted_total_price, total_price),
                      total_price            = ?,
-                     approved_total_price   = ?,
                      need_items_json        = ?,
                      need_items_pricing_json = ?,
                      price_reviewed_at      = NOW()
@@ -194,10 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             if (!$upd) {
                 $flashErr = 'Prepare failed: ' . $conn->error;
             } else {
-                $upd->bind_param('ddssi', $newTotal, $newTotal, $newJsonStr, $newPricingStr, $itemId);
+                $upd->bind_param('dssi', $newTotal, $newJsonStr, $newPricingStr, $itemId);
                 if ($upd->execute()) {
                     if ($foundationUserId > 0) {
-                        $oldTotal = (float)($row['approved_total_price'] ?? ($row['total_price'] ?? 0));
+                        $oldTotal = (float)($row['total_price'] ?? 0);
                         $msg  = 'แอดมินอัปเดตราคาสิ่งของรายการ "' . (string)($row['item_name'] ?? '') . '"';
                         $msg .= ' ราคารวมใหม่ ' . number_format($newTotal, 2) . ' บาท';
                         if (abs($oldTotal - $newTotal) > 0.0001) {
@@ -219,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         // Fallback: แก้ราคารวม (รายการเก่าที่ไม่มี need_items_json)
         $priceInput           = str_replace([',', ' '], '', trim((string)($_POST['admin_total_price'] ?? '')));
         $newApprovedTotal     = (float)$priceInput;
-        $currentApprovedTotal = (float)($row['approved_total_price'] ?? ($row['total_price'] ?? 0));
+        $currentApprovedTotal = (float)($row['total_price'] ?? 0);
         if ($newApprovedTotal <= 0) {
             $flashErr = 'ราคาที่ต้องการแก้ไขต้องมากกว่า 0';
         } else {
@@ -227,7 +165,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
                 "UPDATE foundation_needlist
                  SET submitted_total_price = COALESCE(submitted_total_price, total_price),
                      total_price = ?,
-                     approved_total_price = ?,
                      price_reviewed_at = NOW()
                  WHERE item_id = ?
                  LIMIT 1"
@@ -235,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             if (!$upd) {
                 $flashErr = 'Prepare failed: ' . $conn->error;
             } else {
-                $upd->bind_param('ddi', $newApprovedTotal, $newApprovedTotal, $itemId);
+                $upd->bind_param('di', $newApprovedTotal, $itemId);
                 if ($upd->execute()) {
                     if ($foundationUserId > 0) {
                         $msg  = 'แอดมินอัปเดตราคาสิ่งของรายการ "' . (string)($row['item_name'] ?? '') . '"';
@@ -264,8 +201,13 @@ if (isset($_GET['price_updated']) && $_GET['price_updated'] === '1') {
     $st->bind_param('i', $itemId);
     $st->execute();
     $row = $st->get_result()->fetch_assoc() ?: $row;
-    // Re-parse หลัง re-fetch
-    $adminLineItems = admin_view_parse_line_items($row);
+    $foundationLineItems = foundation_needlist_submitted_line_items_from_row($row);
+    $adminLineItems = foundation_needlist_admin_line_items_from_row($row);
+    $apStatusView = strtolower(trim((string)($row['approve_item'] ?? '')));
+    $priceReviewedView = trim((string)($row['price_reviewed_at'] ?? ''));
+    if ($adminLineItems === [] && $foundationLineItems !== [] && ($apStatusView === 'pending' || $priceReviewedView === '')) {
+        $adminLineItems = $foundationLineItems;
+    }
     $adminItemNames = array_values(array_filter(array_map('trim', explode(',', (string)($row['item_name'] ?? '')))));
 }
 
@@ -537,7 +479,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
 
             <?php
                 $submittedTotalView = (float)($row['submitted_total_price'] ?? ($row['total_price'] ?? 0));
-                $approvedTotalView = (float)($row['approved_total_price'] ?? ($row['total_price'] ?? 0));
+                $approvedTotalView = (float)($row['total_price'] ?? 0);
                 $reviewPriceRaw = trim((string)($row['price_reviewed_at'] ?? ''));
                 $reviewPriceLabel = ($reviewPriceRaw !== '' && !str_starts_with($reviewPriceRaw, '0000-00-00') && strtotime($reviewPriceRaw) !== false)
                     ? date('d/m/Y H:i', strtotime($reviewPriceRaw))
@@ -560,7 +502,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                                 <tr>
                                     <th>รายการ</th>
                                     <th style="text-align:center">จำนวน (ชิ้น)</th>
-                                    <th style="text-align:right">ราคา/ชิ้น (เดิม)</th>
+                                    <th style="text-align:right">ราคา/ชิ้น (มูลนิธิ)</th>
                                     <th style="text-align:right">ราคา/ชิ้น (แอดมินปรับ)</th>
                                     <th style="text-align:right">รวม</th>
                                 </tr>
@@ -570,7 +512,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                                     <tr>
                                         <td><?= htmlspecialchars($adminItemNames[$idx] ?? $li['category'], ENT_QUOTES, 'UTF-8') ?></td>
                                         <td style="text-align:center"><?= number_format($li['qty'], 0) ?></td>
-                                        <td style="text-align:right"><?= number_format($li['price'], 2) ?> บาท</td>
+                                        <td style="text-align:right"><?= number_format((float)($foundationLineItems[$idx]['price'] ?? 0), 2) ?> บาท</td>
                                         <td style="text-align:right">
                                             <input type="number"
                                                    name="item_price_<?= (int)$li['slot'] ?>"
