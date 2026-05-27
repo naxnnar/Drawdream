@@ -15,7 +15,9 @@ function donate_qr_resolve_image(string $baseName): string {
 }
 
 $qrSrc = donate_qr_resolve_image('qr-code');
-$amountLabel = $amount > 0 ? number_format($amount, 0) . ' บาท' : 'ตามจำนวนที่โอน';
+$amountLabel = $amount >= 20
+    ? number_format($amount, 0) . ' บาท'
+    : 'ตามจำนวนที่โอน';
 ?>
 <!DOCTYPE html>
 <html lang="th">

@@ -119,7 +119,7 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
             donateAmount.focus();
             return false;
           }
-          window.location.assign('payment/donate_qr.php');
+          window.location.assign('payment/donate_qr.php?amount=' + encodeURIComponent(String(val)));
         };
         </script>
       </div>
