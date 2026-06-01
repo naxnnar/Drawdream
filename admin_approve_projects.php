@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve projects
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
@@ -39,6 +36,7 @@ function admin_appr_project_format_date(?string $d): string
 
 // ======== POST: อนุมัติ / ปฏิเสธ ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    drawdream_csrf_require_valid('admin_approve_projects.php');
     $project_id = (int)($_POST['project_id'] ?? 0);
     $action = $_POST['action'] ?? '';
     $remark = trim($_POST['remark'] ?? '');
@@ -285,6 +283,7 @@ $endStatLabel = ($endStatRaw === '—') ? '—' : $endStatRaw;
                     <?php if ($isPendingReview): ?>
                     <p class="admin-review-actions-note">การไม่อนุมัติจะอัปเดตสถานะโครงการในระบบ — มูลนิธิสามารถแก้ไขและส่งพิจารณาใหม่ได้</p>
                     <form method="post" action="admin_approve_projects.php" class="admin-review-actions-form">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="project_id" value="<?= $pid ?>">
                         <div class="admin-review-actions-grid">
                             <textarea name="remark" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>

@@ -2,9 +2,10 @@
 declare(strict_types=1);
 
 // สรุปสั้น: ไฟล์นี้เริ่มขั้นตอนล็อกอินด้วย Google OAuth
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+require_once __DIR__ . '/../includes/env_loader.php';
+drawdream_load_env_file(__DIR__ . '/../.env');
+require_once __DIR__ . '/../includes/session_init.php';
+drawdream_session_start();
 
 require_once __DIR__ . '/../includes/google_oauth.php';
 

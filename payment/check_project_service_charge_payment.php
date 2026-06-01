@@ -2,9 +2,6 @@
 // payment/check_project_service_charge_payment.php — ยืนยันชำระค่าบริการระบบโครงการ
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_project_service_charge.php';
@@ -94,7 +91,7 @@ if ($is_mock) {
         ],
     ];
 } else {
-    $fetched = drawdream_omise_fetch_charge($charge_id);
+    $fetched = drawdream_omise_fetch_charge($charge_id, true);
     $charge = is_array($fetched) ? $fetched : [];
 }
 

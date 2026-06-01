@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view child
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
@@ -205,7 +202,7 @@ $photo = htmlspecialchars((string)($child['photo_child'] ?? ''), ENT_QUOTES, 'UT
                     <div class="stat-box stat-box--education-fund">
                         <div class="stat-icon"><i class="bi bi-mortarboard-fill"></i></div>
                         <div class="stat-num"><?= number_format($adminEducationFundTotal, 0, '.', ',') ?></div>
-                        <div class="stat-label">ทุนการศึกษา (ส่วนเกิน 700 บ. / ครั้ง รายวัน)</div>
+                        <div class="stat-label">ทุนการศึกษา (บริจาครายวัน)</div>
                     </div>
                 </div>
             </div>

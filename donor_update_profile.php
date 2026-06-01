@@ -1,7 +1,6 @@
 <?php
 // donor_update_profile.php — แก้ไขโปรไฟล์ผู้บริจาค + อัปโหลดรูป + ข้อมูลใบเสร็จ
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donor update profile
-session_start();
 include 'db.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -75,6 +74,7 @@ if ($pc = @$conn->query("SHOW COLUMNS FROM donor LIKE 'phone'")) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
+    drawdream_csrf_require_valid('donor_update_profile.php');
     $first_name = trim($_POST['first_name'] ?? '');
     $last_name = trim($_POST['last_name'] ?? '');
     $phone = preg_replace('/\s+/', '', trim($_POST['phone'] ?? ''));
@@ -293,6 +293,7 @@ if ($defaultReceiptMobile === '') {
     <?php endif; ?>
 
     <form method="post" enctype="multipart/form-data">
+        <?= drawdream_csrf_field() ?>
         <input type="hidden" name="MAX_FILE_SIZE" value="2097152">
         <input type="file" name="profile_image" id="profile_image" class="visually-hidden" accept="image/jpeg,image/png,image/gif,image/webp">
 

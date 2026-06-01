@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน dashboard
 
-if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/escrow_funds_schema.php';
@@ -23,10 +22,8 @@ if (isset($_GET['broadcast']) && $_GET['broadcast'] === 'ok') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'admin_broadcast') {
-    $csrf = (string) ($_POST['csrf'] ?? '');
-    $expected = (string) ($_SESSION['admin_broadcast_csrf'] ?? '');
-    if ($csrf === '' || $expected === '' || !hash_equals($expected, $csrf)) {
-        $broadcast_flash_err = 'เซสชันไม่ถูกต้อง กรุณาลองใหม่';
+    if (!drawdream_csrf_verify()) {
+        $broadcast_flash_err = 'เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่';
     } else {
         $recipient = (string) ($_POST['recipient'] ?? '');
         $message = (string) ($_POST['broadcast_message'] ?? '');
@@ -34,17 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'admin
         if ($res['error'] !== '') {
             $broadcast_flash_err = $res['error'];
         } else {
-            $_SESSION['admin_broadcast_csrf'] = bin2hex(random_bytes(16));
+            drawdream_csrf_rotate();
             header('Location: admin_dashboard.php?broadcast=ok&sent=' . (int) $res['sent']);
             exit();
         }
     }
 }
-
-if (empty($_SESSION['admin_broadcast_csrf'])) {
-    $_SESSION['admin_broadcast_csrf'] = bin2hex(random_bytes(16));
-}
-$broadcast_csrf = (string) $_SESSION['admin_broadcast_csrf'];
 
 // ======== ดึงข้อมูลทั้งหมด ========
 $total_donation    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM donation WHERE payment_status='completed'"))['total'];
@@ -254,7 +246,7 @@ $chart_initial_to = date('Y-m-d');
             <p class="admin-broadcast-modal__hint">ข้อความจะแสดงที่กระดิ่งของผู้ใช้ที่เลือก (แจ้งเตือนทั่วไป)</p>
             <form method="post" action="admin_dashboard.php">
                 <input type="hidden" name="action" value="admin_broadcast">
-                <input type="hidden" name="csrf" value="<?= htmlspecialchars($broadcast_csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <?= drawdream_csrf_field() ?>
                 <fieldset class="admin-broadcast-fieldset">
                     <legend class="admin-broadcast-legend">ส่งถึง</legend>
                     <label class="admin-broadcast-radio"><input type="radio" name="recipient" value="donors" required> ผู้บริจาค</label>
@@ -362,7 +354,7 @@ $chart_initial_to = date('Y-m-d');
                             <div>
                                 <div class="don-type">
                                     <?php if (drawdream_donate_cat_label_is_active($don['project_donate'] ?? null)): ?>บริจาคโครงการ
-                                    <?php elseif (drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null)): ?>บริจาคสิ่งของ
+                                    <?php elseif (drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null)): ?>บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ
                                     <?php elseif (drawdream_donate_cat_label_is_active($don['child_donate'] ?? null)): ?>บริจาคให้เด็ก
                                     <?php else: ?>บริจาค<?php endif; ?>
                                 </div>

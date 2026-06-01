@@ -10,9 +10,6 @@ declare(strict_types=1);
  * - ถ้ามี TCPDF จะแสดงปุ่มดาวน์โหลด PDF, ถ้าไม่มีให้ใช้ print fallback
  */
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/foundation_analytics.php';
 require_once __DIR__ . '/includes/foundation_analytics_report_html.php';

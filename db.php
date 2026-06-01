@@ -15,6 +15,9 @@ declare(strict_types=1);
 require_once __DIR__ . '/includes/env_loader.php';
 drawdream_load_env_file(__DIR__ . '/.env');
 
+require_once __DIR__ . '/includes/session_init.php';
+drawdream_session_start();
+
 /** ให้ header() / redirect ทำงานได้แม้หน้าเพจเริ่มส่ง HTML แล้ว (เช่น โหมดดูมุมมองผู้บริจาคใน navbar) */
 if (ob_get_level() === 0) {
     ob_start();
@@ -102,6 +105,7 @@ require_once __DIR__ . '/includes/drawdream_soft_delete.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/drawdream_project_updates_schema.php';
 require_once __DIR__ . '/includes/notification_audit.php';
+require_once __DIR__ . '/includes/csrf.php';
 
 // Migration cache — รันแค่ครั้งแรกหรือทุก 1 ชั่วโมง เพื่อไม่ให้ยิง SHOW COLUMNS ทุก request ไปยัง cloud DB
 $_ddMigrationCache = __DIR__ . '/config/migration_done.txt';

@@ -10,7 +10,6 @@
  * 5) ส่งแจ้งเตือนใบเสร็จอิเล็กทรอนิกส์เมื่อปิดรายการสำเร็จ
  */
 
-if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
@@ -46,7 +45,7 @@ if ($is_mock) {
         'metadata' => ['child_id' => (int)($_SESSION['pending_child_id'] ?? $child_id)],
     ];
 } else {
-    $fetched = drawdream_omise_fetch_charge($charge_id);
+    $fetched = drawdream_omise_fetch_charge($charge_id, true);
     $charge = is_array($fetched) ? $fetched : [];
 }
 
@@ -60,7 +59,7 @@ $paid            = $charge['paid'] ?? false;
 $failure_code    = $charge['failure_code'] ?? '';
 $failure_message = $charge['failure_message'] ?? '';
 $expires_at      = $charge['expires_at'] ?? '';
-$is_test_mode    = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
+$is_test_mode    = drawdream_omise_is_test_mode();
 
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0;
@@ -240,11 +239,9 @@ if (empty($child_name) && $child_id > 0) {
         <?php elseif ($status === 'pending'): ?>
             <div class="result-icon pending">⏳</div>
             <h2>ยังไม่พบการโอนจากธนาคาร</h2>
-            <p>ถ้าคุณสแกนจ่ายแล้ว อาจต้องรอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอนจริง</strong>กด «ยกเลิกรายการนี้» — ระบบจะไม่เก็บสถานะค้างรอ และคุณสามารถกดบริจาคใหม่ได้</p>
+            <p>ถ้าคุณสแกนจ่ายแล้ว อาจต้องรอสักครู่แล้วกด «เช็คอีกครั้ง» หาก<strong>ยังไม่ได้โอนจริง</strong>กด «ยกเลิกรายการนี้» — ระบบจะลบรายการค้างและปิด QR ที่ Omise (expire) เพื่อให้บริจาคใหม่ได้</p>
             <?php if ($is_test_mode): ?>
-                <p style="color:#a16207;">ระบบกำลังใช้ Omise Test Key (โหมดทดสอบ) การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะเป็นสำเร็จ — ใน Dashboard ให้เปิดรายการนี้แล้วใช้ <strong>Mark as paid</strong></p>
-                <?php $omise_charge_test_url = 'https://dashboard.omise.co/test/charges/' . rawurlencode($charge_id); ?>
-                <p><a href="<?php echo htmlspecialchars($omise_charge_test_url, ENT_QUOTES, 'UTF-8'); ?>" target="_blank" rel="noopener">เปิด charge นี้ใน Omise Dashboard (test)</a></p>
+                <?php echo drawdream_omise_test_pending_help_html($charge_id); ?>
             <?php endif; ?>
             <?php if (!empty($expires_at)): ?>
                 <p>QR หมดอายุ: <?php echo htmlspecialchars($expires_at); ?></p>
@@ -253,6 +250,7 @@ if (empty($child_name) && $child_id > 0) {
             <a href="check_child_payment.php?charge_id=<?php echo urlencode($charge_id); ?>&child_id=<?php echo $child_id; ?>"
                class="btn-pay">เช็คอีกครั้ง</a>
             <form method="post" action="abandon_qr.php" style="margin:16px 0 0 0;">
+                <?= drawdream_csrf_field() ?>
                 <input type="hidden" name="charge_id" value="<?php echo htmlspecialchars($charge_id, ENT_QUOTES, 'UTF-8'); ?>">
                 <input type="hidden" name="return_url" value="../children_.php">
                 <button type="submit" class="btn-back" style="width:100%;max-width:400px;border:1px solid #b91c1c;color:#b91c1c;background:#fff;cursor:pointer;padding:12px;border-radius:8px;font-weight:600;">

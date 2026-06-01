@@ -3,9 +3,6 @@
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน dashboard chart data
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 
 header('Content-Type: application/json; charset=UTF-8');

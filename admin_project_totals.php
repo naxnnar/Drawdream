@@ -3,9 +3,6 @@
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน project totals
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/donate_type.php';

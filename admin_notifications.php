@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน notifications
 
-if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_project_status.php';
 

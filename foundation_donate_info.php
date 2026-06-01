@@ -3,9 +3,6 @@
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน donate info
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/foundation_banks.php';

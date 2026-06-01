@@ -2,9 +2,6 @@
 // foundation_public_profile.php — โปรไฟล์มูลนิธิแบบสาธารณะ
 // หน้าโปรไฟล์มูลนิธิสาธารณะ (แสดงเฉพาะข้อมูลที่เหมาะให้ผู้บริจาคดู)
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน public profile
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/address_helpers.php';

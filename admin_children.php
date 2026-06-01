@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน children
 
-session_start();
 include 'db.php';
 
 // ให้เข้าได้เฉพาะ foundation
@@ -54,6 +53,7 @@ foreach ($needed_columns as $col => $ddl) {
 $has_birth_date_column = true;
 
 if (isset($_POST['submit'])) {
+    drawdream_csrf_require_valid('admin_children.php');
 
     $child_name    = trim($_POST['child_name'] ?? '');
     $birth_date_raw = trim($_POST['birth_date'] ?? '');
@@ -165,6 +165,7 @@ if (isset($_POST['submit'])) {
 
     <div class="right-box">
         <form method="POST" enctype="multipart/form-data">
+            <?= drawdream_csrf_field() ?>
             <div class="grid-inputs">
                 <div>
                     <label>ชื่อเล่นเด็ก</label>

@@ -78,7 +78,8 @@ function drawdream_webhook_verify_signature_and_time(string $rawBody): bool
 {
     $secret = trim((string)(getenv('OMISE_WEBHOOK_SECRET') ?: ''));
     if ($secret === '') {
-        return true;
+        error_log('[drawdream_webhook] OMISE_WEBHOOK_SECRET is not configured — rejecting webhook');
+        return false;
     }
     $sig = drawdream_webhook_get_header('X-Omise-Signature');
     if ($sig === '') {

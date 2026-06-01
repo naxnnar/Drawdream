@@ -3,8 +3,13 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve children
 
-session_start();
 include 'db.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    die('Method Not Allowed');
+}
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'admin') {
     die("Access Denied");
@@ -28,10 +33,10 @@ foreach ($needCols as $col => $ddl) {
     }
 }
 
-$child_id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
-$action = $_POST['action'] ?? $_GET['action'] ?? 'approve';
+$child_id = (int)($_POST['id'] ?? 0);
+$action = (string)($_POST['action'] ?? '');
 $rejectReason = trim($_POST['reject_reason'] ?? '');
-$returnUrl = $_POST['return'] ?? $_GET['return'] ?? 'admin_notifications.php#admin-pending-children';
+$returnUrl = $_POST['return'] ?? 'admin_notifications.php#admin-pending-children';
 if (!is_string($returnUrl) || $returnUrl === '') {
     $returnUrl = 'admin_notifications.php#admin-pending-children';
 } elseif (preg_match('/[<>"\']/', $returnUrl)) {
@@ -44,8 +49,18 @@ if (!is_string($returnUrl) || $returnUrl === '') {
     $returnUrl = 'admin_notifications.php#admin-pending-children';
 }
 
+if (!drawdream_csrf_verify()) {
+    echo "<script>alert('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่'); history.back();</script>";
+    exit();
+}
+
 if ($child_id <= 0) {
     echo "<script>alert('ไม่พบรหัสโปรไฟล์เด็ก'); history.back();</script>";
+    exit();
+}
+
+if ($action !== 'approve' && $action !== 'reject') {
+    echo "<script>alert('คำขอไม่ถูกต้อง'); history.back();</script>";
     exit();
 }
 

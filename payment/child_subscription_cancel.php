@@ -2,10 +2,6 @@
 declare(strict_types=1);
 // สรุปสั้น: ยกเลิกแผนอุปการะเด็กรายรอบ (subscription) และอัปเดตสถานะให้ตรงกับฐานข้อมูล
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 require_once dirname(__DIR__) . '/db.php';
 require_once __DIR__ . '/config.php';
 require_once dirname(__DIR__) . '/includes/omise_api_client.php';
@@ -31,6 +27,9 @@ if (($_SESSION['role'] ?? '') !== 'donor' || empty($_SESSION['user_id'])) {
 }
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     child_subscription_cancel_redirect('วิธีเรียกใช้งานไม่ถูกต้อง', false, 0);
+}
+if (!drawdream_csrf_verify()) {
+    child_subscription_cancel_redirect('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่', false, (int)($_POST['child_id'] ?? 0));
 }
 
 $donorUid = (int)($_SESSION['user_id'] ?? 0);

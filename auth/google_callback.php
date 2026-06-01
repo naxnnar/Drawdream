@@ -2,10 +2,6 @@
 declare(strict_types=1);
 
 // สรุปสั้น: ไฟล์นี้รับผลลัพธ์การล็อกอิน Google และจัดการสถานะผู้ใช้
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 include __DIR__ . '/../db.php';
 require_once __DIR__ . '/../includes/google_oauth.php';
 
@@ -77,6 +73,7 @@ if ($userRole !== 'donor' && $userRole !== 'foundation') {
     $redirectLogin('Google Login รองรับเฉพาะบัญชีผู้บริจาคและมูลนิธิ');
 }
 
+drawdream_session_regenerate_after_login();
 $_SESSION['user_id'] = (int)$user['user_id'];
 $_SESSION['email'] = (string)$user['email'];
 $_SESSION['role'] = $userRole;

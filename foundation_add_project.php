@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add project
 
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
 
@@ -145,6 +144,7 @@ if ($isEditMode && trim((string)($editingProject['location'] ?? '')) !== '') {
 }
 
 if (isset($_POST['submit'])) {
+    drawdream_csrf_require_valid('foundation_add_project.php');
     $editingId = (int)($_POST['edit_project_id'] ?? 0);
     $isEditSubmit = $editingId > 0;
 
@@ -412,6 +412,7 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
     <!-- ── ขวา: ฟอร์มกรอกข้อมูล ── -->
     <div class="right-box">
         <form method="POST" enctype="multipart/form-data" id="projectForm">
+            <?= drawdream_csrf_field() ?>
             <?php if ($isEditMode): ?>
                 <input type="hidden" name="edit_project_id" value="<?= (int)$editingProject['project_id'] ?>">
             <?php endif; ?>

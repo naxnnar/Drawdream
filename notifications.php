@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน notifications
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/notification_audit.php';
@@ -19,15 +16,33 @@ if (!isset($_SESSION['user_id']) || !in_array($role, ['foundation', 'donor'], tr
 
 $uid = (int)$_SESSION['user_id'];
 
-$result = mysqli_query(
-    $conn,
-    'SELECT * FROM notifications WHERE user_id = ' . (int)$uid . ' ORDER BY created_at DESC LIMIT 200'
-);
+if (isset($_GET['mark_all'])) {
+    drawdream_notifications_mark_all_read($conn, $uid);
+    $_SESSION['dismiss_auto_need_round_open'] = 1;
+    $_SESSION['dismiss_auto_child_outcome'] = 1;
+    header('Location: notifications.php');
+    exit;
+}
 
-$countRow = mysqli_fetch_assoc(
-    mysqli_query($conn, 'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ' . (int)$uid)
+$notif_rows = [];
+$listSt = $conn->prepare(
+    'SELECT notif_id, title, message, link, created_at, is_read
+     FROM notifications
+     WHERE user_id = ?
+     ORDER BY created_at DESC
+     LIMIT 200'
 );
-$notif_count = (int)($countRow['cnt'] ?? 0);
+if ($listSt) {
+    $listSt->bind_param('i', $uid);
+    $listSt->execute();
+    $res = $listSt->get_result();
+    while ($res && ($row = $res->fetch_assoc())) {
+        $notif_rows[] = $row;
+    }
+}
+
+$notif_count = count($notif_rows);
+$unread_count = drawdream_notifications_unread_count($conn, $uid);
 
 ?>
 <!DOCTYPE html>
@@ -56,6 +71,21 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
             margin-bottom: 8px;
             flex-wrap: wrap;
             gap: 12px;
+        }
+
+        .mark-all-link {
+            font-size: 13px;
+            font-weight: 600;
+            color: #4A5BA8;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .mark-all-link:hover { text-decoration: underline; }
+
+        .notif-card--unread {
+            border-left-width: 5px;
+            border-left-color: #4A5BA8;
+            background: #f5f8ff;
         }
 
         .page-title {
@@ -173,16 +203,19 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
     <div class="page-header">
         <div class="page-title">
             🔔 การแจ้งเตือน
-            <?php if ($notif_count > 0): ?>
-                <span class="badge-unread"><?= (int)$notif_count ?> รายการ</span>
+            <?php if ($unread_count > 0): ?>
+                <span class="badge-unread"><?= (int)$unread_count ?> ยังไม่อ่าน</span>
             <?php endif; ?>
         </div>
+        <?php if ($unread_count > 0): ?>
+            <a href="notifications.php?mark_all=1" class="mark-all-link">ทำเครื่องหมายว่าอ่านทั้งหมด</a>
+        <?php endif; ?>
     </div>
-    <p class="page-sub">แสดงประวัติล่าสุดไม่เกิน 200 รายการ</p>
+    <p class="page-sub">แจ้งเตือนในระบบ (กระดิ่ง) — ไม่ส่งอีเมลอัตโนมัติ แสดงประวัติล่าสุดไม่เกิน 200 รายการ</p>
 
-    <?php if ($result && mysqli_num_rows($result) > 0): ?>
+    <?php if ($notif_count > 0): ?>
         <div class="notif-list">
-        <?php while ($row = mysqli_fetch_assoc($result)):
+        <?php foreach ($notif_rows as $row):
             $cardMeta = drawdream_notification_card_meta(
                 (string)($row['title'] ?? ''),
                 (string)($row['link'] ?? '')
@@ -208,10 +241,17 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
                 && strpos($rawLink, 'view=outcome') === false) {
                 $rawLink .= (str_contains($rawLink, '?') ? '&' : '?') . 'view=outcome';
             }
-            $cardClasses = 'notif-card notif--' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8');
+            $isUnread = (int)($row['is_read'] ?? 0) === 0;
+            $cardClasses = 'notif-card notif--' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8')
+                . ($isUnread ? ' notif-card--unread' : '');
+            $notifIdRow = (int)($row['notif_id'] ?? 0);
+            $cardHref = $rawLink;
+            if ($notifIdRow > 0 && $rawLink !== '') {
+                $cardHref = 'mark_notif_read.php?id=' . $notifIdRow . '&goto=' . rawurlencode($rawLink);
+            }
         ?>
-            <?php if ($rawLink !== ''): ?>
-            <a href="<?= htmlspecialchars($rawLink, ENT_QUOTES, 'UTF-8') ?>" class="<?= $cardClasses ?>">
+            <?php if ($cardHref !== ''): ?>
+            <a href="<?= htmlspecialchars($cardHref, ENT_QUOTES, 'UTF-8') ?>" class="<?= $cardClasses ?>">
             <?php else: ?>
             <div class="<?= $cardClasses ?>">
             <?php endif; ?>
@@ -221,12 +261,12 @@ $notif_count = (int)($countRow['cnt'] ?? 0);
                     <div class="notif-message"><?= htmlspecialchars((string)$row['message']) ?></div>
                     <div class="notif-time"><?= htmlspecialchars($time_diff) ?></div>
                 </div>
-            <?php if ($rawLink !== ''): ?>
+            <?php if ($cardHref !== ''): ?>
             </a>
             <?php else: ?>
             </div>
             <?php endif; ?>
-        <?php endwhile; ?>
+        <?php endforeach; ?>
         </div>
     <?php else: ?>
         <div class="empty">

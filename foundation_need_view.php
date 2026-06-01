@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน need view
 
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 drawdream_ensure_needlist_schema($conn);

@@ -7,7 +7,6 @@
  *
  * @see README.md
  */
-if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 require_once __DIR__ . '/omise_helpers.php';
@@ -184,6 +183,7 @@ $charge_id = "";
 
 // ======== ประมวลผลการชำระเงิน ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
+    drawdream_csrf_require_valid('../project.php');
     $rawAmt = (string)($_POST['amount'] ?? '');
     $rawAmt = str_replace([',', ' ', "\xC2\xA0"], '', $rawAmt);
     $amount = (int) max(0, round((float) $rawAmt));
@@ -569,6 +569,7 @@ function _omise_local_mock(string $path, array $data): array {
         <input type="hidden" id="maxDonateBaht" value="<?= (int)$maxDonatePerChargeBaht ?>">
         <?php endif; ?>
         <form method="POST" id="projectDonateForm">
+            <?= drawdream_csrf_field() ?>
             <div class="amount-presets-grid">
                 <button type="button" class="preset-btn" data-amt="2000" onclick="selectPreset(2000)">2,000 บาท</button>
                 <button type="button" class="preset-btn" data-amt="1000" onclick="selectPreset(1000)">1,000 บาท</button>

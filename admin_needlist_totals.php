@@ -3,9 +3,6 @@
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน needlist totals
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/donate_type.php';
@@ -122,7 +119,7 @@ function admin_needlist_totals_plan_label(string $code): string
             </thead>
             <tbody>
             <?php if ($donRows === []): ?>
-                <tr><td colspan="7" class="b--muted">ยังไม่มีประวัติการบริจาคสิ่งของของมูลนิธินี้</td></tr>
+                <tr><td colspan="7" class="b--muted">ยังไม่มีประวัติการบริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของของมูลนิธินี้</td></tr>
             <?php else: ?>
                 <?php foreach ($donRows as $row):
                     $dtRaw = trim((string)($row['transfer_datetime'] ?? ''));

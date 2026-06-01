@@ -3,10 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน profile
 
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
@@ -495,6 +491,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                             </div>
                             <?php if ($subChildId > 0): ?>
                                 <form method="post" action="payment/child_subscription_cancel.php" class="donor-sponsorship-cancel-form js-confirm-cancel-sub" data-child-name="<?= htmlspecialchars((string)($sub['child_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= drawdream_csrf_field() ?>
                                     <input type="hidden" name="child_id" value="<?= $subChildId ?>">
                                     <button type="submit" class="donor-sponsorship-cancel-btn">ยกเลิกอุปการะ</button>
                                 </form>

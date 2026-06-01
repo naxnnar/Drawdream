@@ -7,7 +7,6 @@
  * ตรวจสอบ charge_id + session (pending_*) ให้ตรงกันก่อนแสดง — กันป้อน URL ข้ามคน
  * ภาพ QR ควรมาจาก Omise (session / GET charge) — ไม่ใช้ภาพจำลองในโหมดทดสอบยกเว้นชาร์จ mock (OMISE_ALLOW_LOCAL_MOCK)
  */
-session_start();
 include '../db.php';
 include 'config.php';
 
@@ -91,7 +90,7 @@ if ($type === 'project') {
             }
         }
     }
-    $subtitle_line = 'บริจาคให้เด็ก ' . $child_name;
+    $subtitle_line = 'บริจาคให้เด็ก ชื่อ น้อง' . $child_name;
     $receipt_target_label = 'ชื่อเด็ก';
     $receipt_target_value = $child_name;
     $return_payment_page = '../children_donate.php?id=' . $child_id;
@@ -115,7 +114,7 @@ if ($type === 'project') {
             }
         }
     }
-    $subtitle_line = 'บริจาครายการสิ่งของ — ' . $foundation_name;
+    $subtitle_line = 'บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ — ' . $foundation_name;
     $receipt_target_label = 'มูลนิธิ';
     $receipt_target_value = $foundation_name;
     $return_payment_page = 'foundation_donate.php?fid=' . $fid;
@@ -125,13 +124,13 @@ if ($type === 'project') {
 
 $qr_image = '';
 $qr_missing = false;
-$is_test_mode = (strpos(OMISE_PUBLIC_KEY, 'pkey_test_') === 0) || (strpos(OMISE_SECRET_KEY, 'skey_test_') === 0);
+require_once __DIR__ . '/omise_helpers.php';
+$is_test_mode = drawdream_omise_is_test_mode();
 if ($_SESSION['pending_charge_id'] === $charge_id) {
     $qr_image = trim((string)($_SESSION['qr_image'] ?? ''));
 }
 $is_mock_charge = (strpos($charge_id, 'chrg_mock_') === 0);
 if ($qr_image === '' && !$is_mock_charge) {
-    require_once __DIR__ . '/omise_helpers.php';
     $fetched = drawdream_omise_fetch_charge($charge_id);
     if ($fetched) {
         $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($fetched);
@@ -143,7 +142,10 @@ if ($qr_image === '' && !$is_mock_charge) {
 $qr_missing = ($qr_image === '');
 
 $receipt_no = strtoupper(substr($charge_id, -10));
-$abandon_charge = ($type === 'foundation') ? '' : $charge_id;
+$abandon_charge = $charge_id;
+$goal_closed_message = ($type === 'foundation')
+    ? 'รายการสิ่งของครบเป้าหมายแล้ว'
+    : 'โครงการครบเป้าหมายแล้ว';
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -183,6 +185,25 @@ $abandon_charge = ($type === 'foundation') ? '' : $charge_id;
             transition: filter 0.15s, background 0.15s;
         }
         .qr-abandon-btn:hover { filter: brightness(0.94); }
+        .qr-goal-closed {
+            display: none;
+            text-align: left;
+            line-height: 1.55;
+            padding: 16px;
+            background: #fff3e0;
+            border-radius: 12px;
+            border: 1px solid #fdba74;
+            color: #9a3412;
+            margin: 16px 0;
+        }
+        .qr-goal-closed.is-visible { display: block; }
+        .qr-section.is-hidden { display: none; }
+        .qr-download-btn.is-disabled {
+            pointer-events: none;
+            opacity: 0.45;
+            background: #94a3b8 !important;
+            color: #fff !important;
+        }
     </style>
 </head>
 <body>
@@ -203,34 +224,93 @@ $abandon_charge = ($type === 'foundation') ? '' : $charge_id;
         <div class="qr-project">
             <span class="qr-project-info" style="font-size:1.1em;font-weight:600;display:inline-block;"><?= htmlspecialchars($subtitle_line) ?></span>
         </div>
-        <div class="qr-section">
+        <div id="qrGoalClosed" class="qr-goal-closed" role="alert" aria-live="polite">
+            <strong><?= htmlspecialchars($goal_closed_message, ENT_QUOTES, 'UTF-8') ?></strong><br>
+            มีผู้บริจาคท่านอื่นปิดยอดก่อนคุณ — <strong>กรุณาอย่าชำระเงิน</strong> รายการ QR นี้ถูกยกเลิกแล้ว
+        </div>
+        <div class="qr-section" id="qrImageSection">
             <?php if ($qr_missing): ?>
                 <p style="color:#b45309;text-align:left;line-height:1.5;padding:12px;background:#fffbeb;border-radius:12px;border:1px solid #fcd34d;">
                     ไม่สามารถโหลดภาพ QR จาก Omise ได้ (อาจเป็นเครือข่ายหรือคีย์ API)<br>
-                    ลองกลับไปหน้าชำระเงินแล้วกดบริจาคใหม่ หรือเปิด
-                    <a href="https://dashboard.omise.co/test/charges" target="_blank" rel="noopener">Omise Dashboard (test)</a>
-                    ค้นหา charge <code style="word-break:break-all;"><?= htmlspecialchars($charge_id) ?></code>
-                    แล้วใช้ «Mark as paid» หลังทดสอบ
+                    ลองกลับไปหน้าชำระเงินแล้วกดบริจาคใหม่
+                    <?php if ($is_test_mode && drawdream_omise_test_auto_mark_paid_enabled()): ?>
+                        — หรือกด <strong>ยืนยันการชำระ</strong> ด้านล่างเพื่อจำลองชำระสำเร็จ (โหมดทดสอบ)
+                    <?php elseif ($is_test_mode): ?>
+                        หรือเปิด
+                        <a href="https://dashboard.omise.co/test/charges" target="_blank" rel="noopener">Omise Dashboard (test)</a>
+                        ค้นหา charge <code style="word-break:break-all;"><?= htmlspecialchars($charge_id) ?></code>
+                        แล้วใช้ «Mark as paid»
+                    <?php endif; ?>
                 </p>
             <?php else: ?>
                 <img src="<?= htmlspecialchars($qr_image, ENT_QUOTES, 'UTF-8') ?>" alt="PromptPay QR">
             <?php endif; ?>
         </div>
+        <?php if ($is_test_mode && !$qr_missing): ?>
+            <div style="margin-top:12px;text-align:left;"><?= drawdream_omise_test_pending_help_html($charge_id) ?></div>
+        <?php endif; ?>
         <div class="qr-receipt">
             <div class="qr-receipt-row"><b>จำนวนเงิน</b> <?= number_format($amount, 2) ?> บาท</div>
             <div class="qr-receipt-row"><b>เลขที่รายการบริจาค</b> <?= htmlspecialchars($receipt_no) ?></div>
             <div class="qr-receipt-row"><b><?= htmlspecialchars($receipt_target_label) ?></b> <?= htmlspecialchars($receipt_target_value) ?></div>
             <div class="qr-receipt-row"><b>วันที่</b> <?= date('d/m/Y H:i') ?></div>
         </div>
-        <a class="qr-download-btn"
+        <a class="qr-download-btn" id="qrConfirmBtn"
            href="<?= htmlspecialchars($confirm_href, ENT_QUOTES, 'UTF-8') ?>"
            style="background:#F1CF54;color:#222;display:flex;align-items:center;justify-content:center;font-size:1.18em;text-decoration:none;">
             ยืนยันการชำระ
         </a>
-        <form method="post" action="abandon_qr.php" class="qr-abandon-wrap">
+        <form method="post" action="abandon_qr.php" class="qr-abandon-wrap" id="qrAbandonForm">
+            <?= drawdream_csrf_field() ?>
             <input type="hidden" name="charge_id" value="<?= htmlspecialchars($abandon_charge, ENT_QUOTES, 'UTF-8') ?>">
             <button type="submit" class="qr-abandon-btn">ยกเลิกการชำระ</button>
+            <p class="qr-abandon-hint" style="margin:8px 0 0;font-size:.85rem;color:#6b7280;line-height:1.45;">
+                ยกเลิกจะลบรายการค้างในระบบและปิด QR ที่ Omise (expire) — ใช้สแกนชำระต่อไม่ได้
+                หากโอนแล้วให้กด «ยืนยันการชำระ» แทน
+            </p>
         </form>
     </div>
+<?php if (($type === 'project' && $project_id > 0) || ($type === 'foundation' && $fid > 0)): ?>
+<script>
+(function () {
+    var amount = <?= (int)$amount ?>;
+    var chargeId = <?= json_encode($charge_id, JSON_UNESCAPED_UNICODE) ?>;
+    var closedBox = document.getElementById('qrGoalClosed');
+    var imgSection = document.getElementById('qrImageSection');
+    var confirmBtn = document.getElementById('qrConfirmBtn');
+    var closed = false;
+    var pollUrl = <?php if ($type === 'project'): ?>
+        'project_goal_slot_check.php?project_id=' + encodeURIComponent(String(<?= (int)$project_id ?>))
+    <?php else: ?>
+        'needlist_goal_slot_check.php?fid=' + encodeURIComponent(String(<?= (int)$fid ?>))
+    <?php endif; ?>
+        + '&amount=' + encodeURIComponent(String(amount))
+        + '&charge_id=' + encodeURIComponent(chargeId);
+
+    function applyClosed() {
+        if (closed) return;
+        closed = true;
+        if (closedBox) closedBox.classList.add('is-visible');
+        if (imgSection) imgSection.classList.add('is-hidden');
+        if (confirmBtn) confirmBtn.classList.add('is-disabled');
+    }
+
+    function poll() {
+        if (closed) return;
+        fetch(pollUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.closed) {
+                    applyClosed();
+                }
+            })
+            .catch(function () { /* ignore */ });
+    }
+
+    poll();
+    setInterval(poll, 4000);
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>

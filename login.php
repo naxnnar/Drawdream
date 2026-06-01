@@ -4,7 +4,6 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน login
 
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
@@ -37,6 +36,9 @@ if ($error === '' && isset($_GET['error'])) {
 
 // ======== ประมวลผล Register ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
+    if (!drawdream_csrf_verify()) {
+        $error = 'เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่';
+    } else {
     $role = $_POST['role'];
 
     if ($role === 'donor') {
@@ -70,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $stmt2->execute();
 
                     $success = "สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...";
+                    drawdream_session_regenerate_after_login();
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'donor';
@@ -126,6 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $stmt2->execute();
 
                     $success = "สมัครสมาชิกสำเร็จ! กำลังเข้าสู่ระบบ...";
+                    drawdream_session_regenerate_after_login();
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'foundation';
@@ -138,10 +142,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             }
         }
     }
+    }
 }
 
 // ======== ประมวลผล Login ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
+    if (!drawdream_csrf_verify()) {
+        $error = 'เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่';
+    } else {
     $email = trim($_POST['email']);
     $password = $_POST['password'];
 
@@ -157,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         $row = $stmt->get_result()->fetch_assoc();
 
         if ($row && password_verify($password, $row['password'])) {
+            drawdream_session_regenerate_after_login();
             $_SESSION['user_id'] = $row['user_id'];
             $_SESSION['email']   = $row['email'];
             $_SESSION['role']    = $row['role'];
@@ -177,6 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         } else {
             $error = "ไม่พบผู้ใช้งานนี้";
         }
+    }
     }
 }
 ?>
@@ -217,6 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <h2>เข้าสู่ระบบ</h2>
             <p class="subtitle">ยินดีต้อนรับกลับมา!</p>
             <form method="POST">
+                <?= drawdream_csrf_field() ?>
                 <div class="form-group">
                     <input type="email" name="email" placeholder="อีเมล" required autofocus>
                 </div>
@@ -255,6 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     <h2>สมัครสมาชิก (ผู้บริจาค)</h2>
                     <p class="subtitle">กรอกข้อมูลของคุณ</p>
                     <form method="POST">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="role" value="donor">
                         <div class="form-group">
                             <input type="text" name="first_name" placeholder="ชื่อ" required>
@@ -285,6 +297,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     <h2>สมัครสมาชิก (มูลนิธิ)</h2>
                     <p class="subtitle">กรอกข้อมูลมูลนิธิของคุณ</p>
                     <form method="POST">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="role" value="foundation">
                         <div class="form-group">
                             <input type="text" name="foundation_name" placeholder="ชื่อมูลนิธิ" required>

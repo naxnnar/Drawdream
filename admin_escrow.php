@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน escrow
 
-if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
@@ -32,6 +31,7 @@ if (isset($_GET['success']) && $_GET['success'] === 'transferred') {
 
 // ======== ประมวลผล POST ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    drawdream_csrf_require_valid('admin_escrow.php');
     $action     = $_POST['action'] ?? '';
     $project_id = (int)($_POST['project_id'] ?? 0);
     $item_id    = (int)($_POST['item_id'] ?? 0);
@@ -321,6 +321,7 @@ function drawdream_needlist_delivery_lines(array $need): array
                 </div>
                 <?php if (!$is_done): ?>
                     <form method="POST">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="action" value="confirm_transfer">
                         <input type="hidden" name="project_id" value="<?= $proj['project_id'] ?>">
                         <button type="submit" class="btn-purchase"<?= $scPaid ? '' : ' disabled title="รอมูลนิธิชำระค่าบริการก่อน"' ?> onclick="return confirm('ยืนยันโอนเงิน + ส่งแจ้งเตือนให้มูลนิธิ?')">
@@ -486,6 +487,7 @@ function drawdream_needlist_delivery_lines(array $need): array
                     <p class="sc-block-hint">มูลนิธิต้องชำระค่าบริการระบบ (<?= number_format($serviceFee, 2) ?> บาท) ก่อนแอดมินจึงจะเริ่มจัดซื้อและยืนยันจัดส่งได้</p>
                 <?php elseif (!$is_purchasing): ?>
                     <form method="POST">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="action" value="start_purchase">
                         <input type="hidden" name="item_id" value="<?= $need['item_id'] ?>">
                         <button type="submit" class="btn-purchase" onclick="return confirm('เริ่มดำเนินการจัดซื้อรายการนี้?')">
@@ -496,6 +498,7 @@ function drawdream_needlist_delivery_lines(array $need): array
                     <div class="evidence-form">
                         <div class="evidence-title">📸 อัปโหลดหลักฐานการจัดส่ง</div>
                         <form method="POST" enctype="multipart/form-data">
+                            <?= drawdream_csrf_field() ?>
                             <input type="hidden" name="action" value="upload_evidence">
                             <input type="hidden" name="item_id" value="<?= $need['item_id'] ?>">
                             <div class="form-group">

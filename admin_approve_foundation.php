@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve foundation
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
@@ -21,6 +18,7 @@ drawdream_foundation_review_ensure_schema($conn);
 
 // ======== ประมวลผล POST (จากศูนย์แจ้งเตือน) ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    drawdream_csrf_require_valid('admin_approve_foundation.php');
     $foundation_id = (int)($_POST['foundation_id'] ?? 0);
     $action = $_POST['action'] ?? '';
     $reject_reason = trim((string)($_POST['reject_reason'] ?? ''));
@@ -221,6 +219,7 @@ $email = htmlspecialchars((string)($row['email'] ?? '—'), ENT_QUOTES, 'UTF-8')
 
                     <p class="admin-review-actions-note">หากไม่อนุมัติ ระบบจะเก็บบัญชีผู้ใช้และข้อมูลเดิมไว้ เพื่อให้มูลนิธิแก้ไขข้อมูลแล้วส่งตรวจสอบใหม่ได้</p>
                     <form method="post" action="admin_approve_foundation.php" class="admin-review-actions-form">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="foundation_id" value="<?= (int)($row['foundation_id'] ?? 0) ?>">
                         <div class="admin-review-actions-grid">
                             <textarea name="reject_reason" maxlength="1000" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>

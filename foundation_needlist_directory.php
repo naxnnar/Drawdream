@@ -2,9 +2,6 @@
 // foundation_needlist_directory.php — รายการสิ่งของของมูลนิธิ (มุมมองตารางแบบแอดมิน)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 

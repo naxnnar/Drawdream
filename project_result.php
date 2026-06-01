@@ -4,7 +4,6 @@
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project result
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_project_updates_schema.php';
-session_start();
 drawdream_ensure_foundation_project_update_columns($conn);
 
 $project_id = isset($_GET['project_id']) ? (int)$_GET['project_id'] : 0;

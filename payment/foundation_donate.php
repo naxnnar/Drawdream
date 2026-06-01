@@ -1,11 +1,12 @@
 <?php
 // payment/foundation_donate.php — บริจาคมูลนิธิ (need list) + Omise
 // สรุปสั้น: หน้าเริ่มบริจาคมูลนิธิ สร้าง charge และเตรียมรายการ pending ก่อนแสดง QR
-if (session_status() === PHP_SESSION_NONE) session_start();
 include '../db.php';
 include 'config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/needlist_donate_window.php';
+require_once __DIR__ . '/../includes/donate_category_resolve.php';
+require_once __DIR__ . '/../includes/drawdream_needlist_payment_finalize.php';
 
 if (!isset($_SESSION['user_id'])) {
     $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
@@ -210,6 +211,7 @@ function drawdream_build_need_catalog(array $items): array
             $key = mb_strtolower($name, 'UTF-8') . '|' . number_format($price, 2, '.', '');
             if (!isset($catalog[$key])) {
                 $catalog[$key] = [
+                    'catalog_key' => $key,
                     'name' => $name,
                     'qty_needed' => 0.0,
                     'price' => $price,
@@ -228,11 +230,64 @@ function drawdream_build_need_catalog(array $items): array
 
     return array_map(static function (array $row): array {
         return [
+            'catalog_key' => (string)$row['catalog_key'],
             'name' => (string)$row['name'],
             'qty_needed' => (float)$row['qty_needed'],
             'price' => (float)$row['price'],
         ];
     }, $catalog);
+}
+
+/** @return array<string, int> catalog_key => qty */
+function drawdream_parse_need_item_picks_from_post(array $catalog): array
+{
+    $raw = $_POST['pick_qty'] ?? [];
+    if (!is_array($raw)) {
+        return [];
+    }
+    $byKey = [];
+    foreach ($catalog as $row) {
+        $byKey[(string)($row['catalog_key'] ?? '')] = $row;
+    }
+    $picks = [];
+    foreach ($raw as $key => $qtyRaw) {
+        $key = (string)$key;
+        if ($key === '' || !isset($byKey[$key])) {
+            continue;
+        }
+        $maxQty = (int)max(0, (int)floor((float)($byKey[$key]['qty_needed'] ?? 0)));
+        $qty = (int)max(0, (int)$qtyRaw);
+        if ($maxQty > 0) {
+            $qty = min($qty, $maxQty);
+        }
+        if ($qty > 0) {
+            $picks[$key] = $qty;
+        }
+    }
+
+    return $picks;
+}
+
+/** @param array<string, int> $picks */
+function drawdream_need_pick_total_baht(array $catalog, array $picks): float
+{
+    $byKey = [];
+    foreach ($catalog as $row) {
+        $byKey[(string)($row['catalog_key'] ?? '')] = $row;
+    }
+    $total = 0.0;
+    foreach ($picks as $key => $qty) {
+        if (!isset($byKey[$key])) {
+            continue;
+        }
+        $price = (float)($byKey[$key]['price'] ?? 0);
+        if ($price <= 0 || $qty <= 0) {
+            continue;
+        }
+        $total += round($price * $qty, 2);
+    }
+
+    return round($total, 2);
 }
 
 $needCatalog = drawdream_build_need_catalog($items);
@@ -242,13 +297,15 @@ if (!is_string($needCatalogJson)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
-    $rawAmt = (string)($_POST['amount'] ?? '');
-    $rawAmt = str_replace([',', ' ', "\xC2\xA0"], '', $rawAmt);
-    $amount = (int)max(0, round((float)$rawAmt));
+    drawdream_csrf_require_valid('../foundation.php');
+    $picks = drawdream_parse_need_item_picks_from_post($needCatalog);
+    $amount = (int)round(drawdream_need_pick_total_baht($needCatalog, $picks));
     if ($goal <= 0 || count($items) === 0) {
         $error = "ขณะนี้ไม่มีรายการสิ่งของที่เปิดรับบริจาค (ครบระยะเวลาหรือปิดรับแล้ว)";
+    } elseif ($picks === []) {
+        $error = 'กรุณาเลือกสิ่งของอย่างน้อย 1 รายการ';
     } elseif ($amount < 20) {
-        $error = "จำนวนเงินขั้นต่ำ 20 บาท";
+        $error = 'ยอดรวมจากสิ่งของที่เลือกต้องไม่ต่ำกว่า 20 บาท';
     } else {
         $stFreshGoal = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
         $stFreshCur = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
@@ -292,13 +349,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
             } elseif (isset($charge_response['id'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image  = $charge_response['source']['scannable_code']['image']['download_uri'] ?? '';
-                $_SESSION['pending_charge_id']    = $charge_id;
-                $_SESSION['pending_amount']        = $amount;
-                $_SESSION['pending_foundation']    = $foundation['foundation_name'];
-                $_SESSION['pending_foundation_id'] = $fid;
-                $_SESSION['qr_image']              = $qr_image;
-                header('Location: scan_qr.php?type=foundation&charge_id=' . rawurlencode($charge_id) . '&fid=' . $fid);
-                exit();
+                $pendingDonateId = drawdream_insert_pending_needlist_donation(
+                    $conn,
+                    $fid,
+                    (int)$_SESSION['user_id'],
+                    (float)$amount,
+                    $charge_id
+                );
+                if ($pendingDonateId <= 0) {
+                    $error = 'ไม่สามารถบันทึกรายการบริจาคชั่วคราวได้ กรุณาลองใหม่';
+                } else {
+                    $_SESSION['pending_charge_id']    = $charge_id;
+                    $_SESSION['pending_amount']        = $amount;
+                    $_SESSION['pending_foundation']    = $foundation['foundation_name'];
+                    $_SESSION['pending_foundation_id'] = $fid;
+                    $_SESSION['pending_donate_id']     = $pendingDonateId;
+                    $_SESSION['qr_image']              = $qr_image;
+                    header('Location: scan_qr.php?type=foundation&charge_id=' . rawurlencode($charge_id) . '&fid=' . $fid);
+                    exit();
+                }
             } else { $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด"; }
         } else { $error = "ไม่สามารถสร้าง PromptPay Source ได้: " . ($source_response['message'] ?? 'unknown error'); }
     }
@@ -360,10 +429,10 @@ function _omise_local_mock(string $path, array $data): array {
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>บริจาครายการสิ่งของ | DrawDream</title>
+    <title>บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css">
     <link rel="stylesheet" href="../css/payment.css">
-    <link rel="stylesheet" href="../css/foundation.css?v=23">
+    <link rel="stylesheet" href="../css/foundation.css?v=43">
 </head>
 <body class="foundation-donate-page">
 
@@ -382,6 +451,7 @@ function _omise_local_mock(string $path, array $data): array {
                      class="fd-cover" alt="">
             <?php endif; ?>
 
+            <div class="fd-left-main">
             <h2 class="fd-name">
                 <a class="fd-name-link" href="../foundation_public_profile.php?id=<?= (int)$fid ?>">
                     <?= htmlspecialchars($foundation['foundation_name']) ?>
@@ -406,98 +476,7 @@ function _omise_local_mock(string $path, array $data): array {
                 </div>
             </div>
 
-            <?php if (!empty($items)): ?>
-            <div class="fd-items-wrap">
-                <h3 class="fd-items-title">รายการสิ่งของที่ต้องการ</h3>
-                <?php foreach ($items as $item):
-                    if (!is_array($item)) continue;
-                    $rawNeedImgs = foundation_needlist_item_filenames_from_row($item);
-                    $imgsThree = array_pad(array_slice($rawNeedImgs, 0, 3), 3, '');
-                    $total = number_format((float)($item['total_price'] ?? 0), 0);
-                    $urgent = !empty($item['urgent']);
-                ?>
-                    <?php
-                    $slidesNeed = [];
-                    foreach ($imgsThree as $imn) {
-                        if (trim((string)$imn) !== '') {
-                            $slidesNeed[] = $imn;
-                        }
-                    }
-                    if ($slidesNeed === []) {
-                        $slidesNeed = [''];
-                    }
-                    $nNeedSlides = count($slidesNeed);
-                    $needCarouselCtrl = $nNeedSlides > 1;
-                ?>
-                <div class="fd-item-row<?= $urgent ? ' fd-item-urgent' : '' ?>">
-                    <div class="fd-item-carousel<?= !$needCarouselCtrl ? ' fd-item-carousel--single' : '' ?>">
-                        <div
-                            id="fd-need-carousel-<?= (int)($item['item_id'] ?? 0) ?>"
-                            class="fd-item-carousel-viewport"
-                            role="region"
-                            aria-roledescription="carousel"
-                            aria-label="ภาพสิ่งของ"
-                            <?= $needCarouselCtrl ? ' tabindex="0"' : '' ?>
-                        >
-                            <?php foreach ($slidesNeed as $imnSlide): ?>
-                            <div class="fd-item-carousel-slide">
-                                <?php if ($imnSlide !== ''): ?>
-                                <img src="../uploads/needs/<?= htmlspecialchars($imnSlide) ?>" class="fd-item-carousel-img" alt="" loading="lazy" decoding="async">
-                                <?php else: ?>
-                                <div class="fd-item-carousel-placeholder" aria-hidden="true">—</div>
-                                <?php endif; ?>
-                            </div>
-                            <?php endforeach; ?>
-                        </div>
-                        <?php if ($needCarouselCtrl): ?>
-                        <div class="fd-item-carousel-footer">
-                            <button type="button" class="fd-item-carousel-btn fd-item-carousel-prev" aria-controls="fd-need-carousel-<?= (int)($item['item_id'] ?? 0) ?>" aria-label="ภาพก่อนหน้า">
-                                ‹
-                            </button>
-                            <div class="fd-item-carousel-dots" role="group" aria-label="เลื่อนภาพ">
-                                <?php for ($dsi = 0; $dsi < $nNeedSlides; $dsi++): ?>
-                                    <button
-                                        type="button"
-                                        class="fd-item-carousel-dot<?= $dsi === 0 ? ' is-active' : '' ?>"
-                                        aria-label="ภาพที่ <?= $dsi + 1 ?>"
-                                        <?= $dsi === 0 ? ' aria-current="true"' : '' ?>
-                                        data-slide-index="<?= $dsi ?>"></button>
-                                <?php endfor; ?>
-                            </div>
-                            <button type="button" class="fd-item-carousel-btn fd-item-carousel-next" aria-controls="fd-need-carousel-<?= (int)($item['item_id'] ?? 0) ?>" aria-label="ภาพถัดไป">
-                                ›
-                            </button>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="fd-item-detail">
-                        <div class="fd-item-name">
-                            <?= htmlspecialchars($item['item_name'] ?? '') ?>
-                            <?php if ($urgent): ?><span class="fd-urgent-badge">ด่วน</span><?php endif; ?>
-                        </div>
-                        <div class="fd-item-meta">
-                            รวม <?= $total ?> บาท
-                        </div>
-                        <?php
-                            $itemLines = drawdream_need_item_lines_from_row($item);
-                        ?>
-                        <?php if ($itemLines !== []): ?>
-                        <div class="fd-item-lines">
-                            <?php foreach ($itemLines as $line): ?>
-                                <div class="fd-item-line">
-                                    <span class="fd-item-line-name"><?= htmlspecialchars((string)$line['item_name']) ?></span>
-                                    <span class="fd-item-line-meta">
-                                        <?= number_format((float)$line['qty_needed'], 0) ?> ชิ้น × <?= number_format((float)$line['price_estimate'], 2) ?> บาท
-                                    </span>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php endforeach; ?>
-            </div>
-            <?php endif; ?>
+            </div><!-- /.fd-left-main -->
         </div><!-- /.fd-left -->
 
         <!-- ==================== ฝั่งขวา ==================== -->
@@ -506,41 +485,74 @@ function _omise_local_mock(string $path, array $data): array {
                 <div class="fd-alert fd-alert-error"><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
 
-                <h3 class="fd-donate-section-title">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
-                <p class="fd-form-sub">เงินจะรวมเป็นกองทุนเพื่อซื้อสิ่งของให้มูลนิธิ</p>
+                <h3 class="fd-donate-section-title">เลือกสิ่งของที่ต้องการสมทบทุนจัดซื้อ</h3>
+                <p class="fd-form-sub">เลือกได้หลายรายการ — ระบบคำนวณยอดจากราคาต่อชิ้น × จำนวนที่เลือก</p>
                 <?php if ($goal > 0 && $maxDonatePerChargeBaht > 0): ?>
-                <p class="project-donate-cap-hint" style="margin:0 0 12px;font-size:0.95rem;color:#334155;font-weight:600;font-family:'Sarabun',sans-serif;">
+                <p class="project-donate-cap-hint fd-cap-hint">
                     บริจาคได้สูงสุดครั้งละไม่เกิน <?= number_format($maxDonatePerChargeBaht, 0, '.', ',') ?> บาท (ยอดที่เหลือจะครบเป้าหมาย)
                 </p>
                 <input type="hidden" id="maxDonateBaht" value="<?= (int)$maxDonatePerChargeBaht ?>">
                 <?php endif; ?>
 
                 <form method="POST" id="foundationDonateForm"<?= $donateDisabled ? ' class="fd-form-disabled"' : '' ?>>
-                    <div class="amount-presets-grid fd-amount-presets-grid">
-                        <button type="button" class="preset-btn" data-amt="2000" onclick="fdSelectPreset(2000)">2,000 บาท</button>
-                        <button type="button" class="preset-btn" data-amt="1000" onclick="fdSelectPreset(1000)">1,000 บาท</button>
-                        <button type="button" class="preset-btn" data-amt="500" onclick="fdSelectPreset(500)">500 บาท</button>
-                        <div class="preset-btn preset-input-btn fd-preset-custom-cell">
-                            <label for="amountInput" class="fd-preset-custom-label">ระบุจำนวน</label>
-                            <input type="number" name="amount" id="amountInput" min="20" step="1"
-                                   placeholder="ขั้นต่ำ 20 บาท" inputmode="numeric"
-                                   oninput="fdClearPresetHighlight()">
+                    <?= drawdream_csrf_field() ?>
+                    <?php if ($needCatalog === []): ?>
+                        <p class="fd-picker-empty">ยังไม่มีรายการสิ่งของให้เลือก</p>
+                    <?php else: ?>
+                    <div class="fd-item-picker-list" id="fdItemPickerList">
+                        <?php foreach ($needCatalog as $catRow):
+                            $cKey = (string)($catRow['catalog_key'] ?? '');
+                            $cName = (string)($catRow['name'] ?? '');
+                            $cPrice = (float)($catRow['price'] ?? 0);
+                            $cMaxQty = (int)max(0, (int)floor((float)($catRow['qty_needed'] ?? 0)));
+                            if ($cKey === '' || $cName === '' || $cPrice <= 0 || $cMaxQty <= 0) {
+                                continue;
+                            }
+                        ?>
+                        <div class="fd-picker-row" data-price="<?= htmlspecialchars(number_format($cPrice, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
+                            <div class="fd-picker-info">
+                                <span class="fd-picker-name"><?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="fd-picker-meta"><?= number_format($cPrice, 0) ?> บาท/ชิ้น · ต้องการ <?= number_format($cMaxQty, 0) ?> ชิ้น</span>
+                            </div>
+                            <div class="fd-picker-qty" role="group" aria-label="จำนวน <?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="button" class="fd-qty-btn fd-qty-minus" aria-label="ลดจำนวน">−</button>
+                                <input
+                                    type="number"
+                                    class="fd-qty-input"
+                                    name="pick_qty[<?= htmlspecialchars($cKey, ENT_QUOTES, 'UTF-8') ?>]"
+                                    min="0"
+                                    max="<?= $cMaxQty ?>"
+                                    step="1"
+                                    value="0"
+                                    inputmode="numeric"
+                                    aria-label="จำนวนชิ้น"
+                                >
+                                <button type="button" class="fd-qty-btn fd-qty-plus" aria-label="เพิ่มจำนวน">+</button>
+                            </div>
+                            <div class="fd-picker-line-total" aria-live="polite">0 บาท</div>
                         </div>
+                        <?php endforeach; ?>
                     </div>
+                    <?php endif; ?>
+
+                    <div class="fd-picker-summary" id="fdPickerSummary" aria-live="polite">
+                        <div class="fd-picker-summary-head">
+                            <span class="fd-picker-summary-label">ยอดรวม</span>
+                            <strong class="fd-picker-summary-amt" id="fdPickTotal">0</strong>
+                            <span class="fd-picker-summary-unit">บาท</span>
+                        </div>
+                        <ul class="fd-picker-summary-list" id="fdPickSummaryList"></ul>
+                        <p class="fd-picker-summary-hint" id="fdPickSummaryHint">เลือกสิ่งของอย่างน้อย 1 รายการ (ขั้นต่ำรวม 20 บาท)</p>
+                    </div>
+                    <input type="hidden" name="amount" id="amountInput" value="0">
+
                     <div class="payment-method">
                         <div class="method-card active">
                             <img src="../img/qr-code.png" alt="PromptPay" class="method-icon">
                             <span>PromptPay QR</span>
                         </div>
                     </div>
-                    <p class="fd-impact-preview-intro" style="margin:12px 0 6px;font-size:0.88rem;color:#64748b;line-height:1.45;font-family:'Sarabun',sans-serif;">
-                        จำลองการจัดซื้อตามลำดับรายการและราคาต่อชิ้น (ซื้อเป็นชิ้นเต็มเท่านั้น)
-                    </p>
-                    <div class="fd-impact-preview" id="donationImpactPreview" aria-live="polite">
-                        <div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>
-                        <p class="fd-impact-preview__empty">กรอกจำนวนเงินเพื่อดูรายการสิ่งของและจำนวนชิ้นที่ซื้อได้</p>
-                    </div>
-                    <button type="submit" name="pay" class="btn-pay"<?= $donateDisabled ? ' disabled' : '' ?>>บริจาค</button>
+                    <button type="submit" name="pay" class="btn-pay" id="fdDonateSubmitBtn"<?= $donateDisabled ? ' disabled data-force-disabled="1"' : '' ?>>บริจาค</button>
                 </form>
         </div><!-- /.fd-right -->
 
@@ -548,222 +560,148 @@ function _omise_local_mock(string $path, array $data): array {
 </div><!-- /.fd-wrapper -->
 
 <script>
-function fdParseBahtAmount(raw) {
-    if (raw == null) return NaN;
-    var s = String(raw).replace(/,/g, '').replace(/\u00a0/g, '').replace(/\s/g, '').trim();
-    if (s === '') return NaN;
-    var x = parseFloat(s);
-    return isNaN(x) ? NaN : Math.round(x);
-}
 function fdGetMaxDonateBaht() {
     var el = document.getElementById('maxDonateBaht');
     if (!el || el.value === '') return null;
     var m = parseInt(el.value, 10);
     return (isNaN(m) || m <= 0) ? null : m;
 }
-function fdClearPresetHighlight() {
-    document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
-        b.classList.remove('preset-selected');
-    });
-}
-function fdSelectPreset(amt) {
-    var maxB = fdGetMaxDonateBaht();
-    var useAmt = amt;
-    if (maxB !== null && amt > maxB) {
-        useAmt = maxB;
-    }
-    var inp = document.getElementById('amountInput');
-    if (inp) {
-        inp.value = String(useAmt);
-        inp.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
-        var v = parseInt(b.getAttribute('data-amt'), 10);
-        b.classList.toggle('preset-selected', v === useAmt);
-    });
-}
 document.addEventListener('DOMContentLoaded', function () {
-    var needCatalog = <?= $needCatalogJson ?>;
-    var impactRoot = document.getElementById('donationImpactPreview');
+    var pickerList = document.getElementById('fdItemPickerList');
+    var totalEl = document.getElementById('fdPickTotal');
+    var summaryList = document.getElementById('fdPickSummaryList');
+    var summaryHint = document.getElementById('fdPickSummaryHint');
     var amtInput = document.getElementById('amountInput');
+    var donateBtn = document.getElementById('fdDonateSubmitBtn');
 
     function fdFormatBaht(n) {
         return Number(n || 0).toLocaleString('th-TH');
     }
-    function fdEscapeHtml(s) {
-        return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
+
+    function fdClampQtyInput(inp) {
+        var max = parseInt(inp.getAttribute('max') || '0', 10);
+        var min = parseInt(inp.getAttribute('min') || '0', 10);
+        var v = parseInt(inp.value || '0', 10);
+        if (isNaN(v)) v = min;
+        if (v < min) v = min;
+        if (max > 0 && v > max) v = max;
+        inp.value = String(v);
+        return v;
     }
 
-    function fdRenderImpactPreview() {
-        if (!impactRoot || !amtInput || !Array.isArray(needCatalog) || needCatalog.length === 0) return;
-        var amount = fdParseBahtAmount(amtInput.value);
-        if (!amount || isNaN(amount) || amount < 20) {
-            impactRoot.innerHTML =
-                '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
-                '<p class="fd-impact-preview__empty">กรอกจำนวนเงินอย่างน้อย 20 บาทเพื่อคำนวณรายการ</p>';
-            return;
-        }
-
-        var remain = amount;
+    function fdSyncPickerTotals() {
+        if (!pickerList) return 0;
+        var total = 0;
         var rows = [];
-        needCatalog.forEach(function (it) {
-            var price = Number(it.price || 0);
-            var maxQty = Math.floor(Number(it.qty_needed || 0));
-            if (price <= 0 || maxQty <= 0 || remain < price) return;
-            var buyQty = Math.min(maxQty, Math.floor(remain / price));
-            if (buyQty <= 0) return;
-            var cost = Math.round(buyQty * price * 100) / 100;
-            remain = Math.round((remain - cost) * 100) / 100;
-            rows.push({
-                name: String(it.name || 'รายการสิ่งของ'),
-                qty: buyQty,
-                cost: cost
-            });
+        pickerList.querySelectorAll('.fd-picker-row').forEach(function (row) {
+            var price = parseFloat(row.getAttribute('data-price') || '0');
+            var inp = row.querySelector('.fd-qty-input');
+            var lineEl = row.querySelector('.fd-picker-line-total');
+            if (!inp || price <= 0) return;
+            var qty = fdClampQtyInput(inp);
+            var line = Math.round(qty * price);
+            if (lineEl) lineEl.textContent = fdFormatBaht(line) + ' บาท';
+            row.classList.toggle('fd-picker-row--active', qty > 0);
+            if (qty > 0) {
+                total += line;
+                var nameEl = row.querySelector('.fd-picker-name');
+                rows.push({
+                    name: nameEl ? nameEl.textContent.trim() : 'รายการ',
+                    qty: qty,
+                    line: line
+                });
+            }
         });
-
-        if (rows.length === 0) {
-            impactRoot.innerHTML =
-                '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
-                '<p class="fd-impact-preview__empty">ยอดนี้ยังไม่เพียงพอสำหรับราคาต่อชิ้นของรายการที่มี</p>';
-            return;
+        if (totalEl) totalEl.textContent = fdFormatBaht(total);
+        if (amtInput) amtInput.value = String(total);
+        if (summaryList) {
+            if (rows.length === 0) {
+                summaryList.innerHTML = '';
+            } else {
+                summaryList.innerHTML = rows.map(function (r) {
+                    return '<li><span>' + r.name + ' × ' + r.qty + '</span><strong>' + fdFormatBaht(r.line) + ' บาท</strong></li>';
+                }).join('');
+            }
         }
-
-        var listHtml = rows.map(function (r) {
-            return '<li><span>' + fdEscapeHtml(r.name) + '</span><strong>' + fdFormatBaht(r.qty) + ' ชิ้น</strong></li>';
-        }).join('');
-        impactRoot.innerHTML =
-            '<div class="fd-impact-preview__title">สิ่งของที่คาดว่าจะซื้อได้จากยอดนี้</div>' +
-            '<ul class="fd-impact-preview__list">' + listHtml + '</ul>';
+        if (summaryHint) {
+            var maxB = fdGetMaxDonateBaht();
+            if (rows.length === 0) {
+                summaryHint.textContent = 'เลือกสิ่งของอย่างน้อย 1 รายการ (ขั้นต่ำรวม 20 บาท)';
+                summaryHint.classList.remove('fd-picker-summary-hint--warn');
+            } else if (total < 20) {
+                summaryHint.textContent = 'ยอดรวมต้องไม่ต่ำกว่า 20 บาท';
+                summaryHint.classList.add('fd-picker-summary-hint--warn');
+            } else if (maxB !== null && total > maxB) {
+                summaryHint.textContent = 'ยอดรวมเกินที่เหลือจะครบเป้าหมาย (' + fdFormatBaht(maxB) + ' บาท) — ลดจำนวนชิ้นลง';
+                summaryHint.classList.add('fd-picker-summary-hint--warn');
+            } else {
+                summaryHint.textContent = 'พร้อมชำระด้วย PromptPay QR';
+                summaryHint.classList.remove('fd-picker-summary-hint--warn');
+            }
+        }
+        if (donateBtn && !donateBtn.hasAttribute('data-force-disabled')) {
+            donateBtn.disabled = rows.length === 0 || total < 20 || (fdGetMaxDonateBaht() !== null && total > fdGetMaxDonateBaht());
+        }
+        return total;
     }
 
-    var maxB = fdGetMaxDonateBaht();
-    if (maxB !== null) {
-        document.querySelectorAll('#foundationDonateForm .amount-presets-grid .preset-btn[data-amt]').forEach(function (b) {
-            var v = parseInt(b.getAttribute('data-amt'), 10);
-            if (v > maxB) {
-                b.disabled = true;
-                b.style.opacity = '0.45';
-                b.title = 'เกินยอดที่เหลือจะครบเป้าหมาย';
+    if (pickerList) {
+        pickerList.addEventListener('click', function (e) {
+            var btn = e.target.closest('.fd-qty-btn');
+            if (!btn) return;
+            var wrap = btn.closest('.fd-picker-qty');
+            var inp = wrap ? wrap.querySelector('.fd-qty-input') : null;
+            if (!inp) return;
+            var delta = btn.classList.contains('fd-qty-plus') ? 1 : -1;
+            inp.value = String(fdClampQtyInput(inp) + delta);
+            fdSyncPickerTotals();
+        });
+        pickerList.addEventListener('input', function (e) {
+            if (e.target && e.target.classList.contains('fd-qty-input')) {
+                fdSyncPickerTotals();
             }
         });
-    }
-    if (amtInput) {
-        amtInput.addEventListener('input', fdRenderImpactPreview);
-        amtInput.addEventListener('change', fdRenderImpactPreview);
-    }
-    fdRenderImpactPreview();
-
-    (function fdInitNeedItemCarousels() {
-        document.querySelectorAll('.fd-item-carousel .fd-item-carousel-footer').forEach(function (footer) {
-            var carousel = footer.closest('.fd-item-carousel');
-            var vp = carousel ? carousel.querySelector('.fd-item-carousel-viewport') : null;
-            if (!carousel || !vp) return;
-            var dots = footer.querySelectorAll('.fd-item-carousel-dot');
-            var btnPrev = footer.querySelector('.fd-item-carousel-prev');
-            var btnNext = footer.querySelector('.fd-item-carousel-next');
-            function slideCount() {
-                return vp.querySelectorAll('.fd-item-carousel-slide').length;
+        pickerList.addEventListener('change', function (e) {
+            if (e.target && e.target.classList.contains('fd-qty-input')) {
+                fdSyncPickerTotals();
             }
-            function slideSpan() {
-                var w = vp.clientWidth;
-                return w > 0 ? w : 1;
-            }
-            function clampIdx(i) {
-                var n = slideCount();
-                if (n <= 0) return 0;
-                return ((i % n) + n) % n;
-            }
-            function syncDots(idx) {
-                dots.forEach(function (d, di) {
-                    var on = di === idx;
-                    d.classList.toggle('is-active', on);
-                    if (on) d.setAttribute('aria-current', 'true');
-                    else d.removeAttribute('aria-current');
-                });
-            }
-            function currentIdx() {
-                var sp = slideSpan();
-                return clampIdx(Math.round(vp.scrollLeft / sp));
-            }
-            function go(targetIdx) {
-                var n = slideCount();
-                if (n <= 1) return;
-                var idx = clampIdx(targetIdx);
-                vp.scrollTo({ left: idx * slideSpan(), behavior: 'smooth' });
-                syncDots(idx);
-            }
-            var scrollT = null;
-            vp.addEventListener('scroll', function () {
-                if (scrollT) window.cancelAnimationFrame(scrollT);
-                scrollT = window.requestAnimationFrame(function () {
-                    scrollT = null;
-                    syncDots(currentIdx());
-                });
-            }, { passive: true });
-            var resizeTO = null;
-            window.addEventListener('resize', function () {
-                if (resizeTO) window.clearTimeout(resizeTO);
-                resizeTO = window.setTimeout(function () {
-                    resizeTO = null;
-                    var ix = currentIdx();
-                    vp.scrollLeft = ix * slideSpan();
-                    syncDots(ix);
-                }, 120);
-            });
-            if (btnPrev) {
-                btnPrev.addEventListener('click', function () {
-                    go(currentIdx() - 1);
-                });
-            }
-            if (btnNext) {
-                btnNext.addEventListener('click', function () {
-                    go(currentIdx() + 1);
-                });
-            }
-            dots.forEach(function (dot) {
-                dot.addEventListener('click', function () {
-                    var raw = dot.getAttribute('data-slide-index');
-                    var i = raw == null ? NaN : parseInt(raw, 10);
-                    if (!isNaN(i)) go(i);
-                });
-            });
-            vp.addEventListener('keydown', function (e) {
-                if (e.key === 'ArrowLeft') {
-                    e.preventDefault();
-                    go(currentIdx() - 1);
-                } else if (e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    go(currentIdx() + 1);
-                }
-            });
-            syncDots(0);
         });
-    }());
+        fdSyncPickerTotals();
+    }
 });
 document.getElementById('foundationDonateForm').addEventListener('submit', function (e) {
-    var inp = document.getElementById('amountInput');
-    var n = inp ? fdParseBahtAmount(inp.value) : NaN;
+    var total = 0;
+    var pickerListEl = document.getElementById('fdItemPickerList');
+    var hasPick = false;
+    if (pickerListEl) {
+        pickerListEl.querySelectorAll('.fd-qty-input').forEach(function (inp) {
+            var qty = parseInt(inp.value || '0', 10);
+            var row = inp.closest('.fd-picker-row');
+            var price = row ? parseFloat(row.getAttribute('data-price') || '0') : 0;
+            if (!isNaN(qty) && qty > 0 && price > 0) {
+                hasPick = true;
+                total += Math.round(qty * price);
+            }
+        });
+    }
     var maxB = fdGetMaxDonateBaht();
-    if (inp && !isNaN(n) && n >= 20) {
-        if (maxB !== null && n > maxB) {
-            e.preventDefault();
-            alert('จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' + maxB.toLocaleString('th-TH') + ' บาท)');
-            inp.focus();
-            return;
-        }
-        inp.value = String(n);
+    var amtInput = document.getElementById('amountInput');
+    if (!hasPick) {
+        e.preventDefault();
+        alert('กรุณาเลือกสิ่งของอย่างน้อย 1 รายการ');
         return;
     }
-    if (!n || isNaN(n) || n < 20) {
+    if (total < 20) {
         e.preventDefault();
-        alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
-        if (inp) inp.focus();
+        alert('ยอดรวมจากสิ่งของที่เลือกต้องไม่ต่ำกว่า 20 บาท');
+        return;
     }
+    if (maxB !== null && total > maxB) {
+        e.preventDefault();
+        alert('ยอดรวมเกินยอดที่เหลือจะครบเป้าหมาย (' + maxB.toLocaleString('th-TH') + ' บาท) — ลดจำนวนชิ้นลง');
+        return;
+    }
+    if (amtInput) amtInput.value = String(total);
 });
 </script>
 </body>

@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน needlist view
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 
@@ -247,6 +244,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <?php if ($apLower === 'pending'): ?>
                     <p class="admin-review-actions-note">การไม่อนุมัติจะอัปเดตสถานะรายการในระบบ — มูลนิธิสามารถแก้ไขและส่งพิจารณาใหม่ได้</p>
                     <form method="post" action="admin_approve_needlist.php" class="admin-review-actions-form">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="item_id" value="<?= (int)$itemId ?>">
                         <div class="admin-review-actions-grid">
                             <textarea name="reject_note" placeholder="กรอกเหตุผลเมื่อไม่อนุมัติ"></textarea>

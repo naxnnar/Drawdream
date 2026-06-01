@@ -2,9 +2,6 @@
 // foundation_projects_directory.php — โครงการของมูลนิธิ (มุมมองตารางแบบแอดมิน)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') {

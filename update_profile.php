@@ -3,10 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน update profile
 
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
-
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
@@ -65,6 +61,7 @@ if ($role === 'foundation') {
 
 // อัปเดตข้อมูล
 if (isset($_POST['update'])) {
+    drawdream_csrf_require_valid('update_profile.php');
 
     // อัปโหลดรูปโปรไฟล์
     $newProfileImage = '';
@@ -257,6 +254,7 @@ if (isset($_POST['update'])) {
 
 <div class="edit-container">
     <form method="post" enctype="multipart/form-data">
+        <?= drawdream_csrf_field() ?>
 
         <?php if ($role === 'foundation'): ?>
             <div class="edit-header">

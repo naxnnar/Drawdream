@@ -1,11 +1,7 @@
 <?php
-// payment/abandon_qr.php — ยกเลิกสถานะ QR / payment ค้าง
-// สรุปสั้น: ยกเลิกรายการชำระที่ค้างอยู่และล้าง session pending ของผู้ใช้
-// POST: ยกเลิกรายการสแกน QR ที่ยังไม่ชำระ — ตั้งสถานะเป็น failed ไม่ใช้ pending ค้าง
+// payment/abandon_qr.php — ยกเลิก QR ค้าง (POST จาก scan_qr / check_*_payment)
+// Omise: POST /charges/{id}/expire (ปิด QR pending) + DELETE donation pending + ล้าง session
 declare(strict_types=1);
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 
@@ -17,6 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: ../project.php');
     exit;
 }
+
+drawdream_csrf_require_valid('../project.php');
 
 $uid = (int)$_SESSION['user_id'];
 $chargeId = trim((string)($_POST['charge_id'] ?? ''));

@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add children
 
-session_start();
 include 'db.php';
 
 // ให้เข้าได้เฉพาะ foundation
@@ -111,6 +110,7 @@ if ($isEditForm && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 
 if (isset($_POST['submit'])) {
+    drawdream_csrf_require_valid('foundation_add_children.php');
     $child_name    = trim($_POST['child_name'] ?? '');
     $birth_date_raw = trim($_POST['birth_date'] ?? '');
     $age           = 0;
@@ -313,6 +313,7 @@ if (isset($_POST['submit'])) {
     <!-- ── ขวา: ฟอร์ม ──────────────────────────── -->
     <div class="right-box">
         <form method="POST" enctype="multipart/form-data" id="mainForm" novalidate>
+            <?= drawdream_csrf_field() ?>
             <?php if ($isEditForm): ?>
                 <input type="hidden" name="child_id" value="<?= (int)$editChildId ?>">
             <?php endif; ?>

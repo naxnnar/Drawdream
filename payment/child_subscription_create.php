@@ -3,9 +3,6 @@
 // สรุปสั้น: สร้างแผนอุปการะเด็กรายรอบผ่าน Omise และบันทึกข้อมูลแผนลงระบบ
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 require_once dirname(__DIR__) . '/db.php';
 require_once __DIR__ . '/config.php';
 require_once dirname(__DIR__) . '/includes/omise_api_client.php';
@@ -113,6 +110,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: ../children_.php');
     exit;
 }
+
+drawdream_csrf_require_valid('../children_.php');
 
 $donorUid = (int)$_SESSION['user_id'];
 $childId = (int)($_POST['child_id'] ?? 0);

@@ -6,9 +6,6 @@
 // ------------------------------
 // Session and database bootstrap
 // ------------------------------
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php'; // เชื่อมต่อฐานข้อมูล
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
@@ -41,6 +38,10 @@ if ($role === 'foundation') {
 }
 
 if ($role === 'foundation' && isset($_POST['bulk_action'])) {
+  if (!drawdream_csrf_verify()) {
+    header('Location: children_.php?msg_icon=warning&msg=' . rawurlencode('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่'));
+    exit();
+  }
   if (!$foundationAccountVerified) {
     header('Location: children_.php?msg_icon=warning&msg=' . rawurlencode('บัญชีมูลนิธิยังรอการตรวจสอบจากผู้ดูแลระบบ จึงยังใช้งานฟีเจอร์นี้ไม่ได้'));
     exit();
@@ -276,6 +277,7 @@ if ($role === 'foundation') {
 
 <?php if ($role === 'foundation' && $foundationAccountVerified): ?>
 <form method="POST" id="bulkDeleteForm">
+  <?= drawdream_csrf_field() ?>
   <input type="hidden" name="bulk_action" id="bulkActionInput" value="delete">
 </form>
 <?php endif; ?>

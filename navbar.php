@@ -4,7 +4,10 @@
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน navbar
 
 if (session_status() === PHP_SESSION_NONE) {
-  @session_start();
+  require_once __DIR__ . '/includes/env_loader.php';
+  drawdream_load_env_file(__DIR__ . '/.env');
+  require_once __DIR__ . '/includes/session_init.php';
+  drawdream_session_start();
 }
 
 // นับรายการรออนุมัติ (เฉพาะ admin)
@@ -50,7 +53,7 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
 
     if ($hasNotificationsTable) {
       $stmtNotif = $conn->prepare(
-        "SELECT notif_id, title, message, link, created_at
+        "SELECT notif_id, title, message, link, created_at, is_read
          FROM notifications
          WHERE user_id = ?
          ORDER BY created_at DESC
@@ -176,6 +179,7 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
                   'message' => "มีเด็กที่มีผู้อุปการะแล้ว {$pendingCnt} รายการ รออัปเดตผลลัพธ์",
                   'link' => 'children_.php',
                   'created_at' => date('Y-m-d H:i:s'),
+                  'is_read' => 0,
                 ]);
                 $user_notif_count += 1;
               }
@@ -231,31 +235,10 @@ if ($is_logged_in && in_array($_SESSION['role'] ?? '', ['donor', 'foundation'], 
   }
 }
 
-// โหมดดูตัวอย่างผู้บริจาค (foundation เท่านั้น)
+// โหมดดูตัวอย่างผู้บริจาค — ลิงก์หลักไป preview_mode.php; รองรับ ?preview_mode= บนหน้าเดิม
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
 if (isset($_GET['preview_mode'])) {
-  if ($_GET['preview_mode'] === 'donor' && ($_SESSION['real_role'] ?? $_SESSION['role'] ?? '') === 'foundation') {
-    $_SESSION['real_role'] = 'foundation';
-    $_SESSION['role']      = 'donor';
-  } elseif ($_GET['preview_mode'] === 'exit' && isset($_SESSION['real_role'])) {
-    $_SESSION['role']      = $_SESSION['real_role'];
-    unset($_SESSION['real_role']);
-  }
-  $redirect = strtok((string)($_SERVER['REQUEST_URI'] ?? ''), '?') ?: '/';
-  while (ob_get_level() > 0) {
-    ob_end_clean();
-  }
-  if (!headers_sent()) {
-    header('Location: ' . $redirect);
-    exit();
-  }
-  // หน้าที่ส่ง HTML ก่อน include navbar (เช่น about.php) — redirect ฝั่ง client (อย่าใส่ DOCTYPE ซ้ำ)
-  $loc = htmlspecialchars($redirect, ENT_QUOTES, 'UTF-8');
-  $json = json_encode($redirect, JSON_UNESCAPED_SLASHES);
-  if ($json === false) {
-    $json = '"/"';
-  }
-  echo '<meta http-equiv="refresh" content="0;url=' . $loc . '"><script>location.replace(' . $json . ');</script>';
-  exit();
+  drawdream_foundation_preview_process_request();
 }
 
 $is_donor_preview = isset($_SESSION['real_role']) && $_SESSION['real_role'] === 'foundation';
@@ -386,7 +369,7 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 <?php if ($is_donor_preview): ?>
 <div class="donor-preview-banner">
   <span>&#128065; กำลังดูในโหมด <strong>มุมมองผู้บริจาค</strong> &mdash; เห็นเหมือนผู้บริจาคทั่วไป</span>
-  <a href="?preview_mode=exit" class="donor-preview-exit">✕ ออกจากโหมดดูตัวอย่าง</a>
+  <a href="<?= htmlspecialchars(drawdream_foundation_preview_exit_href($_nav_base), ENT_QUOTES, 'UTF-8') ?>" class="donor-preview-exit">✕ ออกจากโหมดดูตัวอย่าง</a>
 </div>
 <?php endif; ?>
 <?php if (!empty($foundation_account_pending)): ?>
@@ -421,7 +404,7 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
         <?php if (($_SESSION['real_role'] ?? '') === 'foundation'): ?>
           <!-- กำลังอยู่ในโหมดดูตัวอย่างผู้บริจาค -->
         <?php elseif (($_SESSION['role'] ?? '') === 'foundation'): ?>
-          <a href="?preview_mode=donor" class="donor-view-btn" title="ดูหน้าเว็บในมุมมองผู้บริจาค">
+          <a href="<?= htmlspecialchars(drawdream_foundation_preview_enter_href($_nav_base), ENT_QUOTES, 'UTF-8') ?>" class="donor-view-btn" title="ดูหน้าเว็บในมุมมองผู้บริจาค">
             <span class="donor-view-icon">&#128065;</span> มุมมองผู้บริจาค
           </a>
         <?php endif; ?>
@@ -451,18 +434,29 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
             <?php else: ?>
               <?php foreach ($user_notifs as $n): ?>
                 <?php
-                  $rawNotifLink = (string)($n['link'] ?? 'profile.php');
+                  $rawNotifLink = trim((string)($n['link'] ?? ''));
+                  if ($rawNotifLink === '') {
+                      $rawNotifLink = 'notifications.php';
+                  }
                   if (($n['title'] ?? '') === 'อัปเดตผลลัพธ์เด็กที่คุณอุปการะ'
                       && preg_match('#^children_donate\.php\?#', $rawNotifLink)
                       && strpos($rawNotifLink, 'view=outcome') === false) {
                       $rawNotifLink .= (str_contains($rawNotifLink, '?') ? '&' : '?') . 'view=outcome';
                   }
+                  $notifIdNav = (int)($n['notif_id'] ?? 0);
+                  if ($notifIdNav > 0) {
+                      $notifItemHref = $_nav_base . 'mark_notif_read.php?id=' . $notifIdNav
+                          . '&goto=' . rawurlencode($rawNotifLink);
+                  } else {
+                      $notifItemHref = $_nav_base . $rawNotifLink;
+                  }
+                  $notifUnread = (int)($n['is_read'] ?? 0) === 0;
                 ?>
-                <a href="<?= htmlspecialchars($_nav_base . $rawNotifLink, ENT_QUOTES, 'UTF-8') ?>"
-                   class="notif-item">
-                  <div class="notif-item-title"><?= htmlspecialchars($n['title']) ?></div>
-                  <div class="notif-item-msg"><?= htmlspecialchars($n['message']) ?></div>
-                  <div class="notif-item-time"><?= date('d/m/Y H:i', strtotime($n['created_at'])) ?></div>
+                <a href="<?= htmlspecialchars($notifItemHref, ENT_QUOTES, 'UTF-8') ?>"
+                   class="notif-item<?= $notifUnread ? ' unread' : '' ?>">
+                  <div class="notif-item-title"><?= htmlspecialchars((string)($n['title'] ?? '')) ?></div>
+                  <div class="notif-item-msg"><?= htmlspecialchars((string)($n['message'] ?? '')) ?></div>
+                  <div class="notif-item-time"><?= date('d/m/Y H:i', strtotime((string)($n['created_at'] ?? 'now'))) ?></div>
                 </a>
               <?php endforeach; ?>
             <?php endif; ?>
@@ -472,18 +466,14 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
       <?php endif; ?>
 
       <div class="nav-profile-wrap">
-        <a href="<?= $_nav_base ?>profile.php" class="profile-btn nav-profile-desktop-only" title="โปรไฟล์">
+        <button type="button" class="profile-btn" id="navProfileMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="navProfileMenu" title="เมนูบัญชี">
           <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="โปรไฟล์" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
-        </a>
-        <button type="button" class="profile-btn nav-profile-mobile-only" id="navProfileMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="navProfileMenu" title="เมนูบัญชี">
-          <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
         </button>
         <div class="nav-profile-menu" id="navProfileMenu" role="menu" hidden>
           <a href="<?= $_nav_base ?>profile.php" class="nav-profile-menu-item" role="menuitem">โปรไฟล์</a>
           <a href="<?= $_nav_base ?>logout.php" class="nav-profile-menu-item nav-profile-menu-logout" role="menuitem">ออกจากระบบ</a>
         </div>
       </div>
-      <a href="<?= $_nav_base ?>logout.php" class="logout-btn nav-logout-desktop-only">ออกจากระบบ</a>
 
     <?php else: ?>
       <a href="<?= $_nav_base ?>login.php" class="logout-btn">เข้าสู่ระบบ</a>

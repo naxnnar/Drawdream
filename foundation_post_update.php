@@ -4,7 +4,6 @@
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post update
 
 
-if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/notification_audit.php';
@@ -109,6 +108,7 @@ $error   = "";
 
 // ======== POST: บันทึก update ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
+    drawdream_csrf_require_valid('foundation_post_update.php');
     $project_id  = (int)($_POST['project_id'] ?? 0);
     $description = trim($_POST['description'] ?? '');
     $newImageNames = [];
@@ -286,6 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
                 </div>
             <?php endif; ?>
             <form method="POST" enctype="multipart/form-data">
+                <?= drawdream_csrf_field() ?>
                 <?php if ($locked_project): ?>
                     <!-- hidden field ส่ง project_id ไปเลย ไม่ต้องเลือก -->
                     <input type="hidden" name="project_id" value="<?= $locked_project['project_id'] ?>">

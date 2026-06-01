@@ -4,7 +4,6 @@
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน payment
 
 // ------------------------------
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
@@ -62,6 +61,7 @@ if (!drawdream_child_can_receive_donation($conn, $child_id, $childRow)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_paid'])) {
+    drawdream_csrf_require_valid('payment.php');
     $postedChildId = (int)($_POST['child_id'] ?? 0);
     $postedAmount = (float)($_POST['amount'] ?? 0);
     $postedAmount = max(0, $postedAmount);
@@ -128,6 +128,7 @@ $amountDisplay = ($amount >= 20)
     </div>
 
     <form method="post" class="mb-3">
+      <?= drawdream_csrf_field() ?>
       <input type="hidden" name="child_id" value="<?php echo (int)$child_id; ?>">
       <input type="hidden" name="amount" value="<?php echo htmlspecialchars((string)$amount); ?>">
       <button type="submit" name="confirm_paid" class="btn-attach-slip">ยืนยันการบริจาค</button>

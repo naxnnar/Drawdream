@@ -2,9 +2,6 @@
 // foundation_children_directory.php — รายการเด็กของมูลนิธิ (มุมมองตารางแบบแอดมิน)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 

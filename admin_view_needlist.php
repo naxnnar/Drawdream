@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view needlist
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/notification_audit.php';
@@ -83,6 +80,7 @@ if ($adminLineItems === [] && $foundationLineItems !== [] && ($apStatusView === 
 $adminItemNames = array_values(array_filter(array_map('trim', explode(',', (string)($row['item_name'] ?? '')))));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') === 'update_need_price') {
+    drawdream_csrf_require_valid('admin_view_needlist.php?id=' . (int)($_GET['id'] ?? $_POST['item_id'] ?? 0));
     $postedItemId     = (int)($_POST['item_id'] ?? 0);
     $foundationUserId = (int)($row['foundation_user_id'] ?? 0);
     $apStatus         = strtolower(trim((string)($row['approve_item'] ?? '')));
@@ -494,6 +492,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <span class="admin-need-price-chip">อัปเดตราคาล่าสุด: <?= htmlspecialchars($reviewPriceLabel, ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
                 <form method="post">
+                    <?= drawdream_csrf_field() ?>
                     <input type="hidden" name="action" value="update_need_price">
                     <input type="hidden" name="item_id" value="<?= (int)$itemId ?>">
                     <?php if (count($adminLineItems) > 0): ?>

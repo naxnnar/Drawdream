@@ -16,9 +16,6 @@ declare(strict_types=1);
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donation receipt
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/e_receipt.php';
 
@@ -174,7 +171,7 @@ if ($projectLabel !== '' && $projectLabel !== '-') {
         $targetLabel = trim((string)($t['project_name'] ?? ''));
     }
 } elseif ($needLabel !== '' && $needLabel !== '-') {
-    $categoryLabel = 'บริจาคสิ่งของ';
+    $categoryLabel = 'บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ';
     $stTarget = $conn->prepare('SELECT foundation_name FROM foundation_profile WHERE foundation_id = ? LIMIT 1');
     if ($stTarget) {
         $stTarget->bind_param('i', $targetId);

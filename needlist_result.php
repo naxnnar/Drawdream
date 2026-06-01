@@ -7,8 +7,6 @@ declare(strict_types=1);
 
 include 'db.php';
 
-session_start();
-
 $fid = (int)($_GET['fid'] ?? 0);
 if ($fid <= 0) {
     header('Location: foundation.php');

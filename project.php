@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project
 
-if (session_status() === PHP_SESSION_NONE) session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/project_donation_dates.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
@@ -30,6 +29,10 @@ if ($role === 'foundation' && isset($_SESSION['user_id'])) {
 }
 
 if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
+    if (!drawdream_csrf_verify()) {
+        header('Location: project.php?msg_icon=warning&msg=' . rawurlencode('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่'));
+        exit();
+    }
     if (!$is_verified) {
         header('Location: homepage.php?' . http_build_query(['msg' => 'บัญชีมูลนิธิของคุณยังรอการตรวจสอบจากผู้ดูแลระบบ จึงยังไม่สามารถใช้ฟีเจอร์นี้ได้']));
         exit();
@@ -596,6 +599,7 @@ if ($isFoundationOwnView) {
                         </div>
                         <div class="project-delete-wrap" data-allow-delete="<?= $allowDeleteCard ? '1' : '0' ?>">
                             <form method="POST" class="foundation-delete-form">
+                                <?= drawdream_csrf_field() ?>
                                 <input type="hidden" name="delete_project_id" value="<?= (int)$row['project_id'] ?>">
                                 <div class="foundation-delete-actions">
                                     <button type="submit" class="foundation-pill-confirm-delete">ยืนยันลบ</button>

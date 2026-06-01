@@ -2,9 +2,6 @@
 // foundation_dashboard.php — แดชบอร์ดมูลนิธิ (ยอดรวมเด็ก/โครงการ/สิ่งของ + ทางลัดรายงานเชิงวิเคราะห์)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/donate_type.php';
@@ -171,6 +168,23 @@ foreach ($donRows as $r) {
     }
 }
 
+$donationYears = [];
+foreach ($donRows as $r) {
+    $ts = trim((string)($r['transfer_datetime'] ?? ''));
+    if ($ts === '') {
+        continue;
+    }
+    $t = strtotime($ts);
+    if ($t !== false) {
+        $donationYears[(int)date('Y', $t)] = true;
+    }
+}
+$donationYears = array_keys($donationYears);
+rsort($donationYears, SORT_NUMERIC);
+if ($donationYears === []) {
+    $donationYears = [(int)date('Y')];
+}
+
 $cntChildProfiles = count($childMap);
 $cntProjects = count($projectMap);
 $stNeedCnt = $conn->prepare('SELECT COUNT(*) AS c FROM foundation_needlist WHERE foundation_id = ?');
@@ -329,7 +343,6 @@ function foundation_dashboard_plan_label(string $code): string
             <div class="admin-dir-actions" style="flex-shrink:0;">
                 <button type="button" class="admin-dir-btn admin-dir-btn--primary" data-view-tab="overview">กราฟ</button>
                 <button type="button" class="admin-dir-btn admin-dir-btn--analytics" data-view-tab="trends">ภาพรวม</button>
-                <a class="admin-dir-btn admin-dir-btn--ghost" href="foundation_analytics_report.php">รายงาน</a>
             </div>
         </div>
     </div>
@@ -411,6 +424,38 @@ function foundation_dashboard_plan_label(string $code): string
         </div>
     </div>
 
+    <div class="foundation-donation-date-filter" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+        <span style="font-size:.9rem;font-weight:600;color:#374151;">กรองตามวันที่</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;color:#475569;">
+            <span>ช่วง</span>
+            <select id="fdDateMode" class="foundation-date-filter-select" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem;background:#fff;">
+                <option value="all">ทั้งหมด</option>
+                <option value="day">รายวัน</option>
+                <option value="month">รายเดือน</option>
+                <option value="year">รายปี</option>
+            </select>
+        </label>
+        <span id="fdDateRangeWrap" class="foundation-date-range-wrap" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;color:#475569;">
+                <span>จาก</span>
+                <input type="date" id="fdDateFrom" class="foundation-date-filter-input" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem;">
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;color:#475569;">
+                <span>ถึง</span>
+                <input type="date" id="fdDateTo" class="foundation-date-filter-input" title="เว้นว่าง = วันเดียวกับ «จาก»" style="padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem;">
+            </label>
+            <span style="font-size:.8rem;color:#94a3b8;">เว้น «ถึง» = วันเดียว</span>
+        </span>
+        <input type="month" id="fdDateMonth" class="foundation-date-filter-input" style="display:none;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem;">
+        <select id="fdDateYear" class="foundation-date-filter-select" style="display:none;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem;background:#fff;">
+            <?php foreach ($donationYears as $y): ?>
+                <option value="<?= (int)$y ?>"><?= (int)$y + 543 ?> (<?= (int)$y ?>)</option>
+            <?php endforeach; ?>
+        </select>
+        <button type="button" id="fdDateClear" class="admin-dir-btn admin-dir-btn--ghost" style="display:none;">ล้างตัวกรองวันที่</button>
+        <span id="fdDateSummary" style="font-size:.86rem;color:#64748b;margin-left:auto;"></span>
+    </div>
+
     <div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 14px;">
         <button type="button" class="admin-dir-btn admin-dir-btn--primary" data-filter-cat="all">ทั้งหมด (<?= count($donRows) ?>)</button>
         <button type="button" class="admin-dir-btn admin-dir-btn--ghost" data-filter-cat="child">เด็ก (<?= $rowCountChild ?>)</button>
@@ -437,7 +482,11 @@ function foundation_dashboard_plan_label(string $code): string
             <?php else: ?>
                 <?php foreach ($donRows as $row):
                     $dtRaw = trim((string)($row['transfer_datetime'] ?? ''));
-                    $dtLabel = $dtRaw !== '' ? date('d/m/Y H:i:s', strtotime($dtRaw)) : '-';
+                    $dtTs = $dtRaw !== '' ? strtotime($dtRaw) : false;
+                    $dtLabel = $dtTs !== false ? date('d/m/Y H:i:s', $dtTs) : '-';
+                    $dataDonateDate = $dtTs !== false ? date('Y-m-d', $dtTs) : '';
+                    $dataDonateMonth = $dtTs !== false ? date('Y-m', $dtTs) : '';
+                    $dataDonateYear = $dtTs !== false ? date('Y', $dtTs) : '';
                     $fullName = trim((string)($row['first_name'] ?? '') . ' ' . (string)($row['last_name'] ?? ''));
                     if ($fullName === '') {
                         $fullName = trim((string)($row['donor_email'] ?? ''));
@@ -477,7 +526,10 @@ function foundation_dashboard_plan_label(string $code): string
                     }
                     $chargeId = trim((string)($row['omise_charge_id'] ?? ''));
                     ?>
-                    <tr data-cat="<?= htmlspecialchars($rowCat, ENT_QUOTES, 'UTF-8') ?>">
+                    <tr data-cat="<?= htmlspecialchars($rowCat, ENT_QUOTES, 'UTF-8') ?>"
+                        data-donate-date="<?= htmlspecialchars($dataDonateDate, ENT_QUOTES, 'UTF-8') ?>"
+                        data-donate-month="<?= htmlspecialchars($dataDonateMonth, ENT_QUOTES, 'UTF-8') ?>"
+                        data-donate-year="<?= htmlspecialchars($dataDonateYear, ENT_QUOTES, 'UTF-8') ?>">
                         <td><?= htmlspecialchars($dtLabel) ?></td>
                         <td><?= htmlspecialchars($fullName) ?></td>
                         <td><?= htmlspecialchars($channel) ?></td>
@@ -489,7 +541,7 @@ function foundation_dashboard_plan_label(string $code): string
                 <?php endforeach; ?>
             <?php endif; ?>
             <tr id="foundationDashboardNoRows" style="display:none;">
-                <td colspan="7" class="b--muted">ไม่มีข้อมูลในหมวดที่เลือก</td>
+                <td colspan="7" class="b--muted">ไม่มีข้อมูลตามเงื่อนไขที่เลือก</td>
             </tr>
             </tbody>
         </table>
@@ -566,26 +618,174 @@ function foundation_dashboard_plan_label(string $code): string
     const featurePanels = Array.from(document.querySelectorAll('[data-feature-panel]'));
     const rows = Array.from(document.querySelectorAll('tr[data-cat]'));
     const noRows = document.getElementById('foundationDashboardNoRows');
-    if (!buttons.length || !rows.length || !noRows) return;
+    const dateModeEl = document.getElementById('fdDateMode');
+    const dateRangeWrapEl = document.getElementById('fdDateRangeWrap');
+    const dateFromEl = document.getElementById('fdDateFrom');
+    const dateToEl = document.getElementById('fdDateTo');
+    const dateMonthEl = document.getElementById('fdDateMonth');
+    const dateYearEl = document.getElementById('fdDateYear');
+    const dateClearEl = document.getElementById('fdDateClear');
+    const dateSummaryEl = document.getElementById('fdDateSummary');
 
-    const setActive = (activeCat) => {
+    let activeCat = 'all';
+    let dateMode = 'all';
+    let dateValue = '';
+    let dateFrom = '';
+    let dateTo = '';
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const todayLocal = () => {
+        const d = new Date();
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+    };
+    const monthLocal = () => {
+        const d = new Date();
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1);
+    };
+
+    const setActive = (cat) => {
         buttons.forEach((btn) => {
-            const isActive = btn.getAttribute('data-filter-cat') === activeCat;
+            const isActive = btn.getAttribute('data-filter-cat') === cat;
             btn.classList.toggle('admin-dir-btn--primary', isActive);
             btn.classList.toggle('admin-dir-btn--ghost', !isActive);
         });
     };
 
-    const applyFilter = (cat) => {
+    const formatDayLabel = (ymd) => {
+        const p = (ymd || '').split('-');
+        if (p.length !== 3) {
+            return ymd;
+        }
+        return p[2] + '/' + p[1] + '/' + p[0];
+    };
+
+    const matchesDate = (row) => {
+        if (dateMode === 'all') {
+            return true;
+        }
+        if (dateMode === 'day') {
+            if (dateFrom === '' && dateTo === '') {
+                return true;
+            }
+            const d = row.getAttribute('data-donate-date') || '';
+            if (d === '') {
+                return false;
+            }
+            const from = dateFrom || dateTo;
+            const to = dateTo || dateFrom;
+            return d >= from && d <= to;
+        }
+        if (dateValue === '') {
+            return true;
+        }
+        if (dateMode === 'month') {
+            return (row.getAttribute('data-donate-month') || '') === dateValue;
+        }
+        if (dateMode === 'year') {
+            return (row.getAttribute('data-donate-year') || '') === dateValue;
+        }
+        return true;
+    };
+
+    const formatDateSummary = () => {
+        if (dateMode === 'all') {
+            return '';
+        }
+        if (dateMode === 'day') {
+            if (dateFrom === '' && dateTo === '') {
+                return '';
+            }
+            const from = dateFrom || dateTo;
+            const to = dateTo || dateFrom;
+            if (from === to) {
+                return 'วันที่ ' + formatDayLabel(from);
+            }
+            return 'ช่วง ' + formatDayLabel(from) + ' – ' + formatDayLabel(to);
+        }
+        if (dateValue === '') {
+            return '';
+        }
+        if (dateMode === 'month') {
+            const p = dateValue.split('-');
+            if (p.length === 2) {
+                return 'เดือน ' + p[1] + '/' + p[0];
+            }
+        }
+        if (dateMode === 'year') {
+            return 'ปี ' + dateValue + ' (พ.ศ. ' + (parseInt(dateValue, 10) + 543) + ')';
+        }
+        return '';
+    };
+
+    const syncDateInputsVisibility = () => {
+        if (!dateModeEl) {
+            return;
+        }
+        const mode = dateModeEl.value || 'all';
+        if (dateRangeWrapEl) dateRangeWrapEl.style.display = mode === 'day' ? 'flex' : 'none';
+        if (dateMonthEl) dateMonthEl.style.display = mode === 'month' ? '' : 'none';
+        if (dateYearEl) dateYearEl.style.display = mode === 'year' ? '' : 'none';
+        if (dateClearEl) dateClearEl.style.display = mode === 'all' ? 'none' : '';
+    };
+
+    const readDateFilter = () => {
+        if (!dateModeEl) {
+            dateMode = 'all';
+            dateValue = '';
+            return;
+        }
+        dateMode = dateModeEl.value || 'all';
+        if (dateMode === 'day') {
+            dateValue = '';
+            let from = dateFromEl ? (dateFromEl.value || '') : '';
+            let to = dateToEl ? (dateToEl.value || '') : '';
+            if (from !== '' && to !== '' && to < from) {
+                const swap = from;
+                from = to;
+                to = swap;
+                if (dateFromEl) dateFromEl.value = from;
+                if (dateToEl) dateToEl.value = to;
+            }
+            dateFrom = from;
+            dateTo = to;
+        } else if (dateMode === 'month' && dateMonthEl) {
+            dateFrom = '';
+            dateTo = '';
+            dateValue = dateMonthEl.value || '';
+        } else if (dateMode === 'year' && dateYearEl) {
+            dateValue = dateYearEl.value || '';
+        } else {
+            dateValue = '';
+            dateFrom = '';
+            dateTo = '';
+        }
+    };
+
+    const applyFilter = () => {
+        if (!noRows) {
+            return;
+        }
         let visible = 0;
         rows.forEach((row) => {
             const rowCat = row.getAttribute('data-cat') || '';
-            const show = (cat === 'all') || (rowCat === cat);
+            const catOk = activeCat === 'all' || rowCat === activeCat;
+            const dateOk = matchesDate(row);
+            const show = catOk && dateOk;
             row.style.display = show ? '' : 'none';
-            if (show) visible++;
+            if (show) {
+                visible++;
+            }
         });
-        noRows.style.display = visible > 0 ? 'none' : '';
-        setActive(cat);
+        noRows.style.display = (rows.length > 0 && visible === 0) ? '' : 'none';
+        setActive(activeCat);
+        if (dateSummaryEl) {
+            const period = formatDateSummary();
+            if (period === '') {
+                dateSummaryEl.textContent = rows.length > 0 ? 'แสดงทุกวันที่ (สูงสุด ' + rows.length + ' รายการล่าสุด)' : '';
+            } else {
+                dateSummaryEl.textContent = period + ' · แสดง ' + visible + ' รายการ';
+            }
+        }
     };
 
     const showFeaturePanel = (cat) => {
@@ -607,12 +807,63 @@ function foundation_dashboard_plan_label(string $code): string
         });
     };
 
-    buttons.forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const cat = btn.getAttribute('data-filter-cat') || 'all';
-            applyFilter(cat);
+    if (dateFromEl && !dateFromEl.value) {
+        dateFromEl.value = todayLocal();
+    }
+    if (dateMonthEl && !dateMonthEl.value) {
+        dateMonthEl.value = monthLocal();
+    }
+
+    if (dateModeEl) {
+        dateModeEl.addEventListener('change', () => {
+            const mode = dateModeEl.value || 'all';
+            if (mode === 'day' && dateFromEl && !dateFromEl.value) {
+                dateFromEl.value = todayLocal();
+            }
+            if (mode === 'month' && dateMonthEl && !dateMonthEl.value) {
+                dateMonthEl.value = monthLocal();
+            }
+            syncDateInputsVisibility();
+            readDateFilter();
+            applyFilter();
+        });
+    }
+    [dateFromEl, dateToEl, dateMonthEl, dateYearEl].forEach((el) => {
+        if (!el) {
+            return;
+        }
+        el.addEventListener('change', () => {
+            readDateFilter();
+            applyFilter();
         });
     });
+    if (dateClearEl) {
+        dateClearEl.addEventListener('click', () => {
+            if (dateModeEl) {
+                dateModeEl.value = 'all';
+            }
+            dateMode = 'all';
+            dateValue = '';
+            dateFrom = '';
+            dateTo = '';
+            if (dateFromEl) dateFromEl.value = '';
+            if (dateToEl) dateToEl.value = '';
+            syncDateInputsVisibility();
+            applyFilter();
+        });
+    }
+    syncDateInputsVisibility();
+
+    buttons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            activeCat = btn.getAttribute('data-filter-cat') || 'all';
+            applyFilter();
+        });
+    });
+
+    if (buttons.length && rows.length) {
+        applyFilter();
+    }
 
     tabButtons.forEach((btn) => {
         btn.addEventListener('click', () => {

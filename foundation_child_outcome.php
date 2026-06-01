@@ -4,7 +4,6 @@
 /**
  * มูลนิธิ: อัปเดตข้อความผลลัพธ์ให้เด็กที่อุปการะครบยอดในเดือนปัจจุบัน หรือมีผู้อุปการะแบบรายรอบ (Omise) แล้ว
  */
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/utf8_helpers.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
@@ -128,6 +127,7 @@ function drawdream_outcome_upload_ext(string $tmpPath, int $maxBytes): ?string
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$success) {
+    drawdream_csrf_require_valid('foundation_child_outcome.php?id=' . (int)$childId);
     $text = trim((string)($_POST['outcome_text'] ?? ''));
     // บางเครื่องยังเป็น utf8mb3: ตัดอักขระ 4-byte (เช่น emoji) เพื่อกัน SQL collation/charset exception
     $text = (string)preg_replace('/[\x{10000}-\x{10FFFF}]/u', '', $text);
@@ -294,6 +294,7 @@ $childName = htmlspecialchars($child['child_name'] ?? '');
         </div>
 
         <form method="post" action="foundation_child_outcome.php?id=<?php echo (int)$childId; ?>" enctype="multipart/form-data">
+            <?= drawdream_csrf_field() ?>
             <input type="hidden" name="child_id" value="<?php echo (int)$childId; ?>">
             <div class="form-group">
                 <label for="outcome_text">คำอธิบายผลลัพธ์ *</label>

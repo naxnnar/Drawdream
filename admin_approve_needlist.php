@@ -3,7 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve needlist
 
-session_start();
 include 'db.php';
 
 if (!isset($_SESSION['email'])) {
@@ -69,6 +68,7 @@ function admin_needlist_pricing_from_post(array $lineItems, array $post, array $
 
 // อนุมัติ/ปฏิเสธ
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    drawdream_csrf_require_valid('admin_approve_needlist.php');
     $item_id = (int)($_POST['item_id'] ?? 0);
     $action  = $_POST['action'] ?? '';
     $rejectNote = trim((string)($_POST['reject_note'] ?? ''));
@@ -334,6 +334,7 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
                 $foundationNote = trim((string)($row['note'] ?? ''));
             ?>
             <form class="need-approve-card" method="post">
+                <?= drawdream_csrf_field() ?>
                 <input type="hidden" name="item_id" value="<?= (int)$row['item_id'] ?>">
 
                 <div class="need-approve-card__head">

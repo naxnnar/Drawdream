@@ -3,9 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post needlist result
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include 'db.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';
 require_once __DIR__ . '/includes/utf8_helpers.php';
@@ -64,6 +61,7 @@ $success = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resultReady) {
+    drawdream_csrf_require_valid('foundation_post_needlist_result.php?item_id=' . (int)$itemId);
     $description = trim((string)($_POST['outcome_text'] ?? ''));
     $newImageNames = [];
     $uploadDir = __DIR__ . '/uploads/evidence';
@@ -231,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
             </div>
             <p style="color:#666;font-size:0.95rem;margin-bottom:1rem;">ข้อความและรูปจะแสดงในหน้า <a href="needlist_result.php?fid=<?= (int)$fid ?>">ผลลัพธ์ของมูลนิธิ (สาธารณะ)</a></p>
             <form method="POST" enctype="multipart/form-data">
+                <?= drawdream_csrf_field() ?>
                 <div class="form-group">
                     <label for="outcome_text">คำอธิบายผลลัพธ์ *</label>
                     <textarea id="outcome_text" name="outcome_text" placeholder="เช่น ภาพบรรยากาศการมอบสิ่งของ หรือสรุปผลการดำเนินการ"><?= htmlspecialchars($prefillDesc) ?></textarea>

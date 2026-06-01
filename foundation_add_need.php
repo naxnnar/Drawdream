@@ -3,11 +3,6 @@
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add need
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';
@@ -70,34 +65,7 @@ if ($isCreateModeLocked && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 $error   = "";
 $success = "";
 
-$itemCategories = [
-    'อุปโภคบริโภค (ของกิน-ของใช้ประจำวัน)',
-    'สุขภาพและเวชภัณฑ์พื้นฐาน',
-    'เสื้อผ้าและเครื่องนุ่งห่ม',
-    'อุปกรณ์ไฟฟ้าและไอที',
-    'อื่นๆ ที่จำเป็นเฉพาะทาง'
-];
-
-$categoryItems = [
-    'อุปโภคบริโภค (ของกิน-ของใช้ประจำวัน)' => [
-        'ข้าวสาร', 'บะหมี่กึ่งสำเร็จรูป', 'ปลากระป๋อง', 'นมกล่อง UHT', 'น้ำมันพืช', 'เครื่องปรุงรส',
-        'สบู่', 'ยาสีฟัน', 'แปรงสีฟัน', 'แชมพู', 'ผ้าอนามัย', 'แพมเพิส', 'กระดาษทิชชู่', 'น้ำดื่มบรรจุขวด'
-    ],
-    'สุขภาพและเวชภัณฑ์พื้นฐาน' => [
-        'ยาพาราเซตามอล', 'ยาแก้ไอ', 'ผงเกลือแร่ ORS', 'ยาใส่แผล',
-        'สำลี', 'แอลกอฮอล์ล้างแผล', 'พลาสเตอร์ปิดแผล', 'หน้ากากอนามัย',
-        'รถเข็นผู้ป่วย', 'แผ่นรองซับ'
-    ],
-    'เสื้อผ้าและเครื่องนุ่งห่ม' => [
-        'เสื้อยืด', 'กางเกงขาสั้น', 'กางเกงขายาว', 'กางเกงในใหม่', 'เสื้อซับใหม่',
-        'ผ้าห่ม', 'เสื้อกันหนาว', 'หมวกไหมพรม'
-    ],
-    'อุปกรณ์ไฟฟ้าและไอที' => [
-        'คอมพิวเตอร์หรือโน้ตบุ๊ก', 'แท็บเล็ตเพื่อการเรียน', 'พัดลม', 'หม้อหุงข้าว', 'กระติกน้ำร้อน'
-    ],
-    /* หมวดนี้ไม่มีรายการตายตัว — ใช้ช่อง «ระบุเอง (อื่นๆ)» ด้านล่าง (สูงสุด 5 ช่อง รวมกับตามหมวดไม่เกิน 5 รายการ) */
-    'อื่นๆ ที่จำเป็นเฉพาะทาง' => [],
-];
+require_once __DIR__ . '/includes/needlist_category_catalog.php';
 
 /**
  * Parse legacy/new list fields into unique trimmed tokens.
@@ -246,20 +214,7 @@ if ($editRow && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
         if ($rowPrice <= 0) {
             $rowPrice = $priceFromDb;
         }
-        $matchedCategory = '';
-        foreach ($categoryItems as $catName => $optList) {
-            if (in_array($itemName, $optList, true)) {
-                $matchedCategory = $catName;
-                break;
-            }
-        }
-        if ($matchedCategory === '') {
-            if ($rowCat !== '') {
-                $matchedCategory = $rowCat;
-            } else {
-                $matchedCategory = $cats[0] ?? 'อื่นๆ ที่จำเป็นเฉพาะทาง';
-            }
-        }
+        $matchedCategory = drawdream_needlist_resolve_item_category($itemName, $rowCat);
         $_POST['item_category_' . $slotIdx] = $matchedCategory;
         if (in_array($itemName, $categoryItems[$matchedCategory] ?? [], true)) {
             $_POST['item_option_' . $slotIdx] = $itemName;
@@ -292,6 +247,7 @@ if ($editRow && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 }
 
 if (isset($_POST['submit'])) {
+    drawdream_csrf_require_valid('foundation_add_need.php');
     $itemIdEdit = (int)($_POST['item_id'] ?? 0);
     if ($itemIdEdit <= 0) {
         $blockPost = drawdream_foundation_needlist_propose_blocked($conn, $foundation_id);
@@ -753,7 +709,7 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle) ?> | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/foundation.css?v=29">
+    <link rel="stylesheet" href="css/foundation.css?v=30">
 </head>
 <body class="foundation-add-need-page">
 
@@ -777,6 +733,7 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
     <?php endif; ?>
 
     <form method="post" enctype="multipart/form-data">
+        <?= drawdream_csrf_field() ?>
         <?php if ($hiddenItemId > 0): ?>
         <input type="hidden" name="item_id" value="<?= (int)$hiddenItemId ?>">
         <?php endif; ?>
