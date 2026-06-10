@@ -1,11 +1,35 @@
 <?php
 // includes/qr_payment_abandon.php — ล้าง session QR payment ค้าง
-// สรุปสั้น: ปิด/ยกเลิกรายการ QR ที่ค้าง เพื่อไม่ให้ยอด pending สะสมผิด
-// ยกเลิก QR ที่ยังไม่ชำระ: ใช้ donation ตารางเดียว
+// ยกเลิก QR: (1) Omise POST /charges/{id}/expire ถ้ายัง pending (2) DELETE donation pending (3) ล้าง session
+// ไม่ใช่ void/refund — charge ที่ชำระสำเร็จแล้วต้องใช้ flow คืนเงินแยก
 
 declare(strict_types=1);
 
 require_once __DIR__ . '/payment_transaction_schema.php';
+
+/**
+ * เรียก Omise expire สำหรับ charge ที่ยกเลิก (best-effort — ลบแถว DB ต่อแม้ expire ล้มเหลว)
+ */
+function drawdream_qr_abandon_expire_omise_charge(string $chargeId): void
+{
+    $chargeId = trim($chargeId);
+    if ($chargeId === '') {
+        return;
+    }
+    if (!function_exists('drawdream_omise_expire_pending_charge')) {
+        require_once __DIR__ . '/../payment/config.php';
+        require_once __DIR__ . '/../payment/omise_helpers.php';
+    }
+    $res = drawdream_omise_expire_pending_charge($chargeId);
+    if (empty($res['ok'])) {
+        error_log(
+            '[drawdream_qr_abandon] Omise expire failed for '
+            . $chargeId
+            . ': '
+            . (string)($res['message'] ?? 'unknown')
+        );
+    }
+}
 
 /**
  * ลบค่า session ที่ผูกกับหน้าสแกน QR (โครงการ / เด็ก / มูลนิธิ-สิ่งของ)
@@ -103,6 +127,7 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
     if ($rowDonorId !== $donorUserId) {
         return 0;
     }
+    drawdream_qr_abandon_expire_omise_charge($chargeId);
     $del = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND payment_status = ?');
     $del->bind_param('is', $donateId, $pend);
     $del->execute();
@@ -118,6 +143,21 @@ function drawdream_abandon_all_pending_qr_for_donor(mysqli $conn, int $donorUser
         return 0;
     }
     drawdream_payment_transaction_ensure_schema($conn);
+
+    $list = $conn->prepare(
+        'SELECT omise_charge_id FROM donation
+         WHERE payment_status = ? AND donor_id = ?
+           AND omise_charge_id IS NOT NULL AND omise_charge_id <> \'\''
+    );
+    $pend = 'pending';
+    $list->bind_param('si', $pend, $donorUserId);
+    $list->execute();
+    $charges = $list->get_result();
+    if ($charges) {
+        while ($cr = $charges->fetch_assoc()) {
+            drawdream_qr_abandon_expire_omise_charge((string)($cr['omise_charge_id'] ?? ''));
+        }
+    }
 
     $st1 = $conn->prepare(
         'DELETE FROM donation
@@ -144,7 +184,9 @@ function drawdream_safe_payment_return_url(string $raw, string $fallback): strin
     if (strpbrk($t, "\r\n\t\x00") !== false) {
         return $fallback;
     }
-    if (!preg_match('#^(?:\.\./)+[a-zA-Z0-9_./?=&\-#]+$#', $t) && !preg_match('#^[a-zA-Z0-9_./?=&\-#]+$#', $t)) {
+    $relativeOk = preg_match('~^(?:\.\./)+[a-zA-Z0-9_./?=&%\-]+$~', $t) === 1;
+    $rootOk = preg_match('~^[a-zA-Z0-9_./?=&%\-]+$~', $t) === 1;
+    if (!$relativeOk && !$rootOk) {
         return $fallback;
     }
 

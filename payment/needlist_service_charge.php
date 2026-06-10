@@ -2,13 +2,11 @@
 // payment/needlist_service_charge.php — สร้าง QR ชำระค่าบริการระบบรายการสิ่งของ (มูลนิธิ)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/omise_helpers.php';
 drawdream_ensure_needlist_schema($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
@@ -134,6 +132,15 @@ $_SESSION['pending_sc_amount'] = $amount;
 $_SESSION['pending_sc_qr_image'] = $qr_image;
 $_SESSION['pending_sc_foundation_id'] = $foundationId;
 $_SESSION['pending_sc_item_name'] = $itemName;
+
+if (drawdream_foundation_service_charge_skip_qr_after_pay($charge_id)) {
+    drawdream_foundation_service_charge_auto_mark_on_pay($charge_id);
+    header(
+        'Location: check_needlist_service_charge_payment.php?item_id=' . $itemId
+        . '&charge_id=' . rawurlencode($charge_id)
+    );
+    exit();
+}
 
 header(
     'Location: needlist_service_charge_qr.php?item_id=' . $itemId

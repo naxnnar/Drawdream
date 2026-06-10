@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_project_view.php — มูลนิธิดูรายละเอียดโครงการ (อ่านอย่างเดียว) ข้อมูลที่กรอกครบเหมือนหน้าเสนอโครงการ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน project view
@@ -34,7 +34,7 @@ if ($projectId <= 0) {
 }
 
 $st = $conn->prepare(
-    'SELECT * FROM foundation_project WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL LIMIT 1'
+    'SELECT * FROM foundation_project WHERE project_id = ? AND foundation_name = ? LIMIT 1'
 );
 $st->bind_param('is', $projectId, $foundationName);
 $st->execute();
@@ -79,7 +79,7 @@ $remainingToGoal = ($goal > 0) ? max(0.0, $goal - $raised) : 0.0;
 if ($goal > 0 && $raised >= $goal - 1e-6) {
     drawdream_project_sync_service_charge_for_project($conn, $projectId);
     $stRefresh = $conn->prepare(
-        'SELECT service_charge, service_charge_paid_at FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1'
+        'SELECT service_charge, service_charge_paid_at FROM foundation_project WHERE project_id = ? LIMIT 1'
     );
     if ($stRefresh) {
         $stRefresh->bind_param('i', $projectId);
@@ -142,7 +142,7 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>รายละเอียดโครงการ — <?= $pageTitle ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/project.css?v=41">

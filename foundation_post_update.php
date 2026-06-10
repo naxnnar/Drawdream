@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_post_update.php — โพสต์อัปเดตความคืบหน้าโครงการ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post update
@@ -58,7 +58,7 @@ if ($locked_project_id > 0) {
         $lk = $conn->prepare("
             SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
             FROM foundation_project 
-            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('purchasing','done') AND deleted_at IS NULL
+            WHERE project_id = ? AND foundation_name = ? AND project_status IN ('purchasing','done')
             LIMIT 1
         ");
         $lk->bind_param("is", $locked_project_id, $foundation['foundation_name']);
@@ -69,7 +69,7 @@ if ($locked_project_id > 0) {
         $lk = $conn->prepare("
             SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
             FROM foundation_project 
-            WHERE project_id = ? AND project_status IN ('purchasing','done') AND deleted_at IS NULL
+            WHERE project_id = ? AND project_status IN ('purchasing','done')
             LIMIT 1
         ");
         $lk->bind_param("i", $locked_project_id);
@@ -90,7 +90,7 @@ if ($locked_project_id > 0 && $locked_project) {
     $stmt2 = $conn->prepare("
         SELECT project_id, project_name, current_donate, goal_amount, project_status, end_date, update_text, update_images
         FROM foundation_project 
-        WHERE foundation_id = ? AND project_status IN ('purchasing','done') AND deleted_at IS NULL
+        WHERE foundation_id = ? AND project_status IN ('purchasing','done')
         ORDER BY project_id DESC
     ");
     $stmt2->bind_param("i", $fid);
@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
     $chk = $conn->prepare("
         SELECT project_id, project_name, goal_amount, current_donate, project_status, end_date, update_images
         FROM foundation_project
-        WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL
+        WHERE project_id = ? AND foundation_name = ?
     ");
     $chk->bind_param("is", $project_id, $foundation['foundation_name']);
     $chk->execute();
@@ -178,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
                 SET update_text = ?, update_at = NOW(), update_images = ?
                 WHERE project_id = ? AND foundation_name = ?
                   AND LOWER(TRIM(COALESCE(project_status,''))) IN ('purchasing','done')
-                  AND deleted_at IS NULL
+                 
                 LIMIT 1
             ");
             $stmt3->bind_param("ssis", $description, $finalImagesJson, $project_id, $foundation['foundation_name']);
@@ -222,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>อัปเดตโครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css">

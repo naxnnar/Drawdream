@@ -72,6 +72,12 @@ function drawdream_child_persist_subscription_paid_charge(
     $chk->bind_param('ss', $chargeId, $completed);
     $chk->execute();
     if ($chk->get_result()->fetch_row()) {
+        if (!function_exists('drawdream_child_sync_sponsorship_status')) {
+            require_once __DIR__ . '/child_sponsorship.php';
+        }
+        if (function_exists('drawdream_child_sync_sponsorship_status')) {
+            drawdream_child_sync_sponsorship_status($conn, $childId);
+        }
         return false;
     }
     $amountBaht = $amountSatang / 100.0;
@@ -124,6 +130,18 @@ function drawdream_child_persist_subscription_paid_charge(
     $scheduleIdForLog = $scheduleId;
     $planCodeForLog = $planCode;
     if ($ok) {
+        $nextChargeSql = null;
+        if ($planCodeForLog !== '' && function_exists('drawdream_child_subscription_plan')) {
+            $spec = drawdream_child_subscription_plan($planCodeForLog);
+            if (is_array($spec) && function_exists('drawdream_subscription_next_charge_at')) {
+                $anchor = new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok'));
+                $billDay = drawdream_subscription_safe_bill_day($anchor);
+                $nextChargeSql = drawdream_subscription_next_charge_at($anchor, $spec, $billDay)->format('Y-m-d H:i:s');
+            }
+        }
+        if ($scheduleIdForLog === null || trim((string)$scheduleIdForLog) === '') {
+            $scheduleIdForLog = 'local_cron_' . bin2hex(random_bytes(8));
+        }
         drawdream_child_subscription_history_log(
             $conn,
             $childId,
@@ -137,7 +155,9 @@ function drawdream_child_persist_subscription_paid_charge(
             $planCodeForLog !== '' ? $planCodeForLog : null,
             $amountBaht,
             $sourceChannel,
-            'persist_subscription_paid_charge'
+            'persist_subscription_paid_charge',
+            null,
+            $nextChargeSql !== null ? ['next_charge_at' => $nextChargeSql] : null
         );
     }
     if ($ok && !function_exists('drawdream_child_sync_sponsorship_status')) {
@@ -149,15 +169,20 @@ function drawdream_child_persist_subscription_paid_charge(
     return $ok;
 }
 
-function drawdream_child_has_active_omise_subscription(mysqli $conn, int $childId, int $donorUserId): bool
+function drawdream_child_subscription_history_activate_paid_row(mysqli $conn, int $childId, int $donorUserId): bool
 {
     if ($childId <= 0 || $donorUserId <= 0) {
         return false;
     }
-    drawdream_child_omise_subscription_ensure_schema($conn);
+    if (!drawdream_donor_has_child_subscription_payment($conn, $donorUserId, $childId)) {
+        return false;
+    }
+    $status = drawdream_child_donor_latest_subscription_status($conn, $childId, $donorUserId);
+    if ($status === 'active' || in_array($status, ['cancelled', 'cancle', 'canceled'], true)) {
+        return false;
+    }
     $st = $conn->prepare(
-        "SELECT current_status
-         FROM child_subscription_history
+        "SELECT history_id FROM child_subscription_history
          WHERE child_id = ? AND donor_user_id = ?
          ORDER BY history_id DESC
          LIMIT 1"
@@ -168,7 +193,151 @@ function drawdream_child_has_active_omise_subscription(mysqli $conn, int $childI
     $st->bind_param('ii', $childId, $donorUserId);
     $st->execute();
     $row = $st->get_result()->fetch_assoc();
-    return strtolower(trim((string)($row['current_status'] ?? ''))) === 'active';
+    $historyId = (int)($row['history_id'] ?? 0);
+    if ($historyId <= 0) {
+        return false;
+    }
+    $upd = $conn->prepare(
+        "UPDATE child_subscription_history
+         SET current_status = 'active',
+             event_type = CASE
+                 WHEN event_type IS NULL OR TRIM(event_type) = '' OR event_type = 'subscription_reserving'
+                 THEN 'subscription_created'
+                 ELSE event_type
+             END
+         WHERE history_id = ?
+         LIMIT 1"
+    );
+    if (!$upd) {
+        return false;
+    }
+    $upd->bind_param('i', $historyId);
+
+    return $upd->execute() && $upd->affected_rows >= 0;
+}
+
+function drawdream_donor_ensure_active_subscription_record(mysqli $conn, int $donorUserId, int $childId): void
+{
+    if ($donorUserId <= 0 || $childId <= 0) {
+        return;
+    }
+    drawdream_child_subscription_history_ensure_schema($conn);
+    drawdream_child_subscription_history_activate_paid_row($conn, $childId, $donorUserId);
+    if (function_exists('drawdream_child_subscription_history_backfill_active_row')) {
+        drawdream_child_subscription_history_backfill_active_row($conn, $childId, $donorUserId);
+    }
+    drawdream_repair_donor_subscription_history_if_missing($conn, $donorUserId, $childId);
+}
+
+function drawdream_child_donor_latest_subscription_status(mysqli $conn, int $childId, int $donorUserId): string
+{
+    if ($childId <= 0 || $donorUserId <= 0) {
+        return '';
+    }
+    $st = $conn->prepare(
+        "SELECT current_status
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ?
+         ORDER BY history_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return '';
+    }
+    $st->bind_param('ii', $childId, $donorUserId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+
+    return strtolower(trim((string)($row['current_status'] ?? '')));
+}
+
+function drawdream_donor_has_child_subscription_payment(mysqli $conn, int $donorUserId, int $childId): bool
+{
+    if ($donorUserId <= 0 || $childId <= 0) {
+        return false;
+    }
+    $st = $conn->prepare(
+        "SELECT 1 FROM donation
+         WHERE donor_id = ? AND target_id = ? AND payment_status = 'completed'
+           AND COALESCE(donate_type, '') IN ('child_subscription', 'child_subscription_charge')
+         LIMIT 1"
+    );
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('ii', $donorUserId, $childId);
+    $st->execute();
+
+    return (bool)$st->get_result()->fetch_row();
+}
+
+/** ผู้บริจาคควรเห็นปุ่มยกเลิกอุปการะ (แผนรายเดือน / 6 เดือน / รายปี ที่ยัง active) */
+function drawdream_donor_should_show_cancel_subscription(mysqli $conn, int $donorUserId, int $childId): bool
+{
+    if ($donorUserId <= 0 || $childId <= 0) {
+        return false;
+    }
+    drawdream_donor_ensure_active_subscription_record($conn, $donorUserId, $childId);
+    $status = drawdream_child_donor_latest_subscription_status($conn, $childId, $donorUserId);
+    if ($status === 'active') {
+        return true;
+    }
+    if (in_array($status, ['cancelled', 'cancle', 'canceled'], true)) {
+        return false;
+    }
+    if (!drawdream_donor_has_child_subscription_payment($conn, $donorUserId, $childId)) {
+        return false;
+    }
+    drawdream_donor_ensure_active_subscription_record($conn, $donorUserId, $childId);
+
+    return drawdream_child_donor_latest_subscription_status($conn, $childId, $donorUserId) === 'active';
+}
+
+/**
+ * ข้อมูลแผนอุปการะ active ของผู้บริจาคกับเด็กคนนี้ (หน้าโปรไฟล์เด็ก)
+ *
+ * @return array<string,mixed>|null
+ */
+function drawdream_donor_active_child_subscription_for_child(mysqli $conn, int $donorUserId, int $childId): ?array
+{
+    if (!drawdream_donor_should_show_cancel_subscription($conn, $donorUserId, $childId)) {
+        return null;
+    }
+    $st = $conn->prepare(
+        "SELECT donate_id AS id, recurring_plan_code AS plan_code,
+                recurring_next_charge_at AS next_charge_at, current_status AS status, amount_baht
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ?
+           AND LOWER(TRIM(COALESCE(current_status, ''))) = 'active'
+         ORDER BY history_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return null;
+    }
+    $st->bind_param('ii', $childId, $donorUserId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    if (!is_array($row)) {
+        return null;
+    }
+    $spec = drawdream_child_subscription_plan((string)($row['plan_code'] ?? ''));
+    $row['amount_thb'] = (float)($row['amount_baht'] ?? 0);
+    if ($row['amount_thb'] <= 0 && is_array($spec)) {
+        $row['amount_thb'] = (float)($spec['amount_thb'] ?? 0);
+    }
+
+    return $row;
+}
+
+function drawdream_child_has_active_omise_subscription(mysqli $conn, int $childId, int $donorUserId): bool
+{
+    if ($childId <= 0 || $donorUserId <= 0) {
+        return false;
+    }
+    drawdream_child_omise_subscription_ensure_schema($conn);
+
+    return drawdream_child_donor_latest_subscription_status($conn, $childId, $donorUserId) === 'active';
 }
 
 function drawdream_child_has_any_active_subscription(mysqli $conn, int $childId): bool
@@ -186,7 +355,7 @@ function drawdream_child_has_any_active_subscription(mysqli $conn, int $childId)
             WHERE child_id = ?
             GROUP BY donor_user_id
          ) x ON x.max_history_id = h.history_id
-         WHERE h.current_status = 'active'
+         WHERE LOWER(TRIM(COALESCE(h.current_status, ''))) = 'active'
          LIMIT 1"
     );
     if (!$st) {
@@ -195,6 +364,49 @@ function drawdream_child_has_any_active_subscription(mysqli $conn, int $childId)
     $st->bind_param('i', $childId);
     $st->execute();
     return (bool)$st->get_result()->fetch_row();
+}
+
+/** ซ่อมประวัติ subscription จากรายการหักรอบที่บันทึกแล้ว (ทุกผู้บริจาคของเด็กคนนี้) */
+function drawdream_repair_child_subscription_history_from_charges(mysqli $conn, int $childId): void
+{
+    if ($childId <= 0) {
+        return;
+    }
+    $donorIds = [];
+    $st = $conn->prepare(
+        "SELECT DISTINCT donor_id AS donor_user_id
+         FROM donation
+         WHERE target_id = ? AND payment_status = 'completed'
+           AND COALESCE(donate_type, '') IN ('child_subscription', 'child_subscription_charge')"
+    );
+    if ($st) {
+        $st->bind_param('i', $childId);
+        $st->execute();
+        $res = $st->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $donorUid = (int)($row['donor_user_id'] ?? 0);
+            if ($donorUid > 0) {
+                $donorIds[$donorUid] = true;
+            }
+        }
+    }
+    $stHist = $conn->prepare(
+        'SELECT DISTINCT donor_user_id FROM child_subscription_history WHERE child_id = ?'
+    );
+    if ($stHist) {
+        $stHist->bind_param('i', $childId);
+        $stHist->execute();
+        $resHist = $stHist->get_result();
+        while ($row = $resHist->fetch_assoc()) {
+            $donorUid = (int)($row['donor_user_id'] ?? 0);
+            if ($donorUid > 0) {
+                $donorIds[$donorUid] = true;
+            }
+        }
+    }
+    foreach (array_keys($donorIds) as $donorUid) {
+        drawdream_repair_donor_subscription_history_if_missing($conn, (int)$donorUid, $childId);
+    }
 }
 
 /**
@@ -238,6 +450,263 @@ function drawdream_child_ids_with_active_plan_sponsorship(mysqli $conn, array $c
     return $out;
 }
 
+/**
+ * ซ่อมกรณีหักเงินรอบแรกสำเร็จแล้วแต่ไม่มีแถวใน child_subscription_history (ทำให้หน้า profile ไม่โชว์ปุ่มยกเลิก)
+ */
+function drawdream_repair_donor_subscription_history_if_missing(
+    mysqli $conn,
+    int $donorUserId,
+    int $childId
+): void {
+    if ($donorUserId <= 0 || $childId <= 0) {
+        return;
+    }
+    if (function_exists('drawdream_child_subscription_history_backfill_active_row')) {
+        if (drawdream_child_subscription_history_backfill_active_row($conn, $childId, $donorUserId)) {
+            if (function_exists('drawdream_child_sync_sponsorship_status')) {
+                require_once __DIR__ . '/child_sponsorship.php';
+                drawdream_child_sync_sponsorship_status($conn, $childId);
+            }
+            return;
+        }
+    }
+    if (drawdream_child_donor_latest_subscription_status($conn, $childId, $donorUserId) === 'active') {
+        $stRow = $conn->prepare(
+            "SELECT history_id, donate_id, recurring_schedule_id, recurring_next_charge_at,
+                    omise_charge_id, current_status
+             FROM child_subscription_history
+             WHERE child_id = ? AND donor_user_id = ?
+               AND LOWER(TRIM(COALESCE(current_status, ''))) = 'active'
+             ORDER BY history_id DESC
+             LIMIT 1"
+        );
+        if ($stRow) {
+            $stRow->bind_param('ii', $childId, $donorUserId);
+            $stRow->execute();
+            $activeRow = $stRow->get_result()->fetch_assoc();
+            if (
+                is_array($activeRow)
+                && function_exists('drawdream_child_subscription_history_row_needs_backfill')
+                && !drawdream_child_subscription_history_row_needs_backfill($activeRow)
+            ) {
+                return;
+            }
+        } else {
+            return;
+        }
+    }
+    $latestStatus = drawdream_child_donor_latest_subscription_status($conn, $childId, $donorUserId);
+    if (in_array($latestStatus, ['cancelled', 'cancle', 'canceled'], true)) {
+        return;
+    }
+    $chk = $conn->prepare(
+        'SELECT 1 FROM child_subscription_history WHERE child_id = ? AND donor_user_id = ? LIMIT 1'
+    );
+    if ($chk) {
+        $chk->bind_param('ii', $childId, $donorUserId);
+        $chk->execute();
+        if ($chk->get_result()->fetch_row()) {
+            return;
+        }
+    }
+    $st = $conn->prepare(
+        "SELECT donate_id, amount, omise_charge_id
+         FROM donation
+         WHERE donor_id = ? AND target_id = ? AND payment_status = 'completed'
+           AND COALESCE(donate_type, '') = 'child_subscription_charge'
+         ORDER BY donate_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return;
+    }
+    $st->bind_param('ii', $donorUserId, $childId);
+    $st->execute();
+    $don = $st->get_result()->fetch_assoc();
+    if (!$don) {
+        return;
+    }
+    $amountBaht = (float)($don['amount'] ?? 0);
+    $planCode = 'monthly';
+    if ($amountBaht >= 8000) {
+        $planCode = 'yearly';
+    } elseif ($amountBaht >= 4000) {
+        $planCode = 'semiannual';
+    }
+    $donateId = (int)($don['donate_id'] ?? 0);
+    $chargeId = trim((string)($don['omise_charge_id'] ?? ''));
+    $localSchId = 'local_cron_repair_' . bin2hex(random_bytes(8));
+    $repairPayload = ['next_charge_at' => ''];
+    $planSpecRepair = drawdream_child_subscription_plan($planCode);
+    if (is_array($planSpecRepair)) {
+        $paidAnchor = new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok'));
+        $paidRaw = trim((string)($don['transfer_datetime'] ?? ''));
+        if ($paidRaw !== '') {
+            try {
+                $paidAnchor = new DateTimeImmutable($paidRaw, new DateTimeZone('Asia/Bangkok'));
+            } catch (Exception $e) {
+                // keep now
+            }
+        }
+        $billDayRepair = drawdream_subscription_safe_bill_day($paidAnchor);
+        $repairPayload['next_charge_at'] = drawdream_subscription_next_charge_at(
+            $paidAnchor,
+            $planSpecRepair,
+            $billDayRepair
+        )->format('Y-m-d H:i:s');
+    }
+    drawdream_child_subscription_history_log(
+        $conn,
+        $childId,
+        $donorUserId,
+        $donateId > 0 ? $donateId : null,
+        $localSchId,
+        $chargeId !== '' ? $chargeId : null,
+        'subscription_created',
+        null,
+        'active',
+        $planCode,
+        $amountBaht > 0 ? $amountBaht : null,
+        'profile_repair',
+        'rebuilt_from_subscription_charge_donation',
+        $repairPayload
+    );
+    if (function_exists('drawdream_child_sync_sponsorship_status')) {
+        require_once __DIR__ . '/child_sponsorship.php';
+        drawdream_child_sync_sponsorship_status($conn, $childId);
+    }
+}
+
+/**
+ * รายการอุปการะเด็กที่ยัง active ของผู้บริจาค (หน้า profile / ประวัติบริจาค)
+ *
+ * @return list<array{id:int,child_id:int,plan_code:string,child_name:string,amount_thb:float}>
+ */
+function drawdream_donor_list_active_child_subscriptions(mysqli $conn, int $donorUserId): array
+{
+    if ($donorUserId <= 0) {
+        return [];
+    }
+    drawdream_child_subscription_history_ensure_schema($conn);
+
+    $childIds = [];
+    $stHist = $conn->prepare(
+        'SELECT DISTINCT child_id FROM child_subscription_history WHERE donor_user_id = ?'
+    );
+    if ($stHist) {
+        $stHist->bind_param('i', $donorUserId);
+        $stHist->execute();
+        $res = $stHist->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $cid = (int)($row['child_id'] ?? 0);
+            if ($cid > 0) {
+                $childIds[$cid] = true;
+            }
+        }
+    }
+
+    $stDon = $conn->prepare(
+        "SELECT DISTINCT target_id AS child_id
+         FROM donation
+         WHERE donor_id = ? AND payment_status = 'completed'
+           AND COALESCE(donate_type, '') IN ('child_subscription', 'child_subscription_charge')"
+    );
+    if ($stDon) {
+        $stDon->bind_param('i', $donorUserId);
+        $stDon->execute();
+        $res = $stDon->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $cid = (int)($row['child_id'] ?? 0);
+            if ($cid > 0) {
+                $childIds[$cid] = true;
+            }
+        }
+    }
+
+    if ($childIds === []) {
+        return [];
+    }
+
+    $out = [];
+    $stActive = $conn->prepare(
+        "SELECT donate_id AS id, child_id, recurring_plan_code AS plan_code, amount_baht
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ?
+           AND LOWER(TRIM(COALESCE(current_status, ''))) = 'active'
+         ORDER BY history_id DESC
+         LIMIT 1"
+    );
+    $stName = $conn->prepare(
+        'SELECT child_name FROM foundation_children WHERE child_id = ? LIMIT 1'
+    );
+
+    foreach (array_keys($childIds) as $childId) {
+        $childId = (int)$childId;
+        if ($childId <= 0) {
+            continue;
+        }
+        drawdream_repair_donor_subscription_history_if_missing($conn, $donorUserId, $childId);
+        if (!drawdream_child_has_active_omise_subscription($conn, $childId, $donorUserId)) {
+            continue;
+        }
+
+        $planCode = '';
+        $donateId = 0;
+        $amountBaht = 0.0;
+        if ($stActive) {
+            $stActive->bind_param('ii', $childId, $donorUserId);
+            $stActive->execute();
+            $sub = $stActive->get_result()->fetch_assoc();
+            if (is_array($sub)) {
+                $planCode = strtolower(trim((string)($sub['plan_code'] ?? '')));
+                $donateId = (int)($sub['id'] ?? 0);
+                $amountBaht = (float)($sub['amount_baht'] ?? 0);
+            }
+        }
+
+        $childName = '';
+        if ($stName) {
+            $stName->bind_param('i', $childId);
+            $stName->execute();
+            $childName = trim((string)($stName->get_result()->fetch_assoc()['child_name'] ?? ''));
+        }
+        if ($childName === '') {
+            $stDn = $conn->prepare(
+                "SELECT fc.child_name
+                 FROM donation d
+                 INNER JOIN foundation_children fc ON fc.child_id = d.target_id
+                 WHERE d.donor_id = ? AND d.target_id = ? AND d.payment_status = 'completed'
+                 ORDER BY d.transfer_datetime DESC
+                 LIMIT 1"
+            );
+            if ($stDn) {
+                $stDn->bind_param('ii', $donorUserId, $childId);
+                $stDn->execute();
+                $childName = trim((string)($stDn->get_result()->fetch_assoc()['child_name'] ?? ''));
+            }
+        }
+
+        $spec = drawdream_child_subscription_plan($planCode);
+        if ($amountBaht <= 0 && is_array($spec)) {
+            $amountBaht = (float)($spec['amount_thb'] ?? 0);
+        }
+
+        $out[] = [
+            'id' => $donateId,
+            'child_id' => $childId,
+            'plan_code' => $planCode,
+            'child_name' => $childName,
+            'amount_thb' => $amountBaht,
+        ];
+    }
+
+    usort($out, static function (array $a, array $b): int {
+        return strcasecmp((string)($a['child_name'] ?? ''), (string)($b['child_name'] ?? ''));
+    });
+
+    return $out;
+}
+
 function drawdream_subscription_safe_bill_day(DateTimeImmutable $bangkokNow): int
 {
     $d = (int)$bangkokNow->format('j');
@@ -264,9 +733,6 @@ function drawdream_child_can_start_omise_subscription(mysqli $conn, int $childId
     if ($donorUserId <= 0) {
         return false;
     }
-    if (!empty($childRow['deleted_at'])) {
-        return false;
-    }
     $ap = (string)($childRow['approve_profile'] ?? '');
     if (!in_array($ap, ['อนุมัติ', 'กำลังดำเนินการ'], true)) {
         return false;
@@ -278,4 +744,268 @@ function drawdream_child_can_start_omise_subscription(mysqli $conn, int $childId
     }
 
     return !drawdream_child_has_active_omise_subscription($conn, $childId, $donorUserId);
+}
+
+/** นาทีที่ถือว่าการจองสล็อต (reserving) ยังมีผล — กันสมัครพร้อมกันชนกัน */
+function drawdream_child_subscription_reserve_ttl_minutes(): int
+{
+    return 10;
+}
+
+/** มีผู้จองสล็อตอุปการะรายรอบอยู่หรือไม่ (ยังไม่หมดเวลา) */
+function drawdream_child_subscription_has_open_reservation(mysqli $conn, int $childId): bool
+{
+    return drawdream_child_subscription_reserving_holder_user_id($conn, $childId) > 0;
+}
+
+/** ผู้ใช้ที่กำลังจองสล็อตล่าสุด (0 = ไม่มี) */
+function drawdream_child_subscription_reserving_holder_user_id(mysqli $conn, int $childId): int
+{
+    if ($childId <= 0) {
+        return 0;
+    }
+    drawdream_child_subscription_history_ensure_schema($conn);
+    $ttl = drawdream_child_subscription_reserve_ttl_minutes();
+    $st = $conn->prepare(
+        "SELECT h.donor_user_id
+         FROM child_subscription_history h
+         WHERE h.child_id = ?
+           AND h.current_status = 'reserving'
+           AND h.created_at >= (NOW() - INTERVAL ? MINUTE)
+         ORDER BY h.history_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('ii', $childId, $ttl);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    if (!is_array($row)) {
+        return 0;
+    }
+
+    return (int)($row['donor_user_id'] ?? 0);
+}
+
+/**
+ * สถานะสล็อตอุปการะรายรอบสำหรับผู้บริจาค (ก่อนเปิดฟอร์มบัตร / หลัง POST)
+ *
+ * @return array{ok: bool, can_subscribe: bool, reason: string, message: string, holder_user_id?: int}
+ */
+function drawdream_child_subscription_slot_status(mysqli $conn, int $childId, int $donorUserId): array
+{
+    if ($childId <= 0 || $donorUserId <= 0) {
+        return [
+            'ok' => false,
+            'can_subscribe' => false,
+            'reason' => 'invalid',
+            'message' => 'ข้อมูลไม่ถูกต้อง',
+        ];
+    }
+    $st = $conn->prepare(
+        'SELECT c.* FROM foundation_children c WHERE c.child_id = ? LIMIT 1'
+    );
+    if (!$st) {
+        return [
+            'ok' => false,
+            'can_subscribe' => false,
+            'reason' => 'db',
+            'message' => 'ระบบไม่พร้อม กรุณาลองใหม่',
+        ];
+    }
+    $st->bind_param('i', $childId);
+    $st->execute();
+    $child = $st->get_result()->fetch_assoc();
+    if (!is_array($child)) {
+        return [
+            'ok' => true,
+            'can_subscribe' => false,
+            'reason' => 'child_missing',
+            'message' => 'ไม่พบข้อมูลเด็ก',
+        ];
+    }
+    if (drawdream_child_has_any_active_subscription($conn, $childId)) {
+        return [
+            'ok' => true,
+            'can_subscribe' => false,
+            'reason' => 'taken',
+            'message' => 'เด็กคนนี้มีผู้อุปการะรายรอบแล้ว',
+        ];
+    }
+    $holder = drawdream_child_subscription_reserving_holder_user_id($conn, $childId);
+    if ($holder > 0 && $holder !== $donorUserId) {
+        return [
+            'ok' => true,
+            'can_subscribe' => false,
+            'reason' => 'reserving',
+            'message' => 'มีผู้บริจาครายอื่นกำลังสมัครอุปการะอยู่ กรุณารอสักครู่แล้วลองใหม่',
+            'holder_user_id' => $holder,
+        ];
+    }
+    if (!drawdream_child_can_start_omise_subscription($conn, $childId, $child, $donorUserId)) {
+        return [
+            'ok' => true,
+            'can_subscribe' => false,
+            'reason' => 'not_eligible',
+            'message' => 'ไม่สามารถสมัครอุปการะได้ในขณะนี้',
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'can_subscribe' => true,
+        'reason' => 'open',
+        'message' => '',
+    ];
+}
+
+/** UI รายรอบ: ล็อกถ้ามีผู้อุปการะแล้ว หรือมีคนอื่นกำลังจองสล็อต */
+function drawdream_child_subscription_recurring_blocked_for_donor(mysqli $conn, int $childId, int $donorUserId): bool
+{
+    if (drawdream_child_has_any_active_subscription($conn, $childId)) {
+        return true;
+    }
+    $holder = drawdream_child_subscription_reserving_holder_user_id($conn, $childId);
+
+    return $holder > 0 && $holder !== $donorUserId;
+}
+
+/**
+ * จองสล็อตอุปการะ (transaction + FOR UPDATE) — เรียกก่อนสร้าง Omise charge
+ *
+ * @return array{ok: bool, message: string, reason?: string}
+ */
+function drawdream_child_subscription_reserve_slot(
+    mysqli $conn,
+    int $childId,
+    int $donorUserId,
+    string $planCode
+): array {
+    $status = drawdream_child_subscription_slot_status($conn, $childId, $donorUserId);
+    if (!($status['can_subscribe'] ?? false)) {
+        return [
+            'ok' => false,
+            'message' => (string)($status['message'] ?? 'ไม่สามารถจองสิทธิ์อุปการะได้'),
+            'reason' => (string)($status['reason'] ?? 'blocked'),
+        ];
+    }
+
+    if (!$conn->begin_transaction()) {
+        return ['ok' => false, 'message' => 'ระบบไม่พร้อม กรุณาลองใหม่', 'reason' => 'tx'];
+    }
+
+    try {
+        $st = $conn->prepare(
+            'SELECT child_id FROM foundation_children WHERE child_id = ? FOR UPDATE'
+        );
+        if (!$st) {
+            throw new RuntimeException('lock_prepare');
+        }
+        $st->bind_param('i', $childId);
+        $st->execute();
+        if (!$st->get_result()->fetch_assoc()) {
+            $conn->rollback();
+
+            return ['ok' => false, 'message' => 'ไม่พบข้อมูลเด็ก', 'reason' => 'child_missing'];
+        }
+
+        $stChild = $conn->prepare(
+            'SELECT c.* FROM foundation_children c WHERE c.child_id = ? LIMIT 1'
+        );
+        $stChild->bind_param('i', $childId);
+        $stChild->execute();
+        $child = $stChild->get_result()->fetch_assoc();
+        if (!is_array($child) || !drawdream_child_can_start_omise_subscription($conn, $childId, $child, $donorUserId)) {
+            $conn->rollback();
+            if (is_array($child) && drawdream_child_has_any_active_subscription($conn, $childId)) {
+                return [
+                    'ok' => false,
+                    'message' => 'เด็กคนนี้มีผู้อุปการะรายรอบแล้ว (มีผู้สมัครสำเร็จก่อนหน้า)',
+                    'reason' => 'taken',
+                ];
+            }
+            $holder = drawdream_child_subscription_reserving_holder_user_id($conn, $childId);
+            if ($holder > 0 && $holder !== $donorUserId) {
+                return [
+                    'ok' => false,
+                    'message' => 'มีผู้บริจาครายอื่นกำลังสมัครอุปการะอยู่ กรุณารอสักครู่แล้วลองใหม่',
+                    'reason' => 'reserving',
+                ];
+            }
+
+            return ['ok' => false, 'message' => 'ไม่สามารถสมัครอุปการะได้ในขณะนี้', 'reason' => 'not_eligible'];
+        }
+
+        $holder = drawdream_child_subscription_reserving_holder_user_id($conn, $childId);
+        if ($holder > 0 && $holder !== $donorUserId) {
+            $conn->rollback();
+
+            return [
+                'ok' => false,
+                'message' => 'มีผู้บริจาครายอื่นกำลังสมัครอุปการะอยู่ กรุณารอสักครู่แล้วลองใหม่',
+                'reason' => 'reserving',
+            ];
+        }
+
+        if ($holder !== $donorUserId) {
+            $planSpec = drawdream_child_subscription_plan($planCode);
+            $amount = is_array($planSpec) ? (float)($planSpec['amount_thb'] ?? 0) : 0.0;
+            drawdream_child_subscription_history_log(
+                $conn,
+                $childId,
+                $donorUserId,
+                null,
+                null,
+                null,
+                'subscription_reserving',
+                null,
+                'reserving',
+                $planCode,
+                $amount > 0 ? $amount : null,
+                'web_reserve',
+                'slot_reserved'
+            );
+        }
+
+        $conn->commit();
+
+        return ['ok' => true, 'message' => ''];
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log('[drawdream_child_sub] reserve_slot: ' . $e->getMessage());
+
+        return ['ok' => false, 'message' => 'จองสิทธิ์อุปการะไม่สำเร็จ กรุณาลองใหม่', 'reason' => 'error'];
+    }
+}
+
+/** ปล่อยสล็อตเมื่อสมัครล้มเหลวหลังจองแล้ว */
+function drawdream_child_subscription_release_slot(
+    mysqli $conn,
+    int $childId,
+    int $donorUserId,
+    string $note = ''
+): void {
+    if ($childId <= 0 || $donorUserId <= 0) {
+        return;
+    }
+    $holder = drawdream_child_subscription_reserving_holder_user_id($conn, $childId);
+    if ($holder !== $donorUserId) {
+        return;
+    }
+    drawdream_child_subscription_history_log(
+        $conn,
+        $childId,
+        $donorUserId,
+        null,
+        null,
+        null,
+        'subscription_reserve_released',
+        'reserving',
+        'cancelled',
+        null,
+        null,
+        'web_reserve',
+        $note !== '' ? $note : 'slot_released'
+    );
 }

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_foundations_overview.php — ภาพรวมมูลนิธิ
 // รายการมูลนิธิทั้งหมด — มุมมองแอดมิน
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundations overview
@@ -16,9 +16,9 @@ SELECT f.foundation_id,
        f.created_at,
        u.email AS owner_email,
        (SELECT COUNT(*) FROM foundation_project p
-        WHERE p.foundation_id = f.foundation_id AND p.deleted_at IS NULL) AS project_cnt,
+        WHERE p.foundation_id = f.foundation_id) AS project_cnt,
        (SELECT COUNT(*) FROM foundation_children c
-        WHERE c.foundation_id = f.foundation_id AND c.deleted_at IS NULL) AS child_cnt,
+        WHERE c.foundation_id = f.foundation_id) AS child_cnt,
        (SELECT COUNT(*) FROM foundation_needlist n WHERE n.foundation_id = f.foundation_id) AS need_cnt
 FROM foundation_profile f
 JOIN `user` u ON f.user_id = u.user_id
@@ -31,7 +31,7 @@ $rows = $conn->query($sql);
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>มูลนิธิทั้งหมด | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

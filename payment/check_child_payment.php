@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // payment/check_child_payment.php — ยืนยันการชำระบริจาคเด็ก
 // สรุปสั้น: ปิดธุรกรรมบริจาคเด็กหลังจ่าย (pending -> completed/failed) และออกแจ้งเตือนใบเสร็จ
 /**
@@ -210,7 +210,7 @@ if (empty($child_name) && $child_id > 0) {
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผลการชำระเงิน | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css">
     <link rel="stylesheet" href="../css/payment.css">

@@ -3,6 +3,7 @@
    ใช้ใน: children_.php, children_donate.php,
            foundation_add_children.php
    ====================================================== */
+@import url('touch_feedback.css');
 
 /* ── ตัวแปรสีร่วม ─────────────────────────────────── */
 :root {
@@ -288,10 +289,27 @@ body.admin-sidebar-page.donation-page {
     color: inherit;
     text-align: left;
     display: block;
-    transition: transform 0.2s ease;
+    cursor: pointer;
+    -webkit-tap-highlight-color: rgba(60, 80, 153, 0.14);
+    touch-action: manipulation;
+    transition: transform 0.2s ease, filter 0.12s ease;
+    position: relative;
+    z-index: 1;
 }
 
 .child-card:hover { transform: translateY(-4px); }
+
+@media (hover: none) and (pointer: coarse) {
+    .child-card:active {
+        transform: scale(0.98);
+        filter: brightness(0.96);
+    }
+}
+
+body.mode-delete .child-card,
+body.mode-edit .child-card {
+    cursor: default;
+}
 
 .child-card-wrap {
     width: 100%;
@@ -301,6 +319,39 @@ body.admin-sidebar-page.donation-page {
 }
 
 .child-card-wrap .child-card { flex: 1; }
+
+/* ชั้นลิงก์โปร่งใสครอบการ์ด — กดบนมือถือได้เสถียร (ไม่ซ้อนปุ่มใน <a>) */
+.child-card-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: 12px;
+    text-decoration: none;
+    color: transparent;
+    background: transparent;
+    -webkit-tap-highlight-color: rgba(60, 80, 153, 0.12);
+    touch-action: manipulation;
+}
+
+body.mode-delete .child-card-hit,
+body.mode-edit .child-card-hit,
+body.mode-outcome .child-card-hit {
+    pointer-events: none;
+    visibility: hidden;
+}
+
+.child-card-wrap .delete-corner {
+    z-index: 5;
+}
+
+.child-card-wrap .edit-pill-wrap,
+.child-card-wrap .inline-delete-actions,
+.child-card-wrap .child-card-outcome-actions,
+.child-card-wrap .btn-edit-pill,
+.child-card-wrap .btn-card-outcome {
+    position: relative;
+    z-index: 3;
+}
 
 .card-actions {
     display: none;
@@ -600,9 +651,9 @@ body.mode-delete .inline-delete-actions {
 @media (max-width: 1199.98px) { .donation-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 @media (max-width:  991.98px) { .donation-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width:  767.98px) {
-    .donation-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 10px; }
-    .donation-grid .card-info h3 { font-size: 1.18rem; }
-    .donation-grid .card-info p  { font-size: 0.86rem; }
+    .donation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
+    .donation-grid .card-info h3 { font-size: 1.05rem; }
+    .donation-grid .card-info p  { font-size: 0.84rem; }
 }
 @media (max-width:  575.98px) { .donation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
@@ -1252,7 +1303,7 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
 
 .profile-inner { display: flex; flex-direction: row; gap: 40px; align-items: flex-start; }
 
-.col-left { flex: 0 0 300px; min-width: 260px; }
+.col-left { flex: 0 0 300px; min-width: 260px; display: flex; flex-direction: column; }
 
 .child-img-container {
     background-color: #E56B51;
@@ -1270,8 +1321,22 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
 .child-details { margin-top: 18px; color: #333; font-size: 1.25rem; line-height: 2.1; }
 .child-details p { margin: 0; }
 .child-details strong { font-size: 1.25rem; }
-.child-cancel-below-wish-form {
+.child-cancel-below-wish-form,
+.child-cancel-below-photo-form {
     margin-top: 12px;
+}
+.col-left {
+    display: flex;
+    flex-direction: column;
+}
+.child-img-container {
+    order: 1;
+}
+.child-details {
+    order: 2;
+}
+.child-cancel-below-photo-form {
+    order: 3;
 }
 
 .col-right { flex: 1; display: flex; flex-direction: column; align-items: stretch; text-align: center; min-width: 0; }
@@ -1402,6 +1467,22 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
     max-width: none;
     align-self: stretch;
     box-sizing: border-box;
+}
+.child-omise-test-hint {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #854d0e;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    text-align: left;
+}
+.child-omise-test-hint__mono {
+    font-family: ui-monospace, Consolas, monospace;
+    font-weight: 600;
+    color: #713f12;
 }
 .child-sub-active-notice {
     padding: 14px 16px;
@@ -1695,8 +1776,7 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
 }
 
 /*
- * children_donate.php — มือถือ: จัดโครงรอบนอกการ์ด + แท็บ + โซนบริจาค (col-right) ให้อ่านง่าย
- * ไม่แตะ .child-details / .child-img-container (โซนประวัติเด็กในการ์ดเหลืองคงเรียงแบบเดิม)
+ * children_donate.php — มือถือ: รูป+ข้อมูลใหญ่ขึ้น ปุ่มยกเลิกใต้รูป ข้อความ Drawdream เล็กลง
  */
 @media (max-width: 768px) {
     main.child-profile-main.container {
@@ -1739,10 +1819,32 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
     main.child-profile-main .col-left {
         flex: 1 1 auto;
         min-width: 0;
-        max-width: 420px;
-        margin-left: auto;
-        margin-right: auto;
+        max-width: 100%;
+        margin: 0;
         width: 100%;
+        display: grid;
+        grid-template-columns: clamp(132px, 36vw, 172px) minmax(0, 1fr);
+        column-gap: 14px;
+        row-gap: 8px;
+        align-items: start;
+    }
+
+    main.child-profile-main .child-img-container {
+        grid-column: 1;
+        grid-row: 1;
+        width: 100%;
+        height: clamp(132px, 36vw, 172px);
+        max-height: none;
+        border-radius: 18px;
+    }
+
+    main.child-profile-main .child-cancel-below-photo-form {
+        display: block;
+        grid-column: 1;
+        grid-row: 2;
+        margin: 0;
+        width: 100%;
+        min-width: 0;
     }
 
     main.child-profile-main .col-right {
@@ -1751,16 +1853,52 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
     }
 
     main.child-profile-main .brand-header {
-        font-size: clamp(1.85rem, 9vw, 2.65rem);
-        letter-spacing: -0.02em;
-        margin-bottom: 8px;
+        font-size: clamp(1.25rem, 5.5vw, 1.55rem);
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+        font-weight: 800;
+    }
+
+    main.child-profile-main .child-details {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        margin-top: 0;
+        font-size: 0.98rem;
+        line-height: 1.45;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        align-content: start;
+    }
+
+    main.child-profile-main .child-details > p {
+        margin: 0;
+        width: 100%;
+    }
+
+    main.child-profile-main .child-details > form,
+    main.child-profile-main .child-cancel-below-wish-form {
+        margin-top: 4px;
+        width: 100%;
+    }
+
+    main.child-profile-main .child-details strong {
+        font-size: 0.98rem;
+        font-weight: 700;
+    }
+
+    main.child-profile-main .btn-subscription-cancel--compact {
+        font-size: 0.72rem;
+        padding: 6px 8px;
+        border-radius: 999px;
     }
 
     main.child-profile-main .donate-text {
-        font-size: 0.98rem;
-        line-height: 1.65;
-        margin-bottom: 18px;
-        padding: 0 4px;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        margin-bottom: 14px;
+        padding: 0 2px;
+        color: #444;
     }
 
     main.child-profile-main .donation-stats-panel {
@@ -1822,8 +1960,40 @@ body.admin-child-review-page .admin-review-actions-grid .admin-review-action-btn
         border-radius: 22px;
     }
 
+    main.child-profile-main .col-left {
+        grid-template-columns: clamp(118px, 34vw, 148px) minmax(0, 1fr);
+        column-gap: 12px;
+        row-gap: 6px;
+    }
+
+    main.child-profile-main .child-img-container {
+        height: clamp(118px, 34vw, 148px);
+        border-radius: 16px;
+    }
+
+    main.child-profile-main .child-details {
+        font-size: 0.92rem;
+        line-height: 1.42;
+        gap: 3px;
+    }
+
+    main.child-profile-main .child-details strong {
+        font-size: 0.92rem;
+    }
+
+    main.child-profile-main .btn-subscription-cancel--compact {
+        font-size: 0.68rem;
+        padding: 5px 6px;
+    }
+
     main.child-profile-main .brand-header {
-        font-size: clamp(1.6rem, 8.5vw, 2.2rem);
+        font-size: clamp(1.15rem, 5vw, 1.4rem);
+    }
+
+    main.child-profile-main .donate-text {
+        font-size: 0.76rem;
+        line-height: 1.45;
+        margin-bottom: 12px;
     }
 
     main.child-profile-main .sub-plan-btn {
@@ -2486,6 +2656,68 @@ body.admin-children-page button:hover { background: #d4b13a; }
     max-width: 100%;
     margin-top: 0;
 }
+
+.child-outcome-timeline-hint {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    color: #6b7280;
+}
+
+.child-outcome-timeline {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+}
+
+.child-outcome-timeline__track {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 2px 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.child-outcome-timeline__card {
+    flex: 0 0 min(420px, 88vw);
+    scroll-snap-align: start;
+    max-width: none;
+    margin-top: 0;
+}
+
+.child-outcome-timeline__nav {
+    flex: 0 0 36px;
+    width: 36px;
+    border: 1px solid rgba(60, 80, 153, 0.25);
+    border-radius: 10px;
+    background: #fff;
+    color: #3C5099;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    align-self: center;
+    padding: 0;
+    height: 72px;
+}
+
+.child-outcome-timeline__nav:hover {
+    background: #f0f4ff;
+}
+
+@media (max-width: 768px) {
+    .child-outcome-timeline__nav {
+        display: none;
+    }
+    .child-outcome-timeline__card {
+        flex-basis: min(320px, 92vw);
+    }
+}
 .child-outcome-tab-layout {
     display: flex;
     align-items: flex-start;
@@ -2536,6 +2768,287 @@ body.admin-children-page button:hover { background: #d4b13a; }
     margin: 12px 0 0;
     font-size: 0.88rem;
     color: #6b7280;
+}
+
+.child-outcome-history {
+    margin-top: 28px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(60, 80, 153, 0.25);
+}
+.child-outcome-history__title {
+    margin: 0 0 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #3c5099;
+}
+.child-outcome-history__card {
+    background: #fff;
+    border: 1px solid #e8e0d4;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+}
+.child-outcome-history__label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #3c5099;
+    margin-bottom: 10px;
+}
+.child-outcome-history__layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-start;
+}
+.child-outcome-history__media {
+    flex: 0 0 140px;
+    max-width: 42%;
+}
+.child-outcome-history__img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    object-fit: cover;
+    display: block;
+}
+.child-outcome-history__body {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+.child-outcome-history__text {
+    font-size: 0.98rem;
+    color: #334155;
+    line-height: 1.6;
+    font-weight: 600;
+}
+.child-outcome-history__attribution {
+    margin: 10px 0 0;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+.child-outcome-history__meta {
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+/* ผู้อุปการะ: เปิดจากแจ้งเตือนจดหมาย — โฟกัสคอลขวา ซองมองเห็นชัด */
+body.child-letter-notif-view .col-right {
+    min-height: 40vh;
+}
+body.child-letter-notif-view .child-mail-experience {
+    scroll-margin-top: 88px;
+}
+.child-mail-experience--paper-only {
+    max-width: 560px;
+}
+.child-mail-experience--paper-only .child-mail-letter-paper--donor {
+    margin-top: 4px;
+}
+
+/* ผู้อุปการะ: ประสบการณ์จดหมายจากแจ้งเตือน (ซอง → กระดาษ airmail) */
+.child-mail-experience {
+    max-width: 520px;
+    margin: 8px auto 28px;
+    padding: 8px 4px 4px;
+}
+.child-mail-envelope-scene {
+    text-align: center;
+    padding: 16px 12px 8px;
+    margin-bottom: 0;
+}
+.child-mail-envelope-scene__cta {
+    margin-top: 4px;
+}
+.child-mail-envelope-scene__title {
+    margin: 20px 0 6px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #1e3a5f;
+}
+.child-mail-envelope-scene__sub {
+    margin: 0 0 16px;
+    font-size: 1rem;
+    color: #475569;
+}
+.child-mail-envelope-scene__btn {
+    display: inline-block;
+    padding: 12px 36px;
+    border: none;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 700;
+    font-family: inherit;
+    color: #fff;
+    cursor: pointer;
+    background: #597d57;
+    box-shadow: 0 4px 0 #465f44, 0 8px 18px rgba(89, 125, 87, 0.35);
+}
+.child-mail-envelope-scene__btn:hover {
+    background: #4f7150;
+}
+.child-mail-envelope {
+    position: relative;
+    width: min(300px, 88vw);
+    height: 168px;
+    margin: 0 auto;
+    cursor: pointer;
+    outline: none;
+    perspective: 520px;
+}
+.child-mail-envelope:focus-visible {
+    box-shadow: 0 0 0 3px rgba(60, 80, 153, 0.35);
+    border-radius: 8px;
+}
+.child-mail-envelope__shadow {
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    bottom: -10px;
+    height: 22px;
+    background: rgba(15, 23, 42, 0.14);
+    border-radius: 50%;
+    filter: blur(5px);
+}
+.child-mail-envelope__pocket {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 108px;
+    background: linear-gradient(180deg, #9ed4e8 0%, #6eb5cf 55%, #5aa3bc 100%);
+    border-radius: 6px 6px 10px 10px;
+    box-shadow:
+        inset 0 -5px 0 rgba(0, 0, 0, 0.07),
+        0 10px 22px rgba(30, 58, 95, 0.18);
+    z-index: 3;
+}
+.child-mail-envelope__flap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 34px;
+    height: 86px;
+    background: linear-gradient(180deg, #b8e4f0 0%, #7ec5db 100%);
+    clip-path: polygon(0 0, 50% 100%, 100% 0);
+    transform-origin: top center;
+    transition: transform 0.5s ease;
+    z-index: 4;
+    filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.08));
+}
+.child-mail-envelope__peek-letter {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 6px;
+    z-index: 2;
+    border-radius: 4px 4px 0 0;
+    overflow: hidden;
+    box-shadow: 0 -3px 10px rgba(15, 23, 42, 0.12);
+    pointer-events: none;
+}
+.child-mail-envelope__peek-strip {
+    height: 10px;
+    background: repeating-linear-gradient(
+        -45deg,
+        #c41e3a 0,
+        #c41e3a 5px,
+        #fff 5px,
+        #fff 10px,
+        #1e40af 10px,
+        #1e40af 15px,
+        #fff 15px,
+        #fff 20px
+    );
+}
+.child-mail-envelope__peek-body {
+    height: 52px;
+    background: linear-gradient(180deg, #fffdf8 0%, #f8f4ea 100%);
+}
+.child-mail-envelope-scene.is-opening .child-mail-envelope__flap,
+.child-mail-experience.is-opened .child-mail-envelope__flap {
+    transform: rotateX(175deg);
+}
+.child-mail-experience.is-opened .child-mail-envelope-scene {
+    padding-bottom: 0;
+    margin-bottom: -12px;
+}
+.child-mail-experience.is-opened .child-mail-envelope {
+    height: 120px;
+    cursor: default;
+    pointer-events: none;
+}
+.child-mail-experience.is-opened .child-mail-envelope__peek-letter {
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* กระดาษจดหมาย (หลังเปิดซอง) — กรอบ airmail แบบข้อความจากมูลนิธิ */
+.child-mail-letter-paper--donor.is-visible,
+.child-mail-experience.is-opened .child-mail-letter-paper--donor {
+    animation: childMailPaperIn 0.5s ease;
+}
+@keyframes childMailPaperIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.child-mail-experience .child-mail-letter-paper--donor {
+    margin-top: 0;
+}
+.child-mail-letter-airmail {
+    padding: 11px;
+    border-radius: 12px;
+    margin-top: 0;
+    background: repeating-linear-gradient(
+        -45deg,
+        #c41e3a 0,
+        #c41e3a 9px,
+        #fff 9px,
+        #fff 18px,
+        #1e40af 18px,
+        #1e40af 27px,
+        #fff 27px,
+        #fff 36px
+    );
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+}
+.child-mail-letter-airmail__inner {
+    background: #fff;
+    border-radius: 8px;
+    padding: 18px 18px 22px;
+}
+.child-mail-experience .child-outcome-public--letter {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    max-width: none;
+}
+.child-mail-experience .child-outcome-public__label {
+    font-size: 1.12rem;
+    margin-bottom: 14px;
+}
+.child-mail-experience .child-outcome-public__text {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #111827;
+    line-height: 1.45;
+}
+.child-mail-experience .child-outcome-tab-layout__media {
+    flex: 0 0 200px;
+    max-width: 42%;
+}
+.child-mail-experience .child-impression-card__attribution {
+    margin-top: 10px;
+    font-size: 0.95rem;
+    color: #374151;
+}
+.child-outcome-public--letter {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
 }
 
 .child-outcome-public--plan-sponsored {
@@ -2714,6 +3227,18 @@ body.admin-children-page button:hover { background: #d4b13a; }
     padding: 10px 18px;
     font-size: 1.02rem;
     font-weight: 800;
+}
+.btn-subscription-cancel--compact {
+    min-height: 0;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
 }
 .btn-subscription-cancel:hover {
     background: #ffe5e5;

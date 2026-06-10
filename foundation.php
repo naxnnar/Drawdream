@@ -113,9 +113,35 @@ if ($qDone) {
     }
 }
 
+$needPurchasingFoundations = [];
+$qPurch = mysqli_query($conn, "
+    SELECT DISTINCT foundation_id
+    FROM foundation_needlist
+    WHERE approve_item = 'purchasing'
+");
+if ($qPurch) {
+    while ($r = mysqli_fetch_assoc($qPurch)) {
+        $needPurchasingFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+    }
+}
+
+/** รายการยังเปิดรับบริจาค (ตรวจใน PHP สำหรับแถวจาก query รวม) */
+$foundation_needlist_row_open = static function (array $row): bool {
+    if (($row['approve_item'] ?? '') !== 'approved') {
+        return false;
+    }
+    $dwe = trim((string)($row['donate_window_end_at'] ?? ''));
+    if ($dwe === '' || str_starts_with($dwe, '0000-00-00')) {
+        return true;
+    }
+    $ts = strtotime($dwe);
+    return $ts !== false && $ts > time();
+};
+
 /* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — LIMIT 3 เดิมทำให้แถวที่มีรูปถูกตัดออก */
 $stmtAll = $conn->prepare("
-    SELECT item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image
+    SELECT item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image,
+           approve_item, donate_window_end_at, current_donate, total_price
     FROM foundation_needlist
     WHERE foundation_id = ?
       AND (
@@ -205,7 +231,8 @@ if ($foundations && mysqli_num_rows($foundations) > 0) {
     }
 }
 
-$foundationSlides = [];
+$foundationSlidesOpen = [];
+$foundationSlidesDone = [];
 $interestFoundations = [];
 foreach ($foundationRows as $f) {
     $fid = (int)$f['foundation_id'];
@@ -224,45 +251,80 @@ foreach ($foundationRows as $f) {
         continue;
     }
 
-    $currentOpen = $donationTotals[$fid] ?? 0;
-    $goalOpen = $goalTotals[$fid] ?? 0;
-    $currentTrack = $donationTotalsSlideTrack[$fid] ?? 0;
-    $goalTrack = $goalTotalsSlideTrack[$fid] ?? 0;
-    if ($goalOpen > 0) {
-        $current = $currentOpen;
-        $goal = $goalOpen;
-    } elseif ($goalTrack > 0) {
-        $current = $currentTrack;
-        $goal = $goalTrack;
-    } else {
-        $current = 0;
-        $goal = 0;
+    $openItems = [];
+    $doneItems = [];
+    foreach ($items as $row) {
+        if ($foundation_needlist_row_open($row)) {
+            $openItems[] = $row;
+        }
+        if (in_array((string)($row['approve_item'] ?? ''), ['purchasing', 'done'], true)) {
+            $doneItems[] = $row;
+        }
     }
-    $percent = ($goal > 0) ? min(100, round(($current / $goal) * 100, 2)) : 0;
 
-    $foundationSlides[] = [
-        'f' => $f,
-        'items' => $items,
-        'fid' => $fid,
-        'current' => $current,
-        'goal' => $goal,
-        'percent' => $percent,
-    ];
+    $goalOpen = $goalTotals[$fid] ?? 0;
+    if ($goalOpen > 0 && $openItems !== []) {
+        $currentOpen = $donationTotals[$fid] ?? 0;
+        $foundationSlidesOpen[] = [
+            'f' => $f,
+            'items' => $openItems,
+            'fid' => $fid,
+            'current' => $currentOpen,
+            'goal' => $goalOpen,
+            'percent' => min(100, round(($currentOpen / $goalOpen) * 100, 2)),
+            'mode' => 'open',
+        ];
+    }
+
+    $hasNeedResult = !empty($needOutcomeFoundations[$fid])
+        || !empty($needDoneFoundations[$fid])
+        || !empty($needPurchasingFoundations[$fid]);
+    if ($hasNeedResult && $doneItems !== []) {
+        $currentTrack = $donationTotalsSlideTrack[$fid] ?? 0;
+        $goalTrack = $goalTotalsSlideTrack[$fid] ?? 0;
+        $foundationSlidesDone[] = [
+            'f' => $f,
+            'items' => $doneItems,
+            'fid' => $fid,
+            'current' => $currentTrack,
+            'goal' => $goalTrack,
+            'percent' => ($goalTrack > 0) ? min(100, round(($currentTrack / $goalTrack) * 100, 2)) : 0,
+            'mode' => 'done',
+        ];
+    }
 }
-$hasAnySlides = !empty($foundationSlides);
+
+$needTabPanels = [
+    [
+        'id' => 'open',
+        'label' => 'รายการที่เปิดรับบริจาค',
+        'slides' => $foundationSlidesOpen,
+        'empty' => 'ยังไม่มีมูลนิธิที่เปิดรับบริจาคสิ่งของ',
+        'carousel_label' => 'มูลนิธิที่เปิดรับบริจาคสิ่งของ',
+    ],
+    [
+        'id' => 'done',
+        'label' => 'ผลลัพธ์ที่สำเร็จแล้ว',
+        'slides' => $foundationSlidesDone,
+        'empty' => 'ยังไม่มีผลลัพธ์สิ่งของที่สำเร็จแล้ว',
+        'carousel_label' => 'มูลนิธิที่มีผลลัพธ์สิ่งของสำเร็จแล้ว',
+    ],
+];
+$defaultNeedTab = $foundationSlidesOpen !== [] ? 'open' : 'done';
+$hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>มูลนิธิ | DrawDream</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=39">
+  <link rel="stylesheet" href="css/foundation.css?v=49">
 </head>
 <body class="foundation-page">
 
@@ -336,10 +398,18 @@ $hasAnySlides = !empty($foundationSlides);
               $nlImages = foundation_needlist_item_filenames_from_row($nl);
               $nlFdn = foundation_needlist_normalize_filename((string)($nl['need_foundation_image'] ?? ''));
               $needUploadDirAbs = drawdream_needlist_upload_dir();
-              /* แสดงเฉพาะรูปมูลนิธิที่อัปโหลดเท่านั้น */
+              $needCardImages = [];
+              foreach ($nlImages as $imgFn) {
+                  if ($imgFn !== '' && is_file($needUploadDirAbs . $imgFn)) {
+                      $needCardImages[] = $imgFn;
+                  }
+              }
               $nlImg = '';
               if ($nlFdn !== '' && is_file($needUploadDirAbs . $nlFdn)) {
                   $nlImg = $nlFdn;
+              }
+              if ($needCardImages === [] && $nlImg !== '') {
+                  $needCardImages[] = $nlImg;
               }
               $statusLabel = ['pending' => 'รอการอนุมัติ', 'approved' => 'อนุมัติแล้ว', 'rejected' => 'ไม่อนุมัติ'][$status] ?? $status;
               /* คลาสสอดคล้องกับ .foundation-status-pill ในโครงการ (project.css) */
@@ -355,8 +425,23 @@ $hasAnySlides = !empty($foundationSlides);
               <a class="need-card-tap-link" href="foundation_need_view.php?id=<?= (int)($nl['item_id'] ?? 0) ?>" aria-label="ดูรายละเอียดรายการสิ่งของ"></a>
               <div class="need-card-img-wrap">
                 <div class="need-card-img-primary">
-                  <?php if ($nlImg): ?>
-                    <img src="uploads/needs/<?= htmlspecialchars($nlImg) ?>" alt="" class="need-card-img">
+                  <?php if ($needCardImages !== []): ?>
+                  <div class="need-img-rotator need-card-img-rotator<?= count($needCardImages) > 1 ? ' need-img-rotator--multi' : '' ?>" data-interval="3000">
+                    <div class="need-img-rotator__viewport">
+                      <?php foreach ($needCardImages as $ci => $cardImgFn): ?>
+                      <div class="need-img-rotator__slide<?= $ci === 0 ? ' is-active' : '' ?>" data-slide="<?= (int)$ci ?>">
+                        <img src="uploads/needs/<?= htmlspecialchars($cardImgFn) ?>" alt="" class="need-card-img">
+                      </div>
+                      <?php endforeach; ?>
+                    </div>
+                    <?php if (count($needCardImages) > 1): ?>
+                    <div class="need-img-rotator__dots need-img-rotator__dots--card" role="tablist" aria-label="เลือกภาพสิ่งของ">
+                      <?php foreach ($needCardImages as $ci => $_): ?>
+                      <button type="button" class="need-img-rotator__dot<?= $ci === 0 ? ' is-active' : '' ?>" data-go="<?= (int)$ci ?>" role="tab" aria-label="ภาพ <?= (int)$ci + 1 ?>" aria-selected="<?= $ci === 0 ? 'true' : 'false' ?>"></button>
+                      <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                  </div>
                   <?php else: ?>
                     <div class="need-card-noimg">ไม่มีรูป</div>
                   <?php endif; ?>
@@ -409,119 +494,185 @@ $hasAnySlides = !empty($foundationSlides);
     <?php if (!$hasAnySlides): ?>
       <p class="foundation-empty-msg">ยังไม่มีมูลนิธิที่เปิดรับบริจาครายการสิ่งของในระบบ</p>
     <?php else: ?>
-    <section class="foundation-hero-carousel" data-interval="10000" aria-roledescription="carousel" aria-label="มูลนิธิและความต้องการ">
-      <div class="foundation-hero-track">
-        <?php foreach ($foundationSlides as $idx => $slide):
-          $f = $slide['f'];
-          $items = $slide['items'];
-          $fid = $slide['fid'];
-          $current = $slide['current'];
-          $goal = $slide['goal'];
-          $percent = $slide['percent'];
-          $needGoalMet = $goal > 0 && $current >= $goal;
-          $hasNeedOutcome = !empty($needOutcomeFoundations[$fid]);
-          $hasNeedDone = !empty($needDoneFoundations[$fid]);
-          $foundationImage = $f['foundation_image'] ?? '';
-          $facebookUrl = $f['facebook_url'] ?? '';
-          $heroProposalImage = '';
-          $needUploadDirAbs = drawdream_needlist_upload_dir();
-          foreach ($items as $itHero) {
-            $nfHero = foundation_needlist_normalize_filename((string)($itHero['need_foundation_image'] ?? ''));
-            if ($nfHero !== '' && is_file($needUploadDirAbs . $nfHero)) {
-              $heroProposalImage = $nfHero;
-              break;
+    <section class="fd-need-tabs-section" aria-label="รายการสิ่งของมูลนิธิ">
+      <?php
+        $defaultNeedTabLabel = $needTabPanels[0]['label'] ?? '';
+        foreach ($needTabPanels as $panelLabelRow) {
+            if ($panelLabelRow['id'] === $defaultNeedTab) {
+                $defaultNeedTabLabel = $panelLabelRow['label'];
+                break;
             }
-          }
-          /* ใช้เฉพาะรูปมูลนิธิที่อัปโหลด ไม่ fallback เป็นรูปสิ่งของ */
-          /* แสดงรูปสิ่งของด้านซ้ายสูงสุด 3 รายการ — ทั้งด่วนและไม่ด่วน (เรียงตาม query: urgent ก่อน) */
-          $itemShowcaseEntries = [];
-          foreach ($items as $itRow) {
-            $isUrgent = (int)($itRow['urgent'] ?? 0) === 1
-              || $itRow['urgent'] === true
-              || $itRow['urgent'] === '1'
-              || strtolower((string)($itRow['urgent'] ?? '')) === 'true';
-            foreach (foundation_needlist_item_filenames_from_row($itRow) as $bn) {
-              if ($bn === '' || $bn === '.' || $bn === '..') {
-                continue;
-              }
-              $itemShowcaseEntries[] = ['file' => $bn, 'urgent' => $isUrgent];
-              if (count($itemShowcaseEntries) >= 3) {
-                break 2;
-              }
-            }
-          }
-        ?>
-        <article class="foundation-card foundation-slide<?= $idx === 0 ? ' is-active' : '' ?>" id="f<?= $fid ?>" data-slide-index="<?= (int)$idx ?>" aria-hidden="<?= $idx === 0 ? 'false' : 'true' ?>">
-          <div class="fc-left">
-            <h2 class="fc-title"><?= htmlspecialchars($f['foundation_name'] ?? 'มูลนิธิ') ?></h2>
-            <p class="fc-desc"><?= htmlspecialchars(trim((string)($f['foundation_desc'] ?? '')) !== '' ? $f['foundation_desc'] : 'มูลนิธินี้ยังไม่ได้เพิ่มคำอธิบายเพิ่มเติม') ?></p>
-            <div class="fc-progress-block">
-              <div class="bar bar-donate" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= (int)round($percent) ?>">
-                <div class="bar-fill" style="width:<?= htmlspecialchars((string)$percent) ?>%"></div>
-              </div>
-              <div class="fc-amount-row">
-                <span class="fc-amount-label">ยอดปัจจุบัน</span>
-                <span class="fc-prog-current"><?= number_format($current, 0) ?></span>
-                <span class="fc-prog-slash">/</span>
-                <span class="fc-prog-goal"><?= number_format($goal, 0) ?> บาท</span>
-              </div>
-            </div>
+        }
+      ?>
+      <div class="fd-need-view-switch">
+        <div class="fd-need-dropdown" data-need-dropdown>
+          <button type="button"
+            class="fd-need-dropdown__trigger"
+            id="fd-need-tab-trigger"
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="fd-need-dropdown-menu"
+            aria-label="เลือกมุมมองรายการสิ่งของ">
+            <span class="fd-need-dropdown__label"><?= htmlspecialchars($defaultNeedTabLabel) ?></span>
+            <i class="bi bi-chevron-down fd-need-dropdown__chevron" aria-hidden="true"></i>
+          </button>
+          <ul class="fd-need-dropdown__menu" id="fd-need-dropdown-menu" role="listbox" aria-labelledby="fd-need-tab-trigger" hidden>
+            <?php foreach ($needTabPanels as $panel): ?>
+            <li role="presentation">
+              <button type="button"
+                class="fd-need-dropdown__option<?= $panel['id'] === $defaultNeedTab ? ' is-active' : '' ?>"
+                role="option"
+                data-need-tab="<?= htmlspecialchars($panel['id'], ENT_QUOTES, 'UTF-8') ?>"
+                aria-selected="<?= $panel['id'] === $defaultNeedTab ? 'true' : 'false' ?>">
+                <?= htmlspecialchars($panel['label']) ?>
+              </button>
+            </li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+      </div>
 
-            <div class="fc-urgent-zone">
-              <?php if (count($itemShowcaseEntries) > 0): ?>
-              <div class="items urgent-items fc-urgent-items-grid fc-needlist-showcase-grid" aria-label="ภาพรายการสิ่งของ">
-                <?php foreach ($itemShowcaseEntries as $showEnt):
-                  $oneImg = (string)($showEnt['file'] ?? '');
-                  $showUrgent = !empty($showEnt['urgent']);
-                ?>
-                <div class="item urgent-item-card">
-                  <?php if ($showUrgent): ?>
-                    <span class="urgent-tag urgent-tag-abs">ต้องการด่วน</span>
-                  <?php endif; ?>
-                  <?php if ($oneImg !== ''): ?>
-                    <img class="item-img urgent-img-big" src="uploads/needs/<?= htmlspecialchars($oneImg) ?>" alt="">
-                  <?php else: ?>
-                    <div class="noimg urgent-img-big">ไม่มีรูปภาพ</div>
+      <?php foreach ($needTabPanels as $panel):
+        $panelSlides = $panel['slides'];
+        $panelMode = $panel['id'];
+        $panelActive = $panel['id'] === $defaultNeedTab;
+      ?>
+      <div class="fd-need-tab-panel<?= $panelActive ? ' is-active' : '' ?>"
+        id="fd-need-panel-<?= htmlspecialchars($panel['id'], ENT_QUOTES, 'UTF-8') ?>"
+        role="tabpanel"
+        data-need-panel="<?= htmlspecialchars($panel['id'], ENT_QUOTES, 'UTF-8') ?>"
+        aria-labelledby="fd-need-tab-trigger"
+        <?= $panelActive ? '' : 'hidden' ?>>
+        <?php if ($panelSlides === []): ?>
+          <p class="foundation-empty-msg foundation-empty-msg--panel"><?= htmlspecialchars($panel['empty']) ?></p>
+        <?php else: ?>
+        <section class="foundation-hero-carousel" data-interval="10000" data-carousel-mode="<?= htmlspecialchars($panelMode, ENT_QUOTES, 'UTF-8') ?>" aria-roledescription="carousel" aria-label="<?= htmlspecialchars($panel['carousel_label']) ?>">
+          <div class="foundation-hero-track">
+            <?php foreach ($panelSlides as $idx => $slide):
+              $f = $slide['f'];
+              $items = $slide['items'];
+              $fid = $slide['fid'];
+              $current = $slide['current'];
+              $goal = $slide['goal'];
+              $percent = $slide['percent'];
+              $slideMode = $slide['mode'] ?? $panelMode;
+              $needGoalMet = $goal > 0 && $current >= $goal;
+              $foundationImage = $f['foundation_image'] ?? '';
+              $facebookUrl = $f['facebook_url'] ?? '';
+              $heroProposalImage = '';
+              $needUploadDirAbs = drawdream_needlist_upload_dir();
+              foreach ($items as $itHero) {
+                $nfHero = foundation_needlist_normalize_filename((string)($itHero['need_foundation_image'] ?? ''));
+                if ($nfHero !== '' && is_file($needUploadDirAbs . $nfHero)) {
+                  $heroProposalImage = $nfHero;
+                  break;
+                }
+              }
+              $itemShowcaseEntries = [];
+              foreach ($items as $itRow) {
+                $isUrgent = (int)($itRow['urgent'] ?? 0) === 1
+                  || $itRow['urgent'] === true
+                  || $itRow['urgent'] === '1'
+                  || strtolower((string)($itRow['urgent'] ?? '')) === 'true';
+                foreach (foundation_needlist_item_filenames_from_row($itRow) as $bn) {
+                  if ($bn === '' || $bn === '.' || $bn === '..') {
+                    continue;
+                  }
+                  $itemShowcaseEntries[] = ['file' => $bn, 'urgent' => $isUrgent];
+                  if (count($itemShowcaseEntries) >= 3) {
+                    break 2;
+                  }
+                }
+              }
+            ?>
+            <article class="foundation-card foundation-slide<?= $idx === 0 ? ' is-active' : '' ?>" id="f<?= $fid ?>-<?= htmlspecialchars($slideMode, ENT_QUOTES, 'UTF-8') ?>" data-slide-index="<?= (int)$idx ?>" data-foundation-id="<?= $fid ?>" aria-hidden="<?= $idx === 0 ? 'false' : 'true' ?>">
+              <div class="fc-left">
+                <h2 class="fc-title"><?= htmlspecialchars($f['foundation_name'] ?? 'มูลนิธิ') ?></h2>
+                <p class="fc-desc"><?= htmlspecialchars(trim((string)($f['foundation_desc'] ?? '')) !== '' ? $f['foundation_desc'] : 'มูลนิธินี้ยังไม่ได้เพิ่มคำอธิบายเพิ่มเติม') ?></p>
+                <div class="fc-progress-block">
+                  <div class="bar bar-donate" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?= (int)round($percent) ?>">
+                    <div class="bar-fill" style="width:<?= htmlspecialchars((string)$percent) ?>%"></div>
+                  </div>
+                  <div class="fc-amount-row">
+                    <span class="fc-amount-label">ยอดปัจจุบัน</span>
+                    <span class="fc-prog-current"><?= number_format($current, 0) ?></span>
+                    <span class="fc-prog-slash">/</span>
+                    <span class="fc-prog-goal"><?= number_format($goal, 0) ?> บาท</span>
+                  </div>
+                </div>
+
+                <div class="fc-urgent-zone">
+                  <?php if (count($itemShowcaseEntries) > 0): ?>
+                  <div class="fc-needlist-showcase-carousel need-img-rotator<?= count($itemShowcaseEntries) > 1 ? ' need-img-rotator--multi' : '' ?>" data-interval="3000" aria-label="ภาพรายการสิ่งของ">
+                    <div class="need-img-rotator__viewport items urgent-items fc-urgent-items-grid">
+                      <?php foreach ($itemShowcaseEntries as $si => $showEnt):
+                        $oneImg = (string)($showEnt['file'] ?? '');
+                        $showUrgent = !empty($showEnt['urgent']);
+                      ?>
+                      <div class="item urgent-item-card need-img-rotator__slide<?= $si === 0 ? ' is-active' : '' ?>" data-slide="<?= (int)$si ?>">
+                        <?php if ($showUrgent && $slideMode === 'open'): ?>
+                          <span class="urgent-tag urgent-tag-abs">ต้องการด่วน</span>
+                        <?php endif; ?>
+                        <?php if ($oneImg !== ''): ?>
+                          <img class="item-img urgent-img-big" src="uploads/needs/<?= htmlspecialchars($oneImg) ?>" alt="">
+                        <?php else: ?>
+                          <div class="noimg urgent-img-big">ไม่มีรูปภาพ</div>
+                        <?php endif; ?>
+                      </div>
+                      <?php endforeach; ?>
+                    </div>
+                    <?php if (count($itemShowcaseEntries) > 1): ?>
+                    <div class="need-img-rotator__dots" role="tablist" aria-label="เลือกภาพสิ่งของ">
+                      <?php foreach ($itemShowcaseEntries as $si => $_): ?>
+                      <button type="button" class="need-img-rotator__dot<?= $si === 0 ? ' is-active' : '' ?>" data-go="<?= (int)$si ?>" role="tab" aria-label="ภาพ <?= (int)$si + 1 ?>" aria-selected="<?= $si === 0 ? 'true' : 'false' ?>"></button>
+                      <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                  </div>
                   <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
+                <?php if ($slideMode === 'open'): ?>
+                  <?php if (!$needGoalMet): ?>
+                    <a class="btn-donate btn-donate--primary-cta" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
+                  <?php else: ?>
+                    <p class="fc-goal-met-hint">ครบเป้าหมายแล้ว — ดูผลลัพธ์ได้ที่แท็บ「ผลลัพธ์ที่สำเร็จแล้ว」</p>
+                  <?php endif; ?>
+                <?php else: ?>
+                  <a class="btn-donate btn-donate--outcome" href="needlist_result.php?fid=<?= $fid ?>">ดูผลลัพธ์</a>
+                <?php endif; ?>
               </div>
-              <?php endif; ?>
-            </div>
-            <?php if ($needGoalMet || $hasNeedOutcome || $hasNeedDone): ?>
-              <a class="btn-donate btn-donate--outcome" href="needlist_result.php?fid=<?= $fid ?>">ผลลัพธ์ของมูลนิธิ</a>
-            <?php else: ?>
-              <a class="btn-donate btn-donate--primary-cta" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
-            <?php endif; ?>
+              <div class="fc-right">
+                <div class="fc-right-media">
+                  <?php if ($heroProposalImage !== ''): ?>
+                    <img class="cover foundation-cover-large" src="uploads/needs/<?= htmlspecialchars($heroProposalImage) ?>" alt="ภาพประกอบรายการสิ่งของ">
+                  <?php elseif (!empty($foundationImage)): ?>
+                    <img class="cover foundation-cover-large" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
+                  <?php else: ?>
+                    <div class="cover-empty foundation-cover-placeholder">ยังไม่มีข้อมูลรูปให้</div>
+                  <?php endif; ?>
+                </div>
+                <div class="fc-right-meta">
+                  <?php if (!empty($facebookUrl)): ?>
+                    <div class="fb">Facebook: <?= htmlspecialchars($facebookUrl) ?></div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </article>
+            <?php endforeach; ?>
           </div>
-          <div class="fc-right">
-            <div class="fc-right-media">
-              <?php if ($heroProposalImage !== ''): ?>
-                <img class="cover foundation-cover-large" src="uploads/needs/<?= htmlspecialchars($heroProposalImage) ?>" alt="ภาพประกอบรายการสิ่งของ">
-              <?php elseif (!empty($foundationImage)): ?>
-                <img class="cover foundation-cover-large" src="uploads/profiles/<?= htmlspecialchars($foundationImage) ?>" alt="รูปมูลนิธิ">
-              <?php else: ?>
-                <div class="cover-empty foundation-cover-placeholder">ยังไม่มีข้อมูลรูปให้</div>
-              <?php endif; ?>
-            </div>
-            <div class="fc-right-meta">
-              <?php if (!empty($facebookUrl)): ?>
-                <div class="fb">Facebook: <?= htmlspecialchars($facebookUrl) ?></div>
-              <?php endif; ?>
-            </div>
+          <?php if (count($panelSlides) > 1): ?>
+          <button type="button" class="foundation-hero-nav foundation-hero-nav--prev" data-hero-prev aria-label="มูลนิธิก่อนหน้า">‹</button>
+          <button type="button" class="foundation-hero-nav foundation-hero-nav--next" data-hero-next aria-label="มูลนิธิถัดไป">›</button>
+          <div class="foundation-hero-dots" role="tablist" aria-label="เลือกมูลนิธิ">
+            <?php foreach ($panelSlides as $idx => $_): ?>
+            <button type="button" class="foundation-hero-dot<?= $idx === 0 ? ' is-active' : '' ?>" data-go="<?= (int)$idx ?>" role="tab" aria-selected="<?= $idx === 0 ? 'true' : 'false' ?>" aria-label="สไลด์ <?= (int)$idx + 1 ?>"></button>
+            <?php endforeach; ?>
           </div>
-        </article>
-        <?php endforeach; ?>
+          <?php endif; ?>
+        </section>
+        <?php endif; ?>
       </div>
-      <?php if (count($foundationSlides) > 1): ?>
-      <button type="button" class="foundation-hero-nav foundation-hero-nav--prev" data-hero-prev aria-label="มูลนิธิก่อนหน้า">‹</button>
-      <button type="button" class="foundation-hero-nav foundation-hero-nav--next" data-hero-next aria-label="มูลนิธิถัดไป">›</button>
-      <div class="foundation-hero-dots" role="tablist" aria-label="เลือกมูลนิธิ">
-        <?php foreach ($foundationSlides as $idx => $_): ?>
-        <button type="button" class="foundation-hero-dot<?= $idx === 0 ? ' is-active' : '' ?>" data-go="<?= (int)$idx ?>" role="tab" aria-selected="<?= $idx === 0 ? 'true' : 'false' ?>" aria-label="สไลด์ <?= (int)$idx + 1 ?>"></button>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
+      <?php endforeach; ?>
     </section>
     <?php endif; ?>
 
@@ -548,6 +699,7 @@ $hasAnySlides = !empty($foundationSlides);
           }
         ?>
         <article class="fd-interest-card">
+          <a class="fd-interest-card-hit" href="foundation_donate_info.php?fid=<?= $ifid ?>" aria-label="ดูมูลนิธิ <?= htmlspecialchars((string)($inf['foundation_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"></a>
           <div class="fd-interest-top">
             <?php if ($iImg !== ''): ?>
               <img class="fd-interest-cover" src="uploads/profiles/<?= htmlspecialchars($iImg) ?>" alt="<?= htmlspecialchars($inf['foundation_name'] ?? '') ?>">
@@ -610,16 +762,13 @@ $hasAnySlides = !empty($foundationSlides);
         <h3>ช่วยเหลือมูลนิธิเด็กเพื่อสังคม</h3>
         <div class="fd-community-logo-grid">
           <div class="fd-community-logo-card">
-            <img src="<?= htmlspecialchars(drawdream_community_img('logo-santisuk')) ?>" alt="มูลนิธิสันติสุข" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+            <img src="img/logo%20เด็กสายรุ้ง.png" alt="โลโก้เด็กสายรุ้ง" class="fd-community-logo-card__img" width="400" height="200" decoding="async" loading="lazy">
           </div>
           <div class="fd-community-logo-card">
-            <img src="<?= htmlspecialchars(drawdream_community_img('logo-baannok')) ?>" alt="มูลนิธิบ้านนอก" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+            <img src="img/logo%20ทานตะวัน.png" alt="โลโก้ทานตะวัน" class="fd-community-logo-card__img" width="400" height="200" decoding="async" loading="lazy">
           </div>
           <div class="fd-community-logo-card">
-            <img src="<?= htmlspecialchars(drawdream_community_img('logo-holt')) ?>" alt="มูลนิธิฮอลต์สหทัย" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
-          </div>
-          <div class="fd-community-logo-card">
-            <img src="<?= htmlspecialchars(drawdream_community_img('logo-hope')) ?>" alt="มูลนิธิเฮาส์ออฟเบลสซิง" class="fd-community-logo-card__img" width="280" height="140" decoding="async" loading="lazy">
+            <img src="img/logo%20พร.png" alt="โลโก้พร" class="fd-community-logo-card__img" width="400" height="200" decoding="async" loading="lazy">
           </div>
         </div>
       </div>
@@ -669,76 +818,273 @@ $hasAnySlides = !empty($foundationSlides);
   </script>
   <?php endif; ?>
 
-  <?php if (($_SESSION['role'] ?? '') !== 'foundation' && $hasAnySlides && count($foundationSlides) > 1): ?>
+  <?php if (($_SESSION['role'] ?? '') !== 'foundation' && $hasAnySlides): ?>
   <script>
   (function() {
-    var root = document.querySelector('.foundation-hero-carousel');
-    if (!root) return;
-    var slides = [].slice.call(root.querySelectorAll('.foundation-slide'));
-    var dots = [].slice.call(root.querySelectorAll('.foundation-hero-dot'));
-    var prevBtn = root.querySelector('[data-hero-prev]');
-    var nextBtn = root.querySelector('[data-hero-next]');
-    var n = slides.length;
-    if (n <= 1) return;
-    var i = 0;
-    var ms = parseInt(root.getAttribute('data-interval') || '10000', 10);
-    var timer = null;
-    function go(to) {
-      i = ((to % n) + n) % n;
-      slides.forEach(function(s, j) {
-        var on = j === i;
-        s.classList.toggle('is-active', on);
-        s.setAttribute('aria-hidden', on ? 'false' : 'true');
-      });
-      dots.forEach(function(d, j) {
-        var on = j === i;
-        d.classList.toggle('is-active', on);
-        d.setAttribute('aria-selected', on ? 'true' : 'false');
-      });
-    }
-    function startAuto() {
-      stopAuto();
-      timer = setInterval(function() { go(i + 1); }, ms);
-    }
-    function stopAuto() {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
+    var tabSection = document.querySelector('.fd-need-tabs-section');
+    var carouselStates = [];
+
+    function initCarousel(root) {
+      var slides = [].slice.call(root.querySelectorAll('.foundation-slide'));
+      var dots = [].slice.call(root.querySelectorAll('.foundation-hero-dot'));
+      var prevBtn = root.querySelector('[data-hero-prev]');
+      var nextBtn = root.querySelector('[data-hero-next]');
+      var n = slides.length;
+      var state = {
+        root: root,
+        slides: slides,
+        dots: dots,
+        i: 0,
+        n: n,
+        ms: parseInt(root.getAttribute('data-interval') || '10000', 10),
+        timer: null
+      };
+
+      function go(to) {
+        if (n <= 1) return;
+        state.i = ((to % n) + n) % n;
+        slides.forEach(function(s, j) {
+          var on = j === state.i;
+          s.classList.toggle('is-active', on);
+          s.setAttribute('aria-hidden', on ? 'false' : 'true');
+        });
+        dots.forEach(function(d, j) {
+          var on = j === state.i;
+          d.classList.toggle('is-active', on);
+          d.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        if (typeof window.drawdreamRestartNeedImgRotators === 'function') {
+          var activeSlide = slides[state.i];
+          if (activeSlide) {
+            window.drawdreamRestartNeedImgRotators(activeSlide);
+          }
+        }
       }
-    }
-    startAuto();
-    dots.forEach(function(d) {
-      d.addEventListener('click', function() {
-        go(parseInt(d.getAttribute('data-go') || '0', 10));
-        startAuto();
+
+      state.go = go;
+      state.startAuto = function() {
+        state.stopAuto();
+        if (n <= 1) return;
+        if (!root.closest('.fd-need-tab-panel') || root.closest('.fd-need-tab-panel.is-active')) {
+          state.timer = setInterval(function() { go(state.i + 1); }, state.ms);
+        }
+      };
+      state.stopAuto = function() {
+        if (state.timer) {
+          clearInterval(state.timer);
+          state.timer = null;
+        }
+      };
+
+      dots.forEach(function(d) {
+        d.addEventListener('click', function() {
+          go(parseInt(d.getAttribute('data-go') || '0', 10));
+          state.startAuto();
+        });
       });
-    });
-    if (prevBtn) {
-      prevBtn.addEventListener('click', function () {
-        go(i - 1);
-        startAuto();
-      });
+      if (prevBtn) {
+        prevBtn.addEventListener('click', function () {
+          go(state.i - 1);
+          state.startAuto();
+        });
+      }
+      if (nextBtn) {
+        nextBtn.addEventListener('click', function () {
+          go(state.i + 1);
+          state.startAuto();
+        });
+      }
+
+      carouselStates.push(state);
+      return state;
     }
-    if (nextBtn) {
-      nextBtn.addEventListener('click', function () {
-        go(i + 1);
-        startAuto();
+
+    function startActiveCarousel() {
+      carouselStates.forEach(function(s) { s.stopAuto(); });
+      var activePanel = document.querySelector('.fd-need-tab-panel.is-active');
+      if (!activePanel) return;
+      var activeRoot = activePanel.querySelector('.foundation-hero-carousel');
+      if (!activeRoot) return;
+      carouselStates.forEach(function(s) {
+        if (s.root === activeRoot) s.startAuto();
       });
     }
 
-    // ถ้ามี hash เช่น #f12 ให้เปิดสไลด์ของมูลนิธินั้นทันที
+    var activateTab = function() {};
+    if (tabSection) {
+      var dropdown = tabSection.querySelector('[data-need-dropdown]');
+      var trigger = tabSection.querySelector('.fd-need-dropdown__trigger');
+      var triggerLabel = tabSection.querySelector('.fd-need-dropdown__label');
+      var menu = tabSection.querySelector('.fd-need-dropdown__menu');
+      var options = [].slice.call(tabSection.querySelectorAll('[data-need-tab]'));
+      var panels = [].slice.call(tabSection.querySelectorAll('[data-need-panel]'));
+
+      function setMenuOpen(open) {
+        if (!dropdown || !trigger || !menu) return;
+        dropdown.classList.toggle('is-open', open);
+        trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        menu.hidden = !open;
+      }
+
+      activateTab = function(id) {
+        options.forEach(function(opt) {
+          var on = opt.getAttribute('data-need-tab') === id;
+          opt.classList.toggle('is-active', on);
+          opt.setAttribute('aria-selected', on ? 'true' : 'false');
+          if (on && triggerLabel) {
+            triggerLabel.textContent = opt.textContent.trim();
+          }
+        });
+        panels.forEach(function(panel) {
+          var on = panel.getAttribute('data-need-panel') === id;
+          panel.classList.toggle('is-active', on);
+          panel.hidden = !on;
+        });
+        setMenuOpen(false);
+        startActiveCarousel();
+      };
+
+      if (trigger && menu) {
+        trigger.addEventListener('click', function() {
+          setMenuOpen(!dropdown.classList.contains('is-open'));
+        });
+      }
+
+      options.forEach(function(opt) {
+        opt.addEventListener('click', function() {
+          activateTab(opt.getAttribute('data-need-tab') || 'open');
+        });
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!dropdown || !dropdown.classList.contains('is-open')) return;
+        if (!dropdown.contains(e.target)) {
+          setMenuOpen(false);
+        }
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') setMenuOpen(false);
+      });
+    }
+
+    [].slice.call(document.querySelectorAll('.foundation-hero-carousel')).forEach(initCarousel);
+    startActiveCarousel();
+
     var hash = window.location.hash || '';
     if (hash && hash.indexOf('#f') === 0) {
-      var target = document.querySelector(hash);
+      var fid = hash.replace('#f', '').replace(/-(open|done)$/, '');
+      var target = document.querySelector('[data-foundation-id="' + fid + '"]');
+      if (!target) {
+        target = document.querySelector(hash);
+      }
       if (target && target.classList.contains('foundation-slide')) {
-        var idx = parseInt(target.getAttribute('data-slide-index') || '0', 10) || 0;
-        go(idx);
+        var panel = target.closest('[data-need-panel]');
+        if (panel && tabSection) {
+          activateTab(panel.getAttribute('data-need-panel') || 'open');
+        }
+        var root = target.closest('.foundation-hero-carousel');
+        carouselStates.forEach(function(s) {
+          if (s.root === root) {
+            var idx = parseInt(target.getAttribute('data-slide-index') || '0', 10) || 0;
+            s.go(idx);
+            s.startAuto();
+          }
+        });
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
   })();
   </script>
   <?php endif; ?>
+
+  <script>
+  (function () {
+    var rotatorStates = [];
+
+    function rotatorShouldRun(el) {
+      if (!el.classList.contains('need-img-rotator--multi')) return false;
+      var panel = el.closest('.fd-need-tab-panel');
+      if (panel && panel.hidden) return false;
+      var slide = el.closest('.foundation-slide');
+      if (slide && !slide.classList.contains('is-active')) return false;
+      if (el.classList.contains('fc-needlist-showcase-carousel') && window.matchMedia('(min-width: 769px)').matches) {
+        return false;
+      }
+      return true;
+    }
+
+    function initNeedImgRotator(el) {
+      var slides = [].slice.call(el.querySelectorAll('.need-img-rotator__slide'));
+      var dots = [].slice.call(el.querySelectorAll('.need-img-rotator__dot'));
+      var n = slides.length;
+      if (n <= 1) return;
+      var i = 0;
+      var ms = parseInt(el.getAttribute('data-interval') || '3000', 10);
+      var timer = null;
+      var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function go(to) {
+        i = ((to % n) + n) % n;
+        slides.forEach(function (s, j) {
+          s.classList.toggle('is-active', j === i);
+        });
+        dots.forEach(function (d, j) {
+          var on = j === i;
+          d.classList.toggle('is-active', on);
+          d.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+      }
+
+      var state = {
+        el: el,
+        start: function () {
+          state.stop();
+          if (reducedMotion || !rotatorShouldRun(el)) return;
+          timer = setInterval(function () { go(i + 1); }, ms);
+        },
+        stop: function () {
+          if (timer) {
+            clearInterval(timer);
+            timer = null;
+          }
+        }
+      };
+
+      dots.forEach(function (d) {
+        d.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          go(parseInt(d.getAttribute('data-go') || '0', 10));
+          state.start();
+        });
+      });
+
+      el.addEventListener('mouseenter', state.stop);
+      el.addEventListener('mouseleave', state.start);
+      el.addEventListener('touchstart', state.stop, { passive: true });
+      el.addEventListener('touchend', function () {
+        window.setTimeout(state.start, 2500);
+      }, { passive: true });
+
+      rotatorStates.push(state);
+      state.start();
+    }
+
+    window.drawdreamRestartNeedImgRotators = function (scope) {
+      rotatorStates.forEach(function (s) {
+        if (scope && scope !== s.el && !(scope.contains && scope.contains(s.el))) return;
+        s.stop();
+        s.start();
+      });
+    };
+
+    [].slice.call(document.querySelectorAll('.need-img-rotator--multi')).forEach(initNeedImgRotator);
+    window.addEventListener('resize', function () {
+      window.drawdreamRestartNeedImgRotators();
+    });
+  })();
+  </script>
 
   <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
   <script>

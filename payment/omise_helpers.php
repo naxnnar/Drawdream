@@ -191,6 +191,12 @@ function drawdream_omise_http_via_ssl_socket(string $method, string $path, ?stri
  */
 function drawdream_omise_http_raw(string $method, string $path, ?string $jsonBody): array
 {
+    static $omiseKeysChecked = false;
+    if (!$omiseKeysChecked && function_exists('drawdream_payment_require_omise_keys')) {
+        $omiseKeysChecked = true;
+        drawdream_payment_require_omise_keys();
+    }
+
     $method = strtoupper(trim($method));
     $path = '/' . ltrim($path, '/');
     $url = rtrim(OMISE_API_URL, '/') . $path;
@@ -289,11 +295,171 @@ function drawdream_omise_http_raw(string $method, string $path, ?string $jsonBod
     return ['ok' => true, 'body' => (string) $response, 'err' => ''];
 }
 
+function drawdream_omise_is_test_mode(): bool
+{
+    if (!defined('OMISE_PUBLIC_KEY') || !defined('OMISE_SECRET_KEY')) {
+        return false;
+    }
+
+    return strpos((string) OMISE_PUBLIC_KEY, 'pkey_test_') === 0
+        || strpos((string) OMISE_SECRET_KEY, 'skey_test_') === 0;
+}
+
+/** เปิดจำลองชำระสำเร็จอัตโนมัติในโหมดทดสอบ (ไม่มีผลกับคีย์ Live) */
+function drawdream_omise_test_auto_mark_paid_enabled(): bool
+{
+    if (!drawdream_omise_is_test_mode()) {
+        return false;
+    }
+    if (!defined('OMISE_TEST_AUTO_MARK_PAID')) {
+        return true;
+    }
+
+    return (bool) OMISE_TEST_AUTO_MARK_PAID;
+}
+
+function drawdream_omise_charge_is_awaiting_payment(?array $charge): bool
+{
+    if ($charge === null) {
+        return false;
+    }
+    $status = strtolower(trim((string) ($charge['status'] ?? '')));
+    $paid = $charge['paid'] ?? false;
+    if ($paid === true || $paid === 'true' || $paid === 1 || $paid === '1') {
+        return false;
+    }
+
+    return $status === 'pending' || $status === '';
+}
+
+/**
+ * Omise Test API: POST /charges/{id}/mark_as_paid (PromptPay และอื่นๆ ที่รองรับ)
+ *
+ * @param bool $forceWhenTestMode มูลนิธิชำระค่าบริการ 5% — ถ้า true จะ mark ทันทีเมื่อเป็นคีย์ทดสอบ แม้ปิด OMISE_TEST_AUTO_MARK_PAID
+ */
+function drawdream_omise_mark_charge_as_paid_for_test(string $chargeId, bool $forceWhenTestMode = false): ?array
+{
+    $chargeId = trim($chargeId);
+    if ($chargeId === '' || strpos($chargeId, 'chrg_mock_') === 0) {
+        return null;
+    }
+    if ($forceWhenTestMode) {
+        if (!drawdream_omise_is_test_mode()) {
+            return null;
+        }
+    } elseif (!drawdream_omise_test_auto_mark_paid_enabled()) {
+        return null;
+    }
+
+    $path = '/charges/' . rawurlencode($chargeId) . '/mark_as_paid';
+    $http = drawdream_omise_http_raw('POST', $path, '{}');
+    if (!$http['ok'] || $http['body'] === '') {
+        error_log('[drawdream_omise] mark_as_paid failed: ' . drawdream_omise_error_for_human($http['err'] ?? ''));
+        return null;
+    }
+    $decoded = json_decode($http['body'], true);
+
+    return is_array($decoded) ? $decoded : null;
+}
+
+/** มูลนิธิกดชำระค่าบริการ 5% — โหมดทดสอบ Omise: mark as paid ทันที ไม่ต้องไป Dashboard */
+function drawdream_foundation_service_charge_auto_mark_on_pay(string $chargeId): void
+{
+    if (strpos($chargeId, 'chrg_mock_') === 0) {
+        return;
+    }
+    if (!drawdream_omise_is_test_mode()) {
+        return;
+    }
+    drawdream_omise_mark_charge_as_paid_for_test($chargeId, true);
+}
+
+/** ข้ามหน้า QR ไปยืนยันเลย (mock หรือคีย์ทดสอบ Omise) */
+function drawdream_foundation_service_charge_skip_qr_after_pay(string $chargeId): bool
+{
+    return strpos($chargeId, 'chrg_mock_') === 0 || drawdream_omise_is_test_mode();
+}
+
+/**
+ * POST /charges/{id}/expire — ปิด PromptPay / charge ที่ยัง pending (ใช้ตอนยกเลิก QR)
+ *
+ * @return array{ok: bool, skipped?: bool, charge?: array, message?: string}
+ */
+function drawdream_omise_expire_pending_charge(string $chargeId): array
+{
+    $chargeId = trim($chargeId);
+    if ($chargeId === '' || strpos($chargeId, 'chrg_mock_') === 0) {
+        return ['ok' => true, 'skipped' => true];
+    }
+    if (!defined('OMISE_SECRET_KEY')) {
+        require_once __DIR__ . '/config.php';
+    }
+    if (function_exists('drawdream_payment_require_omise_keys')) {
+        drawdream_payment_require_omise_keys();
+    }
+
+    $path = '/charges/' . rawurlencode($chargeId) . '/expire';
+    $http = drawdream_omise_http_raw('POST', $path, '{}');
+    if (!$http['ok'] || $http['body'] === '') {
+        $msg = drawdream_omise_error_for_human($http['err'] ?? 'expire failed');
+        return ['ok' => false, 'message' => $msg];
+    }
+    $decoded = json_decode($http['body'], true);
+    if (!is_array($decoded)) {
+        return ['ok' => false, 'message' => 'invalid Omise response'];
+    }
+    if (($decoded['object'] ?? '') === 'error') {
+        return ['ok' => false, 'message' => (string)($decoded['message'] ?? 'expire rejected')];
+    }
+    if (($decoded['object'] ?? '') === 'charge') {
+        $status = (string)($decoded['status'] ?? '');
+        if (!empty($decoded['expired']) || $status === 'expired' || $status === 'failed') {
+            return ['ok' => true, 'charge' => $decoded];
+        }
+        if ($status === 'successful' || !empty($decoded['paid'])) {
+            return ['ok' => false, 'message' => 'charge already paid'];
+        }
+        return ['ok' => true, 'charge' => $decoded];
+    }
+
+    return ['ok' => false, 'message' => 'unexpected Omise response'];
+}
+
+/**
+ * ข้อความช่วยเหลือบนหน้า QR / ผลชำระ (โหมดทดสอบ)
+ */
+function drawdream_omise_test_pending_help_html(string $chargeId): string
+{
+    if (!drawdream_omise_is_test_mode()) {
+        return '';
+    }
+
+    if (drawdream_omise_test_auto_mark_paid_enabled()) {
+        return '<p style="color:#a16207;line-height:1.55;">'
+            . 'โหมดทดสอบ Omise กด <strong>ยืนยันการชำระ</strong> '
+            . 'ระบบจะจำลองการชำระสำเร็จให้อัตโนมัติ (ไม่ต้องสแกน QR จริง)'
+            . '</p>';
+    }
+
+    $dashboardUrl = 'https://dashboard.omise.co/test/charges/' . rawurlencode($chargeId);
+
+    return '<p style="color:#a16207;line-height:1.55;">ระบบกำลังใช้ Omise Test Key — การสแกนจ่ายจริงอาจไม่เปลี่ยนสถานะ '
+        . 'ให้เปิดรายการใน Dashboard แล้วใช้ <strong>Mark as paid</strong></p>'
+        . '<p><a href="' . htmlspecialchars($dashboardUrl, ENT_QUOTES, 'UTF-8') . '" target="_blank" rel="noopener">'
+        . 'เปิด charge นี้ใน Omise Dashboard (test)</a></p>';
+}
+
 /**
  * GET /charges/{id} พร้อม expand source (ต้อง include config.php ก่อน)
+ *
+ * @param bool $autoMarkTestPaid บริจาคทั่วไป: true + OMISE_TEST_AUTO_MARK_PAID จะ mark ถ้ายัง pending
+ * @param bool $foundationServiceChargeTest มูลนิธิค่าบริการ 5%: mark ทันทีเมื่อเป็นคีย์ทดสอบ Omise
  */
-function drawdream_omise_fetch_charge(string $chargeId): ?array
-{
+function drawdream_omise_fetch_charge(
+    string $chargeId,
+    bool $autoMarkTestPaid = false,
+    bool $foundationServiceChargeTest = false
+): ?array {
     $chargeId = trim($chargeId);
     if ($chargeId === '') {
         return null;
@@ -305,7 +471,25 @@ function drawdream_omise_fetch_charge(string $chargeId): ?array
         return null;
     }
     $decoded = json_decode($http['body'], true);
-    return is_array($decoded) ? $decoded : null;
+    if (!is_array($decoded)) {
+        return null;
+    }
+
+    if (drawdream_omise_charge_is_awaiting_payment($decoded)) {
+        if ($foundationServiceChargeTest && drawdream_omise_is_test_mode()) {
+            $marked = drawdream_omise_mark_charge_as_paid_for_test($chargeId, true);
+            if (is_array($marked)) {
+                return $marked;
+            }
+        } elseif ($autoMarkTestPaid) {
+            $marked = drawdream_omise_mark_charge_as_paid_for_test($chargeId, false);
+            if (is_array($marked)) {
+                return $marked;
+            }
+        }
+    }
+
+    return $decoded;
 }
 
 function drawdream_omise_error_for_human(string $err): string

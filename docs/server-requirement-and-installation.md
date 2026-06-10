@@ -582,7 +582,7 @@ $url = "http://127.0.0.1:$Port/login.php"
 | ขั้น | รายการ | อ้างอิง config |
 |------|--------|----------------|
 | 1 | ติดตั้ง Nginx/Apache + **PHP 8.2** + extensions | ข้อ 1.3 |
-| 2 | อัปโหลดโค้ด → document root = รากที่มี `login.php` | — |
+| 2 | อัปโหลดโค้ด → document root = รากที่มี `index.php`, `homepage.php` | `index.php` redirect → `homepage.php` |
 | 3 | สร้าง `config/db.local.php` หรือตั้ง env บน VPS | `db.php` 23–46 |
 | 4 | ตั้ง `payment/config.php` คีย์ Omise **Live** | บรรทัด 32–34 |
 | 5 | สร้าง `.env` → `OMISE_WEBHOOK_SECRET` | `omise_webhook.php` 79 |

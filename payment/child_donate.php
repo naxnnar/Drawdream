@@ -1,11 +1,9 @@
 <?php
 // payment/child_donate.php — รับ POST สร้าง Omise charge แล้วไป scan_qr.php (PromptPay จริงจาก Omise test/live)
 // สรุปสั้น: รับจำนวนเงินบริจาคเด็ก สร้าง charge และบันทึกรายการ pending ก่อนพาไปหน้า QR
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include '../db.php';
 include 'config.php';
+drawdream_payment_require_omise_keys();
 require_once __DIR__ . '/omise_helpers.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
@@ -32,7 +30,7 @@ $stmt = $conn->prepare("
     SELECT c.*, COALESCE(NULLIF(c.foundation_name, ''), fp.foundation_name) AS display_foundation_name
     FROM foundation_children c
     LEFT JOIN foundation_profile fp ON c.foundation_id = fp.foundation_id
-    WHERE c.child_id = ? AND c.approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') AND c.deleted_at IS NULL
+    WHERE c.child_id = ? AND c.approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ')
     LIMIT 1
 ");
 $stmt->bind_param('i', $child_id);
@@ -44,7 +42,7 @@ if (!$child) {
     exit;
 }
 
-if (!drawdream_child_can_receive_donation($conn, $child_id, $child)) {
+if (!drawdream_child_can_receive_daily_donation($conn, $child_id, $child)) {
     header('Location: ../children_donate.php?id=' . $child_id);
     exit;
 }
@@ -53,6 +51,8 @@ if (!($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay']))) {
     header('Location: ../children_donate.php?id=' . $child_id);
     exit;
 }
+
+drawdream_csrf_require_valid('../children_donate.php?id=' . $child_id);
 
 function omise_request(string $method, string $path, array $data = []): array {
     $jsonBody = ($method === 'POST') ? json_encode($data) : null;

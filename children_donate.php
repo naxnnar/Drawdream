@@ -3,19 +3,26 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน children donate
 
-session_start();
 include 'db.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/payment/config.php';
+require_once __DIR__ . '/payment/omise_helpers.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/notification_audit.php';
 drawdream_child_sponsorship_ensure_columns($conn);
 drawdream_child_outcome_ensure_columns($conn);
+require_once __DIR__ . '/includes/child_outcome_history.php';
 drawdream_child_omise_subscription_ensure_schema($conn);
 
 $child_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if (isset($_GET['notif_read']) && isset($_SESSION['user_id'])) {
+    $notifReadId = (int)$_GET['notif_read'];
+    if ($notifReadId > 0) {
+        drawdream_notifications_mark_read($conn, (int)$_SESSION['user_id'], $notifReadId);
+    }
+}
 $role = $_SESSION['role'] ?? 'donor';
 $isLoggedIn = isset($_SESSION['user_id']) && (int)($_SESSION['user_id'] ?? 0) > 0;
 $loginRequiredDonateMsg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
@@ -29,7 +36,7 @@ $sql = "
     WHERE c.child_id = ?
 ";
 if (!$isAdmin) {
-    $sql .= ' AND c.deleted_at IS NULL';
+    $sql .= '';
 }
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $child_id);
@@ -81,31 +88,17 @@ if ($reviewStatus === 'ไม่อนุมัติ') {
 
 $canDonate = drawdream_child_can_receive_donation($conn, $child_id, $child);
 $donorUid = (int)($_SESSION['user_id'] ?? 0);
-$activeChildSub = null;
-if ($role === 'donor' && $donorUid > 0) {
-    $stActiveSub = $conn->prepare(
-        "SELECT donate_id AS id, recurring_plan_code AS plan_code,
-                recurring_next_charge_at AS next_charge_at, current_status AS status
-         FROM child_subscription_history
-         WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'
-         ORDER BY history_id DESC
-         LIMIT 1"
-    );
-    if ($stActiveSub) {
-        $stActiveSub->bind_param('ii', $child_id, $donorUid);
-        $stActiveSub->execute();
-        $activeChildSub = $stActiveSub->get_result()->fetch_assoc() ?: null;
-        if (is_array($activeChildSub)) {
-            $spec = drawdream_child_subscription_plan((string)($activeChildSub['plan_code'] ?? ''));
-            $activeChildSub['amount_thb'] = is_array($spec) ? (float)($spec['amount_thb'] ?? 0) : 0.0;
-        }
-    }
-}
+$activeChildSub = ($role === 'donor' && $donorUid > 0)
+    ? drawdream_donor_active_child_subscription_for_child($conn, $donorUid, $child_id)
+    : null;
 $hasActiveChildSub = is_array($activeChildSub);
 $canStartChildSub = ($role === 'donor' && $donorUid > 0)
     ? drawdream_child_can_start_omise_subscription($conn, $child_id, $child, $donorUid)
     : false;
 $anyPlanSponsor = drawdream_child_has_any_active_subscription($conn, $child_id);
+$recurringBlockedForDonor = ($role === 'donor' && $donorUid > 0)
+    ? drawdream_child_subscription_recurring_blocked_for_donor($conn, $child_id, $donorUid)
+    : $anyPlanSponsor;
 $planMapShowcase = drawdream_child_ids_with_active_plan_sponsorship($conn, [$child_id]);
 $donorShowcaseSponsored = drawdream_child_is_showcase_sponsored(
     $conn,
@@ -194,8 +187,11 @@ $cycleRemainingAmount = max(0.0, $cycleTargetAmount - $cycleAmountNow);
 $cycleProgressPercent = $cycleTargetAmount > 0
     ? min(100.0, max(0.0, ($cycleAmountNow / $cycleTargetAmount) * 100.0))
     : 0.0;
-/** บริจาครายวัน (PromptPay): ขั้นต่ำ 20 บาท ไม่จำกัดยอดสูงสุดต่อครั้ง — เป้ารอบเดือน (เช่น 700) เป็นแค่เกณฑ์ครบอุปการะ ไม่ใช่เพดานชำระ */
-$dailyCanDonate = $canDonate;
+/** บริจาครายวัน (PromptPay): ขั้นต่ำ 20 บาท ไม่จำกัดยอดสูงสุดต่อครั้ง — เปิดได้แม้มีผู้อุปการะรายรอบแล้ว */
+$dailyCanDonate = drawdream_child_can_receive_daily_donation($conn, $child_id, $child);
+$childHasPlanSponsor = $donorShowcaseSponsored || $hasActiveChildSub || $anyPlanSponsor || $recurringBlockedForDonor;
+$showDonorDonationBox = ($role === 'donor')
+    && ($canStartChildSub || !$isLoggedIn || ($childHasPlanSponsor && $dailyCanDonate));
 $sponsorshipLabel = drawdream_child_is_cycle_sponsored($conn, $child_id, $child) ? 'อุปการะแล้ว' : 'รออุปการะ';
 $foundationCanUpdateOutcome = ($role === 'foundation')
     && drawdream_foundation_account_is_verified($conn)
@@ -230,14 +226,30 @@ if (is_array($activeChildSub)) {
         }
     }
 }
+$letterParam = trim((string)($_GET['letter'] ?? ''));
+$donorIncomingLetter = ($role === 'donor' && in_array($letterParam, ['1', 'open'], true));
+
 $childView = (string)($_GET['view'] ?? 'sponsor');
 if (!in_array($childView, ['sponsor', 'outcome'], true)) {
     $childView = 'sponsor';
 }
+if ($donorIncomingLetter) {
+    $childView = 'outcome';
+}
 $showOutcomeTab = $donorShowcaseSponsored || $outcomeHasContent || $hasCancelledSubHistory;
+if ($donorIncomingLetter) {
+    $showOutcomeTab = true;
+}
 if (!$showOutcomeTab) {
     $childView = 'sponsor';
 }
+$childOutcomeHeading = 'ข้อความจากน้อง' . trim((string)($child['child_name'] ?? ''));
+$childOutcomeHistory = [];
+if ($childView === 'outcome' && ($showOutcomeTab || $role === 'foundation' || $role === 'admin')) {
+    $childOutcomeHistory = drawdream_child_outcome_history_list($child_id);
+}
+/** เปิดจากแจ้งเตือนจดหมาย — แสดงกระดาษข้อความทันที (ไม่มีซอง) */
+$donorLetterExperience = $donorIncomingLetter && $childView === 'outcome';
 
 /** ไอคอน PromptPay บนหน้าเด็ก — ใช้ path เดียวกับ payment_project.php */
 $qrIconSrc = 'img/qr-code.png';
@@ -256,16 +268,19 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <title>โปรไฟล์ - <?php echo htmlspecialchars($child['child_name']); ?></title>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/children.css?v=36">
+    <link rel="stylesheet" href="css/children.css?v=48">
     <?php if ($isAdmin): ?>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <?php endif; ?>
 </head>
-<body class="<?php echo $isAdmin ? 'admin-child-review-page' : ''; ?>">
+<body class="<?php
+    echo $isAdmin ? 'admin-child-review-page' : '';
+    echo $donorLetterExperience ? ' child-letter-notif-view' : '';
+?>">
 
 <?php include 'navbar.php'; ?>
 
@@ -399,7 +414,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             <div class="stat-box stat-box--education-fund">
                                 <div class="stat-icon"><i class="bi bi-mortarboard-fill"></i></div>
                                 <div class="stat-num"><?php echo number_format($adminEducationFundTotal, 0); ?></div>
-                                <div class="stat-label">ทุนการศึกษา (ส่วนเกิน 700 บ. / ครั้ง รายวัน)</div>
+                                <div class="stat-label">ทุนการศึกษา (บริจาครายวัน)</div>
                             </div>
                         </div>
                     </div>
@@ -411,6 +426,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     <?php if ($showChildInspectActions): ?>
                     <p class="admin-review-actions-note">การไม่อนุมัติจะอัปเดตสถานะโปรไฟล์เด็กในระบบ — มูลนิธิสามารถแก้ไขและส่งพิจารณาใหม่ได้</p>
                     <form method="post" action="admin_approve_children.php" class="admin-review-actions-form">
+                        <?= drawdream_csrf_field() ?>
                         <input type="hidden" name="id" value="<?php echo (int)$child_id; ?>">
                         <input type="hidden" name="return" value="admin_notifications.php#admin-pending-children">
                         <div class="admin-review-actions-grid">
@@ -434,7 +450,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
         <div class="profile-labels" role="tablist" aria-label="เมนูโปรไฟล์เด็ก">
             <a href="children_donate.php?id=<?php echo (int)$child['child_id']; ?>&view=sponsor" class="profile-label-tab<?php echo $childView === 'sponsor' ? ' is-active' : ''; ?>" role="tab" aria-selected="<?php echo $childView === 'sponsor' ? 'true' : 'false'; ?>">เด็กรายบุคคล</a>
             <?php if ($showOutcomeTab): ?>
-            <a href="children_donate.php?id=<?php echo (int)$child['child_id']; ?>&view=outcome" class="profile-label-tab<?php echo $childView === 'outcome' ? ' is-active' : ''; ?>" role="tab" aria-selected="<?php echo $childView === 'outcome' ? 'true' : 'false'; ?>">ผลลัพธ์</a>
+            <a href="children_donate.php?id=<?php echo (int)$child['child_id']; ?>&view=outcome" class="profile-label-tab<?php echo $childView === 'outcome' ? ' is-active' : ''; ?>" role="tab" aria-selected="<?php echo $childView === 'outcome' ? 'true' : 'false'; ?>"><?php echo htmlspecialchars($childOutcomeHeading); ?></a>
             <?php endif; ?>
         </div>
 
@@ -443,6 +459,13 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                 <div class="child-img-container">
                     <img src="uploads/childern/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="Profile">
                 </div>
+                <?php if ($role === 'donor' && $hasActiveChildSub): ?>
+                <form method="post" action="payment/child_subscription_cancel.php" class="child-cancel-below-photo-form js-confirm-cancel-sub" data-child-name="<?php echo htmlspecialchars((string)($child['child_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    <?= drawdream_csrf_field() ?>
+                    <input type="hidden" name="child_id" value="<?php echo (int)$child['child_id']; ?>">
+                    <button type="submit" class="btn-subscription-cancel btn-subscription-cancel--compact">ยกเลิกอุปการะเด็กคนนี้</button>
+                </form>
+                <?php endif; ?>
                 <div class="child-details">
                     <p><strong>ชื่อ</strong> <?php echo htmlspecialchars($child['child_name']); ?></p>
                     <p><strong>มูลนิธิ</strong> <?php echo htmlspecialchars($child['display_foundation_name'] ?? '-'); ?></p>
@@ -451,12 +474,6 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     <p><strong>อายุ</strong> <?php echo (int)$child['age']; ?> ปี</p>
                     <p><strong>อาชีพในฝัน</strong> <?php echo htmlspecialchars($child['dream']); ?></p>
                     <p><strong>พรที่ขอ</strong> <?php echo htmlspecialchars($child['wish']); ?></p>
-                    <?php if ($role === 'donor' && $hasActiveChildSub): ?>
-                    <form method="post" action="payment/child_subscription_cancel.php" class="child-cancel-below-wish-form js-confirm-cancel-sub" data-child-name="<?php echo htmlspecialchars((string)($child['child_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                        <input type="hidden" name="child_id" value="<?php echo (int)$child['child_id']; ?>">
-                        <button type="submit" class="btn-subscription-cancel btn-subscription-cancel--large">ยกเลิกอุปการะเด็กคนนี้</button>
-                    </form>
-                    <?php endif; ?>
                     <?php if (($role === 'foundation' || $role === 'admin') && $reviewStatus === 'ไม่อนุมัติ' && $childRejectReasonUi !== ''): ?>
                     <p style="color:#b32525;"><strong>เหตุผลไม่อนุมัติ:</strong> <?php echo htmlspecialchars($childRejectReasonUi); ?></p>
                     <?php endif; ?>
@@ -478,37 +495,6 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     <div class="child-sub-cancelled-notice__hint">
                         หากกดต่อ <strong>ราย 6 เดือน</strong> จะนับช่วง <strong><?php echo htmlspecialchars($nextSemiannualCycleLabel); ?></strong>
                     </div>
-                </div>
-                <?php endif; ?>
-
-                <?php if ($role === 'donor' && ($donorShowcaseSponsored || $hasActiveChildSub || $anyPlanSponsor)): ?>
-                <div class="child-subscription-box mt-2">
-                    <div class="sub-plan-grid" role="group" aria-label="รูปแบบการบริจาค">
-                        <button type="button" class="sub-plan-btn sub-mode-btn" disabled>รายวัน</button>
-                        <button type="button" class="sub-plan-btn sub-mode-btn active" disabled>รายเดือน</button>
-                        <button type="button" class="sub-plan-btn sub-mode-btn" disabled>รายปี</button>
-                    </div>
-                    <div class="sub-section">
-                        <div class="sub-cycle-grid" role="group" aria-label="รอบอุปการะ">
-                            <button type="button" class="sub-cycle-btn active" disabled>
-                                <span class="sub-cycle-amt">700</span>
-                                <span class="sub-cycle-note">บาท / รายเดือน</span>
-                            </button>
-                            <button type="button" class="sub-cycle-btn" disabled>
-                                <span class="sub-cycle-amt">4200</span>
-                                <span class="sub-cycle-note">บาท / ราย 6 เดือน</span>
-                            </button>
-                        </div>
-                        <div class="sub-plan-summary sub-plan-summary--prominent" aria-live="polite">
-                            <div class="sub-summary-main">
-                                <span class="sub-summary-period">รายเดือน</span>
-                            </div>
-                            <div class="sub-summary-amt">700 บาท</div>
-                        </div>
-                    </div>
-                    <button type="button" class="btn-submit-donation btn-submit-donation--sub" disabled aria-disabled="true" title="เด็กคนนี้มีผู้อุปการะแล้ว">
-                        มีผู้อุปการะแล้ว
-                    </button>
                 </div>
                 <?php endif; ?>
 
@@ -549,7 +535,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         <div class="stat-box stat-box--education-fund">
                             <div class="stat-icon"><i class="bi bi-mortarboard-fill"></i></div>
                             <div class="stat-num"><?php echo number_format($educationFundTotal, 0); ?></div>
-                            <div class="stat-label">ทุนการศึกษา (ส่วนเกิน 700 บ. / ครั้ง รายวัน)</div>
+                            <div class="stat-label">ทุนการศึกษา (บริจาครายวัน)</div>
                         </div>
                     </div>
                     <div class="foundation-sponsors-list">
@@ -573,16 +559,26 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                 </div>
                 <?php endif; ?>
 
-                <?php if ($role === 'donor' && !$donorShowcaseSponsored && ($canStartChildSub || !$isLoggedIn)): ?>
+                <?php if ($showDonorDonationBox): ?>
                 <div class="child-subscription-box mt-2">
+                    <?php if (drawdream_omise_is_test_mode()): ?>
+                    <div class="child-omise-test-hint" role="note">
+                        <strong>โหมดทดสอบ Omise</strong> — กรอกในหน้าต่างบัตร:
+                        เลข <span class="child-omise-test-hint__mono">4242&nbsp;4242&nbsp;4242&nbsp;4242</span>,
+                        หมดอายุอนาคต เช่น <span class="child-omise-test-hint__mono">12/29</span>,
+                        CVV <span class="child-omise-test-hint__mono">123</span>,
+                        ชื่ออะไรก็ได้
+                    </div>
+                    <?php endif; ?>
                     <div class="sub-plan-grid" role="tablist" aria-label="เลือกรูปแบบการบริจาค">
-                        <button type="button" class="sub-plan-btn sub-mode-btn" data-mode="daily">รายวัน</button>
-                        <button type="button" class="sub-plan-btn sub-mode-btn active" data-mode="monthly">รายเดือน</button>
+                        <button type="button" class="sub-plan-btn sub-mode-btn<?php echo $childHasPlanSponsor ? ' active' : ''; ?>" data-mode="daily">รายวัน</button>
+                        <button type="button" class="sub-plan-btn sub-mode-btn<?php echo $childHasPlanSponsor ? '' : ' active'; ?>" data-mode="monthly">รายเดือน</button>
                         <button type="button" class="sub-plan-btn sub-mode-btn" data-mode="yearly">รายปี</button>
                     </div>
 
-                    <div id="subSectionDaily" class="sub-section sub-section--hidden" hidden>
+                    <div id="subSectionDaily" class="sub-section<?php echo $childHasPlanSponsor ? '' : ' sub-section--hidden'; ?>"<?php echo $childHasPlanSponsor ? '' : ' hidden'; ?>>
                         <form id="childDailyForm" method="post" action="<?php echo $isLoggedIn ? 'payment/child_donate.php' : htmlspecialchars($loginRequiredDonateUrl, ENT_QUOTES, 'UTF-8'); ?>" class="child-daily-form">
+                            <?= $isLoggedIn ? drawdream_csrf_field() : '' ?>
                             <input type="hidden" name="child_id" value="<?php echo (int)$child['child_id']; ?>">
                             <?php if ($isLoggedIn): ?>
                             <input type="hidden" name="pay" value="1">
@@ -599,7 +595,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         </form>
                     </div>
 
-                    <div id="subSectionCard" class="sub-section">
+                    <div id="subSectionCard" class="sub-section<?php echo $childHasPlanSponsor ? ' sub-section--hidden' : ''; ?>"<?php echo $childHasPlanSponsor ? ' hidden' : ''; ?>>
                         <div id="subMonthlyCycles" class="sub-cycle-grid" role="group" aria-label="เลือกรอบอุปการะ">
                             <button type="button" class="sub-cycle-btn active" data-plan="monthly" data-baht="700" data-satang="70000" data-period-text="รายเดือน">
                                 <span class="sub-cycle-amt">700</span>
@@ -616,18 +612,23 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             </div>
                             <div class="sub-summary-amt"><span id="subAmountLabel">700</span> บาท</div>
                         </div>
-                        <form id="childSubForm" method="post" action="<?php echo $isLoggedIn ? 'payment/child_subscription_create.php' : htmlspecialchars($loginRequiredDonateUrl, ENT_QUOTES, 'UTF-8'); ?>" class="child-sub-form">
+                        <form id="childSubForm" method="post" action="<?php echo $isLoggedIn ? 'payment/child_subscription_create.php' : htmlspecialchars($loginRequiredDonateUrl, ENT_QUOTES, 'UTF-8'); ?>" class="child-sub-form"<?php echo $childHasPlanSponsor ? ' hidden' : ''; ?>>
+                            <?= $isLoggedIn ? drawdream_csrf_field() : '' ?>
                             <input type="hidden" name="child_id" value="<?php echo (int)$child['child_id']; ?>">
                             <input type="hidden" name="plan" id="subPlanField" value="monthly">
                             <input type="hidden" name="omiseToken" id="omiseTokenField" value="">
                             <button type="<?php echo $isLoggedIn ? 'button' : 'submit'; ?>" class="btn-submit-donation btn-submit-donation--sub" id="btnChildSubscribe">บริจาค</button>
                         </form>
+                        <?php if ($childHasPlanSponsor): ?>
+                        <button type="button" class="btn-submit-donation btn-submit-donation--sub" id="btnChildSponsorLocked" hidden disabled aria-disabled="true" title="เด็กคนนี้มีผู้อุปการะแล้ว">มีผู้อุปการะแล้ว</button>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <script type="text/javascript" src="https://cdn.omise.co/omise.js"></script>
                 <script>
                 (function () {
                     var isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+                    var planSponsorLocked = <?php echo $childHasPlanSponsor ? 'true' : 'false'; ?>;
                     var pk = <?php echo json_encode(OMISE_PUBLIC_KEY, JSON_UNESCAPED_UNICODE); ?>;
                     if (typeof OmiseCard !== 'undefined') {
                         OmiseCard.configure({ publicKey: pk });
@@ -642,6 +643,8 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     var periodLabel = document.getElementById('subPeriodLabel');
                     var dailyInput = document.getElementById('dailyAmountInput');
                     var dailyForm = document.getElementById('childDailyForm');
+                    var subForm = document.getElementById('childSubForm');
+                    var lockedBtn = document.getElementById('btnChildSponsorLocked');
                     var satang = 70000;
 
                     function setSectionVisibility(dailyOn) {
@@ -676,12 +679,26 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         satang = 840000;
                     }
 
+                    function syncSubscriptionLockedUi(mode) {
+                        var recurringLocked = planSponsorLocked && mode !== 'daily';
+                        cycleBtns.forEach(function (x) {
+                            x.disabled = recurringLocked;
+                        });
+                        if (subForm) {
+                            subForm.hidden = recurringLocked;
+                        }
+                        if (lockedBtn) {
+                            lockedBtn.hidden = !recurringLocked;
+                        }
+                    }
+
                     function applyMode(mode) {
                         modeBtns.forEach(function (b) {
                             b.classList.toggle('active', b.getAttribute('data-mode') === mode);
                         });
                         if (mode === 'daily') {
                             setSectionVisibility(true);
+                            syncSubscriptionLockedUi(mode);
                             return;
                         }
                         setSectionVisibility(false);
@@ -693,6 +710,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             var a = document.querySelector('.sub-cycle-btn.active');
                             syncFromCycleButton(a || cycleBtns[0]);
                         }
+                        syncSubscriptionLockedUi(mode);
                     }
 
                     modeBtns.forEach(function (btn) {
@@ -726,40 +744,105 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         });
                     }
 
-                    applyMode('monthly');
+                    applyMode(planSponsorLocked ? 'daily' : 'monthly');
 
                     var form = document.getElementById('childSubForm');
                     var tok = document.getElementById('omiseTokenField');
                     var cardBtn = document.getElementById('btnChildSubscribe');
+                    var childIdForSlot = <?php echo (int)$child['child_id']; ?>;
+
+                    function openChildSubscribeCard() {
+                        OmiseCard.open({
+                            amount: satang,
+                            currency: 'THB',
+                            defaultPaymentMethod: 'credit_card',
+                            onCreateTokenSuccess: function (nonce) {
+                                if (typeof nonce === 'string' && nonce.indexOf('tokn_') === 0) {
+                                    tok.value = nonce;
+                                    form.submit();
+                                } else {
+                                    alert('โทเค็นไม่ถูกต้อง กรุณาลองใหม่');
+                                }
+                            }
+                        });
+                    }
+
+                    function checkChildSponsorSlotThenPay() {
+                        var url = 'payment/child_sponsorship_slot_check.php?child_id='
+                            + encodeURIComponent(String(childIdForSlot));
+                        return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                            .then(function (res) { return res.json(); })
+                            .then(function (data) {
+                                if (data && data.can_subscribe) {
+                                    return true;
+                                }
+                                var msg = (data && data.message)
+                                    ? data.message
+                                    : 'ไม่สามารถสมัครอุปการะได้ในขณะนี้';
+                                alert(msg);
+                                if (data && (data.reason === 'taken' || data.reason === 'reserving')) {
+                                    window.location.reload();
+                                }
+                                return false;
+                            })
+                            .catch(function () {
+                                alert('ตรวจสอบสิทธิ์อุปการะไม่สำเร็จ กรุณาลองใหม่');
+                                return false;
+                            });
+                    }
+
                     if (isLoggedIn && cardBtn && form && tok && typeof OmiseCard !== 'undefined') {
                         cardBtn.addEventListener('click', function (e) {
                             e.preventDefault();
-                            OmiseCard.open({
-                                amount: satang,
-                                currency: 'THB',
-                                defaultPaymentMethod: 'credit_card',
-                                onCreateTokenSuccess: function (nonce) {
-                                    if (typeof nonce === 'string' && nonce.indexOf('tokn_') === 0) {
-                                        tok.value = nonce;
-                                        form.submit();
-                                    } else {
-                                        alert('โทเค็นไม่ถูกต้อง กรุณาลองใหม่');
-                                    }
+                            if (planSponsorLocked) {
+                                return;
+                            }
+                            checkChildSponsorSlotThenPay().then(function (ok) {
+                                if (ok) {
+                                    openChildSubscribeCard();
                                 }
                             });
                         });
                     }
+
+                    if (isLoggedIn && !planSponsorLocked && childIdForSlot > 0) {
+                        window.setInterval(function () {
+                            if (document.hidden) {
+                                return;
+                            }
+                            fetch('payment/child_sponsorship_slot_check.php?child_id='
+                                + encodeURIComponent(String(childIdForSlot)),
+                                { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                                .then(function (res) { return res.json(); })
+                                .then(function (data) {
+                                    if (data && !data.can_subscribe
+                                        && (data.reason === 'taken' || data.reason === 'reserving')) {
+                                        if (sectionCard && !sectionCard.hasAttribute('hidden')) {
+                                            applyMode('daily');
+                                            if (typeof alert === 'function') {
+                                                alert(data.message || 'มีผู้อุปการะสมัครไปก่อนแล้ว');
+                                            }
+                                        }
+                                    }
+                                })
+                                .catch(function () { /* ignore poll errors */ });
+                        }, 15000);
+                    }
                 })();
                 </script>
-                <?php elseif ($role === 'donor' && !$donorShowcaseSponsored && !($canStartChildSub || !$isLoggedIn)): ?>
+                <?php elseif ($role === 'donor' && !$showDonorDonationBox): ?>
                 <p class="text-muted mt-3">โปรไฟล์เด็กยังไม่อนุมัติหรือถูกซ่อน จึงยังไม่เปิดรับการสมัครอุปการะรายรอบ</p>
                 <?php endif; ?>
 
                 <?php else: ?>
-                <h1 class="brand-header">ผลลัพธ์</h1>
+                <?php if ($donorLetterExperience): ?>
+                <div class="child-mail-experience child-mail-experience--paper-only" id="childMailExperience">
+                    <div id="childMailLetterPaper" class="child-mail-letter-paper child-mail-letter-paper--donor is-visible">
+                <div class="child-mail-letter-airmail">
+                <div class="child-mail-letter-airmail__inner">
                 <?php if ($outcomeHasContent): ?>
-                <div class="child-outcome-public child-outcome-public--tab">
-                    <div class="child-outcome-public__label"><i class="bi bi-megaphone-fill" aria-hidden="true"></i> อัปเดตจากมูลนิธิ</div>
+                <div class="child-outcome-public child-outcome-public--tab child-outcome-public--letter">
+                    <div class="child-outcome-public__label"><i class="bi bi-envelope-heart-fill" aria-hidden="true"></i> ข้อความจากมูลนิธิ</div>
                     <div class="child-outcome-tab-layout">
                         <?php if ($impressionMainSrc): ?>
                         <div class="child-outcome-tab-layout__media">
@@ -783,13 +866,75 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     </div>
                 </div>
                 <?php else: ?>
-                <div class="child-outcome-public child-outcome-public--tab">
-                    <div class="child-outcome-public__label"><i class="bi bi-megaphone-fill" aria-hidden="true"></i> ผลลัพธ์</div>
+                <div class="child-outcome-public child-outcome-public--tab child-outcome-public--letter">
+                    <div class="child-outcome-public__label"><i class="bi bi-envelope-heart-fill" aria-hidden="true"></i> ข้อความจากมูลนิธิ</div>
                     <p class="child-outcome-public__placeholder mb-0">กำลังดำเนินการ</p>
                     <p class="child-impression-card__attribution">น้อง<?php echo htmlspecialchars($child['child_name'] ?? ''); ?><?php echo $educationLabel !== '' ? ' · นักเรียนชั้น' . htmlspecialchars($educationLabel) : ''; ?></p>
                     <?php if (!empty($outcomeUpdatedAt)): ?>
                     <p class="child-outcome-public__meta">อัปเดตเมื่อ <?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string)$outcomeUpdatedAt))); ?></p>
                     <?php endif; ?>
+                </div>
+                <?php endif; ?>
+                <?php if ($childOutcomeHistory !== []): ?>
+                <?php echo drawdream_child_outcome_history_html(
+                    $childOutcomeHistory,
+                    trim((string)($child['child_name'] ?? '')),
+                    $educationLabel
+                ); ?>
+                <?php endif; ?>
+                </div>
+                </div>
+                </div>
+                </div>
+                <?php else: ?>
+                <div id="childMailLetterPaper" class="child-mail-letter-paper<?php echo ($role === 'donor') ? ' child-mail-letter-paper--donor' : ''; ?>">
+                <h1 class="brand-header"><?php echo htmlspecialchars($childOutcomeHeading); ?></h1>
+                <div class="child-mail-letter-airmail">
+                <div class="child-mail-letter-airmail__inner">
+                <?php if ($outcomeHasContent): ?>
+                <div class="child-outcome-public child-outcome-public--tab child-outcome-public--letter">
+                    <div class="child-outcome-public__label"><i class="bi bi-envelope-heart-fill" aria-hidden="true"></i> ข้อความจากมูลนิธิ</div>
+                    <div class="child-outcome-tab-layout">
+                        <?php if ($impressionMainSrc): ?>
+                        <div class="child-outcome-tab-layout__media">
+                            <img src="<?php echo htmlspecialchars($impressionMainSrc, ENT_QUOTES, 'UTF-8'); ?>" alt="" class="child-outcome-tab-layout__img" loading="lazy" decoding="async">
+                        </div>
+                        <?php endif; ?>
+                        <div class="child-outcome-tab-layout__content">
+                            <?php if ($outcomePublic !== ''): ?>
+                            <div class="child-outcome-public__text"><?php echo nl2br(htmlspecialchars($outcomePublic)); ?></div>
+                            <?php else: ?>
+                            <p class="child-outcome-public__placeholder mb-0">อยู่ในขั้นตอนดำเนินการ</p>
+                            <?php endif; ?>
+                            <p class="child-impression-card__attribution">น้อง<?php echo htmlspecialchars($child['child_name'] ?? ''); ?><?php echo $educationLabel !== '' ? ' · นักเรียนชั้น' . htmlspecialchars($educationLabel) : ''; ?></p>
+                            <?php if (!empty($outcomeUpdatedAt)): ?>
+                            <p class="child-outcome-public__meta">โพสต์เมื่อ <?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string)$outcomeUpdatedAt))); ?></p>
+                            <?php endif; ?>
+                            <?php if ($outcomeImageList !== [] && count($outcomeImageList) > 1): ?>
+                            <?php echo drawdream_child_outcome_images_html(array_slice($outcomeImageList, 1)); ?>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div class="child-outcome-public child-outcome-public--tab child-outcome-public--letter">
+                    <div class="child-outcome-public__label"><i class="bi bi-envelope-heart-fill" aria-hidden="true"></i> ข้อความจากมูลนิธิ</div>
+                    <p class="child-outcome-public__placeholder mb-0">กำลังดำเนินการ</p>
+                    <p class="child-impression-card__attribution">น้อง<?php echo htmlspecialchars($child['child_name'] ?? ''); ?><?php echo $educationLabel !== '' ? ' · นักเรียนชั้น' . htmlspecialchars($educationLabel) : ''; ?></p>
+                    <?php if (!empty($outcomeUpdatedAt)): ?>
+                    <p class="child-outcome-public__meta">อัปเดตเมื่อ <?php echo htmlspecialchars(date('d/m/Y H:i', strtotime((string)$outcomeUpdatedAt))); ?></p>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
+                <?php if ($childOutcomeHistory !== []): ?>
+                <?php echo drawdream_child_outcome_history_html(
+                    $childOutcomeHistory,
+                    trim((string)($child['child_name'] ?? '')),
+                    $educationLabel
+                ); ?>
+                <?php endif; ?>
+                </div>
+                </div>
                 </div>
                 <?php endif; ?>
                 <?php if ($role === 'donor' && $hasActiveChildSub): ?>
@@ -810,6 +955,16 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
 </main>
 <?php endif; ?>
 
+<?php if ($donorLetterExperience): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var target = document.getElementById('childMailExperience');
+    if (target && target.scrollIntoView) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
+</script>
+<?php endif; ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function () {

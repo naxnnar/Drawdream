@@ -42,7 +42,7 @@ function drawdream_donate_type_label_thai(?string $code): string
         'child_subscription_charge' => 'อุปการะเด็ก (หักรายรอบ)',
         'child_one_time' => 'บริจาคเด็กครั้งเดียว',
         'project' => 'บริจาคโครงการ',
-        'need_item' => 'บริจาคสิ่งของ',
+        'need_item' => 'บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ',
         'need_service_charge' => 'ค่าบริการระบบ (รายการสิ่งของ)',
         'project_service_charge' => 'ค่าบริการระบบ (โครงการ)',
         '' => '-',

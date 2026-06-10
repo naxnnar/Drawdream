@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_notifications.php — ศูนย์รวมงานรออนุมัติและลิงก์คิว
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน notifications
@@ -34,7 +34,7 @@ if ($qFoundation) {
 $qChildren = mysqli_query($conn, "
     SELECT c.child_id, c.child_name, c.foundation_name, c.approve_profile, c.status
     FROM foundation_children c
-    WHERE COALESCE(c.approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ') AND c.deleted_at IS NULL
+    WHERE COALESCE(c.approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')
     ORDER BY c.child_id DESC
     LIMIT 50
 ");
@@ -49,7 +49,7 @@ $pendingExpr = drawdream_sql_project_is_pending('project_status');
 $qProjects = mysqli_query($conn, "
     SELECT project_id, project_name, foundation_name, end_date, start_date
     FROM foundation_project
-    WHERE {$pendingExpr} AND deleted_at IS NULL
+    WHERE {$pendingExpr}
     ORDER BY project_id DESC
     LIMIT 50
 ");
@@ -96,7 +96,7 @@ if (isset($_GET['err'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>คำขอรออนุมัติ | DrawDream Admin</title>
   <link rel="stylesheet" href="css/navbar.css">
   <style>

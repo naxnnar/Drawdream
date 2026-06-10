@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // donor_update_profile.php — แก้ไขโปรไฟล์ผู้บริจาค + อัปโหลดรูป + ข้อมูลใบเสร็จ
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donor update profile
 include 'db.php';
@@ -256,11 +256,11 @@ if ($defaultReceiptMobile === '') {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>แก้ไขโปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="css/donor_update_profile.css?v=6">
+    <link rel="stylesheet" href="css/donor_update_profile.css?v=8">
 </head>
 <body>
 
@@ -273,7 +273,7 @@ if ($defaultReceiptMobile === '') {
                 <?php if (!empty($profile['profile_image'])): ?>
                     <img src="uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" alt="" class="donor-avatar-img" id="avatarPreview">
                 <?php else: ?>
-                    <img src="img/donor-avatar-placeholder.svg" alt="" class="donor-avatar-img donor-avatar-img--placeholder" id="avatarPreview">
+                    <span class="donor-avatar-icon donor-avatar-img--placeholder" id="avatarPreview" aria-hidden="true"><i class="bi bi-person-fill"></i></span>
                 <?php endif; ?>
             </div>
             <button type="button" class="donor-avatar-fab" id="avatarFab" title="อัปโหลดรูปโปรไฟล์" aria-label="อัปโหลดรูปโปรไฟล์">
@@ -422,6 +422,15 @@ if ($defaultReceiptMobile === '') {
       if (!f || !f.type.match(/^image\//)) return;
       if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
       lastBlobUrl = URL.createObjectURL(f);
+      var ring = document.getElementById('avatarPreviewWrap');
+      if (preview.tagName === 'SPAN' && ring) {
+        var img = document.createElement('img');
+        img.id = 'avatarPreview';
+        img.className = 'donor-avatar-img';
+        img.alt = '';
+        ring.replaceChild(img, preview);
+        preview = img;
+      }
       preview.src = lastBlobUrl;
       preview.classList.remove('donor-avatar-img--placeholder');
     });

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_escrow.php — จัดการเงินค้ำ / escrow
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน escrow
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "SELECT p.project_name, fp.user_id, fp.foundation_name, p.service_charge_paid_at
              FROM foundation_project p
              JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-             WHERE p.project_id = ? AND p.deleted_at IS NULL"
+             WHERE p.project_id = ?"
         );
         $ps->bind_param('i', $project_id);
         $ps->execute();
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($proj && empty($proj['service_charge_paid_at'])) {
             $error = 'มูลนิธิยังไม่ได้ชำระค่าบริการระบบ — รอมูลนิธิชำระก่อนยืนยันโอนเงิน';
         } elseif ($proj) {
-            $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = ? AND deleted_at IS NULL");
+            $upd = $conn->prepare("UPDATE foundation_project SET project_status = 'purchasing' WHERE project_id = ?");
             $upd->bind_param('i', $project_id);
             $upd->execute();
             drawdream_escrow_funds_release_holding_for_project($conn, $project_id);
@@ -147,18 +147,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $completed_projects = mysqli_query($conn, "
     SELECT p.*, fp.foundation_name, fp.phone, fp.address, fp.bank_name, fp.bank_account_number
     FROM foundation_project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    WHERE p.project_status IN ('completed','purchasing') AND p.deleted_at IS NULL
+    WHERE p.project_status IN ('completed','purchasing')
     ORDER BY p.project_status ASC, p.project_id DESC
 ");
 $active_projects = mysqli_query($conn, "
     SELECT p.*, fp.foundation_name FROM foundation_project p
     JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    WHERE p.project_status = 'approved' AND p.deleted_at IS NULL ORDER BY p.project_id DESC
+    WHERE p.project_status = 'approved' ORDER BY p.project_id DESC
 ");
 $done_projects = mysqli_query($conn, "
     SELECT p.*, fp.foundation_name, p.update_images, p.update_text, p.update_at
     FROM foundation_project p JOIN foundation_profile fp ON p.foundation_id = fp.foundation_id
-    WHERE p.project_status = 'done' AND p.deleted_at IS NULL ORDER BY p.project_id DESC LIMIT 10
+    WHERE p.project_status = 'done' ORDER BY p.project_id DESC LIMIT 10
 ");
 $escrow_project_total = drawdream_escrow_project_holding_total_display($conn);
 
@@ -231,7 +231,7 @@ function drawdream_needlist_delivery_lines(array $need): array
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Escrow | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_escrow.css">

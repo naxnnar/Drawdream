@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_public_profile.php — โปรไฟล์มูลนิธิแบบสาธารณะ
 // หน้าโปรไฟล์มูลนิธิสาธารณะ (แสดงเฉพาะข้อมูลที่เหมาะให้ผู้บริจาคดู)
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน public profile
@@ -38,8 +38,7 @@ $foundationName = (string)($fp['foundation_name'] ?? '');
 $projectCount = 0;
 $stc = $conn->prepare(
     "SELECT COUNT(*) AS c FROM foundation_project
-     WHERE deleted_at IS NULL
-       AND project_status IN ('approved','completed','done')
+     WHERE project_status IN ('approved','completed','done')
        AND (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))"
 );
 if ($stc) {
@@ -84,7 +83,7 @@ $pageTitle = htmlspecialchars($foundationName !== '' ? $foundationName : 'มู
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= $pageTitle ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">

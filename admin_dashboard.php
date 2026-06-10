@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_dashboard.php — แดชบอร์ดแอดมิน
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน dashboard
@@ -6,6 +6,7 @@
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/escrow_funds_schema.php';
+require_once __DIR__ . '/includes/user_activity_tracking.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header("Location: index.php");
@@ -43,19 +44,19 @@ $total_donation    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM
 $today_donation    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COALESCE(SUM(amount),0) AS total FROM donation WHERE payment_status='completed' AND DATE(transfer_datetime) = CURDATE()"))['total'];
 $total_donors      = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM donor"))['cnt'];
 $total_foundations = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile"))['cnt'];
-$total_children    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE deleted_at IS NULL"))['cnt'];
+$total_children    = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children"))['cnt'];
 $pending_foundations = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile WHERE account_verified=0"))['cnt'];
 $pendingProjExprDash = drawdream_sql_project_is_pending('project_status');
-$pending_projects  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_project WHERE {$pendingProjExprDash} AND deleted_at IS NULL"))['cnt'];
+$pending_projects  = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_project WHERE {$pendingProjExprDash}"))['cnt'];
 $pending_needs     = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE approve_item='pending'"))['cnt'];
-$pending_children_dash = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ') AND deleted_at IS NULL"))['cnt'] ?? 0);
+$pending_children_dash = (int)(mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')"))['cnt'] ?? 0);
 // ยอดเงินพักโครงการ (สอดคล้อง admin_escrow.php — ใช้ escrow_funds.holding เมื่อมีข้อมูลในตาราง)
 $escrow_total = drawdream_escrow_project_holding_total_display($conn);
 
 $active_projects = [];
 $aprRes = mysqli_query($conn, "
     SELECT * FROM foundation_project
-    WHERE project_status IN ('approved','completed') AND deleted_at IS NULL
+    WHERE project_status IN ('approved','completed')
     ORDER BY project_status DESC, project_id DESC
     LIMIT 100
 ");
@@ -100,13 +101,15 @@ if ($nphRes) {
 // ======== ช่วงเริ่มต้นของกราฟ (30 วันล่าสุด) ========
 $chart_initial_from = date('Y-m-d', strtotime('-29 days'));
 $chart_initial_to = date('Y-m-d');
+
+$user_activity = drawdream_admin_user_activity_stats($conn);
 ?>
 <!DOCTYPE html>
 <html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Admin Dashboard | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_dashboard.css">
@@ -195,7 +198,61 @@ $chart_initial_to = date('Y-m-d');
                 </div>
             </div>
         </div>
+
+        <div class="admin-metric-stats__row admin-metric-stats__row--2 admin-user-activity-row">
+            <div class="card stat-card users-online" id="statUsersToday">
+                <div class="stat-icon"><i class="bi bi-broadcast"></i></div>
+                <div class="stat-divider" aria-hidden="true"></div>
+                <div class="stat-content">
+                    <div class="card-label">ใช้งานวันนี้</div>
+                    <div class="card-value" data-activity="active_today_count"><?= number_format((int)$user_activity['active_today'], 0) ?><span class="card-value-suffix">คน</span></div>
+                </div>
+            </div>
+
+            <div class="card stat-card users-returning" id="statUsersReturning">
+                <div class="stat-icon"><i class="bi bi-arrow-repeat"></i></div>
+                <div class="stat-divider" aria-hidden="true"></div>
+                <div class="stat-content">
+                    <div class="card-label">ผู้ใช้กลับมาใช้ซ้ำ</div>
+                    <div class="card-value" data-activity="returning_count"><?= number_format((int)$user_activity['returning_count'], 0) ?><span class="card-value-suffix">คน</span></div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <section class="admin-user-activity-panel section-box" aria-labelledby="admin-activity-heading">
+        <div class="admin-user-activity-panel__head">
+            <h2 id="admin-activity-heading" class="section-title" style="margin:0;">ผู้ใช้งานระบบ</h2>
+            <span class="admin-user-activity-panel__updated" data-activity="refreshed_at">อัปเดต <?= htmlspecialchars((string)$user_activity['refreshed_at'], ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
+        <p class="admin-user-activity-panel__note">
+            วันนี้มีผู้ใช้ที่ล็อกอินแล้วเปิดเว็บ <strong data-activity="active_today_note"><?= number_format((int)$user_activity['active_today'], 0) ?></strong> คน
+        </p>
+        <div class="admin-user-activity-table-wrap">
+            <table class="admin-user-activity-table">
+                <thead>
+                    <tr>
+                        <th>อีเมล</th>
+                        <th>บทบาท</th>
+                        <th>ใช้งานล่าสุด</th>
+                    </tr>
+                </thead>
+                <tbody id="adminActiveTodayUsersBody">
+                    <?php if (empty($user_activity['active_today_users'])): ?>
+                    <tr><td colspan="3" class="admin-user-activity-empty">ยังไม่มีผู้ใช้งานวันนี้</td></tr>
+                    <?php else: ?>
+                    <?php foreach ($user_activity['active_today_users'] as $ou): ?>
+                    <tr>
+                        <td><?= htmlspecialchars((string)$ou['email'], ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars(drawdream_role_label_th((string)$ou['role']), ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars((string)$ou['last_seen_at'], ENT_QUOTES, 'UTF-8') ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </section>
 
     <!-- คำขอรออนุมัติ — ศูนย์รวมที่ไอคอนกระดิ่ง -->
     <div class="pending-row">
@@ -629,6 +686,59 @@ $chart_initial_to = date('Y-m-d');
     expandDashboardList('btnDashProjectsMoreTop', 'adminDashProjectsList', '.proj-item--extra');
     expandDashboardList('btnDashDonationsMoreTop', 'adminDashDonationsList', '.don-item--extra');
     expandDashboardList('btnDashNeedPriceMoreTop', 'adminDashNeedPriceList', '.needprice-item--extra');
+})();
+</script>
+
+<script>
+(function () {
+    var activityRoot = document.querySelector('[data-activity="active_today_count"]');
+    if (!activityRoot) return;
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+
+    function roleLabel(role) {
+        if (role === 'admin') return 'แอดมิน';
+        if (role === 'foundation') return 'มูลนิธิ';
+        if (role === 'donor') return 'ผู้บริจาค';
+        return role || '—';
+    }
+
+    function renderActiveTodayTable(users) {
+        var tbody = document.getElementById('adminActiveTodayUsersBody');
+        if (!tbody) return;
+        if (!users || !users.length) {
+            tbody.innerHTML = '<tr><td colspan="3" class="admin-user-activity-empty">ยังไม่มีผู้ใช้งานวันนี้</td></tr>';
+            return;
+        }
+        tbody.innerHTML = users.map(function (u) {
+            return '<tr><td>' + esc(u.email) + '</td><td>' + esc(roleLabel(u.role)) + '</td><td>' + esc(u.last_seen_at) + '</td></tr>';
+        }).join('');
+    }
+
+    function refreshActivity() {
+        fetch('admin_user_activity.php', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || !data.ok) return;
+                var atc = document.querySelector('[data-activity="active_today_count"]');
+                if (atc) atc.innerHTML = Number(data.active_today || 0).toLocaleString() + '<span class="card-value-suffix">คน</span>';
+                var rc = document.querySelector('[data-activity="returning_count"]');
+                if (rc) rc.innerHTML = Number(data.returning_count || 0).toLocaleString() + '<span class="card-value-suffix">คน</span>';
+                var atn = document.querySelector('[data-activity="active_today_note"]');
+                if (atn) atn.textContent = Number(data.active_today || 0).toLocaleString();
+                var ref = document.querySelector('[data-activity="refreshed_at"]');
+                if (ref) ref.textContent = 'อัปเดต ' + (data.refreshed_at || '');
+                renderActiveTodayTable(data.active_today_users || []);
+            })
+            .catch(function () { /* ignore */ });
+    }
+
+    refreshActivity();
+    setInterval(refreshActivity, 30000);
 })();
 </script>
 

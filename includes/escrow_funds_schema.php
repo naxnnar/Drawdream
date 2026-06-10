@@ -87,7 +87,7 @@ function drawdream_escrow_project_holding_total_display(mysqli $conn): float
     $legR = @$conn->query(
         "SELECT COALESCE(SUM(p.current_donate),0) AS total
          FROM foundation_project p
-         WHERE p.project_status = 'completed' AND p.deleted_at IS NULL
+         WHERE p.project_status = 'completed'
          AND NOT EXISTS (
              SELECT 1 FROM escrow_funds ef
              WHERE ef.target_type = 'project' AND ef.target_id = p.project_id

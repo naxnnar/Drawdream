@@ -80,6 +80,44 @@ function drawdream_notifications_mark_all_read(mysqli $conn, int $userId): bool
     return (bool)$stmt->execute();
 }
 
+/** ทำเครื่องหมายแจ้งเตือนรายการเดียวว่าอ่านแล้ว (ไม่ลบแถว) */
+function drawdream_notifications_mark_read(mysqli $conn, int $userId, int $notifId): bool
+{
+    if ($userId <= 0 || $notifId <= 0) {
+        return false;
+    }
+    drawdream_ensure_notifications_table($conn);
+    $stmt = $conn->prepare('UPDATE notifications SET is_read = 1 WHERE notif_id = ? AND user_id = ?');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('ii', $notifId, $userId);
+    return (bool)$stmt->execute();
+}
+
+/** มีแจ้งเตือนเดิม title+link สำหรับ user นี้แล้ว (กันซ้ำจาก polling ชำระเงิน) */
+function drawdream_notification_exists_for_user(
+    mysqli $conn,
+    int $userId,
+    string $title,
+    string $link
+): bool {
+    if ($userId <= 0) {
+        return false;
+    }
+    drawdream_ensure_notifications_table($conn);
+    $st = $conn->prepare(
+        'SELECT 1 FROM notifications WHERE user_id = ? AND title = ? AND link = ? LIMIT 1'
+    );
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('iss', $userId, $title, $link);
+    $st->execute();
+
+    return (bool)$st->get_result()->fetch_assoc();
+}
+
 function drawdream_notifications_unread_count(mysqli $conn, int $userId): int
 {
     if ($userId <= 0) {
@@ -349,6 +387,51 @@ function drawdream_ensure_admin_notif_columns(mysqli $conn): void
     );
 }
 
+/** หัวข้อแจ้งเตือนที่เปิดหน้าจดหมายจากเด็ก (ซอง → กระดาษ) */
+function drawdream_child_letter_notification_titles(): array
+{
+    return ['จดหมายจากเด็ก', 'อัปเดตผลลัพธ์เด็กที่คุณอุปการะ'];
+}
+
+function drawdream_is_child_letter_notification(string $title): bool
+{
+    $t = trim($title);
+    if ($t === '') {
+        return false;
+    }
+    if (in_array($t, drawdream_child_letter_notification_titles(), true)) {
+        return true;
+    }
+
+    return str_contains($t, 'จดหมายจากเด็ก') || str_contains($t, 'ผลลัพธ์เด็ก');
+}
+
+/** บังคับ view=outcome&letter=open สำหรับลิงก์ children_donate จากแจ้งเตือนจดหมาย (เห็นกระดาษทันที) */
+function drawdream_normalize_child_donate_notification_link(string $link, string $title): string
+{
+    $raw = trim($link);
+    if ($raw === '' || !drawdream_is_child_letter_notification($title)) {
+        return $raw;
+    }
+    if (preg_match('~^https?://[^/]+/(.+)$~i', $raw, $hostMatch)) {
+        $raw = $hostMatch[1];
+    }
+    if (!preg_match('~^/?children_donate\.php\?~i', $raw)) {
+        return trim($link);
+    }
+    $path = ltrim($raw, '/');
+    if (stripos($path, 'view=outcome') === false) {
+        $path .= (str_contains($path, '?') ? '&' : '?') . 'view=outcome';
+    }
+    if (preg_match('/(?:^|[?&])letter=1(?:&|$)/i', $path)) {
+        $path = preg_replace('/((?:^|[?&])letter=)1/i', '${1}open', $path) ?? $path;
+    } elseif (!preg_match('/(?:^|[?&])letter=/i', $path)) {
+        $path .= (str_contains($path, '?') ? '&' : '?') . 'letter=open';
+    }
+
+    return $path;
+}
+
 /**
  * ไอคอน/คลาสการ์ดแจ้งเตือนจากหัวข้อและลิงก์ (ไม่ใช้คอลัมน์ type)
  *
@@ -372,6 +455,12 @@ function drawdream_notification_card_meta(string $title, string $link = ''): arr
     if (str_contains($t, 'ครบเป้า') || str_contains($t, 'ครบแล้ว') || str_contains($t, 'พร้อมอัปเดต')) {
         return ['icon' => '🎉', 'class' => 'success'];
     }
+    if ($t === 'จดหมายจากเด็ก' || str_contains($t, 'จดหมายจากเด็ก')) {
+        return ['icon' => '✉️', 'class' => 'letter'];
+    }
+    if ($t !== '' && str_contains($t, 'ผลลัพธ์เด็ก')) {
+        return ['icon' => '✉️', 'class' => 'letter'];
+    }
 
     return ['icon' => '🔔', 'class' => 'other'];
 }
@@ -390,6 +479,9 @@ function drawdream_send_notification(
     }
     unset($type, $entityKey);
     drawdream_ensure_notifications_table($conn);
+    if (drawdream_notification_exists_for_user($conn, $userId, $title, $link)) {
+        return true;
+    }
     $stmt = $conn->prepare('INSERT INTO notifications (user_id, title, message, link) VALUES (?, ?, ?, ?)');
     if (!$stmt) {
         return false;

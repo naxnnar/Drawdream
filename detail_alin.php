@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // detail_alin.php — เรื่องราวน้องอลิน (สตอรี่ตัวอย่าง)
 // สรุปสั้น: ไฟล์นี้แสดงรายละเอียดหน้า detail alin
 $stories = [
@@ -35,7 +35,7 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title><?php echo $story['name']; ?> - DrawDream</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
@@ -85,7 +85,7 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
     <div class="container" >
       <div class="row mt-3">
         <div class="col-md-6 mb-3">
-          <img src="img/logobanner.png" alt="DrawDream logo">
+          <img src="img/โลโก้.png" alt="DrawDream logo" class="footer-logo">
           <p>ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>ธนาคารไทยพาณิชย์ <br>เลขที่บัญชี  011-1-11111-1</p>
         </div>
         
@@ -101,7 +101,7 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
               <i class="bi bi-telephone-fill"></i> 0949278518
             </div>
             <div class="col-md-3">
-              <i class="bi bi-printer-fill"></i> 0123456789
+              <i class="bi bi-envelope-fill"></i> <a href="mailto:contact@drawdream.org" class="text-light">contact@drawdream.org</a>
             </div>
           </div>
           <div class="row text-center mt-2">

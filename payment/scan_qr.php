@@ -56,7 +56,7 @@ if ($type === 'project') {
     }
     $project_name = trim((string)($_SESSION['pending_project'] ?? ''));
     if ($project_name === '') {
-        $st = $conn->prepare('SELECT project_name FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1');
+        $st = $conn->prepare('SELECT project_name FROM foundation_project WHERE project_id = ? LIMIT 1');
         if ($st) {
             $st->bind_param('i', $project_id);
             $st->execute();
@@ -80,7 +80,7 @@ if ($type === 'project') {
     }
     $child_name = trim((string)($_SESSION['pending_child_name'] ?? ''));
     if ($child_name === '') {
-        $st = $conn->prepare('SELECT child_name FROM foundation_children WHERE child_id = ? AND deleted_at IS NULL LIMIT 1');
+        $st = $conn->prepare('SELECT child_name FROM foundation_children WHERE child_id = ? LIMIT 1');
         if ($st) {
             $st->bind_param('i', $child_id);
             $st->execute();
@@ -152,7 +152,7 @@ $goal_closed_message = ($type === 'foundation')
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= htmlspecialchars($page_title) ?></title>
     <link rel="stylesheet" href="../css/payment.css">
     <style>
@@ -177,6 +177,7 @@ $goal_closed_message = ($type === 'foundation')
         .qr-receipt-row { margin-bottom: 8px; }
         .qr-download-btn { margin: 18px auto 0 auto; display: block; background: #3C5099; color: #fff; font-size: 1.15em; font-weight: 700; border: none; border-radius: 10px; padding: 14px 0; width: 100%; max-width: none; box-sizing: border-box; cursor: pointer; transition: background 0.15s; }
         .qr-download-btn:hover { background: #2d4580; }
+        .qr-download-btn:active { background: #243a6e; transform: scale(0.98); }
         .qr-abandon-wrap { margin-top: 14px; }
         .qr-abandon-btn {
             width: 100%; margin: 0; display: block; box-sizing: border-box;
@@ -185,6 +186,7 @@ $goal_closed_message = ($type === 'foundation')
             transition: filter 0.15s, background 0.15s;
         }
         .qr-abandon-btn:hover { filter: brightness(0.94); }
+        .qr-abandon-btn:active { filter: brightness(0.86); transform: scale(0.98); }
         .qr-goal-closed {
             display: none;
             text-align: left;
@@ -264,10 +266,6 @@ $goal_closed_message = ($type === 'foundation')
             <?= drawdream_csrf_field() ?>
             <input type="hidden" name="charge_id" value="<?= htmlspecialchars($abandon_charge, ENT_QUOTES, 'UTF-8') ?>">
             <button type="submit" class="qr-abandon-btn">ยกเลิกการชำระ</button>
-            <p class="qr-abandon-hint" style="margin:8px 0 0;font-size:.85rem;color:#6b7280;line-height:1.45;">
-                ยกเลิกจะลบรายการค้างในระบบและปิด QR ที่ Omise (expire) — ใช้สแกนชำระต่อไม่ได้
-                หากโอนแล้วให้กด «ยืนยันการชำระ» แทน
-            </p>
         </form>
     </div>
 <?php if (($type === 'project' && $project_id > 0) || ($type === 'foundation' && $fid > 0)): ?>
@@ -308,7 +306,7 @@ $goal_closed_message = ($type === 'foundation')
     }
 
     poll();
-    setInterval(poll, 4000);
+    setInterval(poll, 2000);
 })();
 </script>
 <?php endif; ?>

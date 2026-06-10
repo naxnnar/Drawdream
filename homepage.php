@@ -1,10 +1,11 @@
 <?php
 // homepage.php — หน้าแรก
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน homepage
-if (session_status() === PHP_SESSION_NONE) {
-  session_start();
-}
 $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/includes/homepage_impact_stats.php';
+$homeImpactStats = drawdream_homepage_impact_stats($conn);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,12 +13,12 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>หน้าหลัก | DrawDream</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/homepage.css">
+  <link rel="stylesheet" href="css/homepage.css?v=2">
 </head>
 <body>
 
@@ -30,7 +31,7 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
 <!-- ===== SECTION 1: HERO ===== -->
 <div class="home-section home-hero">
   <div class="container">
-    <div class="row align-items-center">
+    <div class="row align-items-center g-4 g-xl-5">
 
       <div class="col-md-5 d-flex hero-image-col">
         <div class="portrait-wrapper">
@@ -39,18 +40,13 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
       </div>
 
       <div class="col-md-7 hero-text-col">
-        <div class="center-section">
-          <h2>ให้ในแบบที่ใช่ สนับสนุนในสิ่งที่เขาต้องการ...</h2>
-          <h3>เพราะความต้องการของเด็กแต่ละคนนั้นแตกต่างกัน</h3>
-          <style>
-            @media (min-width: 768px) {
-              .center-section h3 {
-                white-space: nowrap;
-              }
-            }
-          </style>
-          <p>DrawDream ช่วยให้คุณ เลือกส่งต่อ ได้ตรงจุดที่สุด</p>
-          <p>สามารถเข้าร่วมโครงการอุปการะรายบุคคล เพื่อส่งน้องๆ ให้ถึงฝั่งฝัน</p>
+        <div class="center-section home-hero-copy">
+          <img src="img/โลโก้.png" alt="DrawDream" class="home-hero__brand-logo">
+          <h2 class="home-hero__title">แพลตฟอร์มระดมทุนดิจิทัลเพื่อสังคม</h2>
+          <p class="home-hero__intro">
+            ที่มุ่งสร้างความโปร่งใสและสร้างความเชื่อมั่นให้แก่ผู้บริจาค เราทำหน้าที่เป็นตัวกลางเชื่อมโยงผู้ให้เข้ากับมูลนิธิเด็กและมูลนิธิเพื่อสังคมโดยตรง
+            เพื่อเปลี่ยนความฝันด้านโอกาสและการศึกษาของเด็กๆ ให้กลายเป็นความจริงที่ตรวจสอบได้ในทุกขั้นตอน
+          </p>
           <div class="hero-actions mt-4">
             <a href="children_.php" class="btn btn-hero">อุปการะ</a>
             <a href="project.php" class="btn btn-hero">โครงการ</a>
@@ -62,74 +58,65 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
   </div>
 </div>
 
-<!-- ===== SECTION 2: DONATION ===== -->
-<div class="home-section" style="background-color: #F7ECDE;">
-  <div class="container py-5">
-    <div class="row align-items-center">
-
-      <div class="col-md-5 d-flex justify-content-center">
-        <div class="donation-image">
-          <img src="img/house.png" alt="DrawDream">
-        </div>
-      </div>
-
-      <div class="col-md-7 text-center px-4 px-md-5">
-        <h2 class="mb-2"><b>บริจาคให้เด็กกับ <span class="highlight">Drawdream</span></b></h2>
-        <p class="mb-4">เพื่อช่วยคนเด็กเข้าถึงศิลปะการศึกษา</p>
-
-        <form id="donateForm" class="mb-3" onsubmit="return false;">
-          <div class="donation-amounts mb-3">
-            <button type="button" class="amount-btn" data-amount="500">฿500</button>
-            <button type="button" class="amount-btn" data-amount="600">฿600</button>
-            <button type="button" class="amount-btn" data-amount="900">฿900</button>
-          </div>
-          <div class="mb-3 d-flex justify-content-center" style="gap:0;">
-            <div style="width:515px;max-width:100%;position:relative;">
-              <input type="number" min="20" step="1" id="donateAmount" name="donateAmount" placeholder="ระบุจำนวนเงิน (ขั้นต่ำ 20)" required style="width:100%;padding:12px 44px 12px 48px;border-radius:12px;border:1.5px solid #d8cfc7;font-size:1.15rem;">
-              <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);color:#888;font-size:1.2rem;">฿</span>
-              <button type="button" id="clearBtn" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:1.3rem;color:#888;">&times;</button>
+<!-- ===== 3 ช่องทางการให้ ===== -->
+<section class="home-platform" aria-labelledby="home-platform-channels-heading">
+  <div class="container home-platform__channels">
+    <h3 id="home-platform-channels-heading" class="home-platform__channels-title text-center">ส่งต่อโอกาสอย่างมั่นใจ<br>เลือกรูปแบบการให้ที่ตรงใจคุณ</h3>
+    <div class="row g-4">
+      <div class="col-lg-4">
+        <article class="home-channel home-channel--coral">
+          <a class="home-channel-hit" href="children_.php" aria-label="อุปการะเด็ก"></a>
+          <div class="home-channel__media home-channel__media--sponsor" style="background-image:url('img/อุปการะเด็ก.png');">
+            <div class="home-channel__media-overlay home-channel__media-overlay--sponsor">
+              <span class="home-channel__icon" aria-hidden="true"><i class="bi bi-person-hearts"></i></span>
+              <h4 class="home-channel__name">อุปการะเด็ก</h4>
+              <p class="home-channel__en">Child Sponsorship</p>
             </div>
           </div>
-          <div class="d-flex justify-content-center">
-            <button type="submit" class="btn-donate mt-2" style="width:515px;max-width:100%;margin:auto;display:block;">บริจาค</button>
+          <div class="home-channel__body">
+            <p>ร่วมมอบโอกาสที่ต่อเนื่องเพื่อพลิกอนาคตของเด็กๆ ผ่านระบบสนับสนุนรายเดือน (Subscription) เพื่อเป็นทุนการศึกษาและพัฒนาคุณภาพชีวิตอย่างยั่งยืน โดยระบบจะบริหารจัดการข้อมูลอย่างปลอดภัยตามหลักนโยบายคุ้มครองเด็ก พร้อมส่งรายงานการเติบโตของเด็กให้คุณติดตามได้อย่างต่อเนื่อง</p>
+            <a href="children_.php" class="home-channel__btn">อุปการะ</a>
           </div>
-        </form>
-        <script>
-        // ปุ่ม preset
-        const amountBtns = document.querySelectorAll('.amount-btn');
-        const donateAmount = document.getElementById('donateAmount');
-        amountBtns.forEach(btn => {
-          btn.addEventListener('click', () => {
-            amountBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            donateAmount.value = btn.dataset.amount;
-          });
-        });
-        // ปุ่มล้าง
-        document.getElementById('clearBtn').onclick = () => {
-          donateAmount.value = '';
-          amountBtns.forEach(b => b.classList.remove('active'));
-        };
-        // ส่งฟอร์ม
-        document.getElementById('donateForm').onsubmit = function(e) {
-          e.preventDefault();
-          const val = parseInt(donateAmount.value, 10);
-          if (isNaN(val) || val < 20) {
-            alert('กรุณากรอกจำนวนเงินขั้นต่ำ 20 บาท');
-            donateAmount.focus();
-            return false;
-          }
-          window.location.assign('payment/donate_qr.php?amount=' + encodeURIComponent(String(val)));
-        };
-        </script>
+        </article>
       </div>
-
+      <div class="col-lg-4">
+        <article class="home-channel home-channel--green">
+          <a class="home-channel-hit" href="project.php" aria-label="บริจาคเข้าโครงการ"></a>
+          <div class="home-channel__media home-channel__media--project" style="background-image:url('img/โครงการเด็ก.png');">
+            <div class="home-channel__media-overlay home-channel__media-overlay--project">
+              <span class="home-channel__icon" aria-hidden="true"><i class="bi bi-flag-fill"></i></span>
+              <h4 class="home-channel__name">บริจาคเข้าโครงการ</h4>
+              <p class="home-channel__en">Project Crowdfunding</p>
+            </div>
+          </div>
+          <div class="home-channel__body">
+            <p>สนับสนุนโครงการพัฒนาสังคมและสวัสดิการเด็กที่มีเป้าหมายและระยะเวลาชัดเจน คุณสามารถเลือกบริจาคให้แก่โครงการที่ตรงกับความสนใจ โดยระบบจะรวบรวมเงินทุนส่งตรงถึงมูลนิธิเจ้าของโครงการเพื่อนำไปดำเนินงานให้สำเร็จตามเป้าหมายที่วางไว้</p>
+            <a href="project.php" class="home-channel__btn">บริจาคโครงการ</a>
+          </div>
+        </article>
+      </div>
+      <div class="col-lg-4">
+        <article class="home-channel home-channel--yellow">
+          <a class="home-channel-hit" href="foundation.php" aria-label="สมทบทุนจัดซื้อสิ่งของ"></a>
+          <div class="home-channel__media home-channel__media--need" style="background-image:url('img/สิ่งของเด็ก.png');">
+            <div class="home-channel__media-overlay home-channel__media-overlay--need">
+              <span class="home-channel__icon" aria-hidden="true"><i class="bi bi-box-seam-fill"></i></span>
+              <h4 class="home-channel__name">สมทบทุนจัดซื้อสิ่งของ</h4>
+              <p class="home-channel__en">In-kind Funding</p>
+            </div>
+          </div>
+          <div class="home-channel__body">
+            <p>เปลี่ยนเงินบริจาคเป็นสิ่งของที่มูลนิธิต้องการอย่างแท้จริง เช่น อุปกรณ์การเรียน นม หรือของใช้จำเป็นสำหรับเด็ก โดยผู้บริจาคจะโอนเงินเข้าสมทบทุนในโครงการ จากนั้นแพลตฟอร์มจะทำหน้าที่เป็นตัวกลางในการจัดซื้อและจัดส่งสิ่งของทั้งหมดให้ถึงมือมูลนิธิ เพื่อให้กระบวนการโปร่งใสและผู้บริจาคยังคงได้รับสิทธิ์ลดหย่อนภาษีจากการบริจาคเงิน</p>
+            <a href="foundation.php" class="home-channel__btn">สมทบทุน</a>
+          </div>
+        </article>
+      </div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- ===== SECTION 3: STORIES ===== -->
-<div class="home-section stories">
+<div class="home-section stories" id="stories">
   <div class="container">
 
     <!-- น้องอลิน — แถวบน: รูปซ้าย, text ขวา -->
@@ -138,7 +125,7 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
         <img src="img/alin.png" alt="น้องอลิน" class="img-fluid rounded shadow">
       </div>
       <div class="col-md-6 ps-md-5">
-        <h3 class="text-light mt-4 mt-md-0">น้องอลิน</h3>
+        <h3 class="mt-4 mt-md-0">น้องอลิน</h3>
         <p class="story-text">
           น้องอลินเป็นเด็กที่รักการอ่าน แต่หนังสือในห้องสมุดที่มีมักเป็นเล่มเก่าและไม่เพียงพอต่อใจรักการอ่านของเธอ
           ผ่านโครงการ "บริจาคแบบรวมของทุนการศึกษา" ผู้บริจาคได้ร่วมกันมอบทุนการศึกษาและจัดซื้อชุดหนังสือวรรณกรรมเยาวชนและหนังสือนิทานใหม่
@@ -151,7 +138,7 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
 
     <!-- น้องพิณเพลง + น้องแซน — แถวล่าง: 2 คอลัมน์ -->
     <div class="row g-4">
-      <div class="col-md-6 d-flex flex-column align-items-center text-light" style="justify-content:flex-start;">
+      <div class="col-md-6 d-flex flex-column align-items-center" style="justify-content:flex-start;">
         <img src="img/pin.png" alt="น้องพิณเพลง" class="img-fluid rounded shadow mb-3" style="object-fit:cover; object-position:top; align-self:flex-start;">
         <h3>น้องพิณเพลง</h3>
         <p class="card-text">
@@ -161,7 +148,7 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
         </p>
         <a href="detail_pin.php" class="btn btn-light btn-home">อ่านต่อ</a>
       </div>
-      <div class="col-md-6 d-flex flex-column align-items-center text-light">
+      <div class="col-md-6 d-flex flex-column align-items-center">
         <img src="img/san.png" alt="น้องแซน" class="img-fluid rounded shadow mb-3" style="object-fit:cover; object-position:top; align-self:flex-start;">
         <h3>น้องแซน</h3>
         <p class="card-text">
@@ -176,28 +163,65 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
   </div>
 </div>
 
-<!-- ===== SECTION 4: RIGHTS HOLDER ===== -->
-<div class="home-section home-contact-section" id="support">
-  <div class="container py-5">
-    <div class="row justify-content-center">
-      <div class="col-lg-12">
-        <div class="rights-box">
-          <div class="rights-content">
-            <h4>ร่วมสนับสนุนค่าบริหารจัดการระบบ </h4>
-            <p>เพื่อเปลี่ยนระบบการช่วยเหลือให้เข้าถึงง่ายสำหรับทุกคน</p>
-            <div class="rights-actions">
-              <a href="payment/system_donate.php" class="btn btn-success btn-lg btn-radis">บริจาค</a>
-              <!-- <a href="#" class="btn btn-success btn-lg btn-radis">มูลนิธิ</a> -->
-            </div>
-          </div>
-          <div class="rights-image text-center text-md-end">
-            <img src="img/star.png" alt="Rights holder" class="img-fluid">
-          </div>
+<!-- ===== ผลกระทบจากข้อมูลจริง (ต่อท้ายเรื่องราว) ===== -->
+<section class="home-impact home-impact--after-stories page-section" aria-labelledby="home-impact-heading">
+  <div class="container">
+    <h2 id="home-impact-heading" class="home-impact__title text-center fw-bold">มาสร้างความเปลี่ยนแปลงไปด้วยกัน</h2>
+    <p class="home-impact__lead text-center">ตัวเลขจากการให้และการส่งมอบจริงบนแพลตฟอร์ม DrawDream</p>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-5 g-4 home-impact__stats justify-content-center">
+      <div class="col">
+        <div class="home-impact__card text-center">
+          <span class="home-impact__card-icon home-impact__card-icon--coral" aria-hidden="true"><i class="bi bi-cash-coin"></i></span>
+          <p class="home-impact__label mb-2">ยอดบริจาคทั้งหมด</p>
+          <p class="home-impact__value mb-0">
+            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display_baht($homeImpactStats['total_donation_baht']), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="home-impact__unit">บาท</span>
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="home-impact__card text-center">
+          <span class="home-impact__card-icon home-impact__card-icon--green" aria-hidden="true"><i class="bi bi-people-fill"></i></span>
+          <p class="home-impact__label mb-2">จำนวนผู้บริจาคทั้งหมด</p>
+          <p class="home-impact__value mb-0">
+            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['total_donors']), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="home-impact__unit">คน</span>
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="home-impact__card text-center">
+          <span class="home-impact__card-icon home-impact__card-icon--coral" aria-hidden="true"><i class="bi bi-person-hearts"></i></span>
+          <p class="home-impact__label mb-2">เด็กที่มีผู้อุปการะแล้ว</p>
+          <p class="home-impact__value mb-0">
+            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['children_sponsored']), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="home-impact__unit">คน</span>
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="home-impact__card text-center">
+          <span class="home-impact__card-icon home-impact__card-icon--green" aria-hidden="true"><i class="bi bi-flag-fill"></i></span>
+          <p class="home-impact__label mb-2">โครงการที่ระดมทุนสำเร็จ</p>
+          <p class="home-impact__value mb-0">
+            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['projects_completed']), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="home-impact__unit">โครงการ</span>
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="home-impact__card text-center">
+          <span class="home-impact__card-icon home-impact__card-icon--yellow" aria-hidden="true"><i class="bi bi-box-seam-fill"></i></span>
+          <p class="home-impact__label mb-2">มูลนิธิที่ได้รับสิ่งของแล้ว</p>
+          <p class="home-impact__value mb-0">
+            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['foundations_items_received']), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="home-impact__unit">มูลนิธิ</span>
+          </p>
         </div>
       </div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- ===== SECTION 5: ABOUT DRAWDREAM ===== -->
 <div class="home-section home-about-yellow">
@@ -223,62 +247,8 @@ $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
 
 <!-- ===== FOOTER ===== -->
 <div class="home-section" style="background-color: #3f4f9a;">
-<footer style="background-color: #3f4f9a;">
-  <div class="container py-4" style="background-color: #3f4f9a;">
-    <div class="row text-light">
-
-      <div class="col-md-6 mb-4 text-center text-md-start">
-        <img src="img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo d-block mx-auto mx-md-0">
-        <p class="text-light">
-          ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
-          ธนาคารไทยพาณิชย์<br>
-          เลขที่บัญชี <span style="color:#f4c948; font-weight:bold;">011-1-11111-1</span>
-        </p>
-      </div>
-
-      <div class="col-md-6 mb-4">
-        <h5 class="text-center mb-3 text-light">ติดต่อเรา</h5>
-        <p class="text-light footer-address">
-          <i class="bi bi-geo-alt-fill me-2"></i>
-          ชั้น 3 อาคาร Drawdream ถนนพหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400
-        </p>
-        <div class="d-flex justify-content-center gap-4 mb-3">
-          <span class="text-light"><i class="bi bi-telephone-fill me-1"></i> 0949278518</span>
-          <span class="text-light"><i class="bi bi-printer-fill me-1"></i> 0123456789</span>
-        </div>
-        <div class="social-links">
-          <a href="#" class="social-link" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
-          <a href="#" class="social-link" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>
-          <a href="#" class="social-link" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-          <a href="#" class="social-link" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
-        </div>
-      </div>
-
-    </div>
-    <hr style="border-color: rgba(255,255,255,0.25);">
-    <p class="text-center text-light mb-0 small" style="opacity:0.7;">&copy; All right reserved 2026</p>
-  </div>
-</footer>
+<?php include __DIR__ . '/includes/site_footer.php'; ?>
 </div>
 
-<script>
-  // Donation amount buttons
-  const amountBtns = document.querySelectorAll('.amount-btn');
-  const display    = document.getElementById('selectedAmountDisplay');
-  const clearBtn   = document.getElementById('clearBtn');
-
-  amountBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      amountBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      display.textContent = '฿ ' + btn.dataset.amount;
-    });
-  });
-
-  clearBtn.addEventListener('click', () => {
-    amountBtns.forEach(b => b.classList.remove('active'));
-    display.textContent = '฿ 0';
-  });
-</script>
 </body>
 </html>

@@ -1,11 +1,11 @@
-.center-section {
+.center-section:not(.home-hero-copy) {
         text-align: center;
         margin: 40px 0 0 0;
         padding-left: 120px;
 }
 
 @media (max-width: 1200px) {
-    .center-section {
+    .center-section:not(.home-hero-copy) {
         padding-left: 0;
     }
 }
@@ -13,13 +13,390 @@
    home.css
    ใช้กับ: homepage.php
    ===================================================== */
+@import url('brand_logo.css');
+@import url('touch_feedback.css');
 
 :root {
-    --danger-red: #e06a4a;
+    --dd-green: #597d57;
+    --dd-coral: #df4e35;
+    --dd-yellow: #f8ce32;
+    --danger-red: #df4e35;
     --stories-bg: #3f4f9a;
-    --yellow-bg: #f4c948;
+    --yellow-bg: #f8ce32;
+    --dd-navy: #2c3e50;
+    --dd-cream: #f7ecde;
+    --dd-cream-deep: #f5ede0;
     --radius-md: 12px;
     --radius-lg: 20px;
+    --shadow-soft: 0 10px 28px rgba(44, 62, 80, 0.08);
+    --shadow-card: 0 16px 40px rgba(89, 125, 87, 0.14);
+}
+
+/* ===== Platform intro + 3 channels ===== */
+.home-platform {
+    background: #f7ecde;
+}
+
+.home-platform__channels {
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+}
+
+.home-platform__channels-title {
+    color: var(--dd-navy);
+    font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    line-height: 1.45;
+}
+
+.home-channel {
+    position: relative;
+    height: 100%;
+    background: #fff;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.home-channel-hit {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    text-decoration: none;
+    color: transparent;
+    background: transparent;
+    -webkit-tap-highlight-color: rgba(60, 80, 153, 0.12);
+    touch-action: manipulation;
+}
+
+.home-channel__btn {
+    position: relative;
+    z-index: 2;
+}
+
+.home-channel:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 44px rgba(44, 62, 80, 0.16);
+}
+
+.home-channel__media {
+    position: relative;
+    min-height: 280px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.home-channel__media-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 1.25rem 1.35rem;
+    color: #fff;
+}
+
+/* อุปการะเด็ก.png — ไม่ทับไล่เฉด เพื่อให้เห็นข้อความบนภาพ */
+.home-channel__media--sponsor {
+    background-position: center top;
+}
+
+.home-channel--coral .home-channel__media-overlay--sponsor {
+    background: none;
+}
+
+.home-channel--coral .home-channel__media-overlay--sponsor .home-channel__name,
+.home-channel--coral .home-channel__media-overlay--sponsor .home-channel__en {
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+
+.home-channel--coral .home-channel__media-overlay--sponsor .home-channel__icon {
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--dd-coral);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 991.98px) {
+    .home-channel__media--sponsor {
+        background-position: center top;
+    }
+}
+
+.home-channel--green .home-channel__media-overlay {
+    background: linear-gradient(
+        125deg,
+        rgba(89, 125, 87, 0.88) 0%,
+        rgba(89, 125, 87, 0.55) 32%,
+        transparent 50%
+    );
+}
+
+/* โครงการเด็ก.png — โชว์ข้อความบนภาพด้านขวา (ร่วมสนับสนุนโครงการ…) */
+.home-channel__media--project {
+    background-position: 72% 22%;
+}
+
+.home-channel--green .home-channel__media-overlay--project {
+    background: linear-gradient(
+        125deg,
+        rgba(89, 125, 87, 0.88) 0%,
+        rgba(89, 125, 87, 0.55) 32%,
+        transparent 48%
+    );
+    justify-content: flex-end;
+    max-width: 52%;
+}
+
+@media (max-width: 991.98px) {
+    .home-channel__media {
+        min-height: 240px;
+    }
+
+    .home-channel__media--project {
+        background-position: 78% 18%;
+    }
+
+    .home-channel--green .home-channel__media-overlay--project {
+        max-width: 62%;
+    }
+}
+
+/* สิ่งของเด็ก.png — ไม่ทับไล่เฉด เพื่อให้เห็นข้อความบนภาพ */
+.home-channel__media--need {
+    background-position: center top;
+}
+
+.home-channel--yellow .home-channel__media-overlay--need {
+    background: none;
+}
+
+.home-channel--yellow .home-channel__media-overlay--need .home-channel__name,
+.home-channel--yellow .home-channel__media-overlay--need .home-channel__en {
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+}
+
+.home-channel--yellow .home-channel__media-overlay--need .home-channel__icon {
+    background: rgba(255, 255, 255, 0.92);
+    color: #9a7b00;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+}
+
+@media (max-width: 991.98px) {
+    .home-channel__media--need {
+        background-position: center top;
+    }
+}
+
+.home-channel__icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.home-channel__name {
+    font-size: 1.15rem;
+    font-weight: 800;
+    margin: 0 0 0.15rem;
+    line-height: 1.3;
+}
+
+.home-channel__en {
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin: 0;
+    opacity: 0.9;
+    letter-spacing: 0.02em;
+}
+
+.home-channel__body {
+    padding: 1.15rem 1.35rem 1.35rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.home-channel__body p {
+    color: #5c6b7a;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    margin: 0 0 1.1rem;
+    flex-grow: 1;
+}
+
+.home-channel__btn {
+    display: inline-block;
+    align-self: flex-start;
+    padding: 0.55rem 1.35rem;
+    border-radius: 999px;
+    background: #fff;
+    color: var(--dd-navy);
+    font-weight: 800;
+    font-size: 0.95rem;
+    text-decoration: none;
+    border: 2px solid var(--dd-navy);
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.home-channel--coral .home-channel__btn:hover {
+    background: var(--dd-coral);
+    border-color: var(--dd-coral);
+    color: #fff;
+}
+
+.home-channel--green .home-channel__btn:hover {
+    background: var(--dd-green);
+    border-color: var(--dd-green);
+    color: #fff;
+}
+
+.home-channel--yellow .home-channel__btn:hover {
+    background: var(--dd-yellow);
+    border-color: var(--dd-yellow);
+    color: var(--dd-navy);
+}
+
+/* ===== แบนเนอร์สไลด์หน้าแรก ===== */
+.home-banner-carousel {
+    width: 100%;
+    background: #fff;
+    padding: 1rem 0 1.25rem;
+}
+
+.home-banner-carousel__frame {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0 clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.home-banner-carousel__viewport {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.home-banner-carousel__track {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    width: 100%;
+    line-height: 0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.home-banner-carousel__slide {
+    grid-area: 1 / 1;
+    width: 100%;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.55s ease, visibility 0.55s ease;
+    pointer-events: none;
+}
+
+.home-banner-carousel__slide.is-active {
+    opacity: 1;
+    visibility: visible;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.home-banner-carousel__img {
+    width: 100%;
+    height: clamp(200px, 22vw, 340px);
+    display: block;
+    object-fit: cover;
+    object-position: center;
+}
+
+.home-banner-carousel__nav {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
+    color: #555;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.home-banner-carousel__nav:hover {
+    background: #f8f8f8;
+    box-shadow: 0 3px 14px rgba(0, 0, 0, 0.18);
+}
+
+.home-banner-carousel__dots {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: flex;
+    gap: 8px;
+}
+
+.home-banner-carousel__dot {
+    width: 10px;
+    height: 10px;
+    border: none;
+    border-radius: 50%;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.home-banner-carousel__dot.is-active {
+    background: rgba(0, 0, 0, 0.65);
+    transform: scale(1.15);
+}
+
+.home-banner-carousel__dot:focus-visible,
+.home-banner-carousel__nav:focus-visible {
+    outline: 2px solid #333;
+    outline-offset: 2px;
+}
+
+@media (max-width: 767.98px) {
+    .home-banner-carousel__frame {
+        gap: 0.5rem;
+        padding: 0 0.5rem;
+    }
+
+    .home-banner-carousel__img {
+        height: clamp(150px, 38vw, 220px);
+    }
+
+    .home-banner-carousel__nav {
+        width: 34px;
+        height: 34px;
+        font-size: 1.2rem;
+    }
+
+    .home-hero .home-hero-copy {
+        text-align: center;
+    }
 }
 
 /* =====  homepage.php ===== */
@@ -99,6 +476,36 @@
     color: #222;
     font-size: 1.15rem;
     margin-bottom: 0.5em;
+}
+
+.home-hero .home-hero-copy {
+    text-align: left;
+    max-width: 36rem;
+    margin: 40px 0 0 0;
+    padding-left: 0 !important;
+}
+
+.home-hero .home-hero__brand-logo {
+    display: block;
+    margin-left: 0 !important;
+    margin-right: auto !important;
+    padding-left: 0 !important;
+    align-self: flex-start;
+}
+
+.home-hero__title {
+    color: var(--dd-navy);
+    font-size: clamp(1.35rem, 2.5vw, 1.75rem);
+    font-weight: 800;
+    line-height: 1.4;
+    margin-bottom: 0.85rem;
+}
+
+.home-hero__intro {
+    color: var(--dd-navy);
+    font-size: clamp(1rem, 1.6vw, 1.12rem);
+    line-height: 1.75;
+    margin-bottom: 0;
 }
 
 .hero-actions {
@@ -367,20 +774,21 @@
 .btn-radis { border-radius: 20px; }
 
 .home-section.stories {
-    background: var(--stories-bg);
-    color: #fff;
+    background: #fff;
+    color: #1a1a1a;
 }
 
 .home-section.stories h3 {
     font-size: 28px;
     font-weight: 900;
+    color: #1a1a1a;
 }
 
 .story-text,
 .card-text {
     font-size: 16px;
     line-height: 1.7;
-    color: rgba(255,255,255,0.92);
+    color: #333;
     margin-bottom: 18px;
 }
 
@@ -417,8 +825,8 @@ body { overflow-x: hidden; }
     justify-content: flex-start;
     align-items: flex-end;
     padding-left: 0;
-    padding-right: 56px;
-    overflow: hidden;
+    padding-right: 0;
+    overflow: visible;
 }
 
 .home-hero .portrait-wrapper {
@@ -455,18 +863,39 @@ body { overflow-x: hidden; }
     padding-bottom: 24px;
 }
 
+@media (min-width: 992px) {
+    .home-hero .row.align-items-center {
+        --bs-gutter-x: 3rem;
+    }
+
+    .home-hero .hero-text-col {
+        padding-left: clamp(2.5rem, 5vw, 5.5rem);
+        padding-right: 1rem;
+    }
+
+    .home-hero .home-hero-copy {
+        margin-left: 0;
+        padding-left: 0 !important;
+    }
+
+    .home-hero .hero-actions {
+        justify-content: flex-start;
+    }
+}
+
 .home-contact-section {
-    background-color: #F3EFE7;
+    background-color: #fff;
     min-height: 441px;
     display: flex;
     align-items: center;
 }
 
 .home-about-yellow {
-    background-color: #f4c948;
+    background-color: var(--dd-cream);
     min-height: 600px;
     display: flex;
     align-items: center;
+    margin-top: 0;
 }
 
 @media (max-width: 991.98px) {
@@ -481,6 +910,10 @@ body { overflow-x: hidden; }
     flex-wrap: wrap;
     margin-right: calc(-0.5 * var(--bs-gutter-x));
     margin-left:  calc(-0.5 * var(--bs-gutter-x));
+    gap: 0 !important;
+}
+
+.home-hero .row {
     gap: 0 !important;
 }
 
@@ -501,7 +934,7 @@ body { overflow-x: hidden; }
 
 .stories h3,
 .stories p {
-    color: #ffffff !important;
+    color: #1a1a1a !important;
 }
 
 .stories .btn-home {
@@ -524,15 +957,29 @@ body { overflow-x: hidden; }
 .home-section.stories {
     min-height: auto !important;
     padding-top: 52px !important;
-    padding-bottom: 20px !important;
+    padding-bottom: 2rem !important;
 }
 
 .home-section.stories .container {
     padding-bottom: 6px !important;
 }
 
-.footer-logo {
-    filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+.footer-contact-col {
+    padding-top: 1rem;
+}
+
+@media (min-width: 768px) {
+    .footer-contact-col {
+        padding-top: 1.75rem;
+    }
+}
+
+.site-footer .footer-contact-col {
+    padding-top: 0 !important;
+}
+
+.footer-contact-title {
+    margin-top: 0;
 }
 
 .footer-address {
@@ -559,3 +1006,163 @@ body { overflow-x: hidden; }
     opacity: 0.85;
     transform: translateY(-1px);
 }
+
+/* ===== Homepage impact stats (live data) ===== */
+.home-impact {
+    background: #fff;
+    padding: 2.5rem 0 4.5rem;
+    margin-top: 0;
+}
+
+.home-impact--after-stories {
+    padding-top: 3rem;
+    border-top: 1px solid rgba(44, 62, 80, 0.08);
+}
+
+.home-impact__title {
+    color: var(--dd-navy);
+    font-size: clamp(1.5rem, 2.8vw, 2.1rem);
+    margin-bottom: 0.65rem;
+    letter-spacing: 0.01em;
+}
+
+.home-impact__lead {
+    color: #5a6b8a;
+    font-size: clamp(1.05rem, 1.8vw, 1.15rem);
+    max-width: 32rem;
+    margin: 0 auto 2.25rem;
+}
+
+.home-impact__card {
+    height: 100%;
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: var(--radius-lg);
+    padding: 1.35rem 1rem 1.5rem;
+    box-shadow: none;
+    cursor: default;
+    transition:
+        transform 0.25s ease,
+        box-shadow 0.25s ease,
+        border-color 0.25s ease,
+        background-color 0.25s ease;
+}
+
+.home-impact__card:hover {
+    transform: translateY(-6px) scale(1.03);
+    background: rgba(247, 236, 222, 0.55);
+    border-color: rgba(223, 78, 53, 0.2);
+    box-shadow: 0 14px 32px rgba(44, 62, 80, 0.12);
+}
+
+.home-impact__card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.75rem;
+    height: 3.75rem;
+    border-radius: 50%;
+    font-size: 1.65rem;
+    margin-bottom: 1rem;
+    transition: transform 0.25s ease, background-color 0.25s ease;
+}
+
+.home-impact__card:hover .home-impact__card-icon {
+    transform: scale(1.12);
+}
+
+.home-impact__card-icon--coral {
+    background: rgba(223, 78, 53, 0.12);
+    color: var(--dd-coral);
+}
+
+.home-impact__card:hover .home-impact__card-icon--coral {
+    background: rgba(223, 78, 53, 0.22);
+}
+
+.home-impact__card-icon--green {
+    background: rgba(89, 125, 87, 0.15);
+    color: var(--dd-green);
+}
+
+.home-impact__card:hover .home-impact__card-icon--green {
+    background: rgba(89, 125, 87, 0.28);
+}
+
+.home-impact__card-icon--blue {
+    background: rgba(89, 125, 87, 0.15);
+    color: var(--dd-green);
+}
+
+.home-impact__card-icon--yellow {
+    background: rgba(248, 206, 50, 0.45);
+    color: #9a7b00;
+}
+
+.home-impact__card:hover .home-impact__card-icon--yellow {
+    background: rgba(248, 206, 50, 0.65);
+}
+
+.home-impact__label {
+    color: #4a5568;
+    font-size: clamp(1rem, 1.5vw, 1.1rem);
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.4;
+    transition: color 0.2s ease;
+}
+
+.home-impact__card:hover .home-impact__label {
+    color: var(--dd-navy);
+}
+
+.home-impact__value {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.35rem 0.5rem;
+    line-height: 1.1;
+}
+
+.home-impact__number {
+    color: var(--dd-coral);
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    transition: transform 0.25s ease, color 0.2s ease;
+}
+
+.home-impact__card:hover .home-impact__number {
+    transform: scale(1.06);
+    color: #c93d28;
+}
+
+.home-impact__unit {
+    color: var(--dd-navy);
+    font-size: clamp(1.05rem, 2vw, 1.2rem);
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.home-impact__card:hover .home-impact__unit {
+    color: var(--dd-navy);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .home-impact__card,
+    .home-impact__card-icon,
+    .home-impact__number {
+        transition: none;
+    }
+
+    .home-impact__card:hover {
+        transform: none;
+    }
+
+    .home-impact__card:hover .home-impact__card-icon,
+    .home-impact__card:hover .home-impact__number {
+        transform: none;
+    }
+}
+

@@ -89,7 +89,7 @@ if ($is_mock) {
         ],
     ];
 } else {
-    $fetched = drawdream_omise_fetch_charge($charge_id, true);
+    $fetched = drawdream_omise_fetch_charge($charge_id, false, true);
     $charge = is_array($fetched) ? $fetched : [];
 }
 

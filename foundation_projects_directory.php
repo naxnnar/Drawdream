@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_projects_directory.php — โครงการของมูลนิธิ (มุมมองตารางแบบแอดมิน)
 declare(strict_types=1);
 
@@ -28,8 +28,7 @@ if ($foundationId <= 0) {
 $stRows = $conn->prepare(
     "SELECT p.project_id, p.project_name, p.project_status, p.goal_amount, p.current_donate, p.end_date
      FROM foundation_project p
-     WHERE p.deleted_at IS NULL
-       AND (p.foundation_id = ? OR (p.foundation_id IS NULL AND p.foundation_name = ?))
+     WHERE (p.foundation_id = ? OR (p.foundation_id IS NULL AND p.foundation_name = ?))
      ORDER BY p.project_id DESC"
 );
 $rows = [];
@@ -81,7 +80,7 @@ function foundation_progress_pct(float $current, float $goal): int
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>โครงการทั้งหมด | <?= htmlspecialchars($foundationName) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

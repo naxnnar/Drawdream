@@ -1,11 +1,14 @@
-<?php
+﻿<?php
 declare(strict_types=1);
 // สรุปสั้น: ฟอร์มบริจาคผ่านระบบแบบทั่วไป แล้วส่งต่อไปหน้า QR ตามจำนวนเงินที่กรอก
+
+require_once __DIR__ . '/../includes/csrf.php';
 
 $amount = isset($_POST['amount']) ? (float)$_POST['amount'] : 20;
 $amount = max(0, $amount);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    drawdream_csrf_require_valid('system_donate.php');
     if ($amount < 20) {
         $error = 'จำนวนเงินขั้นต่ำ 20 บาท';
     } else {
@@ -19,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>บริจาคค่าบริหารระบบ | DrawDream</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="../css/system_donate.css?v=1">
@@ -35,6 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       </header>
 
       <form method="post" class="donate-form" novalidate>
+        <?= drawdream_csrf_field() ?>
         <div class="preset-list" id="presetList">
           <button type="button" class="preset-item" data-amount="20">฿ 20</button>
           <button type="button" class="preset-item" data-amount="50">฿ 50</button>

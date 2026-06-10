@@ -59,7 +59,7 @@ if ($projectId <= 0 || $charge_id === '') {
 $st = $conn->prepare(
     'SELECT project_id, foundation_id, service_charge, service_charge_paid_at, project_name
      FROM foundation_project
-     WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL
+     WHERE project_id = ? AND foundation_name = ?
      LIMIT 1'
 );
 if (!$st) {
@@ -91,7 +91,7 @@ if ($is_mock) {
         ],
     ];
 } else {
-    $fetched = drawdream_omise_fetch_charge($charge_id, true);
+    $fetched = drawdream_omise_fetch_charge($charge_id, false, true);
     $charge = is_array($fetched) ? $fetched : [];
 }
 

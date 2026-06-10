@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // project_result.php — แสดงผลลัพธ์โครงการที่เสร็จสิ้น
 // แสดงผลลัพธ์โครงการที่เสร็จสิ้น (สำหรับผู้บริจาค/บุคคลทั่วไป)
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project result
@@ -13,7 +13,7 @@ if ($project_id <= 0) {
 }
 
 // ดึงข้อมูลโครงการ
-$stmt = $conn->prepare("SELECT * FROM foundation_project WHERE project_id = ? AND project_status IN ('completed','done','purchasing') AND deleted_at IS NULL LIMIT 1");
+$stmt = $conn->prepare("SELECT * FROM foundation_project WHERE project_id = ? AND project_status IN ('completed','done','purchasing') LIMIT 1");
 $stmt->bind_param("i", $project_id);
 $stmt->execute();
 $project = $stmt->get_result()->fetch_assoc();
@@ -101,7 +101,7 @@ function drawdream_project_result_images(array $update): array {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผลลัพธ์โครงการ | <?= htmlspecialchars($project['project_name']) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css">

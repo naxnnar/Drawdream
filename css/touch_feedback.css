@@ -1,0 +1,81 @@
+/**
+ * เอฟเฟกต์ตอนกดบนจอสัมผัส — แทน tap highlight ที่ปิดไว้
+ * ใช้ (hover: none) + (pointer: coarse) เพื่อไม่กระทบเดสก์ท็อป
+ */
+@media (hover: none) and (pointer: coarse) {
+    button:not(:disabled):active,
+    input[type="submit"]:not(:disabled):active,
+    input[type="button"]:not(:disabled):active,
+    select:active,
+    a[class*="btn"]:active,
+    .btn:active,
+    .btn-pay:active,
+    .btn-back:active,
+    .btn-check:active,
+    .btn-cancel:active,
+    .btn-hero:active,
+    .preset-btn:active,
+    .profile-menu-btn:active,
+    .btn-donation-all:active,
+    .btn-donation-more:active,
+    .btn-admin-log-more:active,
+    .donor-sponsorship-cancel-btn:active,
+    .btn-subscription-cancel:active,
+    .qr-download-btn:active,
+    .qr-abandon-btn:active,
+    .btn-attach-slip:active,
+    .logout-btn:active,
+    .fd-qty-btn:active,
+    .fd-donate-all-btn:active,
+    .submit-btn:active,
+    .donate-back-btn:active,
+    .payment-qr-top-back:active,
+    .nav-about-dropdown__trigger:active {
+        transform: scale(0.98);
+        filter: brightness(0.93);
+        transition: transform 0.06s ease, filter 0.06s ease, background-color 0.06s ease;
+    }
+
+    .nav-mobile-menu-btn:active,
+    .navbar-public .notif-wrap .notif-btn:active,
+    .navbar-public button.profile-btn:active {
+        background: rgba(0, 0, 0, 0.09) !important;
+        opacity: 1 !important;
+        transform: scale(0.94);
+    }
+
+    .navbar-public .nav-main-links a:active,
+    .nav-profile-menu-item:active,
+    .notif-item:active,
+    .notif-mark-all:active,
+    .notif-see-all-header:active {
+        background: rgba(60, 80, 153, 0.1) !important;
+    }
+
+    a.child-card:active,
+    .child-card:active,
+    .project-card-hit:active,
+    .fd-interest-card-hit:active,
+    .log-item-hit:active,
+    .home-channel-hit:active,
+    .need-card-tap-link:active {
+        transform: scale(0.98);
+        opacity: 0.92;
+    }
+
+    .admin-nav-link:active {
+        background: rgba(255, 255, 255, 0.14);
+    }
+}
+
+/* ไฮไลต์สีอ่อนตอนแตะ (iOS / Android) */
+button,
+a,
+[role="button"],
+input[type="submit"],
+input[type="button"],
+.nav-mobile-menu-btn,
+.notif-btn,
+.profile-btn {
+    -webkit-tap-highlight-color: rgba(60, 80, 153, 0.14);
+}

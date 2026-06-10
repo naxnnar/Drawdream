@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_project_totals.php — แอดมิน: ยอดบริจาคและประวัติรายการต่อโครงการ
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน project totals
 declare(strict_types=1);
@@ -21,7 +21,7 @@ if ($projectId <= 0) {
 $stProj = $conn->prepare(
     'SELECT project_id, project_name, foundation_name, goal_amount, current_donate, project_status
      FROM foundation_project
-     WHERE project_id = ? AND deleted_at IS NULL
+     WHERE project_id = ?
      LIMIT 1'
 );
 $stProj->bind_param('i', $projectId);
@@ -83,7 +83,7 @@ function admin_project_totals_plan_label(string $code): string
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ยอดโครงการ | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_donors.php — ภาพรวมผู้บริจาค
 // รายการผู้บริจาค — มุมมองแอดมิน (ยอดสะสม, ความถี่, ช่องทางติดต่อ)
 
@@ -143,7 +143,7 @@ $rankLabel = ['1st', '2nd', '3rd'];
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผู้บริจาคทั้งหมด | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

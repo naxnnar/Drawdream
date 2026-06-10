@@ -58,7 +58,7 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
       $blocked = 0;
       $failedDelete = 0;
       foreach ($childIds as $cid) {
-        $st = $conn->prepare("SELECT * FROM foundation_children WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL LIMIT 1");
+        $st = $conn->prepare("SELECT * FROM foundation_children WHERE foundation_id = ? AND child_id = ? LIMIT 1");
         $st->bind_param("ii", $foundationId, $cid);
         $st->execute();
         $crow = $st->get_result()->fetch_assoc();
@@ -69,11 +69,9 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
         $cycleSponsored = drawdream_child_is_cycle_sponsored($conn, $cid, $crow);
         $hasActiveSubscription = drawdream_child_has_any_active_subscription($conn, $cid);
         // ลบได้เฉพาะ "ยังไม่มีผู้อุปการะ" และ "ไม่เคยได้รับเงินบริจาคเลย (ยอดสะสม = 0)"
-        $maySoftDelete = ($totalDon <= 0) && !$cycleSponsored && !$hasActiveSubscription;
-        if ($maySoftDelete) {
-          $upd = $conn->prepare('UPDATE foundation_children SET deleted_at = NOW() WHERE foundation_id = ? AND child_id = ? AND deleted_at IS NULL');
-          $upd->bind_param('ii', $foundationId, $cid);
-          if ($upd->execute() && $upd->affected_rows >= 1) {
+        $mayDelete = ($totalDon <= 0) && !$cycleSponsored && !$hasActiveSubscription;
+        if ($mayDelete) {
+          if (drawdream_hard_delete_child($conn, $foundationId, $cid, $crow)) {
             $deleted++;
           } else {
             $failedDelete++;
@@ -119,11 +117,11 @@ function children_row_profile_status_meta(array $child): array
 // Build listing query by role
 // ------------------------------
 if ($role === 'donor') {
-  $sql = "SELECT * FROM foundation_children WHERE approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') AND deleted_at IS NULL ORDER BY child_id DESC";
+  $sql = "SELECT * FROM foundation_children WHERE approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') ORDER BY child_id DESC";
   $result = $conn->query($sql);
 } elseif ($role === 'foundation') {
   if ($foundationId !== null) {
-    $stmt = $conn->prepare("SELECT * FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL ORDER BY child_id DESC");
+    $stmt = $conn->prepare("SELECT * FROM foundation_children WHERE foundation_id = ? ORDER BY child_id DESC");
     $stmt->bind_param("i", $foundationId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -135,12 +133,11 @@ if ($role === 'donor') {
     SELECT c.*, f.foundation_name AS fp_name
     FROM foundation_children c
     LEFT JOIN foundation_profile f ON c.foundation_id = f.foundation_id
-    WHERE c.deleted_at IS NULL
     ORDER BY c.child_id DESC
   ";
   $result = $conn->query($sql);
 } else {
-  $sql = "SELECT * FROM foundation_children WHERE deleted_at IS NULL ORDER BY child_id DESC";
+  $sql = "SELECT * FROM foundation_children ORDER BY child_id DESC";
   $result = $conn->query($sql);
 }
 
@@ -164,6 +161,25 @@ $childDonationTotals = ($role === 'foundation' && $childIdsForTotals !== [])
     ? drawdream_child_donation_totals_batch($conn, $childIdsForTotals)
     : [];
 $planSponsoredMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIdsForTotals);
+
+// อัปเดตคอลัมน์ status ในฐานข้อมูลให้ตรงกับแพ็กเกจรายรอบ (รายเดือน / 6 เดือน / รายปี)
+foreach ($all_list_rows as &$rowSync) {
+    $cidSyncStatus = (int)($rowSync['child_id'] ?? 0);
+    if ($cidSyncStatus <= 0) {
+        continue;
+    }
+    drawdream_child_sync_sponsorship_status($conn, $cidSyncStatus);
+    $stStatus = $conn->prepare('SELECT status FROM foundation_children WHERE child_id = ? LIMIT 1');
+    if ($stStatus) {
+        $stStatus->bind_param('i', $cidSyncStatus);
+        $stStatus->execute();
+        $statusRow = $stStatus->get_result()->fetch_assoc();
+        if (is_array($statusRow) && isset($statusRow['status'])) {
+            $rowSync['status'] = $statusRow['status'];
+        }
+    }
+}
+unset($rowSync);
 
 foreach ($all_list_rows as $row) {
   $cid = (int)($row['child_id'] ?? 0);
@@ -210,13 +226,13 @@ if ($role === 'foundation') {
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>บริจาคให้เด็กรายบุคคล | DrawDream</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="css/navbar.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <!-- link css -->
-  <link rel="stylesheet" href="css/children.css?v=34">
+  <link rel="stylesheet" href="css/children.css?v=45">
   <?php if ($role === 'admin'): ?>
   <link rel="stylesheet" href="css/admin_directory.css">
   <?php endif; ?>
@@ -421,6 +437,9 @@ if ($role === 'foundation') {
           : ('children_donate.php?id=' . (int)$child['child_id']);
       ?>
       <div class="child-card-wrap<?php echo $blockBulkCheckbox ? ' child-card-wrap--bulk-protected' : ''; ?><?php echo $sponsoredLocked ? ' child-card-wrap--sponsored-lock' : ''; ?>">
+        <a class="child-card-hit"
+           href="<?php echo htmlspecialchars($cardViewUrl, ENT_QUOTES, 'UTF-8'); ?>"
+           aria-label="ดูโปรไฟล์ <?php echo htmlspecialchars((string)($child['child_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"></a>
         <div class="child-card<?php echo !empty($gridSection['sponsored']) ? ' child-card--sponsored' : ''; ?>"
              data-view-url="<?php echo htmlspecialchars($cardViewUrl, ENT_QUOTES, 'UTF-8'); ?>"
              data-edit-url="<?php echo $foundationAccountVerified ? 'foundation_add_children.php?edit=' . (int)$child['child_id'] : ''; ?>"
@@ -516,10 +535,9 @@ if ($role === 'foundation') {
     const bulkActionInput   = document.getElementById('bulkActionInput');
     const isFoundationManageContext = !!(toggleDeleteBtn && toggleEditBtn && bulkForm);
 
-    // ผูกการ์ดให้คลิกได้ทุก role (donor/admin/foundation)
+    // โหมดจัดการมูลนิธิ: แก้/ลบ — ปิดลิงก์โปรไฟล์ชั้นบน แล้วใช้พฤติกรรมเดิม
     document.querySelectorAll('.child-card').forEach(card => {
       card.addEventListener('click', function(e) {
-        const viewUrl = this.dataset.viewUrl;
         const editUrl = this.dataset.editUrl;
 
         if (document.body.classList.contains('mode-delete')) {
@@ -532,12 +550,14 @@ if ($role === 'foundation') {
           if (this.dataset.sponsoredLocked === '1') {
             return;
           }
-          if (editUrl) window.location.href = editUrl;
+          if (editUrl) {
+            window.location.href = editUrl;
+          }
           return;
         }
 
-        if (viewUrl) {
-          window.location.href = viewUrl;
+        if (document.body.classList.contains('mode-outcome')) {
+          e.preventDefault();
         }
       });
     });

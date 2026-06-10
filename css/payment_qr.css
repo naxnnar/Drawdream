@@ -1,6 +1,7 @@
 /* ========================================
    payment_qr.css — สำหรับหน้า payment.php / payment/donate_qr.php (QR ชำระเงิน)
    ======================================== */
+@import url('touch_feedback.css');
 
 body.payment-qr-page {
     background-color: #f7ecde;

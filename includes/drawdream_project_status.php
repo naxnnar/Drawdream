@@ -17,22 +17,22 @@ function drawdream_normalize_foundation_project_statuses(mysqli $conn): void
     $conn->query(
         "UPDATE foundation_project SET project_status = 'pending'
          WHERE TRIM(COALESCE(project_status,'')) IN ('รอดำเนินการ','รอดำนิการ','Pending','PENDING')
-         AND deleted_at IS NULL"
+        "
     );
     $conn->query(
         "UPDATE foundation_project SET project_status = 'approved'
          WHERE TRIM(COALESCE(project_status,'')) IN ('อนุมัติ','Approved','APPROVED')
-         AND deleted_at IS NULL"
+        "
     );
     $conn->query(
         "UPDATE foundation_project SET project_status = 'rejected'
          WHERE TRIM(COALESCE(project_status,'')) IN ('ไม่อนุมัติ','ปฏิเสธ','Rejected','REJECTED')
-         AND deleted_at IS NULL"
+        "
     );
     $conn->query(
         "UPDATE foundation_project SET project_status = 'completed'
          WHERE TRIM(COALESCE(project_status,'')) IN ('เสร็จสิ้น','สำเร็จ','Completed','COMPLETED')
-         AND deleted_at IS NULL"
+        "
     );
 }
 

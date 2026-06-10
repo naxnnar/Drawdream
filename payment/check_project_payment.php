@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // payment/check_project_payment.php — ยืนยันการชำระโครงการ (หลัง Omise)
 // สรุปสั้น: ปิดธุรกรรมบริจาคโครงการและเพิ่มยอดโครงการโดยไม่ให้เกินเป้าหมาย
 /**
@@ -243,7 +243,7 @@ if ($payment_ui === 'paid_goal_refunded' && $amount <= 0) {
 
 $project_name = '';
 if ($project_id > 0) {
-    $stPn = $conn->prepare('SELECT project_name FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1');
+    $stPn = $conn->prepare('SELECT project_name FROM foundation_project WHERE project_id = ? LIMIT 1');
     if ($stPn) {
         $stPn->bind_param('i', $project_id);
         $stPn->execute();
@@ -256,7 +256,7 @@ if ($project_id > 0) {
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผลการชำระเงิน | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css?v=7">
     <link rel="stylesheet" href="../css/payment.css?v=2">

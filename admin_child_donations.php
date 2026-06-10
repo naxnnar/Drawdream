@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_child_donations.php — ตรวจสอบยอดและประวัติการรับบริจาคของเด็ก (ฝั่งแอดมิน)
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน child donations
 include 'db.php';
@@ -107,7 +107,7 @@ function admin_child_plan_label_from_row(array $row): string
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ยอดบริจาคเด็ก | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

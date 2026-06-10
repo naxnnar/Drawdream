@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_projects_directory.php — โครงการทั้งหมด (มุมมองแอดมิน)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน projects directory
@@ -13,7 +13,6 @@ $sql = "
     SELECT p.project_id, p.project_name, p.foundation_name, p.project_status, p.goal_amount, p.current_donate,
            p.start_date, p.end_date
     FROM foundation_project p
-    WHERE p.deleted_at IS NULL
     ORDER BY p.project_id DESC
 ";
 $rows = $conn->query($sql);
@@ -57,7 +56,7 @@ function admin_project_status_pill_class(string $st): string
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>โครงการทั้งหมด | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

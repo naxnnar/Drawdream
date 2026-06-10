@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // payment/foundation_donate.php — บริจาคมูลนิธิ (need list) + Omise
 // สรุปสั้น: หน้าเริ่มบริจาคมูลนิธิ สร้าง charge และเตรียมรายการ pending ก่อนแสดง QR
 include '../db.php';
@@ -190,8 +190,10 @@ function drawdream_need_item_lines_from_row(array $item): array
 
 /**
  * สร้างรายการสิ่งของรวมสำหรับคำนวณตัวอย่างการจัดสรรเงินบริจาค
+ * qty_remaining = จำนวนชิ้นที่ยังขาด (อิงยอด current_donate แบ่งตามสัดส่วนราคารายการ)
+ *
  * @param array<int,array<string,mixed>> $items
- * @return array<int,array{name:string,qty_needed:float,price:float}>
+ * @return array<int,array{catalog_key:string,name:string,qty_needed:float,qty_remaining:float,price:float}>
  */
 function drawdream_build_need_catalog(array $items): array
 {
@@ -201,24 +203,59 @@ function drawdream_build_need_catalog(array $items): array
         if (!is_array($item)) {
             continue;
         }
-        foreach (drawdream_need_item_lines_from_row($item) as $line) {
+        $itemCurrent = max(0.0, (float)($item['current_donate'] ?? 0));
+        $itemTotal = max(0.0, (float)($item['total_price'] ?? 0));
+        $lines = drawdream_need_item_lines_from_row($item);
+
+        $linesSum = 0.0;
+        foreach ($lines as $line) {
+            $lineTotal = (float)($line['line_total'] ?? 0);
+            if ($lineTotal <= 0) {
+                $q = (float)($line['qty_needed'] ?? 0);
+                $p = (float)($line['price_estimate'] ?? 0);
+                $lineTotal = function_exists('drawdream_needlist_round_money')
+                    ? drawdream_needlist_round_money($q * $p)
+                    : round($q * $p, 2);
+            }
+            $linesSum += $lineTotal;
+        }
+        if ($linesSum <= 0 && $itemTotal > 0) {
+            $linesSum = $itemTotal;
+        }
+
+        foreach ($lines as $line) {
             $name = trim((string)($line['item_name'] ?? ''));
             $qty = (float)($line['qty_needed'] ?? 0);
             $price = (float)($line['price_estimate'] ?? 0);
             if ($name === '' || $qty <= 0 || $price <= 0) {
                 continue;
             }
+            $lineTotal = (float)($line['line_total'] ?? 0);
+            if ($lineTotal <= 0) {
+                $lineTotal = function_exists('drawdream_needlist_round_money')
+                    ? drawdream_needlist_round_money($qty * $price)
+                    : round($qty * $price, 2);
+            }
+            $lineRaised = 0.0;
+            if ($itemCurrent > 0 && $linesSum > 0) {
+                $lineRaised = $itemCurrent * ($lineTotal / $linesSum);
+            }
+
             $key = mb_strtolower($name, 'UTF-8') . '|' . number_format($price, 2, '.', '');
             if (!isset($catalog[$key])) {
                 $catalog[$key] = [
                     'catalog_key' => $key,
                     'name' => $name,
                     'qty_needed' => 0.0,
+                    'goal_baht' => 0.0,
+                    'raised_baht' => 0.0,
                     'price' => $price,
                     '_order' => $order++,
                 ];
             }
             $catalog[$key]['qty_needed'] += $qty;
+            $catalog[$key]['goal_baht'] += $lineTotal;
+            $catalog[$key]['raised_baht'] += $lineRaised;
         }
     }
 
@@ -229,11 +266,22 @@ function drawdream_build_need_catalog(array $items): array
     });
 
     return array_map(static function (array $row): array {
+        $price = (float)$row['price'];
+        $goalBaht = (float)$row['goal_baht'];
+        $raisedBaht = min($goalBaht, max(0.0, (float)$row['raised_baht']));
+        $remainingBaht = max(0.0, $goalBaht - $raisedBaht);
+        $qtyOrig = (float)$row['qty_needed'];
+        $qtyRemaining = 0.0;
+        if ($price > 0) {
+            $qtyRemaining = min($qtyOrig, floor($remainingBaht / $price + 1e-9));
+        }
+
         return [
             'catalog_key' => (string)$row['catalog_key'],
             'name' => (string)$row['name'],
-            'qty_needed' => (float)$row['qty_needed'],
-            'price' => (float)$row['price'],
+            'qty_needed' => $qtyOrig,
+            'qty_remaining' => max(0.0, $qtyRemaining),
+            'price' => $price,
         ];
     }, $catalog);
 }
@@ -255,7 +303,7 @@ function drawdream_parse_need_item_picks_from_post(array $catalog): array
         if ($key === '' || !isset($byKey[$key])) {
             continue;
         }
-        $maxQty = (int)max(0, (int)floor((float)($byKey[$key]['qty_needed'] ?? 0)));
+        $maxQty = (int)max(0, (int)floor((float)($byKey[$key]['qty_remaining'] ?? ($byKey[$key]['qty_needed'] ?? 0))));
         $qty = (int)max(0, (int)$qtyRaw);
         if ($maxQty > 0) {
             $qty = min($qty, $maxQty);
@@ -295,6 +343,22 @@ $needCatalogJson = json_encode($needCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESC
 if (!is_string($needCatalogJson)) {
     $needCatalogJson = '[]';
 }
+
+$donateAllCatalogBaht = 0;
+$donateAllHasItems = false;
+foreach ($needCatalog as $catRow) {
+    $qRem = (int)max(0, (int)floor((float)($catRow['qty_remaining'] ?? 0)));
+    $pRem = (float)($catRow['price'] ?? 0);
+    if ($qRem > 0 && $pRem > 0) {
+        $donateAllHasItems = true;
+        $donateAllCatalogBaht += (int)round($qRem * $pRem);
+    }
+}
+$donateAllBaht = $donateAllCatalogBaht;
+if ($maxDonatePerChargeBaht > 0) {
+    $donateAllBaht = min($maxDonatePerChargeBaht, $donateAllCatalogBaht);
+}
+$donateAllEnabled = $donateAllHasItems && $donateAllBaht >= 20 && !$donateDisabled;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     drawdream_csrf_require_valid('../foundation.php');
@@ -428,11 +492,11 @@ function _omise_local_mock(string $path, array $data): array {
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css">
     <link rel="stylesheet" href="../css/payment.css">
-    <link rel="stylesheet" href="../css/foundation.css?v=43">
+    <link rel="stylesheet" href="../css/foundation.css?v=50">
 </head>
 <body class="foundation-donate-page">
 
@@ -499,20 +563,45 @@ function _omise_local_mock(string $path, array $data): array {
                     <?php if ($needCatalog === []): ?>
                         <p class="fd-picker-empty">ยังไม่มีรายการสิ่งของให้เลือก</p>
                     <?php else: ?>
+                    <?php if ($donateAllEnabled): ?>
+                    <div class="fd-donate-all-wrap">
+                        <?php
+                        $donateAllLabelOff = 'บริจาคครบตามที่เหลือ (' . number_format($donateAllBaht, 0) . ' บาท)';
+                        $donateAllLabelOn = 'ยกเลิกการเลือกครบ';
+                        ?>
+                        <button
+                            type="button"
+                            id="fdDonateAllBtn"
+                            class="fd-donate-all-btn"
+                            data-target-baht="<?= (int)$donateAllBaht ?>"
+                            data-label-off="<?= htmlspecialchars($donateAllLabelOff, ENT_QUOTES, 'UTF-8') ?>"
+                            data-label-on="<?= htmlspecialchars($donateAllLabelOn, ENT_QUOTES, 'UTF-8') ?>"
+                            aria-pressed="false"
+                        >
+                            <?= htmlspecialchars($donateAllLabelOff, ENT_QUOTES, 'UTF-8') ?>
+                        </button>
+                        <p class="fd-donate-all-hint">
+                            เลือกจำนวนชิ้นที่เหลือทุกรายการให้อัตโนมัติ
+                            <?php if ($maxDonatePerChargeBaht > 0 && $donateAllCatalogBaht > $maxDonatePerChargeBaht): ?>
+                                — ปรับให้ไม่เกินยอดที่เหลือจะครบเป้าหมาย (<?= number_format($maxDonatePerChargeBaht, 0) ?> บาท)
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                    <?php endif; ?>
                     <div class="fd-item-picker-list" id="fdItemPickerList">
                         <?php foreach ($needCatalog as $catRow):
                             $cKey = (string)($catRow['catalog_key'] ?? '');
                             $cName = (string)($catRow['name'] ?? '');
                             $cPrice = (float)($catRow['price'] ?? 0);
-                            $cMaxQty = (int)max(0, (int)floor((float)($catRow['qty_needed'] ?? 0)));
+                            $cMaxQty = (int)max(0, (int)floor((float)($catRow['qty_remaining'] ?? ($catRow['qty_needed'] ?? 0))));
                             if ($cKey === '' || $cName === '' || $cPrice <= 0 || $cMaxQty <= 0) {
                                 continue;
                             }
                         ?>
-                        <div class="fd-picker-row" data-price="<?= htmlspecialchars(number_format($cPrice, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="fd-picker-row" data-price="<?= htmlspecialchars(number_format($cPrice, 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>" data-max-qty="<?= $cMaxQty ?>">
                             <div class="fd-picker-info">
                                 <span class="fd-picker-name"><?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?></span>
-                                <span class="fd-picker-meta"><?= number_format($cPrice, 0) ?> บาท/ชิ้น · ต้องการ <?= number_format($cMaxQty, 0) ?> ชิ้น</span>
+                                <span class="fd-picker-meta"><?= number_format($cPrice, 0) ?> บาท/ชิ้น · เหลืออีก <?= number_format($cMaxQty, 0) ?> ชิ้น</span>
                             </div>
                             <div class="fd-picker-qty" role="group" aria-label="จำนวน <?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?>">
                                 <button type="button" class="fd-qty-btn fd-qty-minus" aria-label="ลดจำนวน">−</button>
@@ -566,6 +655,52 @@ function fdGetMaxDonateBaht() {
     var m = parseInt(el.value, 10);
     return (isNaN(m) || m <= 0) ? null : m;
 }
+/** จัดสรรจำนวนชิ้นให้รวมยอดใกล้ targetBaht ที่สุด (ไม่เกิน max ต่อรายการ) */
+function fdAllocateDonateAllQuantities(rows, targetBaht) {
+    if (!rows.length || targetBaht <= 0) {
+        return;
+    }
+    var lineMaxBaht = rows.map(function (r) {
+        return r.maxQty * r.price;
+    });
+    var sumMax = lineMaxBaht.reduce(function (a, b) {
+        return a + b;
+    }, 0);
+    if (sumMax <= 0) {
+        return;
+    }
+    var target = Math.min(targetBaht, sumMax);
+    if (target >= sumMax) {
+        rows.forEach(function (r) {
+            r.qty = r.maxQty;
+        });
+        return;
+    }
+    rows.forEach(function (r, i) {
+        var share = lineMaxBaht[i] / sumMax;
+        var lineBaht = Math.floor(target * share);
+        r.qty = Math.min(r.maxQty, Math.floor(lineBaht / r.price));
+    });
+    var allocated = rows.reduce(function (s, r) {
+        return s + r.qty * r.price;
+    }, 0);
+    var guard = 0;
+    while (allocated < target && guard < 5000) {
+        guard += 1;
+        var progressed = false;
+        rows.forEach(function (r) {
+            if (r.qty < r.maxQty && allocated + r.price <= target) {
+                r.qty += 1;
+                allocated += r.price;
+                progressed = true;
+            }
+        });
+        if (!progressed) {
+            break;
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     var pickerList = document.getElementById('fdItemPickerList');
     var totalEl = document.getElementById('fdPickTotal');
@@ -573,6 +708,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var summaryHint = document.getElementById('fdPickSummaryHint');
     var amtInput = document.getElementById('amountInput');
     var donateBtn = document.getElementById('fdDonateSubmitBtn');
+    var donateAllBtn = document.getElementById('fdDonateAllBtn');
+    var donateAllActive = false;
 
     function fdFormatBaht(n) {
         return Number(n || 0).toLocaleString('th-TH');
@@ -645,6 +782,85 @@ document.addEventListener('DOMContentLoaded', function () {
         return total;
     }
 
+    function fdSetDonateAllActive(active) {
+        donateAllActive = !!active;
+        if (!donateAllBtn) {
+            return;
+        }
+        donateAllBtn.classList.toggle('is-active', donateAllActive);
+        donateAllBtn.setAttribute('aria-pressed', donateAllActive ? 'true' : 'false');
+        var labelOn = donateAllBtn.getAttribute('data-label-on') || '';
+        var labelOff = donateAllBtn.getAttribute('data-label-off') || '';
+        if (labelOn && labelOff) {
+            donateAllBtn.textContent = donateAllActive ? labelOn : labelOff;
+        }
+    }
+
+    function fdClearDonateAllSelections() {
+        if (!pickerList) {
+            return;
+        }
+        pickerList.querySelectorAll('.fd-qty-input').forEach(function (inp) {
+            inp.value = '0';
+        });
+        fdSyncPickerTotals();
+    }
+
+    function fdApplyDonateAll() {
+        if (!pickerList) {
+            return;
+        }
+        var targetBaht = donateAllBtn
+            ? parseInt(donateAllBtn.getAttribute('data-target-baht') || '0', 10)
+            : 0;
+        if (isNaN(targetBaht) || targetBaht <= 0) {
+            var maxB = fdGetMaxDonateBaht();
+            var sumMax = 0;
+            pickerList.querySelectorAll('.fd-picker-row').forEach(function (row) {
+                var price = parseFloat(row.getAttribute('data-price') || '0');
+                var maxQty = parseInt(row.getAttribute('data-max-qty') || '0', 10);
+                if (price > 0 && maxQty > 0) {
+                    sumMax += Math.round(price * maxQty);
+                }
+            });
+            targetBaht = maxB !== null ? Math.min(maxB, sumMax) : sumMax;
+        }
+        var rows = [];
+        pickerList.querySelectorAll('.fd-picker-row').forEach(function (row) {
+            var inp = row.querySelector('.fd-qty-input');
+            var price = parseFloat(row.getAttribute('data-price') || '0');
+            var maxQty = parseInt(row.getAttribute('data-max-qty') || inp.getAttribute('max') || '0', 10);
+            if (!inp || price <= 0 || maxQty <= 0) {
+                return;
+            }
+            rows.push({ inp: inp, price: price, maxQty: maxQty, qty: 0 });
+        });
+        fdAllocateDonateAllQuantities(rows, targetBaht);
+        rows.forEach(function (r) {
+            r.inp.value = String(r.qty);
+        });
+        fdSyncPickerTotals();
+    }
+
+    if (donateAllBtn) {
+        donateAllBtn.addEventListener('click', function () {
+            if (donateAllActive) {
+                fdClearDonateAllSelections();
+                fdSetDonateAllActive(false);
+                return;
+            }
+            fdApplyDonateAll();
+            fdSetDonateAllActive(true);
+        });
+    }
+
+    function fdOnManualQtyChange() {
+        if (donateAllActive) {
+            fdSetDonateAllActive(false);
+        }
+        fdSyncPickerTotals();
+    }
+
     if (pickerList) {
         pickerList.addEventListener('click', function (e) {
             var btn = e.target.closest('.fd-qty-btn');
@@ -654,16 +870,16 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!inp) return;
             var delta = btn.classList.contains('fd-qty-plus') ? 1 : -1;
             inp.value = String(fdClampQtyInput(inp) + delta);
-            fdSyncPickerTotals();
+            fdOnManualQtyChange();
         });
         pickerList.addEventListener('input', function (e) {
             if (e.target && e.target.classList.contains('fd-qty-input')) {
-                fdSyncPickerTotals();
+                fdOnManualQtyChange();
             }
         });
         pickerList.addEventListener('change', function (e) {
             if (e.target && e.target.classList.contains('fd-qty-input')) {
-                fdSyncPickerTotals();
+                fdOnManualQtyChange();
             }
         });
         fdSyncPickerTotals();

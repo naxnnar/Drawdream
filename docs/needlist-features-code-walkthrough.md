@@ -36,6 +36,8 @@
 
 Helper กลาง: [`includes/drawdream_needlist_schema.php`](../includes/drawdream_needlist_schema.php)
 
+**Flow สิ่งของแบบตารางไฟล์ (จนจบ):** [`drawdream-flow-walkthrough.md`](drawdream-flow-walkthrough.md#flow-3--สิ่งของ-needlist)
+
 ---
 
 ## ภาพรวม Flow

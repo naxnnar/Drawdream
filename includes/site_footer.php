@@ -1,34 +1,41 @@
 <?php
 // includes/site_footer.php — HTML footer เว็บไซต์
-// สรุปสั้น: footer กลางที่ include ซ้ำหลายหน้าเพื่อให้ข้อความและโครงสร้างตรงกัน
-// ฟุตเตอร์กลางเว็บไซต์ (ใช้ร่วมกับ foundation.php และหน้าอื่นที่ต้องการให้สอดคล้องกับ homepage)
+require_once __DIR__ . '/brand_logo.php';
 $footerBase = $footer_base_path ?? '';
 ?>
+<link rel="stylesheet" href="<?= htmlspecialchars($footerBase . 'css/site_footer.css', ENT_QUOTES, 'UTF-8') ?>">
 <div class="site-footer-outer">
 <footer class="site-footer" style="background-color: #3f4f9a;">
-  <div class="container py-4" style="background-color: #3f4f9a;">
-    <div class="row text-light">
+  <div class="container" style="background-color: #3f4f9a;">
+    <div class="site-footer__grid text-light">
 
-      <div class="col-md-6 mb-4 text-center text-md-start">
-        <img src="<?= htmlspecialchars($footerBase) ?>img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo d-block mx-auto mx-md-0">
-        <p class="text-light">
-          ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
-          ธนาคารไทยพาณิชย์<br>
-          เลขที่บัญชี <span style="color:#f4c948; font-weight:bold;">011-1-11111-1</span>
-        </p>
+      <div class="site-footer__brand-stack">
+        <div class="site-footer__logo-cell">
+          <img src="<?= htmlspecialchars(drawdream_brand_logo_src($footerBase), ENT_QUOTES, 'UTF-8') ?>" alt="DrawDream logo" class="footer-logo">
+        </div>
+        <div class="site-footer__donate-cell">
+          <p class="text-light site-footer__donate-text mb-0">
+            ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
+            ธนาคารไทยพาณิชย์<br>
+            เลขที่บัญชี <span style="color:#f4c948; font-weight:bold;">011-1-11111-1</span>
+          </p>
+        </div>
       </div>
 
-      <div class="col-md-6 mb-4">
-        <h5 class="text-center mb-3 text-light">ติดต่อเรา</h5>
-        <p class="text-light footer-address">
+      <div class="site-footer__title-cell footer-contact-col">
+        <h5 class="text-light footer-contact-title mb-0">ติดต่อเรา</h5>
+      </div>
+
+      <div class="site-footer__contact-body footer-contact-col">
+        <p class="text-light footer-address site-footer__address mb-3">
           <i class="bi bi-geo-alt-fill me-2"></i>
           ชั้น 3 อาคาร Drawdream ถนนพหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400
         </p>
-        <div class="d-flex justify-content-center gap-4 mb-3">
-          <span class="text-light"><i class="bi bi-telephone-fill me-1"></i> 0949278518</span>
-          <span class="text-light"><i class="bi bi-printer-fill me-1"></i> 0123456789</span>
+        <div class="site-footer__contact-phones text-light mb-3">
+          <span><i class="bi bi-telephone-fill me-1"></i> 0949278518</span>
+          <a href="mailto:contact@drawdream.org" class="site-footer__email text-light text-decoration-none"><i class="bi bi-envelope-fill me-1"></i> contact@drawdream.org</a>
         </div>
-        <div class="social-links">
+        <div class="social-links site-footer__social">
           <a href="#" class="social-link" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
           <a href="#" class="social-link" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>
           <a href="#" class="social-link" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
@@ -37,8 +44,8 @@ $footerBase = $footer_base_path ?? '';
       </div>
 
     </div>
-    <hr style="border-color: rgba(255,255,255,0.25);">
-    <p class="text-center text-light mb-0 small" style="opacity:0.7;">&copy; All right reserved 2026</p>
+
+    <p class="site-footer__copy text-light">© All right reserved 2026</p>
   </div>
 </footer>
 </div>

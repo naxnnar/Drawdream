@@ -1,0 +1,111 @@
+@import url('site_footer.css');
+
+/* โลโก้ DrawDream (img/โลโก้.png) — ขนาดใหญ่ ปรับเฉพาะรูปโลโก้ */
+
+.nav-logo,
+.navbar-public .nav-logo {
+    display: block;
+    height: 40px;
+    width: auto;
+    max-width: min(280px, 36vw);
+    max-height: 40px;
+    object-fit: contain;
+}
+
+.admin-brand-logo {
+    display: block;
+    height: 88px;
+    width: auto;
+    max-width: 320px;
+    max-height: none;
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+.home-hero__brand-logo {
+    display: block;
+    height: clamp(3.25rem, 5.5vw, 4.25rem);
+    width: auto;
+    max-width: min(360px, 100%);
+    max-height: 4.25rem;
+    margin: 0 0 0.85rem;
+    margin-left: 0;
+    margin-right: auto;
+    padding: 0;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.hero-logo {
+    height: 80px;
+    width: auto;
+    max-width: min(400px, 90vw);
+    max-height: none;
+    object-fit: contain;
+}
+
+.footer-logo,
+.site-footer .footer-logo {
+    display: block;
+    height: 2.75rem;
+    width: auto;
+    max-width: min(220px, 100%);
+    max-height: 2.75rem;
+    margin: 0 !important;
+    padding: 0;
+    object-fit: contain;
+    object-position: center center;
+}
+
+.site-footer__logo-cell .footer-logo {
+    object-position: center center;
+}
+
+.welcome-logo .logo-img {
+    display: block;
+    height: 80px;
+    width: auto;
+    max-width: min(380px, 90vw);
+    max-height: none;
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+footer img[alt*="DrawDream"],
+footer img[alt*="Draw Dream"] {
+    height: 2.75rem;
+    width: auto;
+    max-width: min(220px, 100%);
+    max-height: 2.75rem;
+    margin-left: 0;
+    margin-right: auto;
+    object-fit: contain;
+    object-position: left top;
+}
+
+@media (max-width: 767.98px) {
+    .nav-logo,
+    .navbar-public .nav-logo {
+        height: 32px;
+        max-height: 32px;
+        max-width: min(200px, 64vw);
+    }
+
+    .home-hero__brand-logo {
+        height: 3rem;
+        max-height: 3rem;
+        max-width: min(100%, 300px);
+        margin-left: 0;
+        margin-right: auto;
+        object-position: left center;
+    }
+
+    .footer-logo,
+    .site-footer .footer-logo,
+    footer img[alt*="DrawDream"],
+    footer img[alt*="Draw Dream"] {
+        height: 2.5rem;
+        max-height: 2.5rem;
+        max-width: min(100%, 200px);
+    }
+}

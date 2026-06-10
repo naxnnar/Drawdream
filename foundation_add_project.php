@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_add_project.php — มูลนิธิเสนอ/แก้ไขโครงการ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add project
@@ -111,7 +111,7 @@ if ($editProjectId > 0) {
     $stmtEdit = $conn->prepare(
     "SELECT *
          FROM foundation_project
-         WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL
+         WHERE project_id = ? AND foundation_name = ?
          LIMIT 1"
     );
     $stmtEdit->bind_param("is", $editProjectId, $foundationName);
@@ -199,7 +199,7 @@ if (isset($_POST['submit'])) {
     $currentProjectImage = '';
     $projectStatus = '';
     if ($isEditSubmit) {
-        $stmtCurrent = $conn->prepare("SELECT project_image, start_date, project_status FROM foundation_project WHERE project_id = ? AND foundation_name = ? AND deleted_at IS NULL LIMIT 1");
+        $stmtCurrent = $conn->prepare("SELECT project_image, start_date, project_status FROM foundation_project WHERE project_id = ? AND foundation_name = ? LIMIT 1");
         $stmtCurrent->bind_param("is", $editingId, $foundationName);
         $stmtCurrent->execute();
         $currentProjectRow = $stmtCurrent->get_result()->fetch_assoc();
@@ -257,7 +257,7 @@ if (isset($_POST['submit'])) {
             $stmtPre = $conn->prepare(
                 "SELECT 1 FROM foundation_project
                  WHERE project_id = ? AND foundation_name = ?
-                   AND deleted_at IS NULL
+                  
                    AND LOWER(TRIM(COALESCE(project_status,''))) NOT IN ('completed','done')
                  LIMIT 1"
             );
@@ -280,7 +280,7 @@ if (isset($_POST['submit'])) {
                          ELSE project_status
                      END
                  WHERE project_id = ? AND foundation_name = ?
-                   AND deleted_at IS NULL
+                  
                    AND LOWER(TRIM(COALESCE(project_status,''))) NOT IN ('completed','done')"
             );
             $stmtProject->bind_param(
@@ -364,7 +364,7 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= $isEditMode ? 'แก้ไขโครงการ' : 'เสนอโครงการ' ?> | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/project.css">

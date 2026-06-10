@@ -2,13 +2,11 @@
 // payment/project_service_charge.php — สร้าง QR ชำระค่าบริการระบบโครงการ (มูลนิธิ)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_project_service_charge.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/omise_helpers.php';
 drawdream_ensure_foundation_project_service_charge_columns($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
@@ -43,7 +41,7 @@ $st = $conn->prepare(
             COALESCE(p.current_donate, 0) AS current_donate, COALESCE(p.goal_amount, 0) AS goal_amount,
             p.project_status
      FROM foundation_project p
-     WHERE p.project_id = ? AND p.foundation_name = ? AND p.deleted_at IS NULL
+     WHERE p.project_id = ? AND p.foundation_name = ?
      LIMIT 1'
 );
 if (!$st) {
@@ -133,6 +131,15 @@ $_SESSION['pending_psc_charge_id'] = $charge_id;
 $_SESSION['pending_psc_amount'] = $amount;
 $_SESSION['pending_psc_qr_image'] = $qr_image;
 $_SESSION['pending_psc_project_name'] = $projectName;
+
+if (drawdream_foundation_service_charge_skip_qr_after_pay($charge_id)) {
+    drawdream_foundation_service_charge_auto_mark_on_pay($charge_id);
+    header(
+        'Location: check_project_service_charge_payment.php?project_id=' . $projectId
+        . '&charge_id=' . rawurlencode($charge_id)
+    );
+    exit();
+}
 
 header(
     'Location: project_service_charge_qr.php?project_id=' . $projectId

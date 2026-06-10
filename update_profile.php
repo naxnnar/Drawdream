@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // update_profile.php — อัปเดตโปรไฟล์ (ทั่วไป)
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน update profile
@@ -241,7 +241,7 @@ if (isset($_POST['update'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= $role === 'foundation' ? 'แก้ไขข้อมูลมูลนิธิ' : 'แก้ไขโปรไฟล์' ?> | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">

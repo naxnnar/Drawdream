@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_approve_needlist.php — แอดมินอนุมัติรายการสิ่งของมูลนิธิ
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve needlist
@@ -278,7 +278,7 @@ if (!$result) die("Query failed: " . mysqli_error($conn));
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <link rel="stylesheet" href="css/navbar.css">
     <title>อนุมัติรายการสิ่งของ | Admin</title>
     <link rel="stylesheet" href="css/admin.css">

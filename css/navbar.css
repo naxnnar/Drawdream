@@ -4,6 +4,8 @@
    ======================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+@import url('brand_logo.css');
+@import url('touch_feedback.css');
 
 html,
 body {
@@ -14,7 +16,9 @@ body {
 
 body {
     overflow-x: hidden;
-    padding-top: 82px !important;
+    padding-top: calc(82px + env(safe-area-inset-top, 0px)) !important;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
     font-family: 'Prompt', 'Sarabun', sans-serif;
 }
 
@@ -28,7 +32,7 @@ button {
 .navbar {
     background: white;
     margin-top: 0 !important;
-    padding: 15px 30px;
+    padding: max(15px, env(safe-area-inset-top, 0px)) max(30px, env(safe-area-inset-right, 0px)) 15px max(30px, env(safe-area-inset-left, 0px));
     box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     position: fixed;
     top: 0;
@@ -51,8 +55,6 @@ button {
 }
 
 .nav-logo {
-    height: 60px;
-    width: auto;
     transition: transform 0.3s;
 }
 
@@ -80,8 +82,10 @@ button {
     display: none;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: var(--nav-touch-target);
+    height: var(--nav-touch-target);
+    min-width: var(--nav-touch-target);
+    min-height: var(--nav-touch-target);
     padding: 0;
     border: none;
     background: transparent;
@@ -89,6 +93,7 @@ button {
     cursor: pointer;
     border-radius: 8px;
     flex-shrink: 0;
+    touch-action: manipulation;
     -webkit-appearance: none;
     appearance: none;
 }
@@ -135,6 +140,95 @@ button {
     border-radius: 2px;
 }
 
+.nav-about-dropdown {
+    position: relative;
+}
+
+.nav-about-dropdown__trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    color: #333;
+    font-weight: 500;
+    font-size: 16px;
+    font-family: 'Prompt', sans-serif;
+    padding: 8px 0;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.3s;
+}
+
+.nav-about-dropdown__trigger:hover,
+.nav-about-dropdown.is-open .nav-about-dropdown__trigger {
+    color: #E74C3C;
+}
+
+.nav-about-dropdown__trigger.active {
+    color: #E74C3C;
+    font-weight: 600;
+}
+
+.nav-about-dropdown__trigger.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: #E74C3C;
+    border-radius: 2px;
+}
+
+.nav-about-dropdown__chevron {
+    font-size: 0.72rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-about-dropdown.is-open .nav-about-dropdown__chevron {
+    transform: rotate(180deg);
+}
+
+.nav-about-dropdown__menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    min-width: 200px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+    padding: 6px;
+    z-index: 1100;
+}
+
+.nav-about-dropdown__menu a {
+    display: block;
+    padding: 10px 14px;
+    border-radius: 8px;
+    color: #334155;
+    font-size: 0.92rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-about-dropdown__menu a:hover {
+    background: #f8fafc;
+    color: #E74C3C;
+}
+
+.nav-about-dropdown__menu a.active {
+    background: #fff4e6;
+    color: #c2410c;
+    font-weight: 600;
+}
+
+.nav-about-dropdown__menu a.active::after {
+    display: none;
+}
+
 .nav-right {
     display: flex;
     gap: 15px;
@@ -148,10 +242,10 @@ button {
     position: relative;
     width: auto;
     height: auto;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: var(--nav-touch-target);
+    min-height: var(--nav-touch-target);
     padding: 4px;
-    border-radius: 0;
+    border-radius: 8px;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
@@ -163,6 +257,8 @@ button {
     transition: opacity 0.2s;
     color: #333;
     cursor: pointer;
+    touch-action: manipulation;
+    box-sizing: border-box;
     -webkit-appearance: none;
     appearance: none;
 }
@@ -193,8 +289,10 @@ button {
 
 /* ===== Profile & Logout ===== */
 .profile-btn {
-    width: 40px;
-    height: 40px;
+    width: var(--nav-touch-target);
+    height: var(--nav-touch-target);
+    min-width: var(--nav-touch-target);
+    min-height: var(--nav-touch-target);
     border-radius: 50%;
     background: #e8e8e8;
     display: flex;
@@ -209,52 +307,43 @@ button {
     padding: 0;
     border: none;
     flex-shrink: 0;
+    touch-action: manipulation;
+    box-sizing: border-box;
 }
 
 .profile-btn:hover {
     opacity: 0.88;
 }
 
+/* เข้าสู่ระบบ (ผู้ยังไม่ล็อกอิน) — ปุ่มรอง ไม่แข่งกับเมนูหลัก */
 .logout-btn {
-    padding: 8px 16px;
-    background: white;
-    border: 2px solid #333;
-    border-radius: 20px;
-    color: #333;
-    font-weight: 600;
+    padding: 6px 14px;
+    background: transparent;
+    border: 1px solid rgba(44, 62, 80, 0.2);
+    border-radius: 8px;
+    color: #444;
+    font-weight: 500;
     font-family: 'Prompt', sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
     text-decoration: none;
     display: inline-block;
     white-space: nowrap;
 }
 
 .logout-btn:hover {
-    background: #333;
-    color: white;
-    transform: translateY(-2px);
+    background: #f4f5f6;
+    color: #222;
+    border-color: rgba(44, 62, 80, 0.35);
 }
 
-/* โปรไฟล์: เดสก์ท็อป = ลิงก์รูป + ปุ่มออกจากระบบ | มือถือ = ปุ่มรูปเปิดเมนู (มีโปรไฟล์ + ออกจากระบบ) */
+/* โปรไฟล์: คลิกรูปเปิดเมนู (โปรไฟล์ + ออกจากระบบ) ทุกขนาดจอ */
 .nav-profile-wrap {
     position: relative;
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
-}
-
-.nav-profile-desktop-only {
-    display: inline-flex;
-}
-
-.nav-profile-mobile-only {
-    display: none !important;
-}
-
-.nav-logout-desktop-only {
-    display: inline-block;
 }
 
 .nav-profile-menu {
@@ -280,8 +369,10 @@ button {
 }
 
 .nav-profile-menu-item {
-    display: block;
-    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    min-height: var(--nav-touch-target);
+    padding: 10px 16px;
     font-size: 14px;
     font-weight: 600;
     font-family: 'Prompt', sans-serif;
@@ -289,6 +380,7 @@ button {
     text-decoration: none;
     white-space: nowrap;
     box-sizing: border-box;
+    touch-action: manipulation;
 }
 
 .nav-profile-menu-item:hover {
@@ -297,38 +389,30 @@ button {
 }
 
 .nav-profile-menu-logout {
-    color: #b83226;
+    color: #666;
+    font-weight: 500;
     border-top: 1px solid #eee;
 }
 
 .nav-profile-menu-logout:hover {
-    color: #922b22;
+    background: #fafafa;
+    color: #b83226;
 }
 
 @media (max-width: 768px) {
-    .nav-profile-desktop-only {
-        display: none !important;
-    }
-
-    .nav-profile-mobile-only {
-        display: inline-flex !important;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .nav-logout-desktop-only {
-        display: none !important;
-    }
-
     .navbar {
-        padding: 10px 15px;
+        padding: max(10px, env(safe-area-inset-top, 0px)) max(15px, env(safe-area-inset-right, 0px)) 10px max(15px, env(safe-area-inset-left, 0px));
         gap: 10px;
+        min-height: calc(56px + env(safe-area-inset-top, 0px));
+    }
+
+    body {
+        padding-top: calc(68px + env(safe-area-inset-top, 0px)) !important;
     }
     .nav-left { gap: 15px; justify-content: center; order: 2; }
     .nav-center { order: 1; }
     .nav-right { order: 3; justify-content: center; }
     .nav-left a { font-size: 14px; }
-    .nav-logo { height: 50px; }
     /* เว็บสาธารณะ: คงลำดับ DOM ซ้าย–โลโก้–ขวา ไม่ใช้ order ที่สลับคอลัมน์จนทับกัน */
     .navbar.navbar-public .nav-left,
     .navbar.navbar-public .nav-center,
@@ -373,7 +457,7 @@ button {
         align-items: center;
         min-width: 0;
         max-width: 100%;
-        overflow: hidden;
+        overflow: visible;
         padding-inline: 2px;
         pointer-events: auto;
     }
@@ -388,9 +472,9 @@ button {
 
     .navbar-public .nav-logo {
         width: auto !important;
-        height: auto !important;
-        max-height: 42px;
-        max-width: min(140px, 42vw);
+        height: 32px !important;
+        max-height: 32px !important;
+        max-width: min(200px, 64vw) !important;
         margin: 0 !important;
         object-fit: contain;
     }
@@ -415,7 +499,7 @@ button {
         justify-content: flex-end !important;
         gap: 6px !important;
         width: auto !important;
-        max-width: min(52vw, 260px);
+        max-width: none;
         min-width: 0;
         justify-self: end;
     }
@@ -427,8 +511,8 @@ button {
     }
 
     .navbar-public .logout-btn {
-        padding: 6px 8px;
-        font-size: 11px;
+        padding: 5px 10px;
+        font-size: 12px;
         line-height: 1.25;
     }
 
@@ -439,6 +523,29 @@ button {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    .navbar-public .notif-btn,
+    .navbar-public .profile-btn {
+        width: var(--nav-touch-target);
+        height: var(--nav-touch-target);
+        min-width: var(--nav-touch-target);
+        min-height: var(--nav-touch-target);
+    }
+
+    .navbar-public .logout-btn {
+        min-height: var(--nav-touch-target);
+        padding: 10px 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+    }
+
+    .navbar-public .nav-main-links a,
+    .navbar-public .nav-about-dropdown__trigger {
+        min-height: var(--nav-touch-target);
+        touch-action: manipulation;
     }
 }
 .nav-icon {
@@ -468,6 +575,13 @@ button {
 
 .nav-profile-photo {
     object-fit: cover !important;
+}
+
+.nav-profile-photo--placeholder {
+    object-fit: contain !important;
+    padding: 4px;
+    background: #eef2f0;
+    box-sizing: border-box;
 }
 .nav-left {
     gap: 25px !important;
@@ -534,7 +648,6 @@ button {
         margin-bottom: 6px;
     }
     .nav-logo {
-        height: 38px;
         margin: 0 auto;
     }
     .nav-left a, .logout-btn, .donor-view-btn {
@@ -546,13 +659,15 @@ button {
     .notif-btn {
         width: auto;
         height: auto;
-        min-width: 36px;
-        min-height: 36px;
+        min-width: var(--nav-touch-target);
+        min-height: var(--nav-touch-target);
         font-size: 18px;
     }
     .profile-btn {
-        width: 36px;
-        height: 36px;
+        width: var(--nav-touch-target);
+        height: var(--nav-touch-target);
+        min-width: var(--nav-touch-target);
+        min-height: var(--nav-touch-target);
         font-size: 18px;
     }
 
@@ -560,19 +675,50 @@ button {
     .navbar.navbar-public {
         display: grid !important;
         flex-direction: unset !important;
-        min-height: 52px;
-        padding: 8px 10px;
+        min-height: calc(52px + env(safe-area-inset-top, 0px));
+        padding: max(8px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 8px max(10px, env(safe-area-inset-left, 0px));
     }
 
     .navbar-public .nav-right {
-        max-width: min(56vw, 240px);
-        gap: 5px !important;
+        max-width: none;
+        gap: 4px !important;
+    }
+
+    .navbar-public .logout-btn {
+        padding: 4px 8px;
+        font-size: 11px;
     }
 
     .navbar-public .nav-mobile-menu-btn {
         display: inline-flex;
         flex-shrink: 0;
         margin-right: 0;
+    }
+
+    @media (max-width: 400px) {
+        .navbar.navbar-public {
+            column-gap: 4px;
+            padding-left: max(8px, env(safe-area-inset-left, 0px));
+            padding-right: max(8px, env(safe-area-inset-right, 0px));
+        }
+        .navbar-public .nav-logo {
+            max-width: min(132px, 42vw) !important;
+            height: 28px !important;
+            max-height: 28px !important;
+        }
+        .navbar-public .profile-btn,
+        .navbar-public .notif-btn {
+            width: var(--nav-touch-target);
+            height: var(--nav-touch-target);
+            min-width: var(--nav-touch-target);
+            min-height: var(--nav-touch-target);
+        }
+        .navbar-public .nav-bell-icon {
+            font-size: 1.25rem;
+        }
+        .navbar-public .nav-right {
+            gap: 2px !important;
+        }
     }
 
     /* ต้องต่ำกว่า .navbar (1000) — มิฉะนั้น overlay ทับแผงเมนู fixed ภายใน nav จะกดลิงก์เปลี่ยนหน้าไม่ได้ */
@@ -620,11 +766,13 @@ button {
 
     .navbar-public .nav-main-links a {
         font-size: 1rem !important;
-        padding: 14px 20px;
+        min-height: var(--nav-touch-target);
+        padding: 12px 20px;
         width: 100%;
         text-align: left;
         box-sizing: border-box;
         border-bottom: 1px solid #eee;
+        touch-action: manipulation;
     }
 
     .navbar-public .nav-main-links a.active::after {
@@ -638,9 +786,60 @@ button {
         font-weight: 600;
     }
 
+    .navbar-public .nav-about-dropdown {
+        width: 100%;
+        border-bottom: 1px solid #eee;
+    }
+
+    .navbar-public .nav-about-dropdown__trigger {
+        width: 100%;
+        justify-content: space-between;
+        text-align: left;
+        font-size: 1rem !important;
+        padding: 14px 20px;
+        box-sizing: border-box;
+    }
+
+    .navbar-public .nav-about-dropdown__trigger.active::after {
+        display: none;
+    }
+
+    .navbar-public .nav-about-dropdown__trigger.active {
+        border-left: 4px solid #E74C3C;
+        padding-left: 16px;
+        color: #E74C3C;
+        font-weight: 600;
+    }
+
+    .navbar-public .nav-about-dropdown__menu {
+        position: static;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0 0 8px;
+        background: #f8fafc;
+    }
+
+    .navbar-public .nav-about-dropdown__menu[hidden] {
+        display: none !important;
+    }
+
+    .navbar-public .nav-about-dropdown__menu a {
+        padding: 12px 20px 12px 28px;
+        border-radius: 0;
+        border-bottom: 1px solid #eef2f7;
+        font-size: 0.95rem !important;
+    }
+
+    .navbar-public .nav-about-dropdown__menu a.active {
+        border-left: 4px solid #E74C3C;
+        padding-left: 24px;
+    }
+
     .navbar-public .nav-logo {
-        max-height: 36px;
-        max-width: min(118px, 36vw);
+        height: 32px !important;
+        max-height: 32px !important;
+        max-width: min(200px, 64vw) !important;
     }
 
     .navbar-public .logout-btn,
@@ -658,6 +857,7 @@ button {
     }
 }
 :root {
+    --nav-touch-target: 44px;
     --admin-sidebar-width: 236px;
     --admin-layout-gutter: 24px;
 }
@@ -865,10 +1065,6 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
     backdrop-filter: none;
 }
 
-.admin-brand-logo {
-    width: 122px;
-    height: auto;
-}
 
 .admin-brand-text {
     display: flex;
@@ -1126,7 +1322,7 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
 
 /* แถบโหมดดูตัวอย่างอยู่เหนือ navbar — เลื่อน navbar ลงมา + เพิ่ม padding เนื้อหา */
 body:has(.donor-preview-banner):not(.admin-sidebar-page) {
-    padding-top: calc(82px + 48px) !important;
+    padding-top: calc(82px + 48px + env(safe-area-inset-top, 0px)) !important;
 }
 
 body:has(.donor-preview-banner):not(.admin-sidebar-page) .navbar {
@@ -1144,3 +1340,6 @@ body:has(.donor-preview-banner):not(.admin-sidebar-page) .navbar {
     margin-left: 3px;
     vertical-align: middle;
 }
+
+@import url('brand_logo.css');
+@import url('touch_feedback.css');

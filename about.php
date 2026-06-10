@@ -1,9 +1,10 @@
-<?php
+﻿<?php
 // about.php — เกี่ยวกับเรา / FAQ
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน about
-if (session_status() === PHP_SESSION_NONE) {
-  session_start();
-}
+require_once __DIR__ . '/includes/env_loader.php';
+drawdream_load_env_file(__DIR__ . '/.env');
+require_once __DIR__ . '/includes/session_init.php';
+drawdream_session_start();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -11,12 +12,13 @@ if (session_status() === PHP_SESSION_NONE) {
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>เกี่ยวกับเรา | DrawDream </title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="css/navbar.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/about.css">
+  <link rel="stylesheet" href="css/about_how_it_works.css">
 </head>
 <body class="about-page">
 <?php include 'navbar.php'; ?>
@@ -32,77 +34,123 @@ if (session_status() === PHP_SESSION_NONE) {
     <img src="img/about6.png" alt="" class="hero-decor hero-star-green">
     <img src="img/about7.png" alt="" class="hero-decor hero-star-yellow">
     <img src="img/about8.png" alt="" class="hero-decor hero-star-blue">
+    <span class="hero-shooting-star" aria-hidden="true"></span>
 
     <div class="hero-copy">
       <div class="hero-brand">
-        <img src="img/logobanner.png" alt="Draw Dream Logo" class="hero-logo">
+        <img src="img/โลโก้.png" alt="Draw Dream Logo" class="hero-logo">
         <span style="font-size:1.45rem; font-weight:600; color:#333;">เริ่มต้นจากความตั้งใจ</span>
       </div>
-      <p class="hero-tagline">อยากเห็นเด็กในสถานสงเคราะห์มีโอกาสได้เลือก&amp;ทำตามความฝัน</p>
+      <p class="hero-tagline">มุ่งมั่นสร้างโอกาสให้เด็กในมูลนิธิได้ทำตามความฝัน</p>
       <p class="hero-body">
-        วาดฝันเป็นสื่อกลางส่งต่อความช่วยเหลือจากผู้อุปการะไปยังเด็กแบบเฉพาะบุคคลซึ่งสะท้อนความสนใจ
-        และความฝันของตัวเด็ก เราเป็นองค์กรไม่แสวงหาผลกำไร ภายใต้แนวคิดของคนรุ่นใหม่
-        และให้สมาชิกมีส่วนร่วมติดตามผลที่ตนบริจาคได้
+        ผ่านการสนับสนุนแบบเฉพาะบุคคลที่ตอบโจทย์ความสนใจของเด็กแต่ละคนอย่างแท้จริง
+        เราเป็นองค์กรไม่แสวงหาผลกำไรที่ขับเคลื่อนด้วยแนวคิดใหม่ เน้นความโปร่งใสเพื่อให้คุณติดตามผลลัพธ์ได้จริง
+      </p>
+      <p class="hero-body hero-body--secondary">
+        เลือกสนับสนุนได้ตามความตั้งใจ — โครงการเฉพาะ สมทบทุนสิ่งของจำเป็น หรือสนับสนุนมูลนิธิ —
+        เพื่อให้ทุกการให้ส่งถึงอย่างเป็นรูปธรรม มาร่วมเป็นครอบครัววาดฝัน
+        เปลี่ยนทุกโอกาสให้เป็นก้าวสำคัญที่นำเด็กๆ สู่อนาคตที่เขาวาดไว้ได้อย่างแท้จริง
       </p>
     </div>
   </div>
 </section>
 
 <!-- ===== งานของเรา ===== -->
-<section class="py-5 page-section work-section">
+<section class="py-5 page-section work-section" id="our-work">
   <div class="container">
-    <h2 class="text-center fw-bold mb-5">งานของเรา</h2>
+    <h2 class="text-center fw-bold mb-5">คุณค่าและความตั้งใจของเรา</h2>
     <div class="row g-4 justify-content-center">
       <div class="col-md-4">
-        <div class="about-work-card about-work-card--yellow text-center h-100" style="background-color:#f5c518;">
-          <i class="bi-person-hearts mb-3" style="font-size:2rem;"></i>
+        <div class="about-work-card about-work-card--yellow text-center h-100">
+          <span class="about-work-card__icon about-work-card__icon--yellow" aria-hidden="true">
+            <i class="bi-person-hearts"></i>
+          </span>
           <h5 class="fw-bold">สิทธิเด็ก</h5>
-          <p>เราสนับสนุนสิทธิเด็ก และส่งเสริมให้เด็กมีส่วนร่วมในการแสดงความคิดเห็นที่สะท้อนความสนใจและความฝันของเด็ก</p>
+          <p>เรามุ่งมั่นปกป้องสิทธิเด็กและส่งเสริมการมีส่วนร่วมอย่างสร้างสรรค์ พร้อมเปิดพื้นที่ให้เสียงของเขาได้แสดงความคิดเห็นและฉายภาพความฝันของตนเองได้อย่างเต็มภาคภูมิ และสะท้อนตัวตนผ่านสิ่งที่เขารัก เพื่อให้ทุกความเห็นได้รับการรับฟังอย่างมีความหมาย</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="about-work-card about-work-card--red text-center h-100" style="background-color:#c0392b; color:#fff;">
-          <i class="bi-heart-fill mb-3" style="font-size:2rem;"></i>
+        <div class="about-work-card about-work-card--red text-center h-100">
+          <span class="about-work-card__icon about-work-card__icon--red" aria-hidden="true">
+            <i class="bi-heart-fill"></i>
+          </span>
           <h5 class="fw-bold">คุณค่าที่สัมผัสได้</h5>
-          <p>เราต้องการให้เด็กได้รับความรัก และให้เขารู้ว่าเขาเป็นคนที่มีคุณค่า ผ่านการบริจาคแบบรายบุคคลแบบ1ต่อ1</p>
+          <p>เราเชื่อว่าเด็กทุกคนควรเติบโตด้วยความรักและความมั่นใจในตัวเอง เราจึงสร้างการแบ่งปันที่เปี่ยมด้วยความหมาย ผ่านโมเดลการสนับสนุนแบบ 1 ต่อ 1 เพื่อโอบกอดเด็กๆ ด้วยความรัก และเสริมสร้างความภาคภูมิใจในคุณค่าของตนเองให้เด็กเติบโตอย่างมั่นคง</p>
         </div>
       </div>
       <div class="col-md-4">
-        <div class="about-work-card about-work-card--green text-center h-100" style="background-color:#7a9e7e; color:#fff;">
-          <i class="bi-book-fill mb-3" style="font-size:2rem;"></i>
+        <div class="about-work-card about-work-card--green text-center h-100">
+          <span class="about-work-card__icon about-work-card__icon--green" aria-hidden="true">
+            <i class="bi-book-fill"></i>
+          </span>
           <h5 class="fw-bold">การศึกษา</h5>
-          <p>เราเพิ่มโอกาสในการเข้าถึงการศึกษาที่มีคุณภาพและเครื่องมือที่จำเป็น ทำให้พวกเขาได้รับการศึกษาที่มีคุณภาพ</p>
+          <p>เราเพิ่มโอกาสในการเข้าถึงการศึกษาที่เปี่ยมด้วยคุณภาพ โดยร่วมสนับสนุนอุปกรณ์การเรียนรู้ที่จำเป็นในยุคปัจจุบัน เพื่อเปิดประตูสู่โลกกว้างให้เด็กๆ ได้พัฒนาทักษะ ค้นพบความชอบของตัวเอง และสร้างแรงบันดาลใจในการส่งต่อความฝันของพวกเขาให้กลายเป็นจริงในอนาคต</p>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ===== ทุกความฝัน ===== -->
-<section class="py-5 page-section section-green" style="background-color:#5a7a4a;">
-  <div class="container py-4">
-    <div class="row align-items-center g-4">
-      <div class="col-md-6">
-        <img src="img/children-field.png" alt="เด็กในทุ่งนา"
-             class="img-fluid rounded-3 d-block mx-auto"
-             style="max-height:380px; width:100%; object-fit:cover;">
-      </div>
-      <div class="col-md-6 text-center">
-        <h2 class="fw-bold mb-4" style="font-size:2rem; line-height:1.5; color:#fff;">
-          ทุกความฝันมีความหมายร่วมเติมฝัน<br>ของน้องๆให้เป็นจริง
-        </h2>
-        <p style="font-size:0.95rem; line-height:2; color:rgba(255,255,255,0.9);">
-          เราต้องการให้ทุกการบริจาคไปสู่โครงการที่มุ่งมั่นและตั้งใจสร้างการเปลี่ยนแปลงทางสังคมอย่างแท้จริง
-          ผ่านการสนับสนุนที่ทุกคนได้ร่วมเป็นส่วนหนึ่ง ของการสร้างการเปลี่ยนแปลงเพื่อสังคม
-          และร่วมผลักดันให้การบริจาคมีความน่าเชื่อถือ โปร่งใส สามารถตรวจสอบได้
+<!-- ===== การทำงานของ DrawDream ===== -->
+<section class="hiw-stage page-section" id="how-it-works" aria-labelledby="hiw-steps-heading">
+  <h2 id="hiw-steps-heading" class="hiw-stage__title">การทำงานของ DrawDream</h2>
+  <div class="hiw-grid">
+    <article class="hiw-card hiw-card--blue hiw-card--num-top">
+      <span class="hiw-card__num" aria-hidden="true">1</span>
+      <div class="hiw-card__content">
+        <span class="hiw-card__step">ขั้นที่ 1</span>
+        <h3 class="hiw-card__heading">ตรวจสอบและยืนยัน</h3>
+        <p class="hiw-card__text">
+          มูลนิธิ โปรไฟล์เด็ก โครงการ และรายการสิ่งของผ่านการตรวจสอบจากผู้ดูแลและระบบก่อนเปิดรับบริจาค
+          เพื่อให้ข้อมูลน่าเชื่อถือและปลอดภัยสำหรับผู้ให้ทุกคน
         </p>
+        <span class="hiw-card__icon" aria-hidden="true"><i class="bi bi-shield-check"></i></span>
       </div>
-    </div>
+    </article>
+
+    <article class="hiw-card hiw-card--green hiw-card--num-bottom">
+      <span class="hiw-card__num" aria-hidden="true">2</span>
+      <div class="hiw-card__content">
+        <span class="hiw-card__step">ขั้นที่ 2</span>
+        <h3 class="hiw-card__heading">เผยแพร่บนแพลตฟอร์ม</h3>
+        <p class="hiw-card__text">
+          รายการที่ผ่านการยืนยันจะปรากฏบน DrawDream ให้ผู้บริจาคเลือกอุปการะเด็ก
+          บริจาคเข้าโครงการ หรือสมทบทุนจัดซื้อสิ่งของตามความตั้งใจ
+        </p>
+        <span class="hiw-card__icon" aria-hidden="true"><i class="bi bi-megaphone-fill"></i></span>
+      </div>
+    </article>
+
+    <article class="hiw-card hiw-card--amber hiw-card--num-top">
+      <span class="hiw-card__num" aria-hidden="true">3</span>
+      <div class="hiw-card__content">
+        <span class="hiw-card__step">ขั้นที่ 3</span>
+        <h3 class="hiw-card__heading">รับบริจาคอย่างปลอดภัย</h3>
+        <p class="hiw-card__text">
+          ผู้บริจาคชำระผ่านระบบที่รองรับ เงินถูกบันทึกและพักใน escrow
+          จนกว่าจะดำเนินการตามเงื่อนไขของโครงการหรือรายการสิ่งของ
+        </p>
+        <span class="hiw-card__icon" aria-hidden="true"><i class="bi bi-credit-card-2-front-fill"></i></span>
+      </div>
+    </article>
+
+    <article class="hiw-card hiw-card--red hiw-card--num-bottom">
+      <span class="hiw-card__num" aria-hidden="true">4</span>
+      <div class="hiw-card__content">
+        <span class="hiw-card__step">ขั้นที่ 4</span>
+        <h3 class="hiw-card__heading">ส่งมอบและอัปเดตผล</h3>
+        <p class="hiw-card__text">
+          หลังยืนยันการโอนเงินหรือจัดส่งสิ่งของ มูลนิธิโพสต์ความคืบหน้าและผลลัพธ์
+          ผู้บริจาคติดตามได้จากแพลตฟอร์มและการแจ้งเตือนในระบบ
+        </p>
+        <span class="hiw-card__icon" aria-hidden="true"><i class="bi bi-heart-fill"></i></span>
+      </div>
+    </article>
   </div>
 </section>
 
 <!-- ===== FAQ ===== -->
-<section class="py-5 page-section">
+<section class="py-5 page-section about-faq-section">
   <div class="container" style="max-width:800px;">
     <h2 class="text-center fw-bold mb-5">คำถามที่พบบ่อย</h2>
     <div class="accordion d-flex flex-column gap-3" id="faqAccordion">
@@ -177,39 +225,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 <!-- ===== FOOTER (เหมือน homepage) ===== -->
 <div class="footer-wrap page-section" style="background-color:#3f4f9a;">
-  <footer style="background-color:#3f4f9a;">
-    <div class="container py-4" style="background-color:#3f4f9a;">
-      <div class="row text-light">
-        <div class="col-md-6 mb-4 text-center text-md-start">
-          <img src="img/logobanner.png" alt="DrawDream logo" class="mb-3 footer-logo d-block mx-auto mx-md-0">
-          <p class="text-light">
-            ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>
-            ธนาคารไทยพาณิชย์<br>
-            เลขที่บัญชี <span style="color:#f4c948; font-weight:bold;">011-1-11111-1</span>
-          </p>
-        </div>
-        <div class="col-md-6 mb-4">
-          <h5 class="text-center mb-3 text-light">ติดต่อเรา</h5>
-          <p class="text-light footer-address">
-            <i class="bi bi-geo-alt-fill me-2"></i>
-            ชั้น 3 อาคาร Drawdream ถนนพหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400
-          </p>
-          <div class="d-flex justify-content-center gap-4 mb-3">
-            <span class="text-light"><i class="bi bi-telephone-fill me-1"></i> 0949278518</span>
-            <span class="text-light"><i class="bi bi-printer-fill me-1"></i> 0123456789</span>
-          </div>
-          <div class="social-links">
-            <a href="#" class="social-link" aria-label="Facebook"><i class="bi bi-facebook"></i></a>
-            <a href="#" class="social-link" aria-label="TikTok"><i class="bi bi-tiktok"></i></a>
-            <a href="#" class="social-link" aria-label="Instagram"><i class="bi bi-instagram"></i></a>
-            <a href="#" class="social-link" aria-label="YouTube"><i class="bi bi-youtube"></i></a>
-          </div>
-        </div>
-      </div>
-      <hr style="border-color:rgba(255,255,255,0.25);">
-      <p class="text-center text-light mb-0 small" style="opacity:0.7;">&copy; All right reserved 2026</p>
-    </div>
-  </footer>
+<?php include __DIR__ . '/includes/site_footer.php'; ?>
 </div>
 
 </body>

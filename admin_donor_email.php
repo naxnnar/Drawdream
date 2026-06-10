@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_donor_email.php — หน้าเตรียมส่งอีเมลถึงผู้บริจาค (เปิดโปรแกรมอีเมลของเครื่อง)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน donor email
@@ -54,7 +54,7 @@ $mailtoHref = 'mailto:' . $email . '?' . $mailtoQuery;
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ส่งอีเมลถึงผู้บริจาค | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

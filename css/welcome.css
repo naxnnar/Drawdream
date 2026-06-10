@@ -1,7 +1,8 @@
 /* welcome.css — หน้า welcome.php
  * แอนิเมชัน: .welcome-card = cardPop (เข้าครั้งเดียว) | .welcome-logo = logoFloat (ลูป)
- * | .confetti span = confettiFall + CSS variables (--x,--delay,--dur) | .shape-a/b = driftA/B
- * Responsive + prefers-reduced-motion ด้านล่าง */
+ */
+@import url('brand_logo.css');
+/* .confetti span = confettiFall | .shape-a/b = driftA/B — Responsive + prefers-reduced-motion ด้านล่าง */
 /* ไฟล์นี้: css/welcome.css */
 /* หน้าที่: สไตล์หน้า Welcome สำหรับทั้ง Admin, Donor, Foundation */
 :root {
@@ -53,10 +54,6 @@ body {
     animation: logoFloat 3s ease-in-out infinite;
 }
 
-.logo-img {
-    max-width: 280px;
-    height: auto;
-}
 
 .welcome-text {
     margin: 0 0 4px;
@@ -213,9 +210,6 @@ body {
         font-size: 16px;
     }
 
-    .logo-img {
-        max-width: 140px;
-    }
 
     .welcome-text {
         font-size: 22px;

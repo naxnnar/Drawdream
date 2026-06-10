@@ -11,8 +11,17 @@ require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/notification_audit.php';
 require_once dirname(__DIR__) . '/includes/child_subscription_history.php';
 
-function child_subscription_cancel_redirect(string $msg, bool $ok, int $childId): void
+function child_subscription_cancel_redirect(string $msg, bool $ok, int $childId, string $returnTo = ''): void
 {
+    if ($returnTo === 'profile') {
+        $q = http_build_query([
+            'history' => '1',
+            'sub_ok' => $ok ? '1' : '0',
+            'sub_msg' => $msg,
+        ]);
+        header('Location: ../profile.php?' . $q);
+        exit;
+    }
     $q = http_build_query([
         'id' => max(0, $childId),
         'sub_ok' => $ok ? '1' : '0',
@@ -28,33 +37,41 @@ if (($_SESSION['role'] ?? '') !== 'donor' || empty($_SESSION['user_id'])) {
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     child_subscription_cancel_redirect('วิธีเรียกใช้งานไม่ถูกต้อง', false, 0);
 }
+
+$returnTo = trim((string)($_POST['return_to'] ?? ''));
+if ($returnTo !== 'profile') {
+    $returnTo = '';
+}
+
 if (!drawdream_csrf_verify()) {
-    child_subscription_cancel_redirect('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่', false, (int)($_POST['child_id'] ?? 0));
+    child_subscription_cancel_redirect('เซสชันไม่ถูกต้อง กรุณารีเฟรชหน้าแล้วลองใหม่', false, (int)($_POST['child_id'] ?? 0), $returnTo);
 }
 
 $donorUid = (int)($_SESSION['user_id'] ?? 0);
 $childId = (int)($_POST['child_id'] ?? 0);
 if ($donorUid <= 0 || $childId <= 0) {
-    child_subscription_cancel_redirect('ไม่พบข้อมูลรายการที่ต้องการยกเลิก', false, $childId);
+    child_subscription_cancel_redirect('ไม่พบข้อมูลรายการที่ต้องการยกเลิก', false, $childId, $returnTo);
 }
 
 drawdream_child_omise_subscription_ensure_schema($conn);
+drawdream_donor_ensure_active_subscription_record($conn, $donorUid, $childId);
 
 $st = $conn->prepare(
     "SELECT history_id, donate_id, recurring_schedule_id, recurring_plan_code
      FROM child_subscription_history
-     WHERE child_id = ? AND donor_user_id = ? AND current_status = 'active'
+     WHERE child_id = ? AND donor_user_id = ?
+       AND LOWER(TRIM(COALESCE(current_status, ''))) = 'active'
      ORDER BY history_id DESC
      LIMIT 1"
 );
 if (!$st) {
-    child_subscription_cancel_redirect('ระบบไม่พร้อมใช้งาน กรุณาลองใหม่', false, $childId);
+    child_subscription_cancel_redirect('ระบบไม่พร้อมใช้งาน กรุณาลองใหม่', false, $childId, $returnTo);
 }
 $st->bind_param('ii', $childId, $donorUid);
 $st->execute();
 $sub = $st->get_result()->fetch_assoc();
 if (!$sub) {
-    child_subscription_cancel_redirect('ไม่พบการอุปการะที่ยังใช้งานอยู่', false, $childId);
+    child_subscription_cancel_redirect('ไม่พบการอุปการะที่ยังใช้งานอยู่', false, $childId, $returnTo);
 }
 
 $scheduleId = trim((string)($sub['recurring_schedule_id'] ?? ''));
@@ -65,7 +82,7 @@ if ($scheduleId !== '' && str_starts_with($scheduleId, 'schd_')) {
     $res = drawdream_omise_post_form('/schedules/' . rawurlencode($scheduleId) . '/revoke', []);
     if (($res['object'] ?? '') === 'error' && !drawdream_omise_is_not_found_error($res)) {
         $m = drawdream_omise_error_message_for_user($res, 'ยกเลิกการอุปการะไม่สำเร็จ');
-        child_subscription_cancel_redirect($m, false, $childId);
+        child_subscription_cancel_redirect($m, false, $childId, $returnTo);
     }
 }
 
@@ -75,7 +92,7 @@ $up = $conn->prepare(
      WHERE target_id = ? AND donor_id = ? AND donate_type = 'child_subscription'"
 );
 if (!$up) {
-    child_subscription_cancel_redirect('บันทึกสถานะยกเลิกไม่สำเร็จ', false, $childId);
+    child_subscription_cancel_redirect('บันทึกสถานะยกเลิกไม่สำเร็จ', false, $childId, $returnTo);
 }
 $up->bind_param('ii', $childId, $donorUid);
 $up->execute();
@@ -147,5 +164,5 @@ if ($cancelApplied) {
 }
 
 drawdream_child_sync_sponsorship_status($conn, $childId);
-child_subscription_cancel_redirect('ยกเลิกการอุปการะเรียบร้อยแล้ว', true, $childId);
+child_subscription_cancel_redirect('ยกเลิกการอุปการะเรียบร้อยแล้ว', true, $childId, $returnTo);
 

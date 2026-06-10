@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_add_children.php — มูลนิธิเพิ่มโปรไฟล์เด็ก
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add children
@@ -50,12 +50,18 @@ $needed_columns = [
     'update_text' => "ALTER TABLE foundation_children ADD COLUMN update_text LONGTEXT NULL",
     'update_at' => "ALTER TABLE foundation_children ADD COLUMN update_at DATETIME NULL",
     'update_images' => "ALTER TABLE foundation_children ADD COLUMN update_images LONGTEXT NULL",
-    'deleted_at' => "ALTER TABLE foundation_children ADD COLUMN deleted_at DATETIME NULL",
 ];
 foreach ($needed_columns as $col => $ddl) {
     $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
     if ($chk && $chk->num_rows === 0) {
         $conn->query($ddl);
+    }
+}
+$childBankCol = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'child_bank'");
+if ($childBankCol && ($childBankRow = $childBankCol->fetch_assoc())) {
+    $childBankType = (string)($childBankRow['Type'] ?? '');
+    if (!preg_match('/varchar\((\d+)\)/i', $childBankType, $childBankMatch) || (int)$childBankMatch[1] < 32) {
+        @$conn->query('ALTER TABLE foundation_children MODIFY COLUMN child_bank VARCHAR(32) NULL');
     }
 }
 $cDropReject = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'reject_reason'");
@@ -69,7 +75,7 @@ $isEditForm = false;
 $editChild = null;
 
 if ($editChildId > 0) {
-    $stmtEdit = $conn->prepare("SELECT * FROM foundation_children WHERE child_id = ? AND foundation_id = ? AND deleted_at IS NULL LIMIT 1");
+    $stmtEdit = $conn->prepare("SELECT * FROM foundation_children WHERE child_id = ? AND foundation_id = ? LIMIT 1");
     if ($stmtEdit) {
         $stmtEdit->bind_param("ii", $editChildId, $f_id);
         $stmtEdit->execute();
@@ -121,7 +127,7 @@ if (isset($_POST['submit'])) {
     $wish          = trim($_POST['wish'] ?? '');
     $wish_cat      = trim($_POST['wish_cat'] ?? '');
     $bank_name     = trim($_POST['bank_name'] ?? '');
-    $child_bank    = trim($_POST['child_bank'] ?? '');
+    $child_bank    = preg_replace('/\D+/', '', trim((string)($_POST['child_bank'] ?? '')));
     $status        = "รออุปการะ";
     $approve_status = "รอดำเนินการ";
     $policy_consent = isset($_POST['policy_consent']) && $_POST['policy_consent'] === '1';
@@ -272,7 +278,7 @@ if (isset($_POST['submit'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title><?= $isEditForm ? 'แก้ไขโปรไฟล์เด็ก' : 'สร้างโปรไฟล์เด็ก' ?> - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/children.css">

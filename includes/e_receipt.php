@@ -16,6 +16,14 @@ require_once __DIR__ . '/notification_audit.php';
 require_once __DIR__ . '/donate_type.php';
 
 /** ประเภทบริจาคที่ไม่ออกใบเสร็จ / ไม่แจ้งเตือน (มูลนิธิชำระค่าบริการระบบ) */
+function drawdream_donation_receipt_ref_from_row(int $donateId, ?string $transferDatetime): string
+{
+    $ts = strtotime((string)($transferDatetime ?? ''));
+    $receiptRefDate = $ts !== false ? date('Ymd', $ts) : date('Ymd');
+
+    return 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0', STR_PAD_LEFT);
+}
+
 function drawdream_e_receipt_excluded_donate_types(): array
 {
     return [

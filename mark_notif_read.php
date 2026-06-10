@@ -31,6 +31,18 @@ if (isset($_GET['id'])) {
     }
     $gotoRaw = trim((string)($_GET['goto'] ?? ''));
     if ($gotoRaw !== '') {
+        $st = $conn->prepare('SELECT title, link FROM notifications WHERE notif_id = ? AND user_id = ? LIMIT 1');
+        if ($st) {
+            $st->bind_param('ii', $id, $uid);
+            $st->execute();
+            $nrow = $st->get_result()->fetch_assoc();
+            if (is_array($nrow)) {
+                $gotoRaw = drawdream_normalize_child_donate_notification_link(
+                    $gotoRaw !== '' ? $gotoRaw : (string)($nrow['link'] ?? ''),
+                    (string)($nrow['title'] ?? '')
+                );
+            }
+        }
         header('Location: ' . drawdream_safe_payment_return_url($gotoRaw, 'notifications.php'));
         exit;
     }

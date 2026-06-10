@@ -37,7 +37,7 @@ function drawdream_project_sync_service_charge_for_project(mysqli $conn, int $pr
         'UPDATE foundation_project
          SET service_charge = 0
          WHERE project_id = ?
-           AND deleted_at IS NULL
+          
            AND (COALESCE(goal_amount, 0) <= 0 OR COALESCE(current_donate, 0) < COALESCE(goal_amount, 0))'
     );
     if ($zero) {
@@ -49,7 +49,7 @@ function drawdream_project_sync_service_charge_for_project(mysqli $conn, int $pr
         'UPDATE foundation_project
          SET service_charge = ROUND(COALESCE(current_donate, 0) * ?, 2)
          WHERE project_id = ?
-           AND deleted_at IS NULL
+          
            AND COALESCE(goal_amount, 0) > 0
            AND COALESCE(current_donate, 0) >= COALESCE(goal_amount, 0)'
     );
@@ -65,15 +65,13 @@ function drawdream_project_backfill_service_charges(mysqli $conn): void
     @$conn->query(
         'UPDATE foundation_project
          SET service_charge = 0
-         WHERE deleted_at IS NULL
-           AND (COALESCE(goal_amount, 0) <= 0
+         WHERE (COALESCE(goal_amount, 0) <= 0
                 OR COALESCE(current_donate, 0) < COALESCE(goal_amount, 0))'
     );
     $st = $conn->prepare(
         'UPDATE foundation_project
          SET service_charge = ROUND(COALESCE(current_donate, 0) * ?, 2)
-         WHERE deleted_at IS NULL
-           AND COALESCE(goal_amount, 0) > 0
+         WHERE COALESCE(goal_amount, 0) > 0
            AND COALESCE(current_donate, 0) >= COALESCE(goal_amount, 0)'
     );
     if ($st) {

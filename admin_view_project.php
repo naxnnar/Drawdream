@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_view_project.php — ดูข้อมูลโครงการ (จากไดเรกทอรี — ไม่มีอนุมัติ/ไม่อนุมัติ)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view project
@@ -40,7 +40,7 @@ $sql = "
     FROM foundation_project p
     LEFT JOIN foundation_profile fp ON fp.foundation_id = p.foundation_id
     LEFT JOIN `user` u ON u.user_id = fp.user_id
-    WHERE p.project_id = ? AND p.deleted_at IS NULL
+    WHERE p.project_id = ?
     LIMIT 1
 ";
 $st = $conn->prepare($sql);
@@ -66,7 +66,7 @@ $endStatLabel = ($endStatRaw === '—') ? '—' : $endStatRaw;
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ข้อมูลโครงการ | DrawDream Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/navbar.css">

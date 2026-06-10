@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_approve_projects.php — ตรวจสอบ/อนุมัติโครงการ (UI เดียวกับตรวจสอบโปรไฟล์เด็กใน children_donate.php)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve projects
@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($project_id > 0 && in_array($newStatus, ['approved', 'rejected'], true)) {
         $pend = drawdream_sql_project_is_pending('project_status');
-        $stmt = $conn->prepare("UPDATE foundation_project SET project_status=? WHERE project_id=? AND {$pend} AND deleted_at IS NULL");
+        $stmt = $conn->prepare("UPDATE foundation_project SET project_status=? WHERE project_id=? AND {$pend}");
         $stmt->bind_param('si', $newStatus, $project_id);
         $stmt->execute();
         if ($stmt->affected_rows >= 1) {
@@ -126,7 +126,7 @@ $sql = "
     FROM foundation_project p
     LEFT JOIN foundation_profile fp ON fp.foundation_id = p.foundation_id
     LEFT JOIN `user` u ON u.user_id = fp.user_id
-    WHERE p.project_id = ? AND p.deleted_at IS NULL
+    WHERE p.project_id = ?
     LIMIT 1
 ";
 $st = $conn->prepare($sql);
@@ -155,7 +155,7 @@ $endStatLabel = ($endStatRaw === '—') ? '—' : $endStatRaw;
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ตรวจสอบโครงการ | DrawDream Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">

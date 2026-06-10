@@ -106,6 +106,7 @@ require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/drawdream_project_updates_schema.php';
 require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/user_activity_tracking.php';
 
 // Migration cache — รันแค่ครั้งแรกหรือทุก 1 ชั่วโมง เพื่อไม่ให้ยิง SHOW COLUMNS ทุก request ไปยัง cloud DB
 $_ddMigrationCache = __DIR__ . '/config/migration_done.txt';
@@ -117,15 +118,20 @@ if ($_ddNeedMigration) {
     drawdream_normalize_foundation_project_statuses($conn);
     drawdream_ensure_admin_audit_table($conn);
     drawdream_admin_deduplicate_entity_rows($conn);
-    drawdream_ensure_soft_delete_columns($conn);
+    drawdream_migrate_remove_soft_delete_columns($conn);
     drawdream_ensure_needlist_schema($conn);
     drawdream_ensure_foundation_profile_needlist_result_columns($conn);
     drawdream_ensure_foundation_project_update_columns($conn);
     drawdream_notifications_migrate_legacy_on_boot($conn);
+    drawdream_ensure_user_activity_columns($conn);
 
     @file_put_contents($_ddMigrationCache, date('Y-m-d H:i:s'));
 }
 unset($_ddMigrationCache, $_ddMigrationTtl, $_ddNeedMigration);
+
+if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] > 0) {
+    drawdream_record_user_presence($conn);
+}
 
 if (!function_exists('drawdream_project_image_storage_path')) {
     /**

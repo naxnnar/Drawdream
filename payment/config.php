@@ -1,64 +1,103 @@
 <?php
 // payment/config.php — คีย์ Omise + endpoint (Test/Live)
-// สรุปสั้น: คอนฟิกกลางของระบบชำระเงิน (คีย์ Omise, endpoint, โหมดทดสอบ/ทำงานจริง)
+// สรุปสั้น: คอนฟิกกลางของระบบชำระเงิน — อ่านค่าลับจาก .env / ตัวแปรสภาพแวดล้อมบนโฮสต์ (ไม่เก็บใน Git)
 /**
  * Omise — คีย์ API และ endpoint
  *
- * - คีย์ที่ขึ้นต้น pkey_test_ / skey_test_ = โหมดทดสอบ (ไม่ตัดเงินจริง)
- * - Public กับ Secret ต้องเป็นคู่จากบัญชี Omise **เดียวกัน** (Dashboard เดียวกัน) — ถ้าเปลี่ยนชุดคีย์ให้ลบหรือรีเซ็ตคอลัมน์ donor.omise_customer_id
- *   เพราะรหัสลูกค้าเก่า (cus_xxx) ของบัญชีอื่นจะได้ข้อความ Omise ว่า Resource was not found
- * - Charge Schedule (POST /schedules): Omise กำหนดให้ **ยืนยันอีเมลบัญชีก่อน** มิฉะนั้นจะได้ข้อความว่า Email verification is required…
- *   ให้ไปที่ Dashboard (Test) → บัญชี/อีเมล → ยืนยันจากลิงก์ในกล่องจดหมาย
- * - โค้ดใน payment_project.php / foundation_donate.php / child_donate.php เรียก HTTPS api.omise.co
+ * ตั้งค่า: คัดลอก `.env.example` → `.env` ที่รากโปรเจกต์ แล้วใส่ค่าจริง
+ * บนโฮสต์ production ใส่ env ในแผงโฮสต์หรือไฟล์ `.env` นอก web root
  *
- * - OMISE_ALLOW_LOCAL_MOCK (ค่าเริ่มต้น false): ถ้า true และใช้ skey_test_* เมื่อเรียก API ไม่สำเร็จจะใช้ mock QR ในเครื่อง (ไม่มีรายการใน Omise Dashboard)
- * - OMISE_TEST_MOCK_WHEN_HTTPS_FAILS (ค่าเริ่มต้น false): ถ้า true = เมื่อ HTTPS ล้มจะใช้ mock แทน error — ใช้เฉพาะ dev ที่ PHP ต่อ Omise ไม่ได้
- *   ค่าเริ่มต้น false = ได้ QR PromptPay จริงจาก Omise และเห็น charge ใน Dashboard (test/live ตามคีย์)
- * - Production: เปลี่ยนเป็นคีย์ Live และเก็บนอก Git (env / config server)
+ * ตัวแปรที่ต้องมี (ชำระเงิน):
+ * - OMISE_PUBLIC_KEY, OMISE_SECRET_KEY
+ * - OMISE_WEBHOOK_SECRET (สำหรับ payment/omise_webhook.php)
+ * - DRAWDREAM_SUBSCRIPTION_CRON_SECRET (ถ้าเรียก cron ผ่าน HTTP)
  *
- * Security: ห้าม commit คีย์ production สาธารณะ — เก็บเป็น env/config server
- *
- * อุปการะแบบ server_cron (เมื่อ Omise ไม่ให้สร้าง Charge Schedule):
- * - DRAWDREAM_SUBSCRIPTION_CRON_SECRET ต้องไม่ว่างถ้าเรียก cron ผ่าน HTTP (?secret=…)
- * - Task Scheduler / cron: วันละครั้งหรือทุก 1–6 ชม. ให้ครอบเวลา 08:00 เวลาไทย (รอบถัดไปคำนวณที่ 08:00 Asia/Bangkok)
- *   • เบราว์เซอร์/curl: https://โดเมนของคุณ/drawdream/payment/cron_child_subscription_charges.php?secret=ค่าด้านล่าง
- *   • CLI: php payment/cron_child_subscription_charges.php หรือรัน payment/run_subscription_cron.bat
- * - Webhook charge.complete ยังต้องตั้งไว้ — ทุกรอบที่หักสำเร็จ Omise ส่งมาเพื่อบันทึก child_donations
- * - ถ้า Omise คืนแค่ not_found (ลูกค้า/บัตรไม่ตรงหรือโทเค็นบัตรหมดอายุ) ระบบไม่เข้าโหมดสำรองนี้ และจะเคลียร์ donor.omise_customer_id — ให้สมัครใหม่ด้วยโทเค็นบัตรใหม่
- *
- * @see README.md (Omise)
+ * @see README.md, .env.example
  */
+declare(strict_types=1);
 
-define('OMISE_PUBLIC_KEY', 'pkey_test_672j5iz6trht7azp83c');
-define('OMISE_SECRET_KEY', 'skey_test_672j5jmwvta3f87nmpg');
-define('OMISE_API_URL', 'https://api.omise.co');
+require_once dirname(__DIR__) . '/includes/env_loader.php';
+drawdream_load_env_file(dirname(__DIR__) . '/.env');
 
-/** ถ้าตั้งค่า: ชี้ไปที่ไฟล์ cacert.pem (Mozilla) — มิฉะนั้นระบบจะลองใช้ payment/cacert.pem, config/cacert.pem หรือค่าใน php.ini */
+if (!function_exists('drawdream_payment_env')) {
+    /** อ่าน env — ไม่ทับค่าที่มีใน environment แล้ว (drawdream_load_env_file ทำไว้ก่อนหน้า) */
+    function drawdream_payment_env(string $key, string $default = ''): string
+    {
+        $v = getenv($key);
+        if ($v !== false && $v !== '') {
+            return trim((string) $v);
+        }
+
+        return $default;
+    }
+
+    function drawdream_payment_env_bool(string $key, bool $default): bool
+    {
+        $raw = drawdream_payment_env($key);
+        if ($raw === '') {
+            return $default;
+        }
+
+        return in_array(strtolower($raw), ['1', 'true', 'yes', 'on'], true);
+    }
+}
+
+if (!defined('OMISE_PUBLIC_KEY')) {
+    define('OMISE_PUBLIC_KEY', drawdream_payment_env('OMISE_PUBLIC_KEY'));
+}
+if (!defined('OMISE_SECRET_KEY')) {
+    define('OMISE_SECRET_KEY', drawdream_payment_env('OMISE_SECRET_KEY'));
+}
+if (!defined('OMISE_API_URL')) {
+    define('OMISE_API_URL', drawdream_payment_env('OMISE_API_URL', 'https://api.omise.co'));
+}
+
+/** ถ้าตั้งค่า: ชี้ไปที่ไฟล์ cacert.pem (Mozilla) */
 if (!defined('OMISE_CURL_CAINFO')) {
-    foreach ([dirname(__DIR__) . '/payment/cacert.pem', dirname(__DIR__) . '/config/cacert.pem'] as $caPath) {
-        if (is_file($caPath)) {
-            define('OMISE_CURL_CAINFO', $caPath);
-            break;
+    $envCa = drawdream_payment_env('OMISE_CURL_CAINFO');
+    if ($envCa !== '' && is_file($envCa)) {
+        define('OMISE_CURL_CAINFO', $envCa);
+    } else {
+        foreach ([dirname(__DIR__) . '/payment/cacert.pem', dirname(__DIR__) . '/config/cacert.pem'] as $caPath) {
+            if (is_file($caPath)) {
+                define('OMISE_CURL_CAINFO', $caPath);
+                break;
+            }
         }
     }
 }
 
 if (!defined('OMISE_ALLOW_LOCAL_MOCK')) {
-    define('OMISE_ALLOW_LOCAL_MOCK', false);
+    define('OMISE_ALLOW_LOCAL_MOCK', drawdream_payment_env_bool('OMISE_ALLOW_LOCAL_MOCK', false));
+}
+
+if (!defined('OMISE_TEST_MOCK_WHEN_HTTPS_FAILS')) {
+    define('OMISE_TEST_MOCK_WHEN_HTTPS_FAILS', drawdream_payment_env_bool('OMISE_TEST_MOCK_WHEN_HTTPS_FAILS', false));
+}
+
+if (!defined('OMISE_TEST_AUTO_MARK_PAID')) {
+    define('OMISE_TEST_AUTO_MARK_PAID', drawdream_payment_env_bool('OMISE_TEST_AUTO_MARK_PAID', true));
+}
+
+if (!defined('DRAWDREAM_SUBSCRIPTION_CRON_SECRET')) {
+    define('DRAWDREAM_SUBSCRIPTION_CRON_SECRET', drawdream_payment_env('DRAWDREAM_SUBSCRIPTION_CRON_SECRET'));
 }
 
 /**
- * ค่าเริ่มต้น false: บังคับเรียก Omise API จริง — QR เป็น PromptPay จาก Omise และ charge ไปโผล่ใน Dashboard
- * ตั้งเป็น true เฉพาะเครื่อง dev ที่ยังต่อ HTTPS ไม่ได้ (จะได้ mock QR; จะไม่มีรายการใน Omise)
+ * เรียกจากหน้าชำระเงินเมื่อต้องการข้อความชัดเจนว่ายังไม่ได้ตั้ง .env
  */
-if (!defined('OMISE_TEST_MOCK_WHEN_HTTPS_FAILS')) {
-    define('OMISE_TEST_MOCK_WHEN_HTTPS_FAILS', false);
-}
-
-/** Secret สำหรับเรียก payment/cron_child_subscription_charges.php?secret=... (โหมดหักบนเซิร์ฟเวอร์แทน Omise Schedule) */
-if (!defined('DRAWDREAM_SUBSCRIPTION_CRON_SECRET')) {
-    define(
-        'DRAWDREAM_SUBSCRIPTION_CRON_SECRET',
-        '081a9e4b9232645eea0dbdaaa1d1cd1c6db6139a71aaa7ab93f6244a620d5aef'
-    );
+function drawdream_payment_require_omise_keys(): void
+{
+    if (OMISE_PUBLIC_KEY !== '' && OMISE_SECRET_KEY !== '') {
+        return;
+    }
+    $msg = 'ยังไม่ได้ตั้งค่า Omise: สร้างไฟล์ .env จาก .env.example แล้วใส่ OMISE_PUBLIC_KEY และ OMISE_SECRET_KEY';
+    if (PHP_SAPI === 'cli') {
+        fwrite(STDERR, $msg . PHP_EOL);
+        exit(1);
+    }
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo $msg;
+    exit;
 }

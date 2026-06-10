@@ -58,6 +58,18 @@ if ($LASTEXITCODE -ne 0 -and (Test-Path -LiteralPath $extDir)) {
 }
 
 $url = "http://127.0.0.1:$Port/login.php"
+$lanUrl = $null
+try {
+    $lanIp = ([System.Net.Dns]::GetHostAddresses([System.Net.Dns]::GetHostName()) |
+        Where-Object { $_.AddressFamily -eq 'InterNetwork' -and $_.ToString() -notlike '127.*' } |
+        Select-Object -First 1)
+    if ($lanIp) {
+        $lanUrl = "http://$($lanIp):$Port/login.php"
+    }
+} catch {
+    $lanUrl = $null
+}
+
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  DrawDream - PHP built-in server" -ForegroundColor Cyan
@@ -66,9 +78,15 @@ Write-Host "  Root: $root"
 Write-Host "  PHP : $phpExe"
 Write-Host "  DB  : $($env:DB_HOST):$($env:DB_PORT)/$($env:DB_NAME)"
 Write-Host "  Open: $url"
+if ($lanUrl) {
+    Write-Host "  Mobile (same Wi-Fi): $lanUrl"
+    Write-Host "  Google OAuth redirect: $($lanUrl -replace '/login\.php$','/auth/google_callback.php')"
+    Write-Host "  (add that callback URL in Google Cloud Console)"
+}
 Write-Host "  Stop: Ctrl+C"
 Write-Host "========================================"
 Write-Host ""
 
 Start-Process $url
-& $phpExe @extArgs -S "127.0.0.1:$Port" -t $root
+# 0.0.0.0 — ให้มือถือใน Wi-Fi เดียวกันเข้าได้ (Google Login ต้องใช้ IP จริง ไม่ใช่ 127.0.0.1)
+& $phpExe @extArgs -S "0.0.0.0:$Port" -t $root

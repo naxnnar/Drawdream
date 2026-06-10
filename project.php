@@ -41,21 +41,13 @@ if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
     if ($deleteProjectId > 0 && $foundationName !== '') {
         mysqli_begin_transaction($conn);
         try {
-            $deleteProjectStmt = $conn->prepare(
-                "UPDATE foundation_project SET deleted_at = NOW(), project_delete_reason = NULL
-                 WHERE project_id = ? AND foundation_name = ? AND project_status IN ('pending','rejected') AND deleted_at IS NULL"
-            );
-            $deleteProjectStmt->bind_param("is", $deleteProjectId, $foundationName);
-            if (!$deleteProjectStmt->execute()) {
-                throw new Exception($deleteProjectStmt->error ?: 'ลบโครงการไม่สำเร็จ');
-            }
-            if ($deleteProjectStmt->affected_rows < 1) {
+            if (!drawdream_hard_delete_project($conn, $deleteProjectId, $foundationName)) {
                 throw new Exception('ลบได้เฉพาะโครงการสถานะรอดำเนินการหรือไม่ผ่านการอนุมัติเท่านั้น');
             }
 
             mysqli_commit($conn);
             echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>";
-            echo "<script>Swal.fire({icon:'success',title:'ลบโครงการแล้ว (ข้อมูลยังเก็บในระบบ)',showConfirmButton:false,timer:1800}).then(()=>{window.location='project.php?view=foundation';});</script>";
+            echo "<script>Swal.fire({icon:'success',title:'ลบโครงการเรียบร้อยแล้ว',showConfirmButton:false,timer:1800}).then(()=>{window.location='project.php?view=foundation';});</script>";
             exit();
         } catch (Throwable $e) {
             mysqli_rollback($conn);
@@ -330,7 +322,6 @@ function donorFilterProjectRows(array $rows, string $status): array {
 $params = [];
 $types  = "";
 $where  = [];
-$where[] = 'p.deleted_at IS NULL';
 
 $publicDonorStyle = (!$isFoundationOwnView && in_array($role, ['donor', 'foundation', 'guest'], true));
 
@@ -385,7 +376,7 @@ if ($isFoundationOwnView) {
         SELECT p.*, fp.address AS foundation_address
         FROM foundation_project p
         LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
-        WHERE p.foundation_name = ? AND p.deleted_at IS NULL
+        WHERE p.foundation_name = ?
         ORDER BY p.project_id DESC
     ";
     $foundationProjStmt = $conn->prepare($foundationSql);
@@ -438,7 +429,6 @@ if ($isFoundationOwnView) {
     } elseif ($role !== 'admin') {
         $latestWhere[] = "p.project_status IN ('approved', 'completed', 'done', 'purchasing')";
     }
-    $latestWhere[] = 'p.deleted_at IS NULL';
     $latestSql = "
         SELECT p.*, fp.address AS foundation_address
         FROM foundation_project p
@@ -474,11 +464,11 @@ if ($isFoundationOwnView) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=40">
+    <link rel="stylesheet" href="css/project.css?v=43">
 
 </head>
 <body class="projects-page">
@@ -772,7 +762,8 @@ if ($role === 'admin'):
                             ? 'project_result.php?project_id=' . (int)$latest['project_id']
                             : 'payment/payment_project.php?project_id=' . (int)$latest['project_id'];
                     ?>
-                    <article class="project-card latest-card clickable-card<?= $latestShowResults ? ' project-card--completed' : '' ?>" data-href="<?= htmlspecialchars($latestCardLink) ?>">
+                    <article class="project-card latest-card clickable-card<?= $latestShowResults ? ' project-card--completed' : '' ?>">
+                        <a class="project-card-hit" href="<?= htmlspecialchars($latestCardLink, ENT_QUOTES, 'UTF-8') ?>" aria-label="ดูโครงการ <?= htmlspecialchars((string)($latest['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"></a>
                         <div class="project-card-media">
                             <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($latest['project_image'] ?? ''), 'uploads/'), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($latest['project_name']) ?>">
                         </div>
@@ -866,7 +857,8 @@ if ($role === 'admin'):
                         $daysLeft = (int)$interval->format('%r%a');
                     }
                 ?>
-                <div class="project-card clickable-card<?= $showResults ? ' project-card--completed' : '' ?>" data-href="<?= htmlspecialchars($cardLink) ?>">
+                <div class="project-card clickable-card<?= $showResults ? ' project-card--completed' : '' ?>">
+                    <a class="project-card-hit" href="<?= htmlspecialchars($cardLink, ENT_QUOTES, 'UTF-8') ?>" aria-label="ดูโครงการ <?= htmlspecialchars((string)($row['project_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"></a>
                     <div class="project-card-media">
                         <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($row['project_image'] ?? ''), 'uploads/'), ENT_QUOTES, 'UTF-8') ?>"
                              alt="<?= htmlspecialchars($row['project_name']) ?>">
@@ -994,21 +986,6 @@ if ($role === 'admin'):
         btn.addEventListener('click', function() {
             document.body.classList.remove('mode-delete-project');
             syncToolbarActive();
-        });
-    });
-})();
-
-// ===== Clickable project cards =====
-(function() {
-    document.querySelectorAll('.clickable-card').forEach(function(card) {
-        card.addEventListener('click', function(e) {
-            // ถ้าคลิกปุ่ม "บริจาค" ให้ผ่าน link ปกติ
-            if (e.target.closest('a.donate-btn')) return;
-            // ถ้าคลิก link หรือ button อื่นให้ผ่าน
-            if (e.target.closest('a, button, input, textarea, select, form')) return;
-            // มิฉะนั้น redirect ไปหน้า detail
-            const href = this.dataset.href;
-            if (href) window.location.href = href;
         });
     });
 })();

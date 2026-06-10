@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_need_view.php — มูลนิธิดูรายละเอียดรายการสิ่งของ (อ่านอย่างเดียว) โครง UI เดียวกับ foundation_project_view.php
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน need view
@@ -217,7 +217,7 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>รายละเอียดรายการสิ่งของ — <?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/project.css?v=40">

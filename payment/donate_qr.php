@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // donate_qr.php — แสดง QR และข้อมูลบัญชี DrawDream (เลย์เอาต์การ์ดสีน้ำเงิน)
 // สรุปสั้น: หน้าแสดง QR code สำหรับโอนเงินพร้อมยอดที่ผู้ใช้เลือก
 $amount = isset($_GET['amount']) ? max(0, (float)$_GET['amount']) : 0;
@@ -25,7 +25,7 @@ $amountLabel = $amount >= 20
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
   <meta charset="utf-8">
   <title>ชำระเงินบริจาค | DrawDream</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="../css/payment_qr.css?v=4">
 </head>

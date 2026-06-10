@@ -55,12 +55,11 @@ function drawdream_foundation_analytics_totals(mysqli $conn, int $foundationId, 
       AND (
         (d.category_id = ? AND d.target_id IN (
             SELECT child_id FROM foundation_children
-            WHERE foundation_id = ? AND deleted_at IS NULL
+            WHERE foundation_id = ?
         ))
         OR (d.category_id = ? AND d.target_id IN (
             SELECT project_id FROM foundation_project
-            WHERE deleted_at IS NULL
-              AND (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))
+            WHERE (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))
         ))
         OR (d.category_id = ? AND d.target_id = ?)
       )
@@ -100,7 +99,7 @@ function drawdream_foundation_analytics_totals(mysqli $conn, int $foundationId, 
     }
 
     $cntChildProfiles = 0;
-    $stC = $conn->prepare('SELECT COUNT(*) AS c FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL');
+    $stC = $conn->prepare('SELECT COUNT(*) AS c FROM foundation_children WHERE foundation_id = ?');
     if ($stC) {
         $stC->bind_param('i', $foundationId);
         $stC->execute();
@@ -110,8 +109,7 @@ function drawdream_foundation_analytics_totals(mysqli $conn, int $foundationId, 
     $cntProjects = 0;
     $stP = $conn->prepare(
         "SELECT COUNT(*) AS c FROM foundation_project
-         WHERE deleted_at IS NULL
-           AND (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))"
+         WHERE (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))"
     );
     if ($stP) {
         $stP->bind_param('is', $foundationId, $foundationName);
@@ -161,12 +159,11 @@ function drawdream_foundation_analytics_popular_categories(mysqli $conn, int $fo
       AND (
         (d.category_id = ? AND d.target_id IN (
             SELECT child_id FROM foundation_children
-            WHERE foundation_id = ? AND deleted_at IS NULL
+            WHERE foundation_id = ?
         ))
         OR (d.category_id = ? AND d.target_id IN (
             SELECT project_id FROM foundation_project
-            WHERE deleted_at IS NULL
-              AND (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))
+            WHERE (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))
         ))
         OR (d.category_id = ? AND d.target_id = ?)
       )
@@ -203,7 +200,7 @@ function drawdream_foundation_analytics_popular_categories(mysqli $conn, int $fo
         } elseif ($cid === $projCat) {
             $label = 'บริจาคโครงการ (หมวดโครงการ)';
         } elseif ($cid === $needCat) {
-            $label = 'บริจาคสิ่งของ (หมวดสิ่งของ)';
+            $label = 'บริจาคเงินเพื่อสมทบทุนจัดซื้อสิ่งของ (หมวดสิ่งของ)';
         } else {
             $dc = $conn->prepare(
                 'SELECT child_donate, project_donate, needitem_donate FROM donate_category WHERE category_id = ? LIMIT 1'
@@ -246,7 +243,7 @@ function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundatio
     FROM child_subscription_history h
     WHERE LOWER(TRIM(COALESCE(h.recurring_plan_code, ''))) = 'monthly'
       AND h.child_id IN (
-        SELECT child_id FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL
+        SELECT child_id FROM foundation_children WHERE foundation_id = ?
       )
     GROUP BY rs
     ";
@@ -254,7 +251,7 @@ function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundatio
     SELECT LOWER(TRIM(COALESCE(h.current_status, ''))) AS rs, COUNT(*) AS c
     FROM child_subscription_history h
     WHERE h.child_id IN (
-        SELECT child_id FROM foundation_children WHERE foundation_id = ? AND deleted_at IS NULL
+        SELECT child_id FROM foundation_children WHERE foundation_id = ?
     )
     GROUP BY rs
     ";

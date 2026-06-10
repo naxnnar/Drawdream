@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // notifications.php — ประวัติการแจ้งเตือนทั้งหมด (ผู้บริจาค + มูลนิธิ)
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน notifications
@@ -50,7 +50,7 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>การแจ้งเตือน | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <style>
@@ -145,6 +145,7 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
         .notif-card.notif--rejected { border-left-color: #e53935; background: #fff5f5; }
         .notif-card.notif--pending { border-left-color: #FF9800; background: #fff8f0; }
         .notif-card.notif--broadcast { border-left-color: #5c6bc0; background: #eef1ff; }
+        .notif-card.notif--letter { border-left-color: #3c5099; background: #f5f8ff; }
 
         .notif-icon {
             font-size: 28px;
@@ -234,20 +235,24 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
                 $time_diff = date('d/m/Y H:i', (int)$created);
             }
 
-            $rawLink = trim((string)($row['link'] ?? ''));
-            if ($rawLink !== ''
-                && ($row['title'] ?? '') === 'อัปเดตผลลัพธ์เด็กที่คุณอุปการะ'
-                && preg_match('#^children_donate\.php\?#', $rawLink)
-                && strpos($rawLink, 'view=outcome') === false) {
-                $rawLink .= (str_contains($rawLink, '?') ? '&' : '?') . 'view=outcome';
-            }
+            $rawLink = drawdream_normalize_child_donate_notification_link(
+                trim((string)($row['link'] ?? '')),
+                (string)($row['title'] ?? '')
+            );
             $isUnread = (int)($row['is_read'] ?? 0) === 0;
             $cardClasses = 'notif-card notif--' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8')
                 . ($isUnread ? ' notif-card--unread' : '');
             $notifIdRow = (int)($row['notif_id'] ?? 0);
             $cardHref = $rawLink;
             if ($notifIdRow > 0 && $rawLink !== '') {
-                $cardHref = 'mark_notif_read.php?id=' . $notifIdRow . '&goto=' . rawurlencode($rawLink);
+                $isChildLetter = drawdream_is_child_letter_notification((string)($row['title'] ?? ''))
+                    && preg_match('~^/?children_donate\.php\?~i', $rawLink);
+                if ($isChildLetter) {
+                    $sep = str_contains($rawLink, '?') ? '&' : '?';
+                    $cardHref = $rawLink . $sep . 'notif_read=' . $notifIdRow;
+                } else {
+                    $cardHref = 'mark_notif_read.php?id=' . $notifIdRow . '&goto=' . rawurlencode($rawLink);
+                }
             }
         ?>
             <?php if ($cardHref !== ''): ?>

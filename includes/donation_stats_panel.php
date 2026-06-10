@@ -3,6 +3,8 @@
 // สรุปสั้น: คำนวณยอดสถิติบริจาคเพื่อแสดงในการ์ดสรุปหน้าเด็ก/โปรไฟล์
 declare(strict_types=1);
 
+require_once __DIR__ . '/donate_type.php';
+
 /**
  * @return array{donor_count:int,total_amount:float,month_amount:float,education_fund:float}
  */
@@ -48,15 +50,22 @@ function drawdream_donation_stats_panel_values(mysqli $conn, int $categoryId, in
         $monthAmount = (float)($r2['t'] ?? 0);
     }
 
+    $dtOne = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
     $st3 = $conn->prepare(
-        "SELECT COALESCE(SUM(CASE WHEN amount > 700 THEN amount - 700 ELSE 0 END), 0) AS t
+        "SELECT COALESCE(SUM(
+            CASE
+                WHEN donate_type = ? THEN amount
+                WHEN COALESCE(donate_type, '') IN ('child_subscription', 'child_subscription_charge') THEN 0
+                WHEN amount > 700 THEN amount - 700
+                ELSE 0
+            END
+        ), 0) AS t
          FROM donation
-         WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'
-           AND COALESCE(donate_type, '') NOT IN ('child_subscription', 'child_subscription_charge')"
+         WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'"
     );
     $educationFund = 0.0;
     if ($st3) {
-        $st3->bind_param('ii', $categoryId, $targetId);
+        $st3->bind_param('sii', $dtOne, $categoryId, $targetId);
         $st3->execute();
         $r3 = $st3->get_result()->fetch_assoc();
         $educationFund = (float)($r3['t'] ?? 0);
@@ -104,7 +113,7 @@ function drawdream_render_donation_stats_panel(array $vals, string $ariaLabel = 
                             <div class="stat-box stat-box--education-fund">
                                 <div class="stat-icon"><i class="bi bi-mortarboard-fill"></i></div>
                                 <div class="stat-num"><?= number_format($edu, 0, '.', ',') ?></div>
-                                <div class="stat-label">ทุนการศึกษา (ส่วนเกิน 700 บ. / ครั้ง รายวัน)</div>
+                                <div class="stat-label">ทุนการศึกษา (บริจาครายวัน)</div>
                             </div>
                         </div>
                     </div>

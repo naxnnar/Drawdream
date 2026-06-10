@@ -80,11 +80,6 @@ if (!$rowFull) {
     exit();
 }
 
-if (!empty($rowFull['deleted_at'])) {
-    echo "<script>alert('โปรไฟล์นี้ถูกลบโดยมูลนิธิแล้ว (ข้อมูลยังอยู่ในระบบ)'); history.back();</script>";
-    exit();
-}
-
 if ($action === 'approve') {
     $new_status = 'อนุมัติ';
     $sql = "UPDATE foundation_children SET approve_profile = ?, approve_at = NOW() WHERE child_id = ?";

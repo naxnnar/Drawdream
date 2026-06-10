@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // payment/check_needlist_payment.php — ยืนยันการชำระรายการสิ่งของ
 declare(strict_types=1);
 
@@ -239,7 +239,7 @@ if ($foundation_name === '' && $fid > 0) {
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผลการชำระเงิน | DrawDream</title>
     <link rel="stylesheet" href="../css/navbar.css?v=7">
     <link rel="stylesheet" href="../css/payment.css?v=2">

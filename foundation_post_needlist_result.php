@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_post_needlist_result.php — มูลนิธิโพสต์ผลลัพธ์การระดมสิ่งของ (หลังครบเป้าหมาย)
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post needlist result
@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผลลัพธ์สิ่งของมูลนิธิ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css">

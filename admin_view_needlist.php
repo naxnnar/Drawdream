@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_view_needlist.php — ดูข้อมูลรายการสิ่งของ (จากไดเรกทอรี — ไม่มีอนุมัติ/ไม่อนุมัติ)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view needlist
@@ -231,7 +231,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ข้อมูลรายการสิ่งของ | DrawDream Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/navbar.css">

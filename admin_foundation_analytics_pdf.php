@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_foundation_analytics_pdf.php — รายงานเชิงวิเคราะห์มูลนิธิ (PDF A4 / พิมพ์ HTML หากไม่มี TCPDF)
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundation analytics pdf
 declare(strict_types=1);
@@ -76,7 +76,7 @@ header('Content-Type: text/html; charset=UTF-8');
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>รายงานเชิงวิเคราะห์ | <?= drawdream_foundation_analytics_h($foundationName) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <style>

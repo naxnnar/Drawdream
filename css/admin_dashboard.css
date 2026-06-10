@@ -52,16 +52,21 @@ body.admin-sidebar-page .dashboard {
 
 .admin-metric-stats__row {
     display: grid !important;
-    gap: 18px;
+    gap: 26px;
 }
 
 .admin-metric-stats__row--4 {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    margin-bottom: 22px;
+    margin-bottom: 28px;
 }
 
 .admin-metric-stats__row--2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-metric-stats__row.admin-user-activity-row {
+    margin-top: 8px;
+    gap: 28px;
 }
 
 .admin-metric-stats__row > .admin-stat-card-wrap {
@@ -178,6 +183,98 @@ body.admin-sidebar-page .dashboard {
 .admin-metric-stats .stat-card.donors         { --accent:#39b36a; --icon-bg:#eafaf0; --icon-color:#2e9d5b; }
 .admin-metric-stats .stat-card.foundations    { --accent:#42b7c9; --icon-bg:#e8f9fc; --icon-color:#2f9bab; }
 .admin-metric-stats .stat-card.children       { --accent:#9f47cf; --icon-bg:#f8eeff; --icon-color:#8a38b8; }
+.admin-metric-stats .stat-card.users-online   { --accent:#22a06b; --icon-bg:#e8faf1; --icon-color:#1d8a5c; }
+.admin-metric-stats .stat-card.users-returning { --accent:#4f6bed; --icon-bg:#eef2ff; --icon-color:#3f5bd9; }
+
+.admin-metric-stats .stat-card .card-meta {
+    font-size: 0.78rem;
+    color: #6b7280;
+    margin-top: 0.35rem;
+    line-height: 1.35;
+}
+
+.admin-live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: #22c55e;
+    vertical-align: middle;
+    animation: admin-live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes admin-live-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+.admin-user-activity-panel {
+    margin-top: 8px;
+    margin-bottom: 28px;
+}
+
+.admin-user-activity-panel__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 8px;
+}
+
+.admin-user-activity-panel__updated {
+    font-size: 0.85rem;
+    color: #6b7280;
+}
+
+.admin-user-activity-panel__note {
+    font-size: 0.92rem;
+    color: #4b5563;
+    margin: 0 0 12px;
+    line-height: 1.55;
+}
+
+.admin-user-activity-table-wrap {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid #e8e4dc;
+    background: #fff;
+}
+
+.admin-user-activity-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.admin-user-activity-table th,
+.admin-user-activity-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid #f0ebe3;
+}
+
+.admin-user-activity-table th {
+    background: #faf8f4;
+    font-weight: 700;
+    color: #374151;
+}
+
+.admin-user-activity-path {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #6b7280;
+    font-size: 0.82rem;
+}
+
+.admin-user-activity-empty {
+    text-align: center;
+    color: #9ca3af;
+    padding: 20px 12px !important;
+}
 .card.orange { border-left-color: #FF9800; }
 .card.red    { border-left-color: #E74C3C; }
 .card.purple { border-left-color: #9C27B0; }

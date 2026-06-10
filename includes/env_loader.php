@@ -46,9 +46,7 @@ if (!function_exists('drawdream_load_env_file')) {
                 $val = substr($val, 1, -1);
             }
 
-            if (getenv($key) !== false) {
-                continue;
-            }
+            // ค่าใน .env ชนะ environment เดิม — กัน dev ใช้ secret เก่าค้างในระบบแทนไฟล์ .env
             putenv($key . '=' . $val);
             $_ENV[$key] = $val;
             $_SERVER[$key] = $val;

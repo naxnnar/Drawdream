@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // payment/payment_project.php — หน้าชำระเงินโครงการ + Omise PromptPay
 // สรุปสั้น: หน้าเริ่มบริจาคโครงการ สร้าง charge และบันทึกรายการ pending ก่อนพาไป QR
 /**
@@ -36,7 +36,7 @@ $stmt = $conn->prepare("
     FROM foundation_project p
     LEFT JOIN foundation_profile fp ON fp.foundation_name = p.foundation_name
     LEFT JOIN `user` u ON u.user_id = fp.user_id
-    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done') AND p.deleted_at IS NULL
+    WHERE p.project_id = ? AND p.project_status IN ('approved', 'completed', 'done')
     LIMIT 1
 ");
 $stmt->bind_param("i", $project_id);
@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     } elseif ($amount < 20) {
         $error = "จำนวนเงินขั้นต่ำ 20 บาท";
     } else {
-        $stFresh = $conn->prepare('SELECT goal_amount, current_donate FROM foundation_project WHERE project_id = ? AND deleted_at IS NULL LIMIT 1');
+        $stFresh = $conn->prepare('SELECT goal_amount, current_donate FROM foundation_project WHERE project_id = ? LIMIT 1');
         $stFresh->bind_param('i', $project_id);
         $stFresh->execute();
         $rowFresh = $stFresh->get_result()->fetch_assoc();
@@ -364,7 +364,7 @@ function _omise_local_mock(string $path, array $data): array {
 <head>
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ชำระเงิน | DrawDream</title>
         <link rel="stylesheet" href="../css/payment.css?v=5">
         <style>

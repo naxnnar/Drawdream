@@ -216,9 +216,21 @@ textarea {
 .donor-avatar-img--placeholder {
     object-fit: contain;
     object-position: center;
-    padding: 0;
-    background: transparent;
-    transform: scale(1);
+    padding: 24px;
+    background: #eef2f0;
+    box-sizing: border-box;
+}
+
+.donor-avatar-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background: #eef2f0;
+    color: #597D57;
+    font-size: 3.5rem;
+    line-height: 1;
 }
 
 .donor-avatar-fab {

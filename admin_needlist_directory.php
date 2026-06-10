@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_needlist_directory.php — รายการสิ่งของทั้งหมด (มุมมองแอดมิน)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน needlist directory
@@ -51,7 +51,7 @@ function admin_needlist_status_pill_class(string $ap): string
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>รายการสิ่งของทั้งหมด | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

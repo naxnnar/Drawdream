@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // payment.php — หน้าชำระเงิน (เช่น QR ธนาคารบริจาคเด็ก)
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน payment
@@ -46,7 +46,7 @@ $stmt = $conn->prepare(
     'SELECT c.*, COALESCE(NULLIF(c.foundation_name, \'\'), fp.foundation_name) AS display_foundation_name
      FROM foundation_children c
      LEFT JOIN foundation_profile fp ON c.foundation_id = fp.foundation_id
-     WHERE c.child_id = ? AND c.deleted_at IS NULL LIMIT 1'
+     WHERE c.child_id = ? LIMIT 1'
 );
 $stmt->bind_param('i', $child_id);
 $stmt->execute();
@@ -96,7 +96,7 @@ $amountDisplay = ($amount >= 20)
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>ชำระเงิน - DrawDream</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">

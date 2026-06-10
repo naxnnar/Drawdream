@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_add_need.php — มูลนิธิเสนอรายการสิ่งของ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add need
@@ -706,7 +706,7 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle) ?> | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css?v=30">

@@ -2,6 +2,8 @@
 
 เอกสารสำหรับเตรียมตอบอาจารย์: แต่ละข้อมี **โค้ดจริง (เลขบรรทัด + ชื่อไฟล์)** แล้วตามด้วย **บทอธิบายยาว** อ่านจากบนลงล่างเหมือนอ่านไฟล์ใน IDE — ไม่แยกตารางรายบรรทัด
 
+**อ่านแบบ Flow (ลำดับไฟล์จนจบ):** [`drawdream-flow-walkthrough.md`](drawdream-flow-walkthrough.md) — แยก 1.เด็ก 2.โครงการ 3.สิ่งของ
+
 รายละเอียดสิ่งของเพิ่มเติม (8 ฟีเจอร์ย่อย): [`needlist-features-code-walkthrough.md`](needlist-features-code-walkthrough.md)
 
 ---
@@ -20,8 +22,9 @@
 | 3.1 | ค่าบริการสิ่งของ 5% |
 | 3.2 | กรอกราคา × จำนวน → ยอดเป้าหมาย |
 | 3.3 | แอดมิน escrow สิ่งของ (จัดซื้อ / จัดส่ง) |
+| 4 | ใบเสร็จอิเล็กทรอนิกส์อัตโนมัติหลังบริจาค |
 
-**ตารางหลักใน DBeaver:** `foundation_children`, `donation`, `child_subscription_history`, `donor`, `foundation_project`, `foundation_needlist`
+**ตารางหลักใน DBeaver:** `foundation_children`, `donation`, `child_subscription_history`, `donor`, `foundation_project`, `foundation_needlist`, `notifications`
 
 ---
 
@@ -572,6 +575,181 @@ function updateTotal() {
 ### อธิบาย
 
 หลังมูลนิธิชำระค่าบริการแล้ว แอดมินกด «เริ่มจัดซื้อ» (`start_purchase`) ระบบ **READ** `service_charge_paid_at` ก่อนทุกครั้ง — ถ้าว่างจะไม่เปลี่ยนสถานะ และแจ้ง error เหมือนโครงการ ถ้าผ่านจะ **UPDATE** `approve_item` เป็น `'purchasing'` เมื่อจัดส่งเสร็จแอดมินอัปโหลดรูปหลักฐาน (`upload_evidence`) ตรวจค่าบริการอีกครั้ง แล้ว **UPDATE** เป็น `'done'` พร้อมเก็บ `admin_delivery_text`, `admin_delivery_images` (JSON), `admin_delivery_at` มูลนิธิจึงไปโพสต์ผลให้ผู้บริจาคดูได้ในขั้นตอนถัดไป (ตาม flow ในเอกสาร needlist ฉบับเต็ม)
+
+---
+
+# ส่วนที่ 4 — ใบเสร็จอิเล็กทรอนิกส์อัตโนมัติหลังบริจาค
+
+**ไฟล์หลัก:** `includes/e_receipt.php`, `donation_receipt.php`, และไฟล์ตรวจชำระเงินใน `payment/` (`check_project_payment.php`, `check_child_payment.php`, `check_needlist_payment.php`, `child_subscription_create.php`, `cron_child_subscription_charges.php`, `omise_webhook.php`)
+
+---
+
+## ข้อ 4 ใบเสร็จอัตโนมัติ — แจ้งเตือน + หน้าใบเสร็จ (ไม่สร้าง PDF ในเซิร์ฟเวอร์)
+
+### ภาพรวม Flow
+
+```
+ผู้บริจาคชำระ Omise สำเร็จ
+    → INSERT/UPDATE donation (payment_status = 'completed')
+    → drawdream_send_e_receipt_notification_by_donate_id($donateId)
+    → INSERT notifications ให้ผู้บริจาค (ลิงก์ donation_receipt.php?donate_id=...)
+    → ผู้บริจาคเปิดหน้า HTML ใบเสร็จ / พิมพ์เป็น PDF จากเบราว์เซอร์
+```
+
+ระบบ **ไม่ได้** generate ไฟล์ PDF ใบเสร็จเก็บบนเซิร์ฟเวอร์ — หลังจ่ายสำเร็จจะ **ส่งแจ้งเตือนอัตโนมัติ** แล้วให้ผู้บริจาคเปิดหน้า `donation_receipt.php` ที่เรนเดอร์ HTML (พิมพ์/บันทึกเป็น PDF ได้จากเบราว์เซอร์)
+
+---
+
+### โค้ด (Helper กลาง — ใครได้ใบเสร็จ)
+
+```18:77:includes/e_receipt.php
+function drawdream_e_receipt_excluded_donate_types(): array
+{
+    return [
+        DRAWDREAM_DONATE_TYPE_NEED_SERVICE_CHARGE,
+        DRAWDREAM_DONATE_TYPE_PROJECT_SERVICE_CHARGE,
+    ];
+}
+
+function drawdream_donation_eligible_for_e_receipt(mysqli $conn, int $donateId): bool
+{
+    $st = $conn->prepare(
+        'SELECT donor_id, donate_type
+         FROM donation
+         WHERE donate_id = ? AND payment_status = ?
+         LIMIT 1'
+    );
+    // payment_status ต้องเป็น 'completed'
+  // donate_type ต้องไม่ใช่ค่าบริการมูลนิธิ
+  // donor_id ต้องไม่ใช่ user ที่ role = foundation
+    return true;
+}
+```
+
+### อธิบาย
+
+ฟังก์ชัน `drawdream_donation_eligible_for_e_receipt` เป็นตัวกรองกลางก่อนส่งใบเสร็จทุกครั้ง มัน **READ** แถวจากตาราง `donation` ที่ `donate_id` ตรงและ `payment_status = 'completed'` เท่านั้น ถ้ายังไม่ completed จะไม่มีใบเสร็จ จากนั้นเช็ค `donate_type` — ถ้าเป็น `need_service_charge` หรือ `project_service_charge` (มูลนิธิจ่ายค่าบริการ 5% ให้ระบบ) จะ **ไม่ออกใบเสร็จ** เพราะไม่ใช่การบริจาคเพื่อลดหย่อนของผู้บริจาคทั่วไป สุดท้ายเช็คว่า `donor_id` ไม่ใช่บัญชีที่ role เป็น `foundation` — มูลนิธิไม่มีใบเสร็จในระบบนี้ ใบเสร็จมีเฉพาะ **ผู้บริจาค (donor)** และ **admin** ดูแทนได้
+
+---
+
+### โค้ด (ส่งแจ้งเตือนอัตโนมัติหลังจ่ายสำเร็จ)
+
+```115:149:includes/e_receipt.php
+function drawdream_send_e_receipt_notification_by_donate_id(mysqli $conn, int $donateId): bool
+{
+    if ($donateId <= 0 || !drawdream_donation_eligible_for_e_receipt($conn, $donateId)) {
+        return false;
+    }
+    $st = $conn->prepare(
+        'SELECT donate_id, donor_id, amount
+         FROM donation
+         WHERE donate_id = ? AND payment_status = ?
+         LIMIT 1'
+    );
+    $st->bind_param('is', $donateId, $completed);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $donorId = (int)($row['donor_id'] ?? 0);
+    $amount = (float)($row['amount'] ?? 0);
+    return drawdream_send_notification(
+        $conn,
+        $donorId,
+        'e_receipt_issued',
+        'ได้รับใบเสร็จอิเล็กทรอนิกส์',
+        'ใบเสร็จบริจาคจำนวน ' . number_format($amount, 2) . ' บาท พร้อมดาวน์โหลดสำหรับใช้ลดหย่อนภาษี',
+        'donation_receipt.php?donate_id=' . $donateId,
+        'e_receipt:' . $donateId
+    );
+}
+```
+
+### อธิบาย
+
+เมื่อได้ `donate_id` ที่ผ่านเงื่อนไขแล้ว ฟังก์ชันนี้ **READ** ยอดเงินและ `donor_id` อีกครั้ง แล้วเรียก `drawdream_send_notification` เพื่อ **INSERT** แถวใน `notifications` ให้ผู้บริจาคคนนั้น หัวข้อ «ได้รับใบเสร็จอิเล็กทรอนิกส์» ลิงก์ชี้ไป `donation_receipt.php?donate_id=...` คีย์ `e_receipt:{donateId}` ช่วยกันส่งซ้ำถ้าระบบเรียก callback หลายรอบ (ขึ้นกับ logic ใน `notification_audit.php`) นี่คือส่วน «อัตโนมัติ» — ผู้บริจาคไม่ต้องกดขอใบเสร็จเองหลังสแกน QR/บัตรสำเร็จ
+
+---
+
+### โค้ด (เรียกหลังบันทึก donation — ตัวอย่างโครงการ)
+
+```296:301:payment/check_project_payment.php
+if ($finalized_this_request && $receiptDonateId <= 0) {
+    $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+}
+if ($finalized_this_request && $receiptDonateId > 0) {
+    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
+}
+```
+
+### อธิบาย
+
+ไฟล์ `check_*_payment.php` ทำงานเมื่อผู้ใช้กลับจาก Omise หรือระบบ poll สถานะ charge หลัง `payment_status` เป็น `completed` และ **INSERT** แถว `donation` สำเร็จ (`$finalized_this_request`) จะได้ `$receiptDonateId` จาก `insert_id` ถ้าไม่มี (เช่น callback ซ้ำ) จะใช้ `drawdream_receipt_completed_donation_id_by_charge` หา `donate_id` จาก `omise_charge_id` แล้วค่อยเรียกส่งใบเสร็จ **รูปแบบเดียวกัน** ใช้ใน:
+
+| ไฟล์ | ชนิดบริจาค |
+|------|------------|
+| `payment/check_project_payment.php` | โครงการ |
+| `payment/check_child_payment.php` | เด็ก (ครั้งเดียว / PromptPay) |
+| `payment/check_needlist_payment.php` | สิ่งของ |
+| `payment/child_subscription_create.php` | อุปการะรอบแรก (fallback local_cron) |
+| `payment/cron_child_subscription_charges.php` | อุปการะรอบถัดไป |
+| `payment/omise_webhook.php` | webhook จาก Omise (เช่น charge สำเร็จฝั่ง subscription) |
+
+ทุกจุดจบที่ helper เดียว — ไม่ duplicate logic สร้างใบเสร็จในแต่ละหน้า
+
+---
+
+### โค้ด (หน้าแสดงใบเสร็จ — ผู้บริจาคเปิดจากลิงก์แจ้งเตือน)
+
+```34:80:donation_receipt.php
+if ($viewerRole === 'foundation' || drawdream_user_is_foundation_role($conn, $viewerId)) {
+    http_response_code(403);
+    echo 'มูลนิธิไม่มีใบเสร็จอิเล็กทรอนิกส์ในระบบ — ใบเสร็จสำหรับผู้บริจาคเท่านั้น';
+    exit;
+}
+
+$st = $conn->prepare(
+    "SELECT d.donate_id, d.amount, d.transfer_datetime, d.target_id,
+            dc.project_donate, dc.needitem_donate, dc.child_donate, dn.tax_id
+     FROM donation d
+     LEFT JOIN donate_category dc ON dc.category_id = d.category_id
+     LEFT JOIN donor dn ON dn.user_id = d.donor_id
+     WHERE d.donate_id = ? AND d.payment_status = 'completed'
+     LIMIT 1"
+);
+// ...
+if (!drawdream_donation_eligible_for_e_receipt($conn, $donateId)) {
+    http_response_code(403);
+    echo 'รายการนี้ไม่มีใบเสร็จอิเล็กทรอนิกส์ (เช่น ค่าบริการระบบของมูลนิธิ)';
+    exit;
+}
+if ($viewerRole !== 'admin' && $viewerId !== $ownerDonorId) {
+    http_response_code(403);
+    echo 'คุณไม่มีสิทธิ์เข้าถึงใบเสร็จนี้';
+    exit;
+}
+```
+
+```199:203:donation_receipt.php
+$receiptRefDate = $ts !== false ? date('Ymd', $ts) : date('Ymd');
+$receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0', STR_PAD_LEFT);
+```
+
+### อธิบาย
+
+`donation_receipt.php` เป็นหน้า **Output** ที่ผู้บริจาคเห็นจริง **Input** คือ `GET donate_id` และ session ผู้เปิดดู ระบบปฏิเสธมูลนิธิทันที แล้ว **READ** รายการบริจาคที่ completed พร้อม join `donate_category` เพื่อรู้ว่าบริจาคให้โครงการ / เด็ก / สิ่งของ ชื่อเป้าหมายดึงจาก label ในหมวดหรือ `target_id` ตาม logic ด้านล่างไฟล์ ใช้ `drawdream_donation_eligible_for_e_receipt` ซ้ำอีกครั้งเพื่อกันคนเปิดลิงก์ค่าบริการมูลนิธิ ความปลอดภัย: นอกจาก admin แล้ว ต้องเป็น `donor_id` เจ้าของรายการเท่านั้น
+
+เลขอ้างอิงใบเสร็จสร้างจากวันที่โอน + `donate_id` เช่น `DD-20260524-0000123` หน้า HTML แสดงชื่อผู้บริจาค เลขประจำตัวผู้เสียภาษีจาก `donor.tax_id` ยอดเงิน วันที่เวลา และรองรับสลับโหมด **บุคคลธรรมดา / นิติบุคคล** จากข้อมูลใน `donor` (`receipt_type`, `receipt_company_*`) ที่มูลนิธิกรอกในโปรไฟล์ผู้บริจาค
+
+---
+
+### สรุปตอบอาจารย์ (คำถามที่พบบ่อย)
+
+| คำถาม | คำตอบสั้น |
+|--------|-----------|
+| ใบเสร็จออกเมื่อไหร่ | ทันทีหลัง `donation.payment_status = 'completed'` และบันทึก `donate_id` แล้ว |
+| เก็บที่ไหน | ไม่เก็บ PDF — เก็บข้อมูลใน `donation` + แจ้งเตือนใน `notifications` |
+| มูลนิธิได้ใบเสร็จไหม | ไม่ได้ (ทั้งตอนจ่ายค่าบริการและ role foundation) |
+| ค่าบริการ 5% มีใบเสร็จไหม | ไม่มี (`need_service_charge`, `project_service_charge` ถูก exclude) |
+| อุปการะรายรอบ | แต่ละรอบที่ charge สำเร็จ → `donate_id` ใหม่ → แจ้งเตือนใบเสร็จแยกรายการ |
 
 ---
 

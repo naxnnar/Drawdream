@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // login.php — เข้าสู่ระบบ / เลือกบทบาท
 // ล็อกอินสำเร็จ: ตั้ง show_welcome → welcome.php (ทุก role รวม admin; ไม่ใช้ admin_welcome)
 
@@ -76,6 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $_SESSION['user_id'] = $user_id;
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'donor';
+                    drawdream_log_user_login($conn, $user_id, 'register');
                     $_SESSION['show_welcome'] = true;
                     header("refresh:2;url=welcome.php");
                 } else {
@@ -134,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'foundation';
                     $_SESSION['account_verified'] = 0;
+                    drawdream_log_user_login($conn, $user_id, 'register');
                     $_SESSION['show_welcome'] = true;
                     header("refresh:2;url=welcome.php");
                 } else {
@@ -169,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             $_SESSION['user_id'] = $row['user_id'];
             $_SESSION['email']   = $row['email'];
             $_SESSION['role']    = $row['role'];
+            drawdream_log_user_login($conn, (int)$row['user_id'], 'password');
 
             if ($row['role'] === 'foundation') {
                 $stmt2 = $conn->prepare("SELECT account_verified FROM foundation_profile WHERE user_id = ?");
@@ -196,9 +199,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= $page === 'home' ? 'DrawDream' : ($page === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก') ?> | DrawDream</title>
-    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/auth.css?v=2">
     <link rel="stylesheet" href="css/thai_address.css?v=1">
 </head>
 
@@ -249,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             </div>
             <a href="login.php" class="back-link">← ย้อนกลับ</a>
             <div class="register-link">
-                ยังไม่มีบัญชี? <a href="login.php?page=register&step=choose">สมัครสมาชิก</a>
+                ยังไม่มีบัญชี? <a href="login.php?page=register&step=choose">สมัครบัญชี</a>
             </div>
 
         <?php elseif ($page === 'register'): ?>

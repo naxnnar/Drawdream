@@ -6,6 +6,7 @@
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
+require_once __DIR__ . '/includes/child_omise_subscription.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -24,7 +25,7 @@ function checkCompletedProjects($conn) {
         WHERE project_status = 'approved'
         AND current_donate >= goal_amount
         AND goal_amount > 0
-        AND deleted_at IS NULL
+       
     ");
 
     // เช็คโครงการที่หมดเวลา
@@ -33,7 +34,7 @@ function checkCompletedProjects($conn) {
         SET project_status = 'completed'
         WHERE project_status = 'approved'
         AND end_date < CURDATE()
-        AND deleted_at IS NULL
+       
     ");
 }
 
@@ -173,9 +174,9 @@ if ($role === 'foundation') {
         FROM donation d
         INNER JOIN donate_category dc ON d.category_id = dc.category_id
         LEFT JOIN foundation_children fc
-            ON fc.child_id = d.target_id AND fc.deleted_at IS NULL
+            ON fc.child_id = d.target_id
         LEFT JOIN foundation_project p
-            ON p.project_id = d.target_id AND p.deleted_at IS NULL
+            ON p.project_id = d.target_id
         LEFT JOIN foundation_profile fp
             ON fp.foundation_id = d.target_id
         WHERE d.donor_id = ? AND LOWER(TRIM(d.payment_status)) = 'completed'
@@ -194,30 +195,7 @@ if ($role === 'foundation') {
     );
     $donation_history = array_slice($donation_history, 0, 200);
 
-    $stSub = $conn->prepare(
-        "SELECT h.donate_id AS id, h.child_id, h.recurring_plan_code AS plan_code, fc.child_name
-         FROM child_subscription_history h
-         INNER JOIN (
-            SELECT child_id, donor_user_id, MAX(history_id) AS max_history_id
-            FROM child_subscription_history
-            WHERE donor_user_id = ?
-            GROUP BY child_id, donor_user_id
-         ) latest ON latest.max_history_id = h.history_id
-         INNER JOIN foundation_children fc ON fc.child_id = h.child_id AND fc.deleted_at IS NULL
-         WHERE h.current_status = 'active'
-         ORDER BY fc.child_name ASC"
-    );
-    if ($stSub) {
-        $stSub->bind_param('i', $user_id);
-        $stSub->execute();
-        $donor_active_child_subscriptions = $stSub->get_result()->fetch_all(MYSQLI_ASSOC);
-        require_once __DIR__ . '/includes/child_omise_subscription.php';
-        foreach ($donor_active_child_subscriptions as &$subRow) {
-            $spec = drawdream_child_subscription_plan((string)($subRow['plan_code'] ?? ''));
-            $subRow['amount_thb'] = is_array($spec) ? (float)($spec['amount_thb'] ?? 0) : 0.0;
-        }
-        unset($subRow);
-    }
+    $donor_active_child_subscriptions = drawdream_donor_list_active_child_subscriptions($conn, $user_id);
 
 } elseif ($role === 'admin') {
     $stmt = $conn->prepare("SELECT email FROM `user` WHERE user_id = ? LIMIT 1");
@@ -267,11 +245,11 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>โปรไฟล์ | DrawDream</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/profile.css?v=15">
+    <link rel="stylesheet" href="css/profile.css?v=19">
 </head>
 <body>
 
@@ -314,7 +292,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                 <?php if (!empty($profile['profile_image'])): ?>
                     <img src="uploads/profiles/<?= htmlspecialchars($profile['profile_image']) ?>" alt="รูปโปรไฟล์">
                 <?php else: ?>
-                    <img src="img/donor-avatar-placeholder.svg" alt="รูปโปรไฟล์ผู้บริจาคเริ่มต้น" class="profile-image-default">
+                    <span class="profile-avatar-icon" aria-hidden="true"><i class="bi bi-person-fill"></i></span>
                 <?php endif; ?>
             </div>
             <div class="profile-info">
@@ -492,6 +470,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                             <?php if ($subChildId > 0): ?>
                                 <form method="post" action="payment/child_subscription_cancel.php" class="donor-sponsorship-cancel-form js-confirm-cancel-sub" data-child-name="<?= htmlspecialchars((string)($sub['child_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                                     <?= drawdream_csrf_field() ?>
+                                    <input type="hidden" name="return_to" value="profile">
                                     <input type="hidden" name="child_id" value="<?= $subChildId ?>">
                                     <button type="submit" class="donor-sponsorship-cancel-btn">ยกเลิกอุปการะ</button>
                                 </form>
@@ -523,6 +502,9 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                 <?php foreach ($donation_history as $idx => $don): ?>
                     <?php $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
                     <div class="log-item log-item--donation" data-year="<?= htmlspecialchars($yr) ?>"<?= $idx >= 5 ? ' hidden' : '' ?>>
+                        <?php if ((int)($don['donate_id'] ?? 0) > 0): ?>
+                        <a class="log-item-hit" href="donation_receipt.php?donate_id=<?= (int)$don['donate_id'] ?>" aria-label="ดูใบเสร็จการบริจาค"></a>
+                        <?php endif; ?>
                         <div class="donor-donation-main">
                             <div class="log-action">
                                 <?php
@@ -638,6 +620,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 function showModal(data) {
     const modal = document.getElementById('detailModal');
@@ -674,12 +657,35 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
 (function() {
     var openBtn = document.getElementById('openDonationHistory');
     var panel = document.getElementById('donationHistoryPanel');
-    if (openBtn && panel) {
-        openBtn.addEventListener('click', function() {
-            panel.hidden = false;
-            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
+    function openDonationHistoryPanel() {
+        if (!panel) return;
+        panel.hidden = false;
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    if (openBtn && panel) {
+        openBtn.addEventListener('click', openDonationHistoryPanel);
+    }
+    try {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('history') === '1') {
+            openDonationHistoryPanel();
+            var subMsg = params.get('sub_msg');
+            if (subMsg) {
+                var subOk = params.get('sub_ok') === '1';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: subOk ? 'success' : 'error',
+                        title: subOk ? 'สำเร็จ' : 'ไม่สำเร็จ',
+                        text: subMsg,
+                        timer: subOk ? 2200 : undefined,
+                        showConfirmButton: !subOk
+                    });
+                } else {
+                    alert(subMsg);
+                }
+            }
+        }
+    } catch (e) { /* ignore */ }
 
     var openFin = document.getElementById('openFoundationFinance');
     var finPanel = document.getElementById('foundationFinancePanel');
@@ -792,7 +798,6 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
     });
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 </body>
 </html>

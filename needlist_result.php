@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // needlist_result.php — ผลลัพธ์การระดมสิ่งของมูลนิธิ (หลังครบเป้าหมาย) — UI เดียวกับ project_result.php
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน needlist result
@@ -102,7 +102,7 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ผลลัพธ์ของมูลนิธิ | <?= htmlspecialchars($fname) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css">
@@ -124,19 +124,39 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
             border-radius: 12px; margin: 0; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
         }
         .result-slider-btn {
-            position: absolute; top: 50%; transform: translateY(-50%); width: 34px; height: 34px;
+            position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px;
             border: none; border-radius: 50%; background: rgba(255,255,255,0.95); color: #374151;
-            font-size: 1.2rem; line-height: 1; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 1.35rem; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+            touch-action: manipulation;
         }
         .result-slider-btn.prev { left: 8px; }
         .result-slider-btn.next { right: 8px; }
-        .result-slider-dots { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
-        .result-slider-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; }
+        .result-slider-hint {
+            display: none;
+            margin: 0 0 8px;
+            font-size: 0.84rem;
+            color: #6b7280;
+            text-align: center;
+        }
+        .result-slider-dots {
+            display: flex; gap: 8px; justify-content: center; margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .result-slider-dot {
+            width: 10px; height: 10px; border-radius: 50%; background: #d1d5db;
+            border: none; padding: 0; cursor: pointer; touch-action: manipulation;
+        }
         .result-slider-dot.active { background: #4A5BA8; }
-        @media (max-width: 920px) {
+        @media (max-width: 768px) {
             .result-wrap { margin: 16px auto 24px; padding: 18px 14px 20px; border-radius: 12px; }
-            .result-title { font-size: 1.6rem; }
-            .result-update-layout { grid-template-columns: 1fr; }
+            .result-title { font-size: 1.45rem; }
+            .result-meta { font-size: 0.95rem; }
+            .result-update-layout { grid-template-columns: 1fr; gap: 16px; }
+            .result-update-desc { font-size: 1rem; line-height: 1.75; }
+            .result-update-img { max-height: 360px; }
+            .result-slider-hint { display: block; }
+            .result-slider-btn { width: 48px; height: 48px; font-size: 1.5rem; }
+            .result-slider-dot { width: 12px; height: 12px; }
         }
     </style>
 </head>
@@ -161,6 +181,9 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
             </div>
             <div class="result-media-box">
                 <?php if ($imageList !== []): ?>
+                    <?php if (count($imageList) > 1): ?>
+                    <p class="result-slider-hint">ปัดซ้าย–ขวาหรือกดจุดด้านล่างเพื่อดูรูปเพิ่ม</p>
+                    <?php endif; ?>
                     <div class="result-slider" id="needlistResultSlider">
                         <?php foreach ($imageList as $idx => $img): ?>
                             <div class="result-slide<?= $idx === 0 ? ' active' : '' ?>">
@@ -173,9 +196,9 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
                         <?php endif; ?>
                     </div>
                     <?php if (count($imageList) > 1): ?>
-                        <div class="result-slider-dots" id="needlistResultDots">
+                        <div class="result-slider-dots" id="needlistResultDots" role="tablist" aria-label="เลือกรูปผลลัพธ์">
                             <?php foreach ($imageList as $idx => $_): ?>
-                                <span class="result-slider-dot<?= $idx === 0 ? ' active' : '' ?>"></span>
+                                <button type="button" class="result-slider-dot<?= $idx === 0 ? ' active' : '' ?>" data-slide="<?= (int)$idx ?>" role="tab" aria-label="รูปที่ <?= (int)$idx + 1 ?>" aria-selected="<?= $idx === 0 ? 'true' : 'false' ?>"></button>
                             <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
@@ -186,6 +209,7 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
         </div>
     <?php endif; ?>
 </div>
+<?php include __DIR__ . '/includes/site_footer.php'; ?>
 <?php if ($hasContent && count($imageList) > 1): ?>
 <script>
 (function () {
@@ -197,12 +221,39 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
     var prev = document.getElementById('needlistResultPrev');
     var next = document.getElementById('needlistResultNext');
     var idx = 0;
+    var touchStartX = 0;
+    var touchStartY = 0;
     function render() {
         slides.forEach(function (s, i) { s.classList.toggle('active', i === idx); });
-        dots.forEach(function (d, i) { d.classList.toggle('active', i === idx); });
+        dots.forEach(function (d, i) {
+            d.classList.toggle('active', i === idx);
+            d.setAttribute('aria-selected', i === idx ? 'true' : 'false');
+        });
     }
-    if (prev) prev.addEventListener('click', function () { idx = (idx - 1 + slides.length) % slides.length; render(); });
-    if (next) next.addEventListener('click', function () { idx = (idx + 1) % slides.length; render(); });
+    function go(to) {
+        idx = ((to % slides.length) + slides.length) % slides.length;
+        render();
+    }
+    if (prev) prev.addEventListener('click', function () { go(idx - 1); });
+    if (next) next.addEventListener('click', function () { go(idx + 1); });
+    dots.forEach(function (dot) {
+        dot.addEventListener('click', function () {
+            go(parseInt(dot.getAttribute('data-slide') || '0', 10) || 0);
+        });
+    });
+    slider.addEventListener('touchstart', function (e) {
+        if (!e.changedTouches || !e.changedTouches[0]) return;
+        touchStartX = e.changedTouches[0].clientX;
+        touchStartY = e.changedTouches[0].clientY;
+    }, { passive: true });
+    slider.addEventListener('touchend', function (e) {
+        if (!e.changedTouches || !e.changedTouches[0]) return;
+        var dx = e.changedTouches[0].clientX - touchStartX;
+        var dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        if (dx < 0) go(idx + 1);
+        else go(idx - 1);
+    }, { passive: true });
 })();
 </script>
 <?php endif; ?>

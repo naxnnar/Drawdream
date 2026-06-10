@@ -9,6 +9,7 @@ if (session_status() === PHP_SESSION_NONE) {
   require_once __DIR__ . '/includes/session_init.php';
   drawdream_session_start();
 }
+require_once __DIR__ . '/includes/brand_logo.php';
 
 // นับรายการรออนุมัติ (เฉพาะ admin)
 $pending_count    = 0;
@@ -32,7 +33,7 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
   $r3 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE approve_item = 'pending'");
   if ($r3) $pending_needs = mysqli_fetch_assoc($r3)['cnt'];
 
-  $r4 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ') AND deleted_at IS NULL");
+  $r4 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')");
   if ($r4) $pending_children = mysqli_fetch_assoc($r4)['cnt'];
 }
 
@@ -162,7 +163,7 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
               SELECT COUNT(*) AS cnt
               FROM foundation_children c
               WHERE c.foundation_id = ?
-                AND c.deleted_at IS NULL
+               
                 AND ({$existExpr})
                 AND COALESCE(TRIM(c.update_text), '') = ''
                 AND COALESCE(NULLIF(c.update_images, ''), '[]') IN ('[]', '')
@@ -202,6 +203,7 @@ $_nav_base  = str_repeat('../', max(0, $_nav_depth));
 
 // รูปโปรไฟล์มุมขวาบน (ผู้บริจาค / มูลนิธิ)
 $nav_profile_img = $_nav_base . 'img/donor-avatar-placeholder.svg';
+$nav_profile_is_custom = false;
 if ($is_logged_in && in_array($_SESSION['role'] ?? '', ['donor', 'foundation'], true)) {
   if (!isset($conn) || !($conn instanceof mysqli)) {
     include_once __DIR__ . '/db.php';
@@ -218,6 +220,7 @@ if ($is_logged_in && in_array($_SESSION['role'] ?? '', ['donor', 'foundation'], 
         $fn = isset($rowNav['profile_image']) ? basename((string)$rowNav['profile_image']) : '';
         if ($fn !== '') {
           $nav_profile_img = $_nav_base . 'uploads/profiles/' . rawurlencode($fn);
+          $nav_profile_is_custom = true;
         }
       }
     } elseif ($roleNav === 'foundation') {
@@ -229,6 +232,7 @@ if ($is_logged_in && in_array($_SESSION['role'] ?? '', ['donor', 'foundation'], 
         $fn = isset($rowNav['foundation_image']) ? basename((string)$rowNav['foundation_image']) : '';
         if ($fn !== '') {
           $nav_profile_img = $_nav_base . 'uploads/profiles/' . rawurlencode($fn);
+          $nav_profile_is_custom = true;
         }
       }
     }
@@ -250,6 +254,7 @@ if (isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'foundation') {
 }
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin';
 $current_page = basename($_SERVER['PHP_SELF']);
+$aboutNavActive = in_array($current_page, ['about.php', 'about_how_it_works.php', 'about_support.php'], true);
 $adminDashboardActive = in_array($current_page, [
     'admin_dashboard.php',
     'admin_donors.php',
@@ -281,8 +286,11 @@ $adminNeedlistActive = in_array($current_page, [
 ], true);
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
-<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=6">
-<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=3">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=13">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=5">
+<script>
+document.addEventListener('touchstart', function () {}, { passive: true });
+</script>
 <?php if ($is_admin_mode): ?>
 <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 <button type="button" class="admin-sidebar-show-btn" id="adminSidebarShowBtn" aria-label="แสดงเมนูแอดมิน">☰</button>
@@ -296,7 +304,7 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
   </div>
 
   <a href="<?= $_nav_base ?>admin_dashboard.php" class="admin-brand-card">
-    <img src="<?= $_nav_base ?>img/logobig.png" class="admin-brand-logo" alt="DrawDream Admin">
+    <img src="<?= htmlspecialchars(drawdream_admin_brand_logo_src($_nav_base), ENT_QUOTES, 'UTF-8') ?>" class="admin-brand-logo" alt="DrawDream Admin">
     <div class="admin-brand-text">
       <strong>DrawDream</strong>
       <span>Admin Panel</span>
@@ -387,13 +395,27 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
       <a href="<?= $_nav_base ?>children_.php" <?= basename($_SERVER['PHP_SELF']) == 'children_.php' ? 'class="active"' : '' ?>>บริจาค</a>
       <a href="<?= $_nav_base ?>project.php" <?= basename($_SERVER['PHP_SELF']) == 'project.php' ? 'class="active"' : '' ?>>โครงการ</a>
       <a href="<?= $_nav_base ?>foundation.php" <?= basename($_SERVER['PHP_SELF']) == 'foundation.php' ? 'class="active"' : '' ?>>มูลนิธิ</a>
-      <a href="<?= $_nav_base ?>about.php" <?= basename($_SERVER['PHP_SELF']) == 'about.php' ? 'class="active"' : '' ?>>เกี่ยวกับเรา</a>
+      <div class="nav-about-dropdown<?= $aboutNavActive ? ' is-active' : '' ?>" id="navAboutDropdown">
+        <button type="button"
+                class="nav-about-dropdown__trigger<?= $aboutNavActive ? ' active' : '' ?>"
+                id="navAboutDropdownBtn"
+                aria-expanded="false"
+                aria-controls="navAboutDropdownMenu"
+                aria-haspopup="true">
+          เกี่ยวกับเรา
+          <i class="bi bi-chevron-down nav-about-dropdown__chevron" aria-hidden="true"></i>
+        </button>
+        <div class="nav-about-dropdown__menu" id="navAboutDropdownMenu" role="menu" hidden>
+          <a href="<?= $_nav_base ?>about.php" role="menuitem" <?= $current_page === 'about.php' ? 'class="active"' : '' ?>>เกี่ยวกับเรา</a>
+          <a href="<?= $_nav_base ?>about_support.php" role="menuitem" <?= $current_page === 'about_support.php' ? 'class="active"' : '' ?>>สนับสนุนเรา</a>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="nav-center">
     <a href="<?= $_nav_base ?>homepage.php">
-      <img src="<?= $_nav_base ?>img/logobig.png" class="nav-logo" alt="DrawDream Logo">
+      <img src="<?= htmlspecialchars(drawdream_brand_logo_src($_nav_base), ENT_QUOTES, 'UTF-8') ?>" class="nav-logo" alt="DrawDream Logo">
     </a>
   </div>
 
@@ -416,7 +438,7 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
               <span class="notif-badge"><?= $user_notif_count ?></span>
             <?php endif; ?>
           </button>
-          <div class="notif-dropdown" id="notifDropdown">
+          <div class="notif-dropdown" id="notifDropdown" onclick="event.stopPropagation()">
             <div class="notif-header">
               <span class="notif-header-title">การแจ้งเตือน</span>
               <div class="notif-header-actions">
@@ -438,13 +460,17 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
                   if ($rawNotifLink === '') {
                       $rawNotifLink = 'notifications.php';
                   }
-                  if (($n['title'] ?? '') === 'อัปเดตผลลัพธ์เด็กที่คุณอุปการะ'
-                      && preg_match('#^children_donate\.php\?#', $rawNotifLink)
-                      && strpos($rawNotifLink, 'view=outcome') === false) {
-                      $rawNotifLink .= (str_contains($rawNotifLink, '?') ? '&' : '?') . 'view=outcome';
-                  }
+                  $rawNotifLink = drawdream_normalize_child_donate_notification_link(
+                      $rawNotifLink,
+                      (string)($n['title'] ?? '')
+                  );
                   $notifIdNav = (int)($n['notif_id'] ?? 0);
-                  if ($notifIdNav > 0) {
+                  $isChildLetterNav = drawdream_is_child_letter_notification((string)($n['title'] ?? ''))
+                      && preg_match('~^/?children_donate\.php\?~i', $rawNotifLink);
+                  if ($notifIdNav > 0 && $isChildLetterNav) {
+                      $sepNav = str_contains($rawNotifLink, '?') ? '&' : '?';
+                      $notifItemHref = $_nav_base . $rawNotifLink . $sepNav . 'notif_read=' . $notifIdNav;
+                  } elseif ($notifIdNav > 0) {
                       $notifItemHref = $_nav_base . 'mark_notif_read.php?id=' . $notifIdNav
                           . '&goto=' . rawurlencode($rawNotifLink);
                   } else {
@@ -467,7 +493,7 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 
       <div class="nav-profile-wrap">
         <button type="button" class="profile-btn" id="navProfileMenuBtn" aria-expanded="false" aria-haspopup="true" aria-controls="navProfileMenu" title="เมนูบัญชี">
-          <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="โปรไฟล์" class="nav-icon nav-profile-photo" width="28" height="28" loading="lazy">
+          <img src="<?= htmlspecialchars($nav_profile_img, ENT_QUOTES, 'UTF-8') ?>" alt="โปรไฟล์" class="nav-icon nav-profile-photo<?= $nav_profile_is_custom ? '' : ' nav-profile-photo--placeholder' ?>" width="28" height="28" loading="lazy">
         </button>
         <div class="nav-profile-menu" id="navProfileMenu" role="menu" hidden>
           <a href="<?= $_nav_base ?>profile.php" class="nav-profile-menu-item" role="menuitem">โปรไฟล์</a>
@@ -521,6 +547,53 @@ $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') close();
+    });
+  });
+})();
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    var wrap = document.getElementById('navAboutDropdown');
+    var btn = document.getElementById('navAboutDropdownBtn');
+    var menu = document.getElementById('navAboutDropdownMenu');
+    if (!wrap || !btn || !menu) return;
+
+    function setOpen(open) {
+      wrap.classList.toggle('is-open', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        menu.removeAttribute('hidden');
+      } else {
+        menu.setAttribute('hidden', '');
+      }
+    }
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      setOpen(!wrap.classList.contains('is-open'));
+    });
+
+    menu.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () {
+        setOpen(false);
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target)) {
+        setOpen(false);
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        setOpen(false);
+      }
+    });
+
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 600) {
+        setOpen(false);
+      }
     });
   });
 })();

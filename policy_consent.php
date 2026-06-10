@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // policy_consent.php — หน้าความยินยอมและนโยบาย
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน policy consent
@@ -9,7 +9,7 @@
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>นโยบายความยินยอม | DrawDream</title>
 <link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/policy_consent.css">

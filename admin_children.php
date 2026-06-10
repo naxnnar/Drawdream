@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_children.php — แอดมินจัดการโปรไฟล์เด็ก
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน children
@@ -50,6 +50,13 @@ foreach ($needed_columns as $col => $ddl) {
         $conn->query($ddl);
     }
 }
+$childBankCol = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'child_bank'");
+if ($childBankCol && ($childBankRow = $childBankCol->fetch_assoc())) {
+    $childBankType = (string)($childBankRow['Type'] ?? '');
+    if (!preg_match('/varchar\((\d+)\)/i', $childBankType, $childBankMatch) || (int)$childBankMatch[1] < 32) {
+        @$conn->query('ALTER TABLE foundation_children MODIFY COLUMN child_bank VARCHAR(32) NULL');
+    }
+}
 $has_birth_date_column = true;
 
 if (isset($_POST['submit'])) {
@@ -62,7 +69,7 @@ if (isset($_POST['submit'])) {
     $dream         = trim($_POST['dream'] ?? '');
     $wish          = trim($_POST['wish'] ?? '');
     $bank_name     = trim($_POST['bank_name'] ?? '');
-    $child_bank    = trim($_POST['child_bank'] ?? '');
+    $child_bank    = preg_replace('/\D+/', '', trim((string)($_POST['child_bank'] ?? '')));
     $status        = "รออุปการะ";
     $approve_status = "รอดำเนินการ";
 
@@ -145,7 +152,7 @@ if (isset($_POST['submit'])) {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>เพิ่มข้อมูลเด็ก - Children Profile</title>
 <link rel="stylesheet" href="css/navbar.css">
 <link rel="stylesheet" href="css/children.css">

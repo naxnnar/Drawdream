@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // welcome.php — หน้าต้อนรับหลัง login (แอนิเมชัน + redirect)
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน welcome
 /**
@@ -67,7 +67,7 @@ if ($user_role === 'admin') {
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Welcome | DrawDream</title>
     <link rel="stylesheet" href="css/welcome.css">
 </head>
@@ -78,7 +78,7 @@ if ($user_role === 'admin') {
     <main class="welcome-wrap">
         <section class="welcome-card" role="status" aria-live="polite">
             <div class="welcome-logo">
-                <img src="img/logodrawdream.png" alt="DrawDream" class="logo-img">
+                <img src="img/โลโก้.png" alt="DrawDream" class="logo-img">
             </div>
             
             <h2 class="welcome-text">Welcome</h2>

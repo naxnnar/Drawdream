@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_needlist_directory.php — รายการสิ่งของของมูลนิธิ (มุมมองตารางแบบแอดมิน)
 declare(strict_types=1);
 
@@ -77,7 +77,7 @@ function foundation_need_progress_pct(float $current, float $goal): int
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>รายการสิ่งของทั้งหมด | <?= htmlspecialchars($foundationName) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

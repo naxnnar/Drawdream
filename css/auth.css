@@ -255,6 +255,15 @@ h2 {
 
 /* ========== Responsive ========== */
 
+@media (max-width: 768px) {
+    .logo {
+        width: clamp(140px, 42vw, 180px);
+        max-width: 100%;
+        height: auto;
+        margin-bottom: 16px;
+    }
+}
+
 @media (max-width: 480px) {
     .auth-container {
         padding: 28px 22px;
@@ -262,7 +271,8 @@ h2 {
     }
 
     .logo {
-        width: 75px;
+        width: clamp(132px, 40vw, 168px);
+        margin-bottom: 14px;
     }
 
     h2 {

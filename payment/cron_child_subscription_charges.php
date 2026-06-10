@@ -75,7 +75,7 @@ foreach ($latestActiveSubs as $row) {
     }
 
     $stmtC = $conn->prepare(
-        'SELECT child_name FROM foundation_children WHERE child_id = ? AND deleted_at IS NULL LIMIT 1'
+        'SELECT child_name FROM foundation_children WHERE child_id = ? LIMIT 1'
     );
     $stmtC->bind_param('i', $childId);
     $stmtC->execute();

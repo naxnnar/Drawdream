@@ -1,10 +1,7 @@
-<?php
+﻿<?php
 // payment/needlist_service_charge_qr.php — แสดง QR ชำระค่าบริการระบบ (เลย์เอาต์การ์ดสีน้ำเงิน)
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/omise_helpers.php';
@@ -53,10 +50,15 @@ function needlist_sc_qr_static_image(): string
     return '../img/qr-code.png';
 }
 
+$is_test_mode = drawdream_omise_is_test_mode();
+$auto_test_pay = drawdream_foundation_service_charge_skip_qr_after_pay($charge_id);
+
 $qrSrc = $qr_image !== '' ? $qr_image : needlist_sc_qr_static_image();
 $amountLabel = number_format($amount, 2) . ' บาท';
 $backHref = '../foundation_need_view.php?id=' . $itemId;
 $checkUrl = 'check_needlist_service_charge_payment.php?format=json&item_id=' . $itemId
+    . '&charge_id=' . rawurlencode($charge_id);
+$confirmHref = 'check_needlist_service_charge_payment.php?item_id=' . $itemId
     . '&charge_id=' . rawurlencode($charge_id);
 ?>
 <!DOCTYPE html>
@@ -65,7 +67,7 @@ $checkUrl = 'check_needlist_service_charge_payment.php?format=json&item_id=' . $
 <?php require_once __DIR__ . '/../includes/favicon_meta.php'; ?>
   <meta charset="utf-8">
   <title>ชำระค่าบริการระบบ | DrawDream</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="../css/payment_qr.css?v=4">
 </head>
@@ -99,10 +101,24 @@ $checkUrl = 'check_needlist_service_charge_payment.php?format=json&item_id=' . $
         </div>
       </div>
 
+      <?php if ($is_test_mode && $auto_test_pay): ?>
+      <div style="margin-top:12px;text-align:left;"><?= drawdream_omise_test_pending_help_html($charge_id) ?></div>
+      <?php endif; ?>
+
       <p class="thank-you-text" id="sc-status-msg">
+        <?php if ($is_test_mode && $auto_test_pay): ?>
+        โหมดทดสอบ: ระบบจะจำลองชำระสำเร็จอัตโนมัติ (ไม่ต้องสแกน QR หรือกด Mark as paid ใน Omise)
+        <?php else: ?>
         สแกน QR เพื่อชำระค่าบริการตามยอดด้านบน<br>
         ระบบจะอัปเดตสถานะอัตโนมัติเมื่อชำระสำเร็จ
+        <?php endif; ?>
       </p>
+
+      <?php if ($is_test_mode && $auto_test_pay): ?>
+      <a href="<?= htmlspecialchars($confirmHref, ENT_QUOTES, 'UTF-8') ?>"
+         class="btn btn-warning w-100 mt-3 fw-bold"
+         style="border-radius:10px;">ยืนยันการชำระ (โหมดทดสอบ)</a>
+      <?php endif; ?>
     </div>
   </main>
 
@@ -110,8 +126,9 @@ $checkUrl = 'check_needlist_service_charge_payment.php?format=json&item_id=' . $
   (function () {
     var checkUrl = <?= json_encode($checkUrl, JSON_UNESCAPED_UNICODE) ?>;
     var returnUrl = <?= json_encode($backHref . '&sc_paid=1', JSON_UNESCAPED_UNICODE) ?>;
+    var autoTest = <?= ($auto_test_pay ? 'true' : 'false') ?>;
     var msg = document.getElementById('sc-status-msg');
-  function poll() {
+    function poll() {
       fetch(checkUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -124,11 +141,11 @@ $checkUrl = 'check_needlist_service_charge_payment.php?format=json&item_id=' . $
             if (msg) { msg.textContent = 'การชำระไม่สำเร็จ กรุณาลองใหม่จากหน้ารายการสิ่งของ'; }
             return;
           }
-          setTimeout(poll, 5000);
+          setTimeout(poll, autoTest ? 2000 : 5000);
         })
-        .catch(function () { setTimeout(poll, 8000); });
+        .catch(function () { setTimeout(poll, autoTest ? 3000 : 8000); });
     }
-    setTimeout(poll, 4000);
+    setTimeout(poll, autoTest ? 400 : 4000);
   })();
   </script>
 </body>

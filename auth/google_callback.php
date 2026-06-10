@@ -37,7 +37,7 @@ $tokenRes = drawdream_google_oauth_post('https://oauth2.googleapis.com/token', [
 ]);
 
 if (empty($tokenRes['ok'])) {
-    $redirectLogin('ไม่สามารถเชื่อมต่อ Google ได้ กรุณาลองใหม่');
+    $redirectLogin(drawdream_google_oauth_format_token_error($tokenRes));
 }
 
 $accessToken = (string)($tokenRes['payload']['access_token'] ?? '');
@@ -74,6 +74,7 @@ if ($userRole !== 'donor' && $userRole !== 'foundation') {
 }
 
 drawdream_session_regenerate_after_login();
+drawdream_log_user_login($conn, (int)$user['user_id'], 'google');
 $_SESSION['user_id'] = (int)$user['user_id'];
 $_SESSION['email'] = (string)$user['email'];
 $_SESSION['role'] = $userRole;

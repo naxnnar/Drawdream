@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // foundation_children_directory.php — รายการเด็กของมูลนิธิ (มุมมองตารางแบบแอดมิน)
 declare(strict_types=1);
 
@@ -29,7 +29,7 @@ if ($foundationId <= 0) {
 $stRows = $conn->prepare(
     'SELECT child_id, child_name, photo_child, approve_profile, status
      FROM foundation_children
-     WHERE foundation_id = ? AND deleted_at IS NULL
+     WHERE foundation_id = ?
      ORDER BY child_id DESC'
 );
 $rows = [];
@@ -87,7 +87,7 @@ function foundation_child_sponsor_status_class(string $st): string
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>เด็กทั้งหมด | <?= htmlspecialchars($foundationName) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">

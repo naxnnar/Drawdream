@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 // admin_foundation_totals.php — แอดมิน: ยอดบริจาครวมของมูลนิธิ (เด็ก / โครงการ / สิ่งของ) + ประวัติรายการ
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundation totals
 declare(strict_types=1);
@@ -42,7 +42,7 @@ if ($childCat <= 0 || $projCat <= 0 || $needCat <= 0) {
 $childMap = [];
 $stC = $conn->prepare(
     'SELECT child_id, child_name FROM foundation_children
-     WHERE foundation_id = ? AND deleted_at IS NULL'
+     WHERE foundation_id = ?'
 );
 if ($stC) {
     $stC->bind_param('i', $foundationId);
@@ -56,8 +56,7 @@ if ($stC) {
 $projectMap = [];
 $stP = $conn->prepare(
     "SELECT project_id, project_name FROM foundation_project
-     WHERE deleted_at IS NULL
-       AND (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))"
+     WHERE (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))"
 );
 if ($stP) {
     $stP->bind_param('is', $foundationId, $foundationName);
@@ -81,12 +80,11 @@ WHERE LOWER(TRIM(COALESCE(d.payment_status, ''))) = 'completed'
   AND (
     (d.category_id = ? AND d.target_id IN (
         SELECT child_id FROM foundation_children
-        WHERE foundation_id = ? AND deleted_at IS NULL
+        WHERE foundation_id = ?
     ))
     OR (d.category_id = ? AND d.target_id IN (
         SELECT project_id FROM foundation_project
-        WHERE deleted_at IS NULL
-          AND (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))
+        WHERE (foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))
     ))
     OR (d.category_id = ? AND d.target_id = ?)
   )
@@ -157,7 +155,7 @@ $verifiedLabel = (int)($fp['account_verified'] ?? 0) === 1 ? 'ยืนยัน
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ยอดมูลนิธิ | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">
