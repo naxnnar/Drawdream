@@ -324,7 +324,7 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=49">
+  <link rel="stylesheet" href="css/foundation.css?v=51">
 </head>
 <body class="foundation-page">
 
@@ -339,18 +339,20 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
           <p>จัดการรายการสิ่งของที่ต้องการได้จากหน้านี้</p>
           <div class="foundation-view-toolbar">
             <div class="foundation-view-actions">
-              <?php if ($is_verified && empty($myNeedProposeBlock['blocked'])): ?>
-                <a href="foundation_add_need.php" class="foundation-manage-btn foundation-manage-btn-primary">+ เสนอสิ่งของมูลนิธิ</a>
-              <?php elseif ($is_verified): ?>
-                <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="<?= htmlspecialchars($myNeedProposeBlockTitle, ENT_QUOTES, 'UTF-8') ?>">+ เสนอสิ่งของมูลนิธิ</span>
+              <?php if ($is_verified): ?>
+                <?php if (empty($myNeedProposeBlock['blocked'])): ?>
+                  <a href="foundation_add_need.php" class="foundation-manage-btn foundation-manage-btn-primary">+ เสนอสิ่งของมูลนิธิ</a>
+                <?php else: ?>
+                  <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="<?= htmlspecialchars($myNeedProposeBlockTitle, ENT_QUOTES, 'UTF-8') ?>">+ เสนอสิ่งของมูลนิธิ</span>
+                <?php endif; ?>
+                <button type="button" id="toggleEditNeedBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขรายการสิ่งของ</button>
+                <?php if ($myNeedlistResultReady): ?>
+                  <a href="foundation_post_needlist_result.php" class="foundation-manage-btn foundation-manage-btn-update">อัปเดตผลลัพธ์สิ่งของ</a>
+                <?php else: ?>
+                  <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="อัปเดตได้เมื่อแอดมินยืนยันจัดส่งสิ่งของแล้ว (สถานะ done)">อัปเดตผลลัพธ์สิ่งของ</span>
+                <?php endif; ?>
               <?php else: ?>
-                <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอสิ่งของมูลนิธิได้</span>
-              <?php endif; ?>
-              <button type="button" id="toggleEditNeedBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขรายการสิ่งของ</button>
-              <?php if ($is_verified && $myNeedlistResultReady): ?>
-                <a href="foundation_post_needlist_result.php" class="foundation-manage-btn foundation-manage-btn-update">อัปเดตผลลัพธ์สิ่งของ</a>
-              <?php elseif ($is_verified): ?>
-                <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="อัปเดตได้เมื่อแอดมินยืนยันจัดส่งสิ่งของแล้ว (สถานะ done)">อัปเดตผลลัพธ์สิ่งของ</span>
+                <p class="foundation-pending-inline-msg">บัญชีมูลนิธิยังรอการตรวจสอบจากผู้ดูแลระบบ — หลังอนุมัติแล้วจึงจะสร้างหรือจัดการโปรไฟล์เด็กได้</p>
               <?php endif; ?>
             </div>
           </div>

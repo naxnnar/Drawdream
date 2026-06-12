@@ -146,6 +146,14 @@
     font-family: 'Sarabun', sans-serif;
     font-size: 14px;
 }
+
+.foundation-pending-inline-msg {
+    margin: 0;
+    color: #6c757d;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+}
 /* ---- shared buttons ---- */
 .urgent-item-card {
     background: transparent !important;

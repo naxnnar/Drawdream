@@ -468,7 +468,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=43">
+    <link rel="stylesheet" href="css/project.css?v=44">
 
 </head>
 <body class="projects-page">
@@ -485,15 +485,15 @@ if ($isFoundationOwnView) {
             <div class="foundation-view-actions">
                 <?php if ($is_verified): ?>
                     <a class="foundation-manage-btn foundation-manage-btn-primary" href="foundation_add_project.php">+ เสนอโครงการ</a>
+                    <button type="button" id="toggleEditProjectBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขโครงการ</button>
+                    <button type="button" id="toggleDeleteProjectBtn" class="foundation-manage-btn foundation-manage-btn-danger">ลบโครงการ</button>
+                    <?php if ($hasOutcomeCandidates): ?>
+                        <button type="button" id="toggleOutcomeProjectBtn" class="foundation-manage-btn foundation-manage-btn-outcome">อัปเดตผลลัพธ์โครงการ</button>
+                    <?php else: ?>
+                        <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="เมื่อมีโครงการที่ครบเงื่อนไขแล้ว จึงจะอัปเดตผลลัพธ์ได้">อัปเดตผลลัพธ์โครงการ</span>
+                    <?php endif; ?>
                 <?php else: ?>
-                    <span class="foundation-warn">รอการอนุมัติก่อนจึงจะเสนอโครงการได้</span>
-                <?php endif; ?>
-                <button type="button" id="toggleEditProjectBtn" class="foundation-manage-btn foundation-manage-btn-edit">แก้ไขโครงการ</button>
-                <button type="button" id="toggleDeleteProjectBtn" class="foundation-manage-btn foundation-manage-btn-danger">ลบโครงการ</button>
-                <?php if ($hasOutcomeCandidates): ?>
-                    <button type="button" id="toggleOutcomeProjectBtn" class="foundation-manage-btn foundation-manage-btn-outcome">อัปเดตผลลัพธ์โครงการ</button>
-                <?php else: ?>
-                    <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="เมื่อมีโครงการที่ครบเงื่อนไขแล้ว จึงจะอัปเดตผลลัพธ์ได้">อัปเดตผลลัพธ์โครงการ</span>
+                    <p class="foundation-pending-inline-msg">บัญชีมูลนิธิยังรอการตรวจสอบจากผู้ดูแลระบบ — หลังอนุมัติแล้วจึงจะสร้างหรือจัดการโปรไฟล์เด็กได้</p>
                 <?php endif; ?>
             </div>
         </div>
