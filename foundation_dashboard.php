@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 declare(strict_types=1);
 // foundation_dashboard.php — แดชบอร์ดมูลนิธิ (ยอดรวมเด็ก/โครงการ/สิ่งของ + กราฟ/รายการบริจาค)
 
