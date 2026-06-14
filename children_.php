@@ -159,25 +159,6 @@ $childDonationTotals = ($role === 'foundation' && $childIdsForTotals !== [])
     : [];
 $planSponsoredMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIdsForTotals);
 
-// อัปเดตคอลัมน์ status ในฐานข้อมูลให้ตรงกับแพ็กเกจรายรอบ (รายเดือน / 6 เดือน / รายปี)
-foreach ($all_list_rows as &$rowSync) {
-    $cidSyncStatus = (int)($rowSync['child_id'] ?? 0);
-    if ($cidSyncStatus <= 0) {
-        continue;
-    }
-    drawdream_child_sync_sponsorship_status($conn, $cidSyncStatus);
-    $stStatus = $conn->prepare('SELECT status FROM foundation_children WHERE child_id = ? LIMIT 1');
-    if ($stStatus) {
-        $stStatus->bind_param('i', $cidSyncStatus);
-        $stStatus->execute();
-        $statusRow = $stStatus->get_result()->fetch_assoc();
-        if (is_array($statusRow) && isset($statusRow['status'])) {
-            $rowSync['status'] = $statusRow['status'];
-        }
-    }
-}
-unset($rowSync);
-
 foreach ($all_list_rows as $row) {
   $cid = (int)($row['child_id'] ?? 0);
   $cycleAmt = (float)($cycleTotals[$cid] ?? 0);
@@ -336,12 +317,8 @@ if ($role === 'foundation') {
                     $profMeta = children_row_profile_status_meta($r);
                     $cycleAmtRow = (float)($cycleTotals[$cid] ?? 0);
                     $sponsoredRow = drawdream_child_is_showcase_sponsored($conn, $cid, $r, $cycleAmtRow, $planSponsoredMap);
-                    $uiSponsor = drawdream_child_sponsorship_ui_status($conn, $cid);
-                    $sponsorLabel = trim((string)($uiSponsor['label'] ?? ''));
-                    if ($sponsorLabel === '') {
-                        $sponsorLabel = $sponsoredRow ? 'อุปการะแล้ว' : 'รออุปการะ';
-                    }
-                    $sponsorDetail = trim((string)($uiSponsor['detail'] ?? ''));
+                    $sponsorLabel = $sponsoredRow ? 'อุปการะแล้ว' : 'รออุปการะ';
+                    $sponsorDetail = '';
                     $sponsorPillClass = 'admin-pill--danger';
                     if ($sponsorLabel === 'อุปการะแล้ว' || $sponsorLabel === 'มีผู้อุปการะ') {
                         $sponsorPillClass = 'admin-pill--success';

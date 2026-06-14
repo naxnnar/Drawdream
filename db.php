@@ -112,11 +112,20 @@ require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/child_subscription_history.php';
 require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
 
-// Migration cache — รันแค่ครั้งแรกหรือทุก 1 ชั่วโมง เพื่อไม่ให้ยิง SHOW COLUMNS ทุก request ไปยัง cloud DB
+// Migration cache — dev: ทุก 1 ชม. | production: รันครั้งเดียวจนกว่าจะลบไฟล์หรือตั้ง DRAWDREAM_FORCE_MIGRATION=1
 $_ddMigrationCache = __DIR__ . '/config/migration_done.txt';
-$_ddMigrationTtl   = 3600; // วินาที
-$_ddNeedMigration  = !file_exists($_ddMigrationCache)
-    || (time() - (int)filemtime($_ddMigrationCache)) > $_ddMigrationTtl;
+$_ddAppEnv = strtolower(trim((string)(getenv('APP_ENV') ?: '')));
+$_ddIsProduction = in_array($_ddAppEnv, ['production', 'prod'], true);
+$_ddForceMigration = trim((string)(getenv('DRAWDREAM_FORCE_MIGRATION') ?: '')) === '1';
+
+if ($_ddIsProduction && !$_ddForceMigration) {
+    $_ddNeedMigration = !is_file($_ddMigrationCache);
+} else {
+    $_ddMigrationTtl = 3600;
+    $_ddNeedMigration = $_ddForceMigration
+        || !is_file($_ddMigrationCache)
+        || (time() - (int)filemtime($_ddMigrationCache)) > $_ddMigrationTtl;
+}
 
 if ($_ddNeedMigration) {
     drawdream_normalize_foundation_project_statuses($conn);
@@ -136,7 +145,7 @@ if ($_ddNeedMigration) {
 
     @file_put_contents($_ddMigrationCache, date('Y-m-d H:i:s'));
 }
-unset($_ddMigrationCache, $_ddMigrationTtl, $_ddNeedMigration);
+unset($_ddMigrationCache, $_ddIsProduction, $_ddForceMigration, $_ddAppEnv, $_ddNeedMigration);
 
 if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] > 0) {
     drawdream_record_user_presence($conn);

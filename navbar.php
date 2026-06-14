@@ -10,6 +10,7 @@ if (session_status() === PHP_SESSION_NONE) {
   drawdream_session_start();
 }
 require_once __DIR__ . '/includes/brand_logo.php';
+require_once __DIR__ . '/includes/navbar_cache.php';
 
 // นับรายการรออนุมัติ (เฉพาะ admin)
 $pending_count    = 0;
@@ -18,6 +19,13 @@ $pending_projects = 0;
 $pending_needs    = 0;
 
 if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
+  $adminPendingCache = drawdream_navbar_cache_get('admin_pending', 60);
+  if ($adminPendingCache !== null) {
+    $pending_count = (int)($adminPendingCache['foundation'] ?? 0);
+    $pending_projects = (int)($adminPendingCache['projects'] ?? 0);
+    $pending_needs = (int)($adminPendingCache['needs'] ?? 0);
+    $pending_children = (int)($adminPendingCache['children'] ?? 0);
+  } else {
   include_once 'db.php';
 
   $r = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_profile WHERE account_verified = 0");
@@ -35,6 +43,14 @@ if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
 
   $r4 = mysqli_query($conn, "SELECT COUNT(*) AS cnt FROM foundation_children WHERE COALESCE(approve_profile, 'รอดำเนินการ') IN ('รอดำเนินการ', 'กำลังดำเนินการ')");
   if ($r4) $pending_children = mysqli_fetch_assoc($r4)['cnt'];
+
+  drawdream_navbar_cache_set('admin_pending', [
+    'foundation' => (int)$pending_count,
+    'projects' => (int)$pending_projects,
+    'needs' => (int)$pending_needs,
+    'children' => (int)$pending_children,
+  ]);
+  }
 }
 
 $total_pending = $pending_count + $pending_children + $pending_projects + $pending_needs;
@@ -44,9 +60,15 @@ $user_notif_count = 0;
 $user_notifs      = [];
 $is_logged_in = isset($_SESSION['user_id']);
 if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])) {
+  $uid = (int)$_SESSION['user_id'];
+  $notifCacheKey = 'user_notifs_' . ($_SESSION['role'] ?? '') . '_' . $uid;
+  $notifCache = drawdream_navbar_cache_get($notifCacheKey, 60);
+  if ($notifCache !== null) {
+    $user_notifs = is_array($notifCache['notifs'] ?? null) ? $notifCache['notifs'] : [];
+    $user_notif_count = (int)($notifCache['count'] ?? 0);
+  } else {
   include_once 'db.php';
   require_once __DIR__ . '/includes/notification_audit.php';
-  $uid = (int)$_SESSION['user_id'];
   try {
     $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
     $hasNotificationsTable = $tableCheck && mysqli_num_rows($tableCheck) > 0;
@@ -192,6 +214,11 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
     $user_notifs = [];
     $user_notif_count = 0;
   }
+  drawdream_navbar_cache_set($notifCacheKey, [
+    'notifs' => $user_notifs,
+    'count' => $user_notif_count,
+  ]);
+  }
 }
 
 $_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
@@ -244,9 +271,17 @@ if (isset($_GET['preview_mode'])) {
 $is_donor_preview = isset($_SESSION['real_role']) && $_SESSION['real_role'] === 'foundation';
 $foundation_account_pending = false;
 if (isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'foundation') {
+  $uidFdn = (int)$_SESSION['user_id'];
+  $fdnPendingCache = drawdream_navbar_cache_get('foundation_verified_' . $uidFdn, 60);
+  if ($fdnPendingCache !== null) {
+    $foundation_account_pending = empty($fdnPendingCache['verified']);
+  } else {
   include_once __DIR__ . '/db.php';
   require_once __DIR__ . '/includes/foundation_account_verified.php';
-  $foundation_account_pending = !drawdream_foundation_account_is_verified($conn);
+  $verified = drawdream_foundation_account_is_verified($conn);
+  $foundation_account_pending = !$verified;
+  drawdream_navbar_cache_set('foundation_verified_' . $uidFdn, ['verified' => $verified]);
+  }
 }
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin';
 $current_page = basename($_SERVER['PHP_SELF']);
