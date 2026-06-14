@@ -201,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= $page === 'home' ? 'DrawDream' : ($page === 'login' ? 'เข้าสู่ระบบ' : 'สมัครสมาชิก') ?> | DrawDream</title>
-    <link rel="stylesheet" href="css/auth.css?v=2">
+    <link rel="stylesheet" href="css/auth.css?v=3">
     <link rel="stylesheet" href="css/thai_address.css?v=1">
 </head>
 

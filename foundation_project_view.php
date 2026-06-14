@@ -6,7 +6,6 @@
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
-drawdream_ensure_foundation_project_service_charge_columns($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: project.php');

@@ -48,7 +48,6 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
   require_once __DIR__ . '/includes/notification_audit.php';
   $uid = (int)$_SESSION['user_id'];
   try {
-    drawdream_ensure_notifications_table($conn);
     $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
     $hasNotificationsTable = $tableCheck && mysqli_num_rows($tableCheck) > 0;
 
@@ -75,9 +74,6 @@ if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundatio
     // แจ้งเตือนเสริมสำหรับมูลนิธิ: เด็กมีผู้อุปการะแล้ว แต่ยังไม่อัปเดตผลลัพธ์ให้ผู้บริจาค
     if (($_SESSION['role'] ?? '') === 'foundation') {
       require_once __DIR__ . '/includes/donate_category_resolve.php';
-      require_once __DIR__ . '/includes/payment_transaction_schema.php';
-      drawdream_ensure_notifications_table($conn);
-      drawdream_payment_transaction_ensure_schema($conn);
       $stmtFid = $conn->prepare("SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1");
       if ($stmtFid) {
         $stmtFid->bind_param("i", $uid);
@@ -286,7 +282,7 @@ $adminNeedlistActive = in_array($current_page, [
 ], true);
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
-<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=13">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=14">
 <link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=5">
 <script>
 document.addEventListener('touchstart', function () {}, { passive: true });

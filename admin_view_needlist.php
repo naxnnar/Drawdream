@@ -12,8 +12,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
     exit();
 }
 
-drawdream_ensure_needlist_schema($conn);
-
 function admin_view_needlist_label_th(string $raw): string
 {
     $t = strtolower(trim($raw));

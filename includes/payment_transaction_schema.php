@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/donate_type.php';
+require_once __DIR__ . '/drawdream_schema_once.php';
 
 /**
  * ย้าย recurring_type → donate_type (หรือเพิ่ม donate_type)
@@ -80,6 +81,16 @@ function drawdream_donation_backfill_donate_type(mysqli $conn): void
  * เฉพาะคอลัมน์ที่ยังใช้ในตาราง donation (ไม่สร้าง tax_id / pending_* / recurring_every_n / …)
  */
 function drawdream_payment_transaction_ensure_schema(mysqli $conn): void
+{
+    drawdream_schema_once('payment_transaction', static function (mysqli $c): void {
+        drawdream_payment_transaction_ensure_schema_inner($c);
+    }, $conn);
+}
+
+/**
+ * @internal เรียกผ่าน drawdream_payment_transaction_ensure_schema เท่านั้น
+ */
+function drawdream_payment_transaction_ensure_schema_inner(mysqli $conn): void
 {
     drawdream_donation_migrate_recurring_type_to_donate_type($conn);
 

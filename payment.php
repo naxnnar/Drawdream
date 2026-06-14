@@ -9,8 +9,6 @@ require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/payment_transaction_schema.php';
 require_once __DIR__ . '/includes/donate_type.php';
-drawdream_child_sponsorship_ensure_columns($conn);
-drawdream_payment_transaction_ensure_schema($conn);
 
 $child_id = (int)($_POST['child_id'] ?? $_GET['child_id'] ?? 0);
 $amount = (float)($_POST['amount'] ?? $_GET['amount'] ?? 0);

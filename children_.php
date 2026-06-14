@@ -10,9 +10,6 @@ include 'db.php'; // เชื่อมต่อฐานข้อมูล
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';
-drawdream_child_sponsorship_ensure_columns($conn);
-drawdream_child_outcome_ensure_columns($conn);
-drawdream_child_omise_subscription_ensure_schema($conn);
 
 // ------------------------------
 // Current user context

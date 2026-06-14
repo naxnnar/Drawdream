@@ -468,7 +468,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=44">
+    <link rel="stylesheet" href="css/project.css?v=45">
 
 </head>
 <body class="projects-page">

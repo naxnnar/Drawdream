@@ -11,8 +11,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
     exit();
 }
 
-drawdream_ensure_needlist_schema($conn);
-
 $sql = "
     SELECT nl.*, fp.foundation_name
     FROM foundation_needlist nl

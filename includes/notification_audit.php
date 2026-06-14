@@ -15,8 +15,17 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/admin_audit_migrate.php';
+require_once __DIR__ . '/drawdream_schema_once.php';
 
 function drawdream_ensure_notifications_table(mysqli $conn): void
+{
+    drawdream_schema_once('notifications_table', static function (mysqli $c): void {
+        drawdream_ensure_notifications_table_inner($c);
+    }, $conn);
+}
+
+/** @internal */
+function drawdream_ensure_notifications_table_inner(mysqli $conn): void
 {
     @$conn->query(
         "CREATE TABLE IF NOT EXISTS notifications (

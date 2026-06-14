@@ -3,9 +3,18 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/drawdream_needlist_schema.php';
+require_once __DIR__ . '/drawdream_schema_once.php';
 
 /** ตรวจ/เพิ่มคอลัมน์ service_charge บน foundation_project */
 function drawdream_ensure_foundation_project_service_charge_columns(mysqli $conn): void
+{
+    drawdream_schema_once('project_service_charge', static function (mysqli $c): void {
+        drawdream_ensure_foundation_project_service_charge_columns_inner($c);
+    }, $conn);
+}
+
+/** @internal */
+function drawdream_ensure_foundation_project_service_charge_columns_inner(mysqli $conn): void
 {
     $t = @$conn->query("SHOW TABLES LIKE 'foundation_project'");
     if (!$t || $t->num_rows === 0) {

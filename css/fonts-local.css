@@ -1,0 +1,78 @@
+/* Local Prompt + Sarabun (Thai) — ไม่พึ่ง fonts.googleapis.com */
+@font-face {
+    font-family: 'Prompt';
+    font-style: normal;
+    font-weight: 300;
+    font-display: swap;
+    src: url('fonts/prompt-thai-300-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Prompt';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/prompt-thai-400-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Prompt';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/prompt-thai-500-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Prompt';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/prompt-thai-600-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Prompt';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/prompt-thai-700-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Prompt';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: url('fonts/prompt-thai-800-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Sarabun';
+    font-style: normal;
+    font-weight: 300;
+    font-display: swap;
+    src: url('fonts/sarabun-thai-300-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Sarabun';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/sarabun-thai-400-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Sarabun';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/sarabun-thai-500-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Sarabun';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/sarabun-thai-600-normal.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Sarabun';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/sarabun-thai-700-normal.woff2') format('woff2');
+}

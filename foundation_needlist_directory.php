@@ -9,8 +9,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') 
     header('Location: index.php');
     exit();
 }
-drawdream_ensure_needlist_schema($conn);
-
 $uid = (int)$_SESSION['user_id'];
 $stFp = $conn->prepare('SELECT foundation_id, foundation_name FROM foundation_profile WHERE user_id = ? LIMIT 1');
 if (!$stFp) {

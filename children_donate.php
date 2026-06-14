@@ -11,10 +11,7 @@ require_once __DIR__ . '/payment/config.php';
 require_once __DIR__ . '/payment/omise_helpers.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/notification_audit.php';
-drawdream_child_sponsorship_ensure_columns($conn);
-drawdream_child_outcome_ensure_columns($conn);
 require_once __DIR__ . '/includes/child_outcome_history.php';
-drawdream_child_omise_subscription_ensure_schema($conn);
 
 $child_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if (isset($_GET['notif_read']) && isset($_SESSION['user_id'])) {

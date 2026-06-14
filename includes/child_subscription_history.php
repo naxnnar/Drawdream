@@ -2,7 +2,17 @@
 // includes/child_subscription_history.php — บันทึกประวัติ subscription เด็กแบบละเอียด
 declare(strict_types=1);
 
+require_once __DIR__ . '/drawdream_schema_once.php';
+
 function drawdream_child_subscription_history_ensure_schema(mysqli $conn): void
+{
+    drawdream_schema_once('child_subscription_history', static function (mysqli $c): void {
+        drawdream_child_subscription_history_ensure_schema_inner($c);
+    }, $conn);
+}
+
+/** @internal */
+function drawdream_child_subscription_history_ensure_schema_inner(mysqli $conn): void
 {
     @$conn->query(
         "CREATE TABLE IF NOT EXISTS child_subscription_history (

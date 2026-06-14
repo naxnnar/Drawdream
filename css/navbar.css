@@ -3,7 +3,7 @@
    ใช้ได้กับทุกหน้า
    ======================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+@import url('fonts-local.css');
 @import url('brand_logo.css');
 @import url('touch_feedback.css');
 

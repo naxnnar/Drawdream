@@ -6,18 +6,21 @@ declare(strict_types=1);
 require_once __DIR__ . '/payment_transaction_schema.php';
 require_once __DIR__ . '/donate_category_resolve.php';
 require_once __DIR__ . '/child_subscription_history.php';
+require_once __DIR__ . '/drawdream_schema_once.php';
 
 function drawdream_child_omise_subscription_ensure_schema(mysqli $conn): void
 {
-    $chk = $conn->query("SHOW COLUMNS FROM donor LIKE 'omise_customer_id'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query('ALTER TABLE donor ADD COLUMN omise_customer_id VARCHAR(64) NULL DEFAULT NULL');
-    }
-    $chkCard = $conn->query("SHOW COLUMNS FROM donor LIKE 'omise_card_id'");
-    if ($chkCard && $chkCard->num_rows === 0) {
-        $conn->query('ALTER TABLE donor ADD COLUMN omise_card_id VARCHAR(64) NULL DEFAULT NULL');
-    }
-    drawdream_payment_transaction_ensure_schema($conn);
+    drawdream_schema_once('child_omise_subscription', static function (mysqli $c): void {
+        $chk = $c->query("SHOW COLUMNS FROM donor LIKE 'omise_customer_id'");
+        if ($chk && $chk->num_rows === 0) {
+            $c->query('ALTER TABLE donor ADD COLUMN omise_customer_id VARCHAR(64) NULL DEFAULT NULL');
+        }
+        $chkCard = $c->query("SHOW COLUMNS FROM donor LIKE 'omise_card_id'");
+        if ($chkCard && $chkCard->num_rows === 0) {
+            $c->query('ALTER TABLE donor ADD COLUMN omise_card_id VARCHAR(64) NULL DEFAULT NULL');
+        }
+        drawdream_payment_transaction_ensure_schema_inner($c);
+    }, $conn);
 }
 
 /** วันที่รอบถัดไปจาก DB → ใช้เป็นวันตัด (1–28) สำหรับ cron */

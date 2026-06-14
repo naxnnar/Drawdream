@@ -107,6 +107,10 @@ require_once __DIR__ . '/includes/drawdream_project_updates_schema.php';
 require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/user_activity_tracking.php';
+require_once __DIR__ . '/includes/payment_transaction_schema.php';
+require_once __DIR__ . '/includes/child_omise_subscription.php';
+require_once __DIR__ . '/includes/child_subscription_history.php';
+require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
 
 // Migration cache — รันแค่ครั้งแรกหรือทุก 1 ชั่วโมง เพื่อไม่ให้ยิง SHOW COLUMNS ทุก request ไปยัง cloud DB
 $_ddMigrationCache = __DIR__ . '/config/migration_done.txt';
@@ -124,6 +128,11 @@ if ($_ddNeedMigration) {
     drawdream_ensure_foundation_project_update_columns($conn);
     drawdream_notifications_migrate_legacy_on_boot($conn);
     drawdream_ensure_user_activity_columns($conn);
+    drawdream_payment_transaction_ensure_schema($conn);
+    drawdream_child_omise_subscription_ensure_schema($conn);
+    drawdream_ensure_notifications_table($conn);
+    drawdream_child_subscription_history_ensure_schema($conn);
+    drawdream_ensure_foundation_project_service_charge_columns($conn);
 
     @file_put_contents($_ddMigrationCache, date('Y-m-d H:i:s'));
 }

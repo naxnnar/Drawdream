@@ -14,9 +14,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
     exit();
 }
 
-drawdream_child_sponsorship_ensure_columns($conn);
-drawdream_child_omise_subscription_ensure_schema($conn);
-
 $child_id = (int)($_GET['id'] ?? 0);
 if ($child_id <= 0) {
     header('Location: children_.php');

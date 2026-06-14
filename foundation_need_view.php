@@ -5,7 +5,6 @@
 
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
-drawdream_ensure_needlist_schema($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: foundation.php');

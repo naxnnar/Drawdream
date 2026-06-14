@@ -6,7 +6,6 @@
 include 'db.php';
 require_once __DIR__ . '/includes/admin_audit_migrate.php';
 require_once __DIR__ . '/includes/notification_audit.php';
-drawdream_ensure_notifications_table($conn);
 
 $role = $_SESSION['role'] ?? '';
 if (!isset($_SESSION['user_id']) || !in_array($role, ['foundation', 'donor'], true)) {

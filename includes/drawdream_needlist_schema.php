@@ -88,8 +88,13 @@ function drawdream_needlist_backfill_service_charges(mysqli $conn): void
  */
 function drawdream_ensure_needlist_schema(mysqli $conn): void
 {
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
     $t = @$conn->query("SHOW TABLES LIKE 'foundation_needlist'");
     if (!$t || $t->num_rows === 0) {
+        $ensured = true;
         return;
     }
 
@@ -328,6 +333,7 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
             @$conn->query("ALTER TABLE foundation_needlist DROP COLUMN `{$dropCol}`");
         }
     }
+    $ensured = true;
 }
 
 /**

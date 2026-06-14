@@ -11,8 +11,6 @@ if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
     exit();
 }
 
-drawdream_ensure_needlist_schema($conn);
-
 $dirUrl = 'admin_needlist_directory.php';
 
 function admin_needlist_view_approve_label_th(string $raw): string

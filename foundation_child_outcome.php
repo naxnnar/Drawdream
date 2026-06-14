@@ -11,10 +11,6 @@ require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/child_outcome_history.php';
 
-drawdream_child_sponsorship_ensure_columns($conn);
-drawdream_child_outcome_ensure_columns($conn);
-drawdream_child_omise_subscription_ensure_schema($conn);
-
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: homepage.php');
     exit;
