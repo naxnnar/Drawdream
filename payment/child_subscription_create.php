@@ -120,6 +120,7 @@ function drawdream_omise_post_schedule(
 }
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
+require_once __DIR__ . '/../includes/return_to.php';
 
 function child_subscription_redirect(string $msg, bool $ok, int $childId): void
 {
@@ -129,7 +130,8 @@ function child_subscription_redirect(string $msg, bool $ok, int $childId): void
 }
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: ../login.php');
+    $msg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
+    header('Location: ' . drawdream_login_url('login', $msg, drawdream_return_to_current_request()));
     exit;
 }
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'], true)) {

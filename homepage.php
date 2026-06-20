@@ -8,7 +8,7 @@ require_once __DIR__ . '/includes/homepage_impact_stats.php';
 $homeImpactStats = drawdream_homepage_impact_stats($conn);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>หน้าหลัก | DrawDream</title>

@@ -8,6 +8,9 @@ require_once __DIR__ . '/../includes/session_init.php';
 drawdream_session_start();
 
 require_once __DIR__ . '/../includes/google_oauth.php';
+require_once __DIR__ . '/../includes/return_to.php';
+
+drawdream_return_to_capture_from_request();
 
 if (!drawdream_google_oauth_is_ready()) {
     header('Location: ../login.php?page=login&error=' . urlencode('ยังไม่ได้ตั้งค่า Google Login ในระบบ'));

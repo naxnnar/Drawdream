@@ -15,11 +15,12 @@ require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/payment_transaction_schema.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/donate_type.php';
+require_once __DIR__ . '/../includes/return_to.php';
 
 // ต้อง login ก่อน
 if (!isset($_SESSION['user_id'])) {
-    $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
-    header("Location: ../login.php?page=login&error={$msg}");
+    $msg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
+    header('Location: ' . drawdream_login_url('login', $msg, drawdream_return_to_current_request()));
     exit();
 }
 

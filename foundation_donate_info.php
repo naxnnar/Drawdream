@@ -1,11 +1,10 @@
-﻿<?php
-// foundation_donate_info.php — หน้าข้อมูลบัญชี/ติดต่อมูลนิธิก่อนเข้าหน้าบริจาค
-// สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน donate info
+<?php
 declare(strict_types=1);
-
+// foundation_donate_info.php — หน้าข้อมูลบัญชี/ติดต่อมูลนิธิก่อนเข้าหน้าบริจาค
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
+require_once __DIR__ . '/includes/needlist_donate_window.php';
 
 $fid = (int)($_GET['fid'] ?? 0);
 if ($fid <= 0) {
@@ -45,6 +44,37 @@ $bankList = drawdream_foundation_bank_list();
 $bankDisplay = $bankName !== '' ? ($bankList[$bankName] ?? $bankName) : 'ไม่ระบุธนาคาร';
 $accountNumberDisplay = $bankAccountNumber !== '' ? $bankAccountNumber : '-';
 $accountNameDisplay = $bankAccountName !== '' ? $bankAccountName : ($foundationName !== '' ? $foundationName : '-');
+
+$needOpen = drawdream_needlist_sql_open_for_donation();
+$goalStmt = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
+$goalStmt->bind_param('i', $fid);
+$goalStmt->execute();
+$goal = (float)($goalStmt->get_result()->fetch_assoc()['goal'] ?? 0);
+$goalStmt->close();
+
+$currentStmt = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
+$currentStmt->bind_param('i', $fid);
+$currentStmt->execute();
+$current = (float)($currentStmt->get_result()->fetch_assoc()['current'] ?? 0);
+$currentStmt->close();
+
+$itemsStmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
+$itemsStmt->bind_param('i', $fid);
+$itemsStmt->execute();
+$itemCount = (int)($itemsStmt->get_result()->fetch_assoc()['cnt'] ?? 0);
+$itemsStmt->close();
+
+$remainingNeed = ($goal > 0) ? max(0.0, $goal - $current) : 0.0;
+$donateUrl = 'payment/foundation_donate.php?fid=' . $fid;
+$donateReady = $itemCount > 0 && ($goal <= 0 || $current < $goal) && !($goal > 0 && $remainingNeed > 0 && $remainingNeed < 20);
+$donateDisabledReason = '';
+if ($itemCount <= 0) {
+    $donateDisabledReason = 'มูลนิธิยังไม่มีรายการสิ่งของที่เปิดรับบริจาค';
+} elseif ($goal > 0 && $current >= $goal) {
+    $donateDisabledReason = 'รายการสิ่งของครบเป้าหมายแล้ว';
+} elseif ($goal > 0 && $remainingNeed > 0 && $remainingNeed < 20) {
+    $donateDisabledReason = 'ยอดที่เหลือไม่ถึงขั้นต่ำการบริจาค 20 บาท';
+}
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -54,7 +84,7 @@ $accountNameDisplay = $bankAccountName !== '' ? $bankAccountName : ($foundationN
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ข้อมูลบัญชีมูลนิธิ | <?= htmlspecialchars($foundationName !== '' ? $foundationName : 'มูลนิธิ', ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/foundation_donate_info.css?v=1">
+    <link rel="stylesheet" href="css/foundation_donate_info.css?v=2">
 </head>
 <body class="foundation-donate-info-page">
 <?php include __DIR__ . '/navbar.php'; ?>
@@ -99,6 +129,16 @@ $accountNameDisplay = $bankAccountName !== '' ? $bankAccountName : ($foundationN
         <div class="fdi-contact">
             <h2>ติดต่อสอบถาม</h2>
             <p><?= htmlspecialchars($phone !== '' ? $phone : '-', ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+
+        <div class="fdi-donate-cta">
+            <h2>บริจาคสิ่งของผ่าน DrawDream</h2>
+            <p>เลือกรายการสิ่งของที่ต้องการสมทบทุน แล้วชำระผ่าน PromptPay QR บนแพลตฟอร์ม</p>
+            <?php if ($donateReady): ?>
+                <a class="fdi-donate-btn" href="<?= htmlspecialchars($donateUrl, ENT_QUOTES, 'UTF-8') ?>">บริจาคสิ่งของ</a>
+            <?php else: ?>
+                <p class="fdi-donate-note"><?= htmlspecialchars($donateDisabledReason !== '' ? $donateDisabledReason : 'ยังไม่สามารถบริจาคได้ในขณะนี้', ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
         </div>
 
     </section>

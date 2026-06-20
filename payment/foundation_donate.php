@@ -7,10 +7,11 @@ require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/needlist_donate_window.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/drawdream_needlist_payment_finalize.php';
+require_once __DIR__ . '/../includes/return_to.php';
 
 if (!isset($_SESSION['user_id'])) {
-    $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
-    header("Location: ../login.php?page=login&error={$msg}");
+    $msg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
+    header('Location: ' . drawdream_login_url('login', $msg, drawdream_return_to_current_request()));
     exit();
 }
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'])) { header("Location: ../foundation.php"); exit(); }

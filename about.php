@@ -7,7 +7,7 @@ require_once __DIR__ . '/includes/session_init.php';
 drawdream_session_start();
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>เกี่ยวกับเรา | DrawDream </title>

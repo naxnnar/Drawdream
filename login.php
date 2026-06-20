@@ -9,13 +9,23 @@ require_once __DIR__ . '/includes/address_helpers.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
 require_once __DIR__ . '/includes/google_oauth.php';
 require_once __DIR__ . '/includes/utf8_helpers.php';
+require_once __DIR__ . '/includes/password_policy.php';
+require_once __DIR__ . '/includes/return_to.php';
 
-// ถ้า login แล้ว ไป homepage
+drawdream_return_to_capture_from_request();
+$storedReturnTo = drawdream_return_to_get();
+
+// ถ้า login แล้ว ไป homepage (หรือ return_to ถ้ามี)
 if (isset($_SESSION['user_id'])) {
-    // แยกเส้นทางตาม role สำหรับผู้ที่ login ค้างอยู่
+    $role = (string)($_SESSION['role'] ?? '');
+    $returnDest = drawdream_return_to_consume_after_login($role);
+    if ($returnDest !== null) {
+        header('Location: ' . $returnDest);
+        exit();
+    }
     if (!empty($_SESSION['show_welcome'])) {
         header("Location: welcome.php");
-    } elseif (($_SESSION['role'] ?? '') === 'admin') {
+    } elseif ($role === 'admin') {
         header("Location: admin_dashboard.php");
     } else {
         header("Location: homepage.php");
@@ -50,8 +60,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
 
         if (empty($first_name) || empty($last_name) || empty($email) || empty($password)) {
             $error = "กรุณากรอกข้อมูลให้ครบถ้วน";
-        } elseif (drawdream_utf8_strlen($password) !== 10) {
-            $error = "รหัสผ่านต้องมีความยาว 10 ตัวอักษรเท่านั้น";
+        } elseif (!drawdream_password_meets_policy($password)) {
+            $error = drawdream_password_policy_message();
         } elseif ($password !== $confirm_password) {
             $error = "รหัสผ่านไม่ตรงกัน";
         } else {
@@ -77,8 +87,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                     $_SESSION['email'] = $email;
                     $_SESSION['role'] = 'donor';
                     drawdream_log_user_login($conn, $user_id, 'register');
-                    $_SESSION['show_welcome'] = true;
-                    header("refresh:2;url=welcome.php");
+                    $returnDest = drawdream_return_to_consume_after_login('donor');
+                    if ($returnDest !== null) {
+                        header("refresh:2;url=" . $returnDest);
+                    } else {
+                        $_SESSION['show_welcome'] = true;
+                        header("refresh:2;url=welcome.php");
+                    }
                 } else {
                     $error = "เกิดข้อผิดพลาด: " . $stmt->error;
                 }
@@ -104,8 +119,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             $error = "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก";
         } elseif ($address === '') {
             $error = "กรุณาเลือกจังหวัด อำเภอ ตำบล และรหัสไปรษณีย์ให้ครบ";
-        } elseif (drawdream_utf8_strlen($password) !== 10) {
-            $error = "รหัสผ่านต้องมีความยาว 10 ตัวอักษรเท่านั้น";
+        } elseif (!drawdream_password_meets_policy($password)) {
+            $error = drawdream_password_policy_message();
         } elseif ($password !== $confirm_password) {
             $error = "รหัสผ่านไม่ตรงกัน";
         } elseif ($bank_name !== '' && !in_array($bank_name, array_keys(drawdream_foundation_bank_list()), true)) {
@@ -157,8 +172,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 
     if (empty($email) || empty($password)) {
         $error = "กรุณากรอกอีเมลและรหัสผ่าน";
-    } elseif (drawdream_utf8_strlen($password) !== 10) {
-        $error = "รหัสผ่านต้องมีความยาว 10 ตัวอักษรเท่านั้น";
+    } elseif (!drawdream_password_meets_policy($password)) {
+        $error = drawdream_password_policy_message();
     } else {
         // ดึงข้อมูล user จาก email ก่อน ไม่ filter role
         $stmt = $conn->prepare("SELECT * FROM `user` WHERE email = ?");
@@ -181,8 +196,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                 $_SESSION['account_verified'] = $fp['account_verified'];
             }
 
-            $_SESSION['show_welcome'] = true;
-            header("Location: welcome.php");
+            $returnDest = drawdream_return_to_consume_after_login((string)$row['role']);
+            if ($returnDest !== null) {
+                header('Location: ' . $returnDest);
+            } else {
+                $_SESSION['show_welcome'] = true;
+                header('Location: welcome.php');
+            }
             exit();
         } elseif ($row) {
             $error = "รหัสผ่านไม่ถูกต้อง";
@@ -231,12 +251,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             <p class="subtitle">ยินดีต้อนรับกลับมา!</p>
             <form method="POST">
                 <?= drawdream_csrf_field() ?>
+                <?php if ($storedReturnTo !== null): ?>
+                    <input type="hidden" name="return_to" value="<?= htmlspecialchars($storedReturnTo, ENT_QUOTES, 'UTF-8') ?>">
+                <?php endif; ?>
                 <div class="form-group">
                     <input type="email" name="email" placeholder="อีเมล" required autofocus>
                 </div>
                 <div class="form-group">
                     <div style="position:relative;">
-                        <input type="password" name="password" placeholder="รหัสผ่าน (10 ตัวอักษร)" required minlength="10" maxlength="10" class="password-input">
+                        <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" required minlength="8" maxlength="72" class="password-input">
                         <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                         <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                     </div>
@@ -245,7 +268,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             </form>
             <div class="google-login-wrap">
                 <?php if ($googleLoginEnabled): ?>
-                    <a href="auth/google_start.php" class="btn-google-login">เข้าสู่ระบบด้วย Google</a>
+                    <?php
+                    $googleStartUrl = 'auth/google_start.php';
+                    if ($storedReturnTo !== null) {
+                        $googleStartUrl .= '?return_to=' . rawurlencode($storedReturnTo);
+                    }
+                    ?>
+                    <a href="<?= htmlspecialchars($googleStartUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn-google-login">เข้าสู่ระบบด้วย Google</a>
                 <?php else: ?>
                     <div class="google-login-note">Google Login ยังไม่พร้อม: ตั้งค่า `config/google_oauth.local.php` ก่อน</div>
                 <?php endif; ?>
@@ -282,14 +311,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="password" placeholder="รหัสผ่าน (10 ตัวอักษรเท่านั้น)" required minlength="10" maxlength="10" class="password-input">
+                                <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" required minlength="8" maxlength="72" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน (10 ตัวอักษร)" required minlength="10" maxlength="10" class="password-input">
+                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" required minlength="8" maxlength="72" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
@@ -337,14 +366,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="password" placeholder="รหัสผ่าน (10 ตัวอักษรเท่านั้น)" required minlength="10" maxlength="10" class="password-input">
+                                <input type="password" name="password" placeholder="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" required minlength="8" maxlength="72" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>
                         </div>
                         <div class="form-group">
                             <div style="position:relative;">
-                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน (10 ตัวอักษร)" required minlength="10" maxlength="10" class="password-input">
+                                <input type="password" name="confirm_password" placeholder="ยืนยันรหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" required minlength="8" maxlength="72" class="password-input">
                                 <!-- ปุ่มแสดง/ซ่อนรหัสผ่าน -->
                                 <button type="button" class="toggle-password" tabindex="-1" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;border:none;cursor:pointer;font-size:18px;">👁</button>
                             </div>

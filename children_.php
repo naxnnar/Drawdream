@@ -199,7 +199,7 @@ if ($role === 'foundation') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title>บริจาคให้เด็กรายบุคคล | DrawDream</title>

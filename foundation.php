@@ -708,7 +708,7 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
             <?php else: ?>
               <div class="fd-interest-cover fd-interest-cover--empty">ไม่มีรูป</div>
             <?php endif; ?>
-            <a class="fd-interest-pill-btn" href="foundation_donate_info.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
+            <a class="fd-interest-pill-btn" href="payment/foundation_donate.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
           </div>
           <div class="fd-interest-body">
             <h3 class="fd-interest-name"><?= htmlspecialchars($inf['foundation_name'] ?? 'มูลนิธิ') ?></h3>

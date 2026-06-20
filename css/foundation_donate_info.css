@@ -136,6 +136,54 @@ body.foundation-donate-info-page {
     font-size: 1.45rem;
 }
 
+.fdi-donate-cta {
+    margin-top: 8px;
+    padding: 20px 18px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #eef6ee 0%, #f8fafc 100%);
+    border: 1px solid #d7e6d6;
+    text-align: center;
+}
+
+.fdi-donate-cta h2 {
+    margin: 0 0 8px;
+    font-size: 1.35rem;
+    color: #1f2937;
+}
+
+.fdi-donate-cta p {
+    margin: 0 0 16px;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.fdi-donate-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 220px;
+    padding: 14px 28px;
+    border-radius: 999px;
+    background: #f0d05c;
+    color: #1f2937;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-decoration: none;
+    box-shadow: 0 6px 16px rgba(240, 208, 92, 0.45);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fdi-donate-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(240, 208, 92, 0.55);
+}
+
+.fdi-donate-note {
+    margin: 0;
+    color: #64748b;
+    font-weight: 600;
+}
+
 @media (max-width: 720px) {
     .fdi-top {
         grid-template-columns: 1fr;

@@ -8,11 +8,12 @@ require_once __DIR__ . '/omise_helpers.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
 require_once dirname(__DIR__) . '/includes/qr_payment_abandon.php';
+require_once __DIR__ . '/../includes/return_to.php';
 drawdream_child_sponsorship_ensure_columns($conn);
 
 if (!isset($_SESSION['user_id'])) {
-    $msg = rawurlencode('กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้');
-    header('Location: ../login.php?page=login&error=' . $msg);
+    $msg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
+    header('Location: ' . drawdream_login_url('login', $msg, drawdream_return_to_current_request()));
     exit;
 }
 if (!in_array($_SESSION['role'] ?? '', ['donor', 'admin'], true)) {

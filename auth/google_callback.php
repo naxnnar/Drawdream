@@ -4,9 +4,10 @@ declare(strict_types=1);
 // สรุปสั้น: ไฟล์นี้รับผลลัพธ์การล็อกอิน Google และจัดการสถานะผู้ใช้
 include __DIR__ . '/../db.php';
 require_once __DIR__ . '/../includes/google_oauth.php';
+require_once __DIR__ . '/../includes/return_to.php';
 
 $redirectLogin = static function (string $message): void {
-    header('Location: ../login.php?page=login&error=' . urlencode($message));
+    header('Location: ' . drawdream_login_url('login', $message, drawdream_return_to_get()));
     exit();
 };
 
@@ -63,9 +64,53 @@ $stmt = $conn->prepare('SELECT user_id, email, role FROM `user` WHERE email = ? 
 $stmt->bind_param('s', $email);
 $stmt->execute();
 $user = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+$isNewGoogleDonor = false;
 
 if (!$user) {
-    $redirectLogin('ไม่พบบัญชีนี้ในระบบ กรุณาสมัครสมาชิกก่อน');
+    $givenName = trim((string)($userInfoRes['payload']['given_name'] ?? ''));
+    $familyName = trim((string)($userInfoRes['payload']['family_name'] ?? ''));
+    $displayName = trim((string)($userInfoRes['payload']['name'] ?? ''));
+    if ($givenName === '' && $displayName !== '') {
+        $givenName = $displayName;
+    }
+    if ($givenName === '') {
+        $givenName = 'ผู้บริจาค';
+    }
+    if ($familyName === '') {
+        $familyName = 'Google';
+    }
+
+    try {
+        $randomPassword = bin2hex(random_bytes(24));
+    } catch (Throwable $e) {
+        $randomPassword = sha1($email . ':' . microtime(true));
+    }
+    $hashedPassword = password_hash($randomPassword, PASSWORD_DEFAULT);
+
+    $stmtIns = $conn->prepare("INSERT INTO `user` (email, password, role) VALUES (?, ?, 'donor')");
+    $stmtIns->bind_param('ss', $email, $hashedPassword);
+    if (!$stmtIns->execute()) {
+        $redirectLogin('ไม่สามารถสร้างบัญชีผู้บริจาคจาก Google ได้ กรุณาลองใหม่');
+    }
+    $newUserId = (int)$conn->insert_id;
+    $stmtIns->close();
+
+    $stmtDonor = $conn->prepare('INSERT INTO donor (user_id, first_name, last_name) VALUES (?, ?, ?)');
+    $stmtDonor->bind_param('iss', $newUserId, $givenName, $familyName);
+    if (!$stmtDonor->execute()) {
+        $conn->query('DELETE FROM `user` WHERE user_id = ' . $newUserId);
+        $redirectLogin('ไม่สามารถสร้างโปรไฟล์ผู้บริจาคจาก Google ได้ กรุณาลองใหม่');
+    }
+    $stmtDonor->close();
+
+    $user = [
+        'user_id' => $newUserId,
+        'email' => $email,
+        'role' => 'donor',
+    ];
+    $isNewGoogleDonor = true;
 }
 
 $userRole = (string)($user['role'] ?? '');
@@ -74,7 +119,7 @@ if ($userRole !== 'donor' && $userRole !== 'foundation') {
 }
 
 drawdream_session_regenerate_after_login();
-drawdream_log_user_login($conn, (int)$user['user_id'], 'google');
+drawdream_log_user_login($conn, (int)$user['user_id'], $isNewGoogleDonor ? 'google_register' : 'google');
 $_SESSION['user_id'] = (int)$user['user_id'];
 $_SESSION['email'] = (string)$user['email'];
 $_SESSION['role'] = $userRole;
@@ -88,7 +133,18 @@ if ($userRole === 'foundation') {
     $_SESSION['account_verified'] = (int)($fp['account_verified'] ?? 0);
 }
 
-$_SESSION['show_welcome'] = true;
+$returnDest = drawdream_return_to_consume_after_login($userRole);
+if ($returnDest !== null) {
+    unset($_SESSION['show_welcome']);
+    header('Location: ../' . $returnDest);
+    exit();
+}
 
-header('Location: ../welcome.php');
+if (!$isNewGoogleDonor) {
+    $_SESSION['show_welcome'] = true;
+    header('Location: ../welcome.php');
+    exit();
+}
+
+header('Location: ../homepage.php');
 exit();

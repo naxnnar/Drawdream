@@ -30,7 +30,7 @@ $id = isset($_GET['id']) ? $_GET['id'] : 'alin';
 $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
 <?php require_once __DIR__ . '/includes/favicon_meta.php'; ?>
   <title><?php echo $story['name']; ?> - DrawDream</title>

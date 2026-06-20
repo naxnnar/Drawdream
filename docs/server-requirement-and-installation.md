@@ -337,7 +337,6 @@ if ($_ddNeedMigration) {
     drawdream_admin_deduplicate_entity_rows($conn);
     drawdream_ensure_soft_delete_columns($conn);
     drawdream_ensure_needlist_schema($conn);
-    drawdream_ensure_foundation_profile_needlist_result_columns($conn);
     drawdream_ensure_foundation_project_update_columns($conn);
     drawdream_notifications_migrate_legacy_on_boot($conn);
 

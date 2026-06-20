@@ -12,6 +12,7 @@ require_once __DIR__ . '/payment/omise_helpers.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/child_outcome_history.php';
+require_once __DIR__ . '/includes/return_to.php';
 
 $child_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if (isset($_GET['notif_read']) && isset($_SESSION['user_id'])) {
@@ -23,7 +24,15 @@ if (isset($_GET['notif_read']) && isset($_SESSION['user_id'])) {
 $role = $_SESSION['role'] ?? 'donor';
 $isLoggedIn = isset($_SESSION['user_id']) && (int)($_SESSION['user_id'] ?? 0) > 0;
 $loginRequiredDonateMsg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
-$loginRequiredDonateUrl = 'login.php?page=login&error=' . rawurlencode($loginRequiredDonateMsg);
+$childReturnTo = drawdream_return_to_path('children_donate.php', ['id' => $child_id]);
+$loginRequiredDonateUrl = drawdream_login_url('login', $loginRequiredDonateMsg, $childReturnTo);
+$prefillAmount = 0;
+if (isset($_GET['amount'])) {
+    $prefillAmount = (int)$_GET['amount'];
+    if ($prefillAmount < 20) {
+        $prefillAmount = 0;
+    }
+}
 $isAdmin = ($role === 'admin');
 
 $sql = "
@@ -62,9 +71,12 @@ if ($dsRow) {
 }
 $donationStats['cycle_amount'] = drawdream_child_cycle_total($conn, $child_id, $child);
 
-// รายชื่อผู้บริจาค + สถานะแผนรายรอบ (มูลนิธิ/แอดมิน — แยก ยกเลิก / กำลังอุปการะ / บริจาคครั้งเดียว)
-$sponsorDisplayList = drawdream_child_foundation_sponsor_display_list($conn, $child_id, $childCategoryId);
-$sponsorDisplayRows = $sponsorDisplayList['rows'] ?? [];
+// รายชื่อผู้บริจาค + สถานะแผนรายรอบ — เฉพาะมูลนิธิ/แอดมิน (ผู้บริจาคไม่ใช้ ลด query ไป Aiven)
+$sponsorDisplayRows = [];
+if ($role === 'foundation' || $role === 'admin') {
+    $sponsorDisplayList = drawdream_child_foundation_sponsor_display_list($conn, $child_id, $childCategoryId);
+    $sponsorDisplayRows = $sponsorDisplayList['rows'] ?? [];
+}
 
 $birthDateText = '-';
 if (!empty($child['birth_date'] ?? '')) {
@@ -83,7 +95,17 @@ if ($reviewStatus === 'ไม่อนุมัติ') {
     );
 }
 
-$canDonate = drawdream_child_can_receive_donation($conn, $child_id, $child);
+$cycleAmountCached = (float)($donationStats['cycle_amount'] ?? 0);
+$cycleTargetAmount = drawdream_child_cycle_target_amount($conn, $child_id);
+$coverageWindow = drawdream_child_plan_coverage_window($conn, $child_id);
+$hasPlanCoverageNow = (bool)($coverageWindow['current'] ?? false);
+$isCycleSponsored = $hasPlanCoverageNow
+    || ($cycleTargetAmount > 0 && $cycleAmountCached >= $cycleTargetAmount);
+$anyPlanSponsor = drawdream_child_has_any_active_subscription($conn, $child_id);
+
+$canDonate = drawdream_child_can_receive_daily_donation($conn, $child_id, $child)
+    && !$anyPlanSponsor
+    && !$isCycleSponsored;
 $donorUid = (int)($_SESSION['user_id'] ?? 0);
 $activeChildSub = ($role === 'donor' && $donorUid > 0)
     ? drawdream_donor_active_child_subscription_for_child($conn, $donorUid, $child_id)
@@ -92,7 +114,6 @@ $hasActiveChildSub = is_array($activeChildSub);
 $canStartChildSub = ($role === 'donor' && $donorUid > 0)
     ? drawdream_child_can_start_omise_subscription($conn, $child_id, $child, $donorUid)
     : false;
-$anyPlanSponsor = drawdream_child_has_any_active_subscription($conn, $child_id);
 $recurringBlockedForDonor = ($role === 'donor' && $donorUid > 0)
     ? drawdream_child_subscription_recurring_blocked_for_donor($conn, $child_id, $donorUid)
     : $anyPlanSponsor;
@@ -107,7 +128,6 @@ $donorShowcaseSponsored = drawdream_child_is_showcase_sponsored(
 $latestCancelledSubAny = null;
 $latestCancelledSubForDonor = null;
 $planLabelMap = ['monthly' => 'รายเดือน', 'semiannual' => 'ราย 6 เดือน', 'yearly' => 'รายปี'];
-$cycleTargetAmount = drawdream_child_cycle_target_amount($conn, $child_id);
 $cycleMonthLabel = date('m/Y');
     $stLatestCancelledAny = $conn->prepare(
         "SELECT recurring_plan_code AS plan_code,
@@ -170,7 +190,7 @@ $showContinueFromCycleNotice = ($role === 'donor')
     && !$hasActiveChildSub
     && !$donorShowcaseSponsored
     && $canStartChildSub;
-$coverageWindow = drawdream_child_plan_coverage_window($conn, $child_id);
+// $coverageWindow คำนวณไว้แล้วด้านบน
 $coverageEnd = $coverageWindow['end'] ?? null;
 $nextMonthlyCycleLabel = '-';
 $nextSemiannualCycleLabel = '-';
@@ -189,11 +209,11 @@ $dailyCanDonate = drawdream_child_can_receive_daily_donation($conn, $child_id, $
 $childHasPlanSponsor = $donorShowcaseSponsored || $hasActiveChildSub || $anyPlanSponsor || $recurringBlockedForDonor;
 $showDonorDonationBox = ($role === 'donor')
     && ($canStartChildSub || !$isLoggedIn || ($childHasPlanSponsor && $dailyCanDonate));
-$sponsorshipLabel = drawdream_child_is_cycle_sponsored($conn, $child_id, $child) ? 'อุปการะแล้ว' : 'รออุปการะ';
+$sponsorshipLabel = $isCycleSponsored ? 'อุปการะแล้ว' : 'รออุปการะ';
 $foundationCanUpdateOutcome = ($role === 'foundation')
     && drawdream_foundation_account_is_verified($conn)
     && (
-        drawdream_child_is_monthly_fully_sponsored($conn, $child_id, $child)
+        ($isCycleSponsored && in_array((string)($child['approve_profile'] ?? ''), ['อนุมัติ', 'กำลังดำเนินการ'], true))
         || $anyPlanSponsor
         || $donorShowcaseSponsored
     );
@@ -581,7 +601,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             <input type="hidden" name="pay" value="1">
                             <?php endif; ?>
                             <label class="visually-hidden" for="dailyAmountInput">จำนวนเงินบาท (ขั้นต่ำ 20)</label>
-                            <input type="number" name="amount" id="dailyAmountInput" class="sub-daily-amount-input" min="20" step="1" inputmode="numeric" placeholder="<?php echo $dailyCanDonate ? 'ระบุจำนวนเงิน (ขั้นต่ำ 20 บาท)' : 'ไม่เปิดรับบริจาคในรอบนี้'; ?>" required autocomplete="off" <?php echo $dailyCanDonate ? '' : 'disabled'; ?>>
+                            <input type="number" name="amount" id="dailyAmountInput" class="sub-daily-amount-input" min="20" step="1" inputmode="numeric" placeholder="<?php echo $dailyCanDonate ? 'ระบุจำนวนเงิน (ขั้นต่ำ 20 บาท)' : 'ไม่เปิดรับบริจาคในรอบนี้'; ?>" value="<?php echo $prefillAmount > 0 ? (int)$prefillAmount : ''; ?>" required autocomplete="off" <?php echo $dailyCanDonate ? '' : 'disabled'; ?>>
                             <div class="payment-method child-daily-payment-method">
                                 <div class="method-card active" aria-label="ชำระด้วย PromptPay QR ผ่าน Omise">
                                     <img src="<?php echo htmlspecialchars($qrIconSrc); ?>" alt="" class="method-icon" width="30" height="30" decoding="async">
@@ -625,6 +645,8 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                 <script>
                 (function () {
                     var isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+                    var childId = <?php echo (int)$child_id; ?>;
+                    var loginRequiredMsg = <?php echo json_encode($loginRequiredDonateMsg, JSON_UNESCAPED_UNICODE); ?>;
                     var planSponsorLocked = <?php echo $childHasPlanSponsor ? 'true' : 'false'; ?>;
                     var pk = <?php echo json_encode(OMISE_PUBLIC_KEY, JSON_UNESCAPED_UNICODE); ?>;
                     if (typeof OmiseCard !== 'undefined') {
@@ -643,6 +665,30 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     var subForm = document.getElementById('childSubForm');
                     var lockedBtn = document.getElementById('btnChildSponsorLocked');
                     var satang = 70000;
+
+                    function buildChildDonateLoginUrl(amount) {
+                        var path = 'children_donate.php?id=' + childId;
+                        var amt = parseInt(String(amount || ''), 10);
+                        if (!isNaN(amt) && amt >= 20) {
+                            path += '&amount=' + amt;
+                        }
+                        return 'login.php?page=login&return_to=' + encodeURIComponent(path)
+                            + '&error=' + encodeURIComponent(loginRequiredMsg);
+                    }
+
+                    if (!isLoggedIn && dailyForm) {
+                        dailyForm.addEventListener('submit', function (e) {
+                            e.preventDefault();
+                            window.location.href = buildChildDonateLoginUrl(dailyInput ? dailyInput.value : '');
+                        });
+                    }
+
+                    if (!isLoggedIn && subForm) {
+                        subForm.addEventListener('submit', function (e) {
+                            e.preventDefault();
+                            window.location.href = buildChildDonateLoginUrl(null);
+                        });
+                    }
 
                     function setSectionVisibility(dailyOn) {
                         if (dailyOn) {

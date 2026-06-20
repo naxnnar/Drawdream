@@ -560,7 +560,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                     </div>
                 <?php endforeach; ?>
             <?php elseif (!empty($donor_active_child_subscriptions)): ?>
-                <p class="donor-history-hint">รายการแต่ละรอบจะแสดงด้านล่างเมื่อระบบบันทึกยอดสำเร็จ (Webhook Omise → <code>payment/omise_webhook.php</code> หรือ cron รอบ)</p>
+                <p class="donor-history-hint">รายการแต่ละรอบจะแสดงด้านล่างเมื่อระบบบันทึกยอดสำเร็จ</p>
             <?php else: ?>
                 <div style="text-align:center; color:#999; padding:30px;">
                     ยังไม่มีประวัติการบริจาค

@@ -423,7 +423,7 @@ document.addEventListener('touchstart', function () {}, { passive: true });
     </button>
     <div class="nav-main-links" id="navMainLinks" role="navigation" aria-label="เมนูหลัก">
       <a href="<?= $_nav_base ?>homepage.php" <?= basename($_SERVER['PHP_SELF']) == 'homepage.php' ? 'class="active"' : '' ?>>หน้าแรก</a>
-      <a href="<?= $_nav_base ?>children_.php" <?= basename($_SERVER['PHP_SELF']) == 'children_.php' ? 'class="active"' : '' ?>>บริจาค</a>
+      <a href="<?= $_nav_base ?>children_.php" <?= in_array(basename($_SERVER['PHP_SELF']), ['children_.php', 'children_donate.php'], true) ? 'class="active"' : '' ?>>อุปการะเด็ก</a>
       <a href="<?= $_nav_base ?>project.php" <?= basename($_SERVER['PHP_SELF']) == 'project.php' ? 'class="active"' : '' ?>>โครงการ</a>
       <a href="<?= $_nav_base ?>foundation.php" <?= basename($_SERVER['PHP_SELF']) == 'foundation.php' ? 'class="active"' : '' ?>>มูลนิธิ</a>
       <div class="nav-about-dropdown<?= $aboutNavActive ? ' is-active' : '' ?>" id="navAboutDropdown">
