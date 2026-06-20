@@ -79,7 +79,7 @@ server {
     server_name ${DRAWDREAM_SERVER_IP};
 
     root ${APP_ROOT};
-    index login.php homepage.php;
+    index index.php homepage.php;
 
     client_max_body_size 36M;
 
@@ -112,6 +112,6 @@ nginx -t
 systemctl reload nginx
 
 echo ""
-echo "==> Done. Open: http://${DRAWDREAM_SERVER_IP}/login.php"
+echo "==> Done. Open: http://${DRAWDREAM_SERVER_IP}/"
 echo "==> Next: nano /etc/ssl/aiven/ca.pem  +  nano ${APP_ROOT}/.env  (Aiven DB)"
 echo "==> Test DB: cd ${APP_ROOT} && php -r \"require 'includes/env_loader.php'; drawdream_load_env_file(__DIR__.'/.env'); require 'db.php'; echo 'DB OK'.PHP_EOL;\""
