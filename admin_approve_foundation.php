@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // admin_approve_foundation.php — แอดมิน: ตรวจสอบโปรไฟล์มูลนิธิ (อ่านอย่างเดียว — อนุมัติ/ไม่อนุมัติที่ศูนย์แจ้งเตือน)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน approve foundation
@@ -29,10 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'approve') {
             $stmt = $conn->prepare(
                 'UPDATE foundation_profile
-                 SET account_verified = 1, verified_at = NOW(), verified_by = ?, review_note = NULL, reviewed_at = NOW()
+                 SET account_verified = 1, verified_at = NOW(), review_note = NULL
                  WHERE foundation_id = ? AND account_verified = 0'
             );
-            $stmt->bind_param('ii', $admin_id, $foundation_id);
+            $stmt->bind_param('i', $foundation_id);
             $stmt->execute();
             $fu = drawdream_foundation_user_id_by_foundation_id($conn, $foundation_id);
             drawdream_send_notification(
@@ -61,10 +61,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rejectUid = (int)$fp['user_id'];
                 $stUpd = $conn->prepare(
                     'UPDATE foundation_profile
-                     SET account_verified = 2, review_note = ?, reviewed_at = NOW(), verified_by = ?
+                     SET account_verified = 2, review_note = ?
                      WHERE foundation_id = ? AND account_verified = 0'
                 );
-                $stUpd->bind_param('sii', $reject_reason, $admin_id, $foundation_id);
+                $stUpd->bind_param('si', $reject_reason, $foundation_id);
                 $stUpd->execute();
                 drawdream_send_notification(
                     $conn,

@@ -790,27 +790,3 @@ function foundation_needlist_admin_delivery_from_row(array $row): array
         'has' => $text !== '' || $images !== [],
     ];
 }
-
-/**
- * คอลัมน์ผลลัพธ์การระดมสิ่งของ (รวมทั้งมูลนิธิ) ใน foundation_profile
- */
-function drawdream_ensure_foundation_profile_needlist_result_columns(mysqli $conn): void
-{
-    $t = @$conn->query("SHOW TABLES LIKE 'foundation_profile'");
-    if (!$t || $t->num_rows === 0) {
-        return;
-    }
-    $add = [
-        ['needlist_result_text', 'TEXT NULL DEFAULT NULL'],
-        ['needlist_result_at', 'DATETIME NULL DEFAULT NULL'],
-        ['needlist_result_images', 'TEXT NULL DEFAULT NULL'],
-    ];
-    foreach ($add as $pair) {
-        $name = $pair[0];
-        $def = $pair[1];
-        $c = @$conn->query("SHOW COLUMNS FROM foundation_profile LIKE '" . mysqli_real_escape_string($conn, $name) . "'");
-        if ($c && $c->num_rows === 0) {
-            @$conn->query("ALTER TABLE foundation_profile ADD COLUMN `{$name}` {$def}");
-        }
-    }
-}

@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/drawdream_project_service_charge.php';
-require_once __DIR__ . '/escrow_funds_schema.php';
 require_once __DIR__ . '/donate_type.php';
 require_once __DIR__ . '/payment_transaction_schema.php';
 require_once __DIR__ . '/notification_audit.php';
@@ -155,10 +154,6 @@ function drawdream_finalize_project_donation(
         $bump = drawdream_project_bump_and_maybe_complete($conn, $project_id, $amountBaht);
         if ($bump !== DRAWDREAM_PROJECT_FINALIZE_OK) {
             throw new RuntimeException('project bump:' . $bump);
-        }
-
-        if (!drawdream_escrow_funds_try_insert_holding($conn, $project_id, $ptDonateId, $charge_id, $amountBaht)) {
-            throw new RuntimeException('escrow insert');
         }
 
         $conn->commit();

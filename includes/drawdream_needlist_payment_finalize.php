@@ -5,7 +5,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/drawdream_project_payment_finalize.php';
 require_once __DIR__ . '/drawdream_needlist_schema.php';
 require_once __DIR__ . '/needlist_donate_window.php';
-require_once __DIR__ . '/escrow_funds_schema.php';
 require_once __DIR__ . '/donate_category_resolve.php';
 require_once __DIR__ . '/donate_type.php';
 require_once __DIR__ . '/payment_transaction_schema.php';
@@ -146,11 +145,6 @@ function drawdream_needlist_bump_open_items(
         $upd->execute();
         if ($itemId > 0) {
             drawdream_needlist_sync_service_charge_for_item($conn, $itemId);
-        }
-        if ($itemId > 0 && $item_amount > 0) {
-            if (!drawdream_escrow_funds_try_insert_holding_for_target($conn, 'need_item', $itemId, $donateId, $chargeId, $item_amount)) {
-                return 'escrow_failed';
-            }
         }
     }
 

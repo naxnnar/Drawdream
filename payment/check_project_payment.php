@@ -172,9 +172,6 @@ if ($already_refunded) {
                 if ($bump !== DRAWDREAM_PROJECT_FINALIZE_OK) {
                     throw new RuntimeException('project bump:' . $bump);
                 }
-                if (!drawdream_escrow_funds_try_insert_holding($conn, $project_id, $receiptDonateId, $charge_id, (float)$amount)) {
-                    throw new RuntimeException('escrow insert');
-                }
                 $conn->commit();
                 $payment_ui = 'success';
                 $finalized_this_request = true;

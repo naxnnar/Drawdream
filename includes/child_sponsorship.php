@@ -134,13 +134,20 @@ function drawdream_child_donor_plan_coverage_window(mysqli $conn, int $childId, 
  */
 function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
 {
-    $out = ['current' => false, 'start' => null, 'end' => null, 'plan_code' => ''];
+    static $cache = [];
     if ($childId <= 0) {
-        return $out;
+        return ['current' => false, 'start' => null, 'end' => null, 'plan_code' => ''];
     }
+    if (isset($cache[$childId])) {
+        return $cache[$childId];
+    }
+
+    $out = ['current' => false, 'start' => null, 'end' => null, 'plan_code' => ''];
     require_once __DIR__ . '/donate_category_resolve.php';
     $catId = drawdream_get_or_create_child_donate_category_id($conn);
     if ($catId <= 0) {
+        $cache[$childId] = $out;
+
         return $out;
     }
     $st = $conn->prepare(
@@ -151,12 +158,16 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
          ORDER BY transfer_datetime ASC, donate_id ASC"
     );
     if (!$st) {
+        $cache[$childId] = $out;
+
         return $out;
     }
     $st->bind_param('ii', $catId, $childId);
     $st->execute();
     $rows = $st->get_result()->fetch_all(MYSQLI_ASSOC);
     if ($rows === []) {
+        $cache[$childId] = $out;
+
         return $out;
     }
     $tz = new DateTimeZone('Asia/Bangkok');
@@ -204,6 +215,8 @@ function drawdream_child_plan_coverage_window(mysqli $conn, int $childId): array
     $out['start'] = $activeStart;
     $out['end'] = $activeEnd;
     $out['plan_code'] = $activePlanCode;
+    $cache[$childId] = $out;
+
     return $out;
 }
 
@@ -294,6 +307,7 @@ function drawdream_child_anchor_datetime(array $childRow): ?string
 /** ยอดบริจาคในเดือนปฏิทินปัจจุบัน (หลัง anchor ตาม effectiveStart) */
 function drawdream_child_cycle_total(mysqli $conn, int $childId, array $childRow): float
 {
+    static $cache = [];
     drawdream_child_sponsorship_ensure_columns($conn);
     $anchor = drawdream_child_anchor_datetime($childRow);
     if ($anchor === null) {
@@ -304,6 +318,10 @@ function drawdream_child_cycle_total(mysqli $conn, int $childId, array $childRow
         return 0.0;
     }
     [$effectiveStart, $monthEnd] = $bounds;
+    $cacheKey = $childId . '|' . $effectiveStart->format('Y-m-d H:i:s') . '|' . $monthEnd->format('Y-m-d H:i:s');
+    if (isset($cache[$cacheKey])) {
+        return (float)$cache[$cacheKey];
+    }
     require_once __DIR__ . '/donate_category_resolve.php';
     require_once __DIR__ . '/donate_type.php';
     $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
@@ -323,7 +341,9 @@ function drawdream_child_cycle_total(mysqli $conn, int $childId, array $childRow
     $stmt->bind_param('iisss', $childCategoryId, $childId, $startStr, $endStr, $dtOne);
     $stmt->execute();
     $r = $stmt->get_result()->fetch_assoc();
-    return (float)($r['t'] ?? 0);
+    $cache[$cacheKey] = (float)($r['t'] ?? 0);
+
+    return (float)$cache[$cacheKey];
 }
 
 /**

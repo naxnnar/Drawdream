@@ -69,9 +69,16 @@ function drawdream_donate_category_id_for_needitem(mysqli $conn): int
 
 function drawdream_get_or_create_child_donate_category_id(mysqli $conn): int
 {
+    static $cachedId = null;
+    if ($cachedId !== null) {
+        return (int)$cachedId;
+    }
+
     $id = drawdream_donate_category_id_for_child($conn);
     if ($id > 0) {
-        return $id;
+        $cachedId = $id;
+
+        return (int)$cachedId;
     }
     $col = @$conn->query("SHOW COLUMNS FROM donate_category LIKE 'child_donate'");
     if ($col && $col->num_rows === 0) {
@@ -79,8 +86,12 @@ function drawdream_get_or_create_child_donate_category_id(mysqli $conn): int
         @$conn->query('ALTER TABLE donate_category ADD COLUMN child_donate VARCHAR(100) NULL');
     }
     if ($conn->query("INSERT INTO donate_category (child_donate) VALUES ('บริจาคให้เด็ก')")) {
-        return (int)$conn->insert_id;
+        $cachedId = (int)$conn->insert_id;
+
+        return (int)$cachedId;
     }
+
+    $cachedId = 0;
 
     return 0;
 }

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // payment/check_needlist_payment.php — ยืนยันการชำระรายการสิ่งของ
 declare(strict_types=1);
 

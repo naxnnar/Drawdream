@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // payment/needlist_service_charge_qr.php — แสดง QR ชำระค่าบริการระบบ (เลย์เอาต์การ์ดสีน้ำเงิน)
 declare(strict_types=1);
 

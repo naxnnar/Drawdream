@@ -5,6 +5,7 @@ declare(strict_types=1);
 include __DIR__ . '/../db.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_needlist_schema.php';
+require_once __DIR__ . '/../includes/escrow_funds_schema.php';
 require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/donate_type.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
@@ -71,6 +72,7 @@ if (!$item) {
 }
 
 if (!empty($item['service_charge_paid_at'])) {
+    drawdream_escrow_sync_summary_holding_for_need_item($conn, $itemId);
     drawdream_clear_pending_service_charge_session();
     needlist_sc_respond(['ok' => true, 'already' => true], $wantJson, $itemId);
 }
@@ -131,6 +133,7 @@ if ($dup->get_result()->fetch_assoc()) {
         $updPaid->bind_param('i', $itemId);
         $updPaid->execute();
     }
+    drawdream_escrow_sync_summary_holding_for_need_item($conn, $itemId);
     drawdream_clear_pending_service_charge_session();
     needlist_sc_respond(['ok' => true, 'duplicate' => true], $wantJson, $itemId);
 }
@@ -170,6 +173,10 @@ if ($conn->begin_transaction()) {
         $upd->execute();
         if ($upd->affected_rows < 1) {
             throw new RuntimeException('update_paid_at');
+        }
+
+        if (!drawdream_escrow_sync_summary_holding_for_need_item($conn, $itemId)) {
+            throw new RuntimeException('escrow_sync');
         }
 
         $conn->commit();

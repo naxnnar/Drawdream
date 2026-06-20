@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // update_profile.php — อัปเดตโปรไฟล์ (ทั่วไป)
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน update profile
@@ -175,7 +175,7 @@ if (isset($_POST['update'])) {
                     if ($foundationId > 0) {
                         $rst = $conn->prepare(
                             'UPDATE foundation_profile
-                             SET account_verified = 0, verified_at = NULL, verified_by = NULL, review_note = NULL, reviewed_at = NULL
+                             SET account_verified = 0, verified_at = NULL, review_note = NULL
                              WHERE foundation_id = ?'
                         );
                         if ($rst) {

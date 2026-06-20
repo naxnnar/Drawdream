@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // payment/project_service_charge_qr.php — QR ชำระค่าบริการระบบโครงการ
 declare(strict_types=1);
 

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // foundation_add_project.php — มูลนิธิเสนอ/แก้ไขโครงการ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add project
@@ -400,7 +400,6 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
             <h3>ข้อมูลติดต่อที่จะโชว์ในหน้าโครงการ</h3>
             <p>👤 ผู้ติดต่อ <?= htmlspecialchars($fp['contact_person'] ?? '-') ?></p>
             <p>📞 เบอร์หลัก <?= htmlspecialchars($fp['phone'] ?? '-') ?></p>
-            <p>📱 เบอร์รอง <?= htmlspecialchars($fp['phone_secondary'] ?? '-') ?></p>
             <p>✉️ อีเมล <?= htmlspecialchars($fp['email'] ?? '-') ?></p>
             <p>🌐 เว็บไซต์ <?= htmlspecialchars($fp['website'] ?? '-') ?></p>
             <p>📘 Facebook <?= htmlspecialchars($fp['facebook_url'] ?? '-') ?></p>
