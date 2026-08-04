@@ -5,6 +5,8 @@ declare(strict_types=1);
 include __DIR__ . '/../db.php';
 require_once __DIR__ . '/../includes/google_oauth.php';
 require_once __DIR__ . '/../includes/return_to.php';
+require_once __DIR__ . '/../includes/welcome_session.php';
+require_once __DIR__ . '/../includes/utf8_helpers.php';
 
 $redirectLogin = static function (string $message): void {
     header('Location: ' . drawdream_login_url('login', $message, drawdream_return_to_get()));
@@ -53,7 +55,7 @@ if (empty($userInfoRes['ok'])) {
     $redirectLogin('ไม่สามารถอ่านข้อมูลผู้ใช้จาก Google ได้');
 }
 
-$email = trim((string)($userInfoRes['payload']['email'] ?? ''));
+$email = drawdream_normalize_email((string)($userInfoRes['payload']['email'] ?? ''));
 $emailVerified = (bool)($userInfoRes['payload']['email_verified'] ?? false);
 
 if ($email === '' || !$emailVerified) {
@@ -125,26 +127,20 @@ $_SESSION['email'] = (string)$user['email'];
 $_SESSION['role'] = $userRole;
 
 if ($userRole === 'foundation') {
-    $stmt2 = $conn->prepare('SELECT account_verified FROM foundation_profile WHERE user_id = ? LIMIT 1');
+    $stmt2 = $conn->prepare('SELECT account_verified, foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1');
     $userId = (int)$user['user_id'];
     $stmt2->bind_param('i', $userId);
     $stmt2->execute();
     $fp = $stmt2->get_result()->fetch_assoc();
     $_SESSION['account_verified'] = (int)($fp['account_verified'] ?? 0);
+    $_SESSION['foundation_id'] = (int)($fp['foundation_id'] ?? 0);
 }
 
 $returnDest = drawdream_return_to_consume_after_login($userRole);
 if ($returnDest !== null) {
-    unset($_SESSION['show_welcome']);
     header('Location: ../' . $returnDest);
     exit();
 }
 
-if (!$isNewGoogleDonor) {
-    $_SESSION['show_welcome'] = true;
-    header('Location: ../welcome.php');
-    exit();
-}
-
-header('Location: ../homepage.php');
+header('Location: ../' . drawdream_post_login_redirect_url($userRole));
 exit();

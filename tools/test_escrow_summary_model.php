@@ -89,6 +89,7 @@ echo "DB: {$c['database']} @ {$c['host']}\n\n";
 drawdream_escrow_funds_ensure_schema($conn);
 ok(drawdream_escrow_has_index($conn, 'escrow_funds', 'uq_escrow_target'), 'unique index uq_escrow_target exists');
 ok(!drawdream_escrow_has_index($conn, 'escrow_funds', 'uq_escrow_target_donate'), 'old index uq_escrow_target_donate removed');
+ok(!drawdream_escrow_has_column($conn, 'escrow_funds', 'created_at'), 'column created_at removed');
 
 // 2) No per-donation rows
 $nPerDon = (int)($conn->query('SELECT COUNT(*) FROM escrow_funds WHERE donate_id > 0')->fetch_row()[0] ?? -1);

@@ -16,8 +16,11 @@ declare(strict_types=1);
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donation receipt
 
+define('DRAWDREAM_DB_LIGHT', true);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/e_receipt.php';
+require_once __DIR__ . '/includes/drawdream_donor_receipt_schema.php';
+require_once __DIR__ . '/includes/qr_payment_abandon.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -42,7 +45,8 @@ if ($donateId <= 0) {
 
 // ดึงเฉพาะรายการที่จ่ายสำเร็จแล้วเท่านั้น
 $st = $conn->prepare(
-    "SELECT d.donate_id, d.category_id, d.target_id, d.donor_id, d.amount, d.transfer_datetime, d.omise_charge_id, dn.tax_id,
+    "SELECT d.donate_id, d.category_id, d.target_id, d.donor_id, d.amount, d.transfer_datetime, d.omise_charge_id,
+            d.donate_type, dn.tax_id,
             dc.project_donate, dc.needitem_donate, dc.child_donate
      FROM donation d
      LEFT JOIN donate_category dc ON dc.category_id = d.category_id
@@ -91,23 +95,11 @@ $hasReceiptType = false;
 $hasReceiptCompanyName = false;
 $hasReceiptCompanyTaxId = false;
 $hasReceiptCompanyAddress = false;
-// ตรวจคอลัมน์ donor แบบ runtime (กันบางเครื่อง migrate schema ยังไม่ครบ)
-$colChk = $conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_type'");
-if ($colChk && $colChk->num_rows > 0) {
-    $hasReceiptType = true;
-}
-$colChk = $conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_company_name'");
-if ($colChk && $colChk->num_rows > 0) {
-    $hasReceiptCompanyName = true;
-}
-$colChk = $conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_company_tax_id'");
-if ($colChk && $colChk->num_rows > 0) {
-    $hasReceiptCompanyTaxId = true;
-}
-$colChk = $conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_company_address'");
-if ($colChk && $colChk->num_rows > 0) {
-    $hasReceiptCompanyAddress = true;
-}
+$receiptColFlags = drawdream_donor_receipt_column_flags($conn);
+$hasReceiptType = (bool)($receiptColFlags['receipt_type'] ?? false);
+$hasReceiptCompanyName = (bool)($receiptColFlags['receipt_company_name'] ?? false);
+$hasReceiptCompanyTaxId = (bool)($receiptColFlags['receipt_company_tax_id'] ?? false);
+$hasReceiptCompanyAddress = (bool)($receiptColFlags['receipt_company_address'] ?? false);
 
 $donorSelectCols = ['first_name', 'last_name', 'tax_id'];
 $donorSelectCols[] = $hasReceiptType ? 'receipt_type' : "'individual' AS receipt_type";
@@ -160,7 +152,27 @@ $targetLabel = '-';
 $projectLabel = trim((string)($receipt['project_donate'] ?? ''));
 $needLabel = trim((string)($receipt['needitem_donate'] ?? ''));
 $childLabel = trim((string)($receipt['child_donate'] ?? ''));
+$donateTypeCode = strtolower(trim((string)($receipt['donate_type'] ?? '')));
 $targetId = (int)($receipt['target_id'] ?? 0);
+$childSubPlanLabel = '';
+if (in_array($donateTypeCode, ['child_subscription', 'child_subscription_charge'], true)) {
+    $categoryLabel = 'อุปการะเด็ก';
+    $stSubPlan = $conn->prepare(
+        'SELECT recurring_plan_code FROM child_subscription_history
+         WHERE donate_id = ? ORDER BY history_id DESC LIMIT 1'
+    );
+    if ($stSubPlan) {
+        $stSubPlan->bind_param('i', $donateId);
+        $stSubPlan->execute();
+        $subPlanRow = $stSubPlan->get_result()->fetch_assoc();
+        $subPlanCode = strtolower(trim((string)($subPlanRow['recurring_plan_code'] ?? '')));
+        $subPlanMap = ['monthly' => 'รายเดือน', 'semiannual' => 'ราย 6 เดือน', 'yearly' => 'รายปี'];
+        if ($subPlanCode !== '' && isset($subPlanMap[$subPlanCode])) {
+            $childSubPlanLabel = $subPlanMap[$subPlanCode];
+            $categoryLabel .= ' (' . $childSubPlanLabel . ')';
+        }
+    }
+}
 if ($projectLabel !== '' && $projectLabel !== '-') {
     $categoryLabel = 'บริจาคโครงการ';
     $stTarget = $conn->prepare('SELECT project_name FROM foundation_project WHERE project_id = ? LIMIT 1');
@@ -180,7 +192,11 @@ if ($projectLabel !== '' && $projectLabel !== '-') {
         $targetLabel = trim((string)($t['foundation_name'] ?? ''));
     }
 } elseif ($childLabel !== '' && $childLabel !== '-') {
-    $categoryLabel = 'บริจาคเด็ก';
+    if ($categoryLabel === 'บริจาคทั่วไป') {
+        $categoryLabel = in_array($donateTypeCode, ['child_subscription', 'child_subscription_charge'], true)
+            ? 'อุปการะเด็ก'
+            : 'บริจาคเด็ก';
+    }
     $stTarget = $conn->prepare('SELECT child_name FROM foundation_children WHERE child_id = ? LIMIT 1');
     if ($stTarget) {
         $stTarget->bind_param('i', $targetId);
@@ -198,6 +214,50 @@ $dateText = $ts !== false ? date('d/m/Y', $ts) : '-';
 $timeText = $ts !== false ? date('H:i', $ts) . ' น.' : '-';
 $receiptRefDate = $ts !== false ? date('Ymd', $ts) : date('Ymd');
 $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0', STR_PAD_LEFT);
+
+$showPaymentSuccess = isset($_GET['success']) && (string)$_GET['success'] === '1';
+$successTitle = trim((string)($_GET['success_title'] ?? ''));
+if ($successTitle === '') {
+    $successTitle = 'บริจาคสำเร็จ';
+}
+$successDetail = trim((string)($_GET['success_detail'] ?? ''));
+$returnAfterUrl = 'profile.php';
+$returnRaw = trim((string)($_GET['return'] ?? ''));
+if ($returnRaw !== '') {
+    $returnAfterUrl = drawdream_safe_payment_return_url($returnRaw, 'profile.php');
+}
+if ($successDetail === '' && $showPaymentSuccess) {
+    $amtText = number_format((float)($receipt['amount'] ?? 0), 2);
+    if (in_array($donateTypeCode, ['child_subscription', 'child_subscription_charge'], true)) {
+        $who = $targetLabel !== '' && $targetLabel !== '-' ? $targetLabel : 'เด็ก';
+        $successDetail = 'ขอบคุณที่อุปการะ ' . $who . ' — จำนวน ' . $amtText . ' บาท';
+        if ($childSubPlanLabel !== '') {
+            $successDetail .= ' · แพ็ก' . $childSubPlanLabel;
+        }
+    } elseif ($targetLabel !== '' && $targetLabel !== '-') {
+        $successDetail = 'ขอบคุณที่ร่วมบริจาคให้ ' . $targetLabel . ' — จำนวน ' . $amtText . ' บาท';
+    }
+}
+
+$receiptBaseQuery = static function (int $id, ?string $mode = null) use ($showPaymentSuccess, $successTitle, $successDetail, $returnRaw): string {
+    $params = ['donate_id' => (string)$id];
+    if ($mode !== null && $mode !== '') {
+        $params['receipt_mode'] = $mode;
+    }
+    if ($showPaymentSuccess) {
+        $params['success'] = '1';
+        if ($successTitle !== '') {
+            $params['success_title'] = $successTitle;
+        }
+        if ($successDetail !== '') {
+            $params['success_detail'] = $successDetail;
+        }
+        if ($returnRaw !== '') {
+            $params['return'] = $returnRaw;
+        }
+    }
+    return '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+};
 ?>
 <!doctype html>
 <html lang="th">
@@ -209,7 +269,47 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
     <link rel="stylesheet" href="css/navbar.css">
     <style>
         body { margin: 0; background: #f2f4f8; font-family: 'Prompt', sans-serif; color: #24304a; }
+        .payment-success-banner {
+            max-width: 920px;
+            margin: 18px auto 0;
+            padding: 0 14px;
+        }
+        .payment-success-banner__inner {
+            background: linear-gradient(135deg, #ecfdf3 0%, #f0fdf4 100%);
+            border: 1px solid #86efac;
+            border-radius: 14px;
+            padding: 16px 18px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+        .payment-success-banner__icon {
+            flex-shrink: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #22c55e;
+            color: #fff;
+            font-size: 1.4rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .payment-success-banner__title {
+            margin: 0 0 4px;
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #166534;
+        }
+        .payment-success-banner__detail {
+            margin: 0;
+            font-size: 0.98rem;
+            color: #14532d;
+            line-height: 1.5;
+        }
         .receipt-wrap { max-width: 920px; margin: 26px auto 40px; padding: 0 14px; }
+        .receipt-wrap--after-success { margin-top: 14px; }
         .receipt-card {
             background: #fff;
             border-radius: 18px;
@@ -297,6 +397,15 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
             font-family: inherit;
         }
         .btn-print { background: #3c5099; color: #fff; }
+        .btn-history { background: #eef2ff; color: #2f4b93; }
+        .receipt-download-hint {
+            margin: 10px 0 0;
+            text-align: right;
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.45;
+        }
+        .btn-print__icon { margin-right: 6px; }
         .btn-back { background: #e6ebf8; color: #25365f; }
         @media print {
             @page {
@@ -319,7 +428,10 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
             body.donation-receipt-page .foundation-pending-account-banner,
             body.donation-receipt-page .admin-sidebar-nav,
             body.donation-receipt-page .admin-sidebar-show-btn,
-            body.donation-receipt-page .actions {
+            body.donation-receipt-page .admin-sidebar-backdrop,
+            body.donation-receipt-page .actions,
+            body.donation-receipt-page .receipt-download-hint,
+            body.donation-receipt-page .payment-success-banner {
                 display: none !important;
             }
             .receipt-wrap { margin: 0; max-width: none; padding: 0; }
@@ -431,7 +543,22 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
 </head>
 <body class="donation-receipt-page">
 <?php include __DIR__ . '/navbar.php'; ?>
-<div class="receipt-wrap">
+<?php if ($showPaymentSuccess): ?>
+<div class="payment-success-banner" id="paymentSuccessBanner" role="status" aria-live="polite">
+    <div class="payment-success-banner__inner">
+        <div class="payment-success-banner__icon" aria-hidden="true">✓</div>
+        <div>
+            <p class="payment-success-banner__title"><?php echo htmlspecialchars($successTitle, ENT_QUOTES, 'UTF-8'); ?></p>
+            <?php if ($successDetail !== ''): ?>
+            <p class="payment-success-banner__detail"><?php echo htmlspecialchars($successDetail, ENT_QUOTES, 'UTF-8'); ?></p>
+            <?php else: ?>
+            <p class="payment-success-banner__detail">ใบเสร็จอิเล็กทรอนิกส์ของคุณพร้อมแล้ว — สามารถพิมพ์หรือบันทึก PDF ได้ด้านล่าง</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+<div class="receipt-wrap<?php echo $showPaymentSuccess ? ' receipt-wrap--after-success' : ''; ?>">
     <div class="receipt-card">
         <div class="head">
             <div class="brand">
@@ -445,10 +572,10 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
             </div>
         </div>
         <div class="receipt-mode-switch" role="tablist" aria-label="เลือกประเภทออกใบเสร็จ">
-            <a href="?donate_id=<?php echo (int)$donateId; ?>&receipt_mode=individual"
+            <a href="<?php echo htmlspecialchars($receiptBaseQuery($donateId, 'individual'), ENT_QUOTES, 'UTF-8'); ?>"
                class="receipt-mode-switch__btn<?php echo $receiptMode === 'individual' ? ' is-active' : ''; ?>"
                role="tab" aria-selected="<?php echo $receiptMode === 'individual' ? 'true' : 'false'; ?>">บุคคลธรรมดา</a>
-            <a href="?donate_id=<?php echo (int)$donateId; ?>&receipt_mode=juristic"
+            <a href="<?php echo htmlspecialchars($receiptBaseQuery($donateId, 'juristic'), ENT_QUOTES, 'UTF-8'); ?>"
                class="receipt-mode-switch__btn<?php echo $receiptMode === 'juristic' ? ' is-active' : ''; ?>"
                role="tab" aria-selected="<?php echo $receiptMode === 'juristic' ? 'true' : 'false'; ?>">นิติบุคคล</a>
         </div>
@@ -504,11 +631,39 @@ $receiptRef = 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0',
         </div>
 
         <div class="actions">
-            <a href="profile.php" class="btn btn-back">กลับไปโปรไฟล์</a>
-            <button type="button" class="btn btn-print" onclick="window.print()">พิมพ์ / บันทึก PDF</button>
+            <a href="<?php echo htmlspecialchars($returnAfterUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-back">กลับ</a>
+            <a href="profile.php?history=1" class="btn btn-history">ประวัติบริจาค</a>
+            <button type="button" class="btn btn-print" onclick="window.print()" title="เลือก Save as PDF ในหน้าต่างพิมพ์">
+                <span class="btn-print__icon" aria-hidden="true">⬇</span> ดาวน์โหลด PDF
+            </button>
         </div>
+        <p class="receipt-download-hint">กด «ดาวน์โหลด PDF» แล้วเลือก <strong>Save as PDF</strong> / <strong>บันทึกเป็น PDF</strong> ในหน้าต่างพิมพ์</p>
     </div>
 </div>
+<?php if ($showPaymentSuccess): ?>
+<?php require_once __DIR__ . '/includes/vendor_assets.php'; echo drawdream_sweetalert2_js_tag('', false); ?>
+<script>
+(function () {
+    if (typeof Swal === 'undefined') {
+        return;
+    }
+    var title = <?php echo json_encode($successTitle, JSON_UNESCAPED_UNICODE); ?>;
+    var detail = <?php echo json_encode($successDetail, JSON_UNESCAPED_UNICODE); ?>;
+    Swal.fire({
+        icon: 'success',
+        title: title,
+        text: detail !== '' ? detail : 'ใบเสร็จอิเล็กทรอนิกส์พร้อมให้คุณแล้ว',
+        confirmButtonText: 'ดูใบเสร็จ',
+        confirmButtonColor: '#597D57'
+    }).then(function () {
+        var card = document.querySelector('.receipt-card');
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>
 

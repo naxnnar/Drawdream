@@ -11,6 +11,7 @@
  * - OMISE_PUBLIC_KEY, OMISE_SECRET_KEY
  * - OMISE_WEBHOOK_SECRET (สำหรับ payment/omise_webhook.php)
  * - DRAWDREAM_SUBSCRIPTION_CRON_SECRET (ถ้าเรียก cron ผ่าน HTTP)
+ * - DRAWDREAM_OUTCOME_COMPLIANCE_CRON_SECRET (cron เตือน/พักบัญชีมูลนิธิ)
  *
  * @see README.md, .env.example
  */
@@ -81,6 +82,10 @@ if (!defined('OMISE_TEST_AUTO_MARK_PAID')) {
 
 if (!defined('DRAWDREAM_SUBSCRIPTION_CRON_SECRET')) {
     define('DRAWDREAM_SUBSCRIPTION_CRON_SECRET', drawdream_payment_env('DRAWDREAM_SUBSCRIPTION_CRON_SECRET'));
+}
+
+if (!defined('DRAWDREAM_OUTCOME_COMPLIANCE_CRON_SECRET')) {
+    define('DRAWDREAM_OUTCOME_COMPLIANCE_CRON_SECRET', drawdream_payment_env('DRAWDREAM_OUTCOME_COMPLIANCE_CRON_SECRET'));
 }
 
 /**

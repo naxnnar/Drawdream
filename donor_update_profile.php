@@ -1,7 +1,9 @@
-﻿<?php
+<?php
 // donor_update_profile.php — แก้ไขโปรไฟล์ผู้บริจาค + อัปโหลดรูป + ข้อมูลใบเสร็จ
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน donor update profile
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php';
+require_once __DIR__ . '/includes/csrf.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -42,36 +44,10 @@ if (!$profile) {
     die('ไม่พบข้อมูลโปรไฟล์');
 }
 
-function donor_ensure_receipt_schema(mysqli $conn): void
-{
-    $cols = [
-        'receipt_type' => "VARCHAR(20) NOT NULL DEFAULT 'individual'",
-        'receipt_email' => 'VARCHAR(191) NULL DEFAULT NULL',
-        'receipt_mobile' => 'VARCHAR(20) NULL DEFAULT NULL',
-        'receipt_company_name' => 'VARCHAR(255) NULL DEFAULT NULL',
-        'receipt_company_tax_id' => 'VARCHAR(32) NULL DEFAULT NULL',
-        'receipt_company_address' => 'TEXT NULL',
-        'receipt_company_email' => 'VARCHAR(191) NULL DEFAULT NULL',
-        'receipt_company_phone' => 'VARCHAR(20) NULL DEFAULT NULL',
-    ];
-    foreach ($cols as $name => $def) {
-        $chk = @$conn->query("SHOW COLUMNS FROM donor LIKE '" . $conn->real_escape_string($name) . "'");
-        if ($chk && $chk->num_rows === 0) {
-            @$conn->query("ALTER TABLE donor ADD COLUMN `{$name}` {$def}");
-        }
-    }
-}
-
-donor_ensure_receipt_schema($conn);
-
-$receiptSchemaOk = false;
-if ($chk = @$conn->query("SHOW COLUMNS FROM donor LIKE 'receipt_type'")) {
-    $receiptSchemaOk = $chk->num_rows > 0;
-}
-$hasPhoneCol = false;
-if ($pc = @$conn->query("SHOW COLUMNS FROM donor LIKE 'phone'")) {
-    $hasPhoneCol = $pc->num_rows > 0;
-}
+require_once __DIR__ . '/includes/drawdream_donor_receipt_schema.php';
+$donorColFlags = drawdream_donor_receipt_column_flags($conn);
+$receiptSchemaOk = (bool)($donorColFlags['receipt_type'] ?? false);
+$hasPhoneCol = (bool)($donorColFlags['phone'] ?? false);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     drawdream_csrf_require_valid('donor_update_profile.php');

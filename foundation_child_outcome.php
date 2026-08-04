@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // foundation_child_outcome.php — บันทึกผลลัพธ์/ผลกระทบเด็ก
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน child outcome
 /**
@@ -213,6 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$success) {
             $error = 'บันทึกไม่สำเร็จ: กรุณาลองลบอีโมจิหรืออักขระพิเศษ แล้วบันทึกอีกครั้ง';
         }
         if ($ok) {
+            drawdream_foundation_clear_children_outcome_due_cache($foundationId);
             foreach ($remove as $b) {
                 $p = drawdream_outcome_image_existing_path($b, $outcomeDir, $legacyOutcomeDir);
                 if (is_file($p)) {
@@ -279,12 +280,13 @@ if ($letterPhotoSrc === '' && !empty($child['photo_child'])) {
     <title>อัปเดตจดหมายเด็ก — <?php echo $childName; ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css?v=46">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=1">
 </head>
-<body class="foundation-child-letter-page">
+<body class="foundation-child-letter-page foundation-manage-page">
 <?php include 'navbar.php'; ?>
 
 <div class="child-letter-wrap">
-    <a href="children_donate.php?id=<?php echo (int)$childId; ?>" class="child-letter-back" aria-label="ย้อนกลับ" title="ย้อนกลับ" onclick="if (window.history.length > 1) { event.preventDefault(); history.back(); }">←</a>
+    <a href="children_donate.php?id=<?php echo (int)$childId; ?>" class="child-letter-back" aria-label="ย้อนกลับ" title="ย้อนกลับ" data-foundation-back>←</a>
     <h1 class="child-letter-page-title">✉️ อัปเดตจดหมายเด็ก</h1>
 
     <?php if ($success): ?>

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 // foundation_donate_info.php — หน้าข้อมูลบัญชี/ติดต่อมูลนิธิก่อนเข้าหน้าบริจาค
 
+define('DRAWDREAM_DB_LIGHT', true);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';
@@ -46,23 +47,28 @@ $accountNumberDisplay = $bankAccountNumber !== '' ? $bankAccountNumber : '-';
 $accountNameDisplay = $bankAccountName !== '' ? $bankAccountName : ($foundationName !== '' ? $foundationName : '-');
 
 $needOpen = drawdream_needlist_sql_open_for_donation();
-$goalStmt = $conn->prepare("SELECT COALESCE(SUM(total_price), 0) AS goal FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
-$goalStmt->bind_param('i', $fid);
-$goalStmt->execute();
-$goal = (float)($goalStmt->get_result()->fetch_assoc()['goal'] ?? 0);
-$goalStmt->close();
-
-$currentStmt = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS current FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
-$currentStmt->bind_param('i', $fid);
-$currentStmt->execute();
-$current = (float)($currentStmt->get_result()->fetch_assoc()['current'] ?? 0);
-$currentStmt->close();
-
-$itemsStmt = $conn->prepare("SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
-$itemsStmt->bind_param('i', $fid);
-$itemsStmt->execute();
-$itemCount = (int)($itemsStmt->get_result()->fetch_assoc()['cnt'] ?? 0);
-$itemsStmt->close();
+$statsStmt = $conn->prepare(
+    "SELECT
+        COALESCE(SUM(total_price), 0) AS goal,
+        COALESCE(SUM(current_donate), 0) AS current,
+        COUNT(*) AS cnt
+     FROM foundation_needlist
+     WHERE foundation_id = ? AND $needOpen"
+);
+$goal = 0.0;
+$current = 0.0;
+$itemCount = 0;
+if ($statsStmt) {
+    $statsStmt->bind_param('i', $fid);
+    $statsStmt->execute();
+    $statsRow = $statsStmt->get_result()->fetch_assoc();
+    $statsStmt->close();
+    if ($statsRow) {
+        $goal = (float)($statsRow['goal'] ?? 0);
+        $current = (float)($statsRow['current'] ?? 0);
+        $itemCount = (int)($statsRow['cnt'] ?? 0);
+    }
+}
 
 $remainingNeed = ($goal > 0) ? max(0.0, $goal - $current) : 0.0;
 $donateUrl = 'payment/foundation_donate.php?fid=' . $fid;
@@ -90,7 +96,7 @@ if ($itemCount <= 0) {
 <?php include __DIR__ . '/navbar.php'; ?>
 
 <main class="fdi-wrap">
-    <a href="foundation.php" class="fdi-back">← กลับไปหน้าเลือกมูลนิธิ</a>
+    <a href="foundation.php" class="fdi-back" data-foundation-back>← กลับ</a>
 
     <section class="fdi-card">
         <div class="fdi-top">

@@ -23,9 +23,6 @@ require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/e_receipt.php';
 require_once dirname(__DIR__) . '/includes/child_subscription_history.php';
 
-drawdream_child_omise_subscription_ensure_schema($conn);
-drawdream_child_sponsorship_ensure_columns($conn);
-
 $tz = new DateTimeZone('Asia/Bangkok');
 $nowSql = drawdream_subscription_now_bangkok_sql();
 $st = $conn->prepare(

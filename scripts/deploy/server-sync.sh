@@ -2,16 +2,16 @@
 set -euo pipefail
 
 APP=/var/www/drawdream
-ZIP=/tmp/drawdream-deploy.zip
+ARCHIVE=/tmp/drawdream-deploy.tar.gz
 STAGE="/tmp/drawdream-extract-$$"
 
-if [ ! -f "$ZIP" ]; then
-  echo "Missing $ZIP — upload zip first."
+if [ ! -f "$ARCHIVE" ]; then
+  echo "Missing $ARCHIVE — upload archive first."
   exit 1
 fi
 
 mkdir -p "$STAGE"
-unzip -oq "$ZIP" -d "$STAGE"
+tar -xzf "$ARCHIVE" -C "$STAGE"
 
 if [ -f "$APP/.env" ]; then
   cp "$APP/.env" /root/drawdream.env.before-sync
@@ -20,7 +20,7 @@ if [ -d "$APP/uploads" ]; then
   cp -a "$APP/uploads" "/tmp/drawdream-uploads-backup-$$"
 fi
 
-rsync -a --exclude='.env' --exclude='uploads' "$STAGE"/ "$APP"/
+rsync -a --exclude='.env' --exclude='uploads' --exclude='config/google_oauth.local.php' "$STAGE"/ "$APP"/
 
 if [ -f /root/drawdream.env.before-sync ]; then
   cp /root/drawdream.env.before-sync "$APP/.env"
@@ -37,7 +37,7 @@ mkdir -p "$APP/uploads" "$APP/data"
 chown -R www-data:www-data "$APP/uploads" "$APP/data" 2>/dev/null || true
 chmod -R 775 "$APP/uploads" "$APP/data" 2>/dev/null || true
 rm -rf "$STAGE"
-rm -f "$ZIP"
+rm -f "$ARCHIVE" /tmp/drawdream-deploy.zip
 
 systemctl reload php8.1-fpm 2>/dev/null || systemctl reload php8.2-fpm 2>/dev/null || true
 systemctl reload nginx

@@ -12,16 +12,22 @@
 .sdg-title {
     display: flex;
     align-items: center;
-    height: 56px;
-    font-size: 1.08em;
+    min-height: 44px;
+    height: auto;
+    font-size: 1.05em;
+    font-weight: 700;
+    color: #222;
+    font-family: 'Prompt', sans-serif;
+    line-height: 1.35;
+    word-break: break-word;
 }
 img.sdg-img {
-    width: 56px !important;
-    height: 56px !important;
-    max-width: 56px !important;
-    max-height: 56px !important;
+    width: 44px !important;
+    height: 44px !important;
+    max-width: 44px !important;
+    max-height: 44px !important;
     object-fit: contain !important;
-    border-radius: 8px;
+    border-radius: 12px;
     background: #fff;
     box-shadow: 0 1px 4px #0001;
     padding: 1px;
@@ -187,6 +193,114 @@ body {
     box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.1);
 }
 
+.payment-card--project {
+    align-items: stretch;
+}
+
+.payment-card--project .project-info {
+    flex: 1 1 54%;
+    min-height: 100%;
+}
+
+.payment-card--project .project-info-inner {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    padding-bottom: 24px;
+}
+
+.payment-card--project .payment-box {
+    flex: 1 1 46%;
+    justify-content: flex-start;
+    align-self: stretch;
+}
+
+.project-trust-panel {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin-top: auto;
+    padding: 8px 0 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.project-trust-panel__title {
+    margin: 0 0 16px;
+    font-size: 1.08rem;
+    font-weight: 800;
+    color: #3f4f9a;
+    font-family: 'Prompt', sans-serif;
+    letter-spacing: 0.01em;
+}
+
+.project-trust-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.project-trust-list__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+}
+
+.project-trust-list__icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #7b8fbf 0%, #4f6fb0 100%);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.35rem;
+    box-shadow: 0 6px 14px rgba(47, 80, 153, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.project-trust-list__item:nth-child(1) .project-trust-list__icon {
+    background: linear-gradient(135deg, #43a67d 0%, #2f8b66 100%);
+    box-shadow: 0 6px 14px rgba(47, 139, 102, 0.24);
+}
+
+.project-trust-list__item:nth-child(2) .project-trust-list__icon {
+    background: linear-gradient(135deg, #f2a53b 0%, #ea7f2d 100%);
+    box-shadow: 0 6px 14px rgba(234, 127, 45, 0.25);
+}
+
+.project-trust-list__item:nth-child(3) .project-trust-list__icon {
+    background: linear-gradient(135deg, #5f8ef7 0%, #3f6fd8 100%);
+    box-shadow: 0 6px 14px rgba(63, 111, 216, 0.24);
+}
+
+.project-trust-list__icon i {
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.project-trust-list__text {
+    font-size: 1.05rem;
+    line-height: 1.55;
+    color: #334155;
+    font-family: 'Sarabun', sans-serif;
+    padding-top: 6px;
+}
+
+.project-trust-list__text strong {
+    color: #1e293b;
+    font-weight: 700;
+}
+
 .project-donate-progress-fill {
     height: 100%;
     border-radius: 999px;
@@ -296,11 +410,73 @@ a.contact-card-link:focus-visible .contact-card-name {
     border: none;
     border-radius: 0;
     padding: 0;
-    margin-bottom: 14px;
-    color: #222;
-    font-size: 1em;
+    margin-bottom: 1.5rem;
+    color: #1e293b;
+    font-size: 1rem;
     box-shadow: none;
-    line-height: 1.5;
+    line-height: 1.65;
+}
+
+.project-detail-lead {
+    font-size: 1.05rem;
+    line-height: 1.75;
+    color: #334155;
+    margin: 0 0 1.25rem;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid rgba(89, 125, 87, 0.18);
+}
+
+.project-detail-facts {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.project-detail-fact {
+    display: grid;
+    grid-template-columns: minmax(7.25rem, 9.25rem) 1fr;
+    gap: 6px 1rem;
+    align-items: start;
+    margin: 0;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid #f0ebe3;
+}
+
+.project-detail-fact:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.project-detail-fact dt {
+    margin: 0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #597d57;
+    line-height: 1.45;
+}
+
+.project-detail-fact dd {
+    margin: 0;
+    font-size: 0.98rem;
+    font-weight: 400;
+    color: #1e293b;
+    line-height: 1.65;
+    word-break: break-word;
+}
+
+.project-detail-fact--highlight {
+    background: #f8faf6;
+    margin: 0.35rem -0.65rem 0;
+    padding: 0.85rem 0.65rem;
+    border-radius: 10px;
+    border-bottom: none;
+}
+
+.project-detail-fact--highlight dt {
+    color: #3f4f9a;
 }
 /* ปุ่มย้อนกลับบนภาพ */
 .project-info a[href*="history.back"] {
@@ -531,6 +707,41 @@ a.contact-card-link:focus-visible .contact-card-name {
     margin-top: 10px;
 }
 
+/* ปุ่มย้อนกลับวงกลมมุมซ้ายบนบนภาพ (needlist / โครงการ / เด็ก) */
+.donor-flow-back-wrap,
+.fd-left-cover-wrap {
+    position: relative;
+}
+
+.donor-flow-back-circle {
+    position: absolute;
+    top: 18px;
+    left: 18px;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+    background: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+    text-decoration: none;
+    border: none;
+    box-sizing: border-box;
+    transition: box-shadow 0.15s;
+}
+
+.donor-flow-back-circle:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+}
+
+.donor-flow-back-circle span {
+    font-size: 1.5em;
+    color: #3C5099;
+    line-height: 1;
+}
+
 .btn-cancel,
 .btn-check {
     display: block;
@@ -679,7 +890,7 @@ a.contact-card-link:focus-visible .contact-card-name {
 }
 
 /* ======== Responsive — หน้าชำระเงิน / บริจาคโครงการ (payment_project.php) ======== */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .payment-container {
         margin: 12px auto 0;
         padding: 0 14px;
@@ -710,6 +921,22 @@ a.contact-card-link:focus-visible .contact-card-name {
     .project-info-inner {
         padding: 18px 16px 16px;
         gap: 10px;
+    }
+
+    .payment-card--project .project-trust-panel {
+        flex: none;
+        margin-top: 12px;
+        padding: 0;
+    }
+
+    .project-trust-list__text {
+        font-size: 1rem;
+    }
+
+    .project-trust-list__icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.25rem;
     }
 
     .project-payment-heading-row {
@@ -743,6 +970,33 @@ a.contact-card-link:focus-visible .contact-card-name {
         margin-bottom: 18px !important;
         font-size: 1rem !important;
         line-height: 1.6 !important;
+    }
+
+    .project-detail-lead {
+        font-size: 1rem !important;
+        line-height: 1.65 !important;
+        margin-bottom: 1rem !important;
+        padding-bottom: 1rem !important;
+    }
+
+    .project-detail-fact {
+        grid-template-columns: 1fr;
+        gap: 4px;
+        padding: 0.75rem 0;
+    }
+
+    .project-detail-fact dt {
+        font-size: 0.8rem;
+    }
+
+    .project-detail-fact dd {
+        font-size: 0.96rem;
+        line-height: 1.6;
+    }
+
+    .project-detail-fact--highlight {
+        margin-left: 0;
+        margin-right: 0;
     }
 
     .project-detail-summary .detail-row {

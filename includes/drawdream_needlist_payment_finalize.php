@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/drawdream_project_payment_finalize.php';
 require_once __DIR__ . '/drawdream_needlist_schema.php';
+require_once __DIR__ . '/drawdream_needlist_catalog.php';
+require_once __DIR__ . '/drawdream_needlist_catalog_funded.php';
 require_once __DIR__ . '/needlist_donate_window.php';
 require_once __DIR__ . '/donate_category_resolve.php';
 require_once __DIR__ . '/donate_type.php';
 require_once __DIR__ . '/payment_transaction_schema.php';
 require_once __DIR__ . '/notification_audit.php';
 
+const DRAWDREAM_NEED_FINALIZE_ITEM_EXCEED = 'item_exceed';
+
 function drawdream_needlist_finalize_is_goal_race(string $code): bool
 {
-    return drawdream_project_finalize_is_goal_race($code);
+    return drawdream_project_finalize_is_goal_race($code)
+        || $code === DRAWDREAM_NEED_FINALIZE_ITEM_EXCEED;
 }
 
 /** @return array{goal: float, current: float, remaining: float} */
@@ -65,7 +70,8 @@ function drawdream_insert_pending_needlist_donation(
     int $foundationId,
     int $donorUserId,
     float $amountBaht,
-    string $omiseChargeId
+    string $omiseChargeId,
+    array $picks = []
 ): int {
     drawdream_payment_transaction_ensure_schema($conn);
     $categoryId = drawdream_get_or_create_needitem_donate_category_id($conn);
@@ -74,16 +80,34 @@ function drawdream_insert_pending_needlist_donation(
     }
     $pending = 'pending';
     $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
-    $ins = $conn->prepare(
-        'INSERT INTO donation (
-            category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-            omise_charge_id, donate_type
-        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
-    );
-    if (!$ins) {
-        return 0;
+    $picksJson = '';
+    if ($picks !== []) {
+        $picksJson = drawdream_need_encode_picks_json($picks);
     }
-    $ins->bind_param('iiidsss', $categoryId, $foundationId, $donorUserId, $amountBaht, $pending, $omiseChargeId, $dtNeed);
+    $hasPicksCol = drawdream_donation_has_need_item_picks_column($conn);
+    if ($hasPicksCol && $picksJson !== '' && $picksJson !== '{}') {
+        $ins = $conn->prepare(
+            'INSERT INTO donation (
+                category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                omise_charge_id, donate_type, need_item_picks_json
+            ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)'
+        );
+        if (!$ins) {
+            return 0;
+        }
+        $ins->bind_param('iiidssss', $categoryId, $foundationId, $donorUserId, $amountBaht, $pending, $omiseChargeId, $dtNeed, $picksJson);
+    } else {
+        $ins = $conn->prepare(
+            'INSERT INTO donation (
+                category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                omise_charge_id, donate_type
+            ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
+        );
+        if (!$ins) {
+            return 0;
+        }
+        $ins->bind_param('iiidsss', $categoryId, $foundationId, $donorUserId, $amountBaht, $pending, $omiseChargeId, $dtNeed);
+    }
     if (!$ins->execute()) {
         return 0;
     }
@@ -133,17 +157,43 @@ function drawdream_needlist_bump_open_items(
     $old_c = $current;
     $old_g = $goal;
 
+    $itemUpdates = [];
     while ($item = $item_rows->fetch_assoc()) {
         $itemId = (int)($item['item_id'] ?? 0);
+        if ($itemId <= 0) {
+            continue;
+        }
         $ratio = (float)$item['total_price'] / $goal;
-        $item_amount = round($amountBaht * $ratio, 2);
-        $upd = $conn->prepare('UPDATE foundation_needlist SET current_donate = current_donate + ? WHERE item_id = ?');
-        if (!$upd) {
+        $itemUpdates[$itemId] = round($amountBaht * $ratio, 2);
+    }
+    if ($itemUpdates !== []) {
+        $caseSql = '';
+        $bindTypes = '';
+        $bindParams = [];
+        foreach ($itemUpdates as $itemId => $itemAmount) {
+            $caseSql .= ' WHEN ? THEN ?';
+            $bindTypes .= 'id';
+            $bindParams[] = $itemId;
+            $bindParams[] = $itemAmount;
+        }
+        $itemIds = array_keys($itemUpdates);
+        $inPh = implode(',', array_fill(0, count($itemIds), '?'));
+        $bindTypes .= 'i' . str_repeat('i', count($itemIds));
+        $bindParams[] = $foundationId;
+        foreach ($itemIds as $id) {
+            $bindParams[] = $id;
+        }
+        $batchUpd = $conn->prepare(
+            'UPDATE foundation_needlist
+             SET current_donate = current_donate + CASE item_id' . $caseSql . ' ELSE 0 END
+             WHERE foundation_id = ? AND item_id IN (' . $inPh . ')'
+        );
+        if (!$batchUpd) {
             return 'update_failed';
         }
-        $upd->bind_param('di', $item_amount, $itemId);
-        $upd->execute();
-        if ($itemId > 0) {
+        $batchUpd->bind_param($bindTypes, ...$bindParams);
+        $batchUpd->execute();
+        foreach ($itemIds as $itemId) {
             drawdream_needlist_sync_service_charge_for_item($conn, $itemId);
         }
     }
@@ -168,7 +218,10 @@ function drawdream_needlist_bump_open_items(
                     $msg = 'รายการสิ่งของของ ' . $dispName . ' ได้รับเงินบริจาครวม ' . $totalFmt . ' บาท '
                         . 'กรุณาชำระค่าบริการระบบตามรายการที่ครบเป้าหมาย '
                         . 'เพื่อให้แอดมินดำเนินการจัดส่งสิ่งของ';
-                    $link = 'foundation.php#my-needlist-section';
+                    $itemIdForLink = drawdream_needlist_first_unpaid_service_charge_item_id($conn, $foundationId);
+                    $link = $itemIdForLink > 0
+                        ? drawdream_needlist_service_charge_view_link($itemIdForLink)
+                        : 'foundation.php#my-needlist-section';
                     $sigStmt = $conn->prepare("SELECT GROUP_CONCAT(item_id ORDER BY item_id) AS sig FROM foundation_needlist WHERE foundation_id = ? AND ($needOpen)");
                     $sig = '';
                     if ($sigStmt) {
@@ -188,59 +241,116 @@ function drawdream_needlist_bump_open_items(
 }
 
 /**
- * @return string DRAWDREAM_PROJECT_FINALIZE_* หรือ 'error'
+ * ปิดบริจาค needlist สำเร็จ: lock → ตรวจ picks → บันทึก completed + picks → bump เงิน
+ *
+ * @param array<string,int> $picks
+ * @return string DRAWDREAM_PROJECT_FINALIZE_* | DRAWDREAM_NEED_FINALIZE_ITEM_EXCEED | 'error'
  */
-function drawdream_finalize_needlist_donation(
+function drawdream_needlist_complete_successful_payment(
     mysqli $conn,
     int $foundationId,
-    int $donateIdParam,
+    int $donorUserId,
     string $chargeId,
     float $amountBaht,
-    int $donorUserId
+    array $picks,
+    int $existingDonateId = 0
 ): string {
     drawdream_payment_transaction_ensure_schema($conn);
 
-    $pend = 'pending';
-    $pt = $conn->prepare(
-        'SELECT donate_id, category_id, target_id, donor_id
-         FROM donation WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1'
-    );
-    $pt->bind_param('ss', $chargeId, $pend);
-    $pt->execute();
-    $ptRow = $pt->get_result()->fetch_assoc();
-    if (!$ptRow) {
+    if ($foundationId <= 0 || $donorUserId <= 0 || $chargeId === '' || $amountBaht < 20 || $picks === []) {
         return 'error';
     }
 
-    $ptDonateId = (int)($ptRow['donate_id'] ?? 0);
-    if ($donateIdParam > 0 && $ptDonateId > 0 && $donateIdParam !== $ptDonateId) {
-        return 'error';
-    }
-
-    $pDonor = (int)($ptRow['donor_id'] ?? 0);
-    $pTarget = (int)($ptRow['target_id'] ?? 0);
-    if ($pDonor !== $donorUserId || $pTarget !== $foundationId || $ptDonateId <= 0) {
-        return 'error';
-    }
-
+    $needOpen = drawdream_needlist_sql_open_for_donation();
     if (!$conn->begin_transaction()) {
         return 'error';
     }
+
     try {
-        $completed = 'completed';
-        $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
-        $upt = $conn->prepare(
-            'UPDATE donation
-             SET amount = ?, payment_status = ?, transfer_datetime = NOW(), donate_type = ?
-             WHERE donate_id = ? AND payment_status = ?'
-        );
-        $upt->bind_param('dssis', $amountBaht, $completed, $dtNeed, $ptDonateId, $pend);
-        $upt->execute();
-        if ($upt->affected_rows < 1) {
-            throw new RuntimeException('update donation');
+        $lock = $conn->prepare("SELECT item_id FROM foundation_needlist WHERE foundation_id = ? AND $needOpen FOR UPDATE");
+        if ($lock) {
+            $lock->bind_param('i', $foundationId);
+            $lock->execute();
+            $lock->get_result()->fetch_all(MYSQLI_ASSOC);
         }
 
-        $bump = drawdream_needlist_bump_open_items($conn, $foundationId, $amountBaht, $ptDonateId, $chargeId);
+        $itemsSt = $conn->prepare("SELECT * FROM foundation_needlist WHERE foundation_id = ? AND $needOpen");
+        if (!$itemsSt) {
+            throw new RuntimeException('load items');
+        }
+        $itemsSt->bind_param('i', $foundationId);
+        $itemsSt->execute();
+        $itemRows = $itemsSt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $skeleton = drawdream_need_catalog_skeleton_from_needlist_rows($itemRows);
+        $totals = drawdream_needlist_open_goal_totals($conn, $foundationId);
+        $catalog = drawdream_need_catalog_with_remaining(
+            $conn,
+            $foundationId,
+            $skeleton,
+            $totals['remaining']
+        );
+
+        $pickErr = drawdream_need_validate_picks_against_catalog($catalog, $picks);
+        if ($pickErr !== null) {
+            throw new RuntimeException('needlist item:' . DRAWDREAM_NEED_FINALIZE_ITEM_EXCEED);
+        }
+
+        $pickTotal = drawdream_need_pick_total_baht_from_catalog($catalog, $picks);
+        if (abs($pickTotal - $amountBaht) > 0.06) {
+            throw new RuntimeException('amount mismatch');
+        }
+
+        $picksJson = drawdream_need_encode_picks_json($picks);
+        $categoryId = drawdream_get_or_create_needitem_donate_category_id($conn);
+        if ($categoryId <= 0) {
+            throw new RuntimeException('category');
+        }
+
+        $completed = 'completed';
+        $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
+        $donateId = $existingDonateId;
+
+        if ($donateId > 0) {
+            $pend = 'pending';
+            $upt = $conn->prepare(
+                'UPDATE donation
+                 SET amount = ?, payment_status = ?, transfer_datetime = NOW(), donate_type = ?, need_item_picks_json = ?
+                 WHERE donate_id = ? AND donor_id = ? AND payment_status = ? AND omise_charge_id = ?'
+            );
+            if (!$upt) {
+                throw new RuntimeException('update donation');
+            }
+            $upt->bind_param('dsssiiss', $amountBaht, $completed, $dtNeed, $picksJson, $donateId, $donorUserId, $pend, $chargeId);
+            $upt->execute();
+            if ($upt->affected_rows < 1) {
+                throw new RuntimeException('update donation');
+            }
+        } else {
+            if (!drawdream_donation_has_need_item_picks_column($conn)) {
+                throw new RuntimeException('schema');
+            }
+            $ins = $conn->prepare(
+                'INSERT INTO donation (
+                    category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                    omise_charge_id, donate_type, need_item_picks_json
+                ) VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)'
+            );
+            if (!$ins) {
+                throw new RuntimeException('insert donation');
+            }
+            $ins->bind_param('iiidssss', $categoryId, $foundationId, $donorUserId, $amountBaht, $completed, $chargeId, $dtNeed, $picksJson);
+            $ins->execute();
+            if ($ins->affected_rows < 1) {
+                throw new RuntimeException('insert donation');
+            }
+            $donateId = (int)$conn->insert_id;
+        }
+
+        if ($donateId <= 0) {
+            throw new RuntimeException('donate id');
+        }
+
+        $bump = drawdream_needlist_bump_open_items($conn, $foundationId, $amountBaht, $donateId, $chargeId);
         if ($bump !== DRAWDREAM_PROJECT_FINALIZE_OK) {
             throw new RuntimeException('needlist bump:' . $bump);
         }
@@ -254,9 +364,106 @@ function drawdream_finalize_needlist_donation(
         if (str_starts_with($msg, 'needlist bump:')) {
             return substr($msg, strlen('needlist bump:'));
         }
+        if (str_starts_with($msg, 'needlist item:')) {
+            return substr($msg, strlen('needlist item:'));
+        }
 
         return 'error';
     }
+}
+
+/**
+ * @param array<string,int> $picks
+ * @return string DRAWDREAM_PROJECT_FINALIZE_* หรือ 'error'
+ */
+function drawdream_finalize_needlist_donation(
+    mysqli $conn,
+    int $foundationId,
+    int $donateIdParam,
+    string $chargeId,
+    float $amountBaht,
+    int $donorUserId,
+    array $picks = []
+): string {
+    if ($picks === []) {
+        return 'error';
+    }
+
+    $pend = 'pending';
+    $pt = $conn->prepare(
+        'SELECT donate_id, donor_id, target_id
+         FROM donation WHERE omise_charge_id = ? AND payment_status = ? LIMIT 1'
+    );
+    $pt->bind_param('ss', $chargeId, $pend);
+    $pt->execute();
+    $ptRow = $pt->get_result()->fetch_assoc();
+    if (!$ptRow) {
+        return 'error';
+    }
+
+    $ptDonateId = (int)($ptRow['donate_id'] ?? 0);
+    if ($donateIdParam > 0 && $ptDonateId > 0 && $donateIdParam !== $ptDonateId) {
+        return 'error';
+    }
+    if ($ptDonateId <= 0) {
+        return 'error';
+    }
+    if ((int)($ptRow['donor_id'] ?? 0) !== $donorUserId || (int)($ptRow['target_id'] ?? 0) !== $foundationId) {
+        return 'error';
+    }
+
+    return drawdream_needlist_complete_successful_payment(
+        $conn,
+        $foundationId,
+        $donorUserId,
+        $chargeId,
+        $amountBaht,
+        $picks,
+        $ptDonateId
+    );
+}
+
+/**
+ * @return array<string,int>
+ */
+function drawdream_pending_needlist_picks_from_session(): array
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return [];
+    }
+    $picks = $_SESSION['pending_need_item_picks'] ?? null;
+
+    return is_array($picks) ? $picks : [];
+}
+
+/**
+ * อ่าน picks จาก session หรือ need_item_picks_json ใน donation (กัน session หลุดตอน poll QR)
+ *
+ * @return array<string,int>
+ */
+function drawdream_pending_needlist_picks_resolve(mysqli $conn, string $chargeId): array
+{
+    $fromSession = drawdream_pending_needlist_picks_from_session();
+    if ($fromSession !== []) {
+        return $fromSession;
+    }
+    $chargeId = trim($chargeId);
+    if ($chargeId === '') {
+        return [];
+    }
+    drawdream_payment_transaction_ensure_schema($conn);
+    if (!drawdream_donation_has_need_item_picks_column($conn)) {
+        return [];
+    }
+    $st = $conn->prepare('SELECT need_item_picks_json FROM donation WHERE omise_charge_id = ? LIMIT 1');
+    if (!$st) {
+        return [];
+    }
+    $st->bind_param('s', $chargeId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+
+    return drawdream_need_decode_picks_json((string)($row['need_item_picks_json'] ?? ''));
 }
 
 /**

@@ -1,6 +1,6 @@
 <?php
 // includes/qr_payment_abandon.php — ล้าง session QR payment ค้าง
-// ยกเลิก QR: (1) Omise POST /charges/{id}/expire ถ้ายัง pending (2) DELETE donation pending (3) ล้าง session
+// ยกเลิก QR: (1) Omise expire ถ้าจำเป็น (2) ลบแถว pending — บันทึก donation เฉพาะตอนชำระสำเร็จ (completed)
 // ไม่ใช่ void/refund — charge ที่ชำระสำเร็จแล้วต้องใช้ flow คืนเงินแยก
 
 declare(strict_types=1);
@@ -8,7 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/payment_transaction_schema.php';
 
 /**
- * เรียก Omise expire สำหรับ charge ที่ยกเลิก (best-effort — ลบแถว DB ต่อแม้ expire ล้มเหลว)
+ * เรียก Omise expire สำหรับ charge ที่ยกเลิก (best-effort — อัปเดตสถานะต่อแม้ expire ล้มเหลว)
  */
 function drawdream_qr_abandon_expire_omise_charge(string $chargeId): void
 {
@@ -50,6 +50,7 @@ function drawdream_clear_pending_payment_session(): void
         'pending_child_name',
         'pending_foundation',
         'pending_foundation_id',
+        'pending_need_item_picks',
     ];
     foreach ($sessionKeys as $k) {
         unset($_SESSION[$k]);
@@ -128,7 +129,9 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
         return 0;
     }
     drawdream_qr_abandon_expire_omise_charge($chargeId);
-    $del = $conn->prepare('DELETE FROM donation WHERE donate_id = ? AND payment_status = ?');
+    $del = $conn->prepare(
+        'DELETE FROM donation WHERE donate_id = ? AND payment_status = ?'
+    );
     $del->bind_param('is', $donateId, $pend);
     $del->execute();
     return $del->affected_rows > 0 ? 1 : 0;
@@ -136,6 +139,8 @@ function drawdream_abandon_pending_donation_by_charge(mysqli $conn, int $donorUs
 
 /**
  * ก่อนสร้าง QR ชุดใหม่: ปิดรายการ pending ทั้งหมดของผู้บริจาคคนนี้
+ *
+ * ลบรายการ pending ทั้งหมดของผู้บริจาค — ไม่สร้างแถว cancelled
  */
 function drawdream_abandon_all_pending_qr_for_donor(mysqli $conn, int $donorUserId): int
 {
@@ -144,28 +149,13 @@ function drawdream_abandon_all_pending_qr_for_donor(mysqli $conn, int $donorUser
     }
     drawdream_payment_transaction_ensure_schema($conn);
 
-    $list = $conn->prepare(
-        'SELECT omise_charge_id FROM donation
-         WHERE payment_status = ? AND donor_id = ?
-           AND omise_charge_id IS NOT NULL AND omise_charge_id <> \'\''
-    );
-    $pend = 'pending';
-    $list->bind_param('si', $pend, $donorUserId);
-    $list->execute();
-    $charges = $list->get_result();
-    if ($charges) {
-        while ($cr = $charges->fetch_assoc()) {
-            drawdream_qr_abandon_expire_omise_charge((string)($cr['omise_charge_id'] ?? ''));
-        }
-    }
-
     $st1 = $conn->prepare(
-        'DELETE FROM donation
-         WHERE payment_status = ? AND donor_id = ?'
+        'DELETE FROM donation WHERE payment_status = ? AND donor_id = ?'
     );
     $pend = 'pending';
     $st1->bind_param('si', $pend, $donorUserId);
     $st1->execute();
+
     return (int)$st1->affected_rows;
 }
 

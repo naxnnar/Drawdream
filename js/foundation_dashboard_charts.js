@@ -2,19 +2,87 @@
  * แดชบอร์ดมูลนิธิ — กราฟ + insight + กรองวันที่ (ต้องมี window.FD_DONATIONS, FD_WEEK_META จาก PHP)
  */
 (function () {
-    const FD_DONATIONS = window.FD_DONATIONS || [];
-    const FD_WEEK_META = window.FD_WEEK_META || { labels: [], keys: [] };
+    let fdDonations = window.FD_DONATIONS || [];
+    let fdWeekMeta = window.FD_WEEK_META || { labels: [], keys: [] };
     const FD_STATIC = window.FD_STATIC || {};
+    const getDonations = () => fdDonations;
     const CAT_LABELS = { child: 'เด็ก', project: 'โครงการ', need: 'สิ่งของ' };
     const CAT_COLORS = { child: '#4A5BA8', project: '#22c55e', need: '#f59e0b' };
     const CAT_ORDER = ['child', 'project', 'need'];
+    const FILTER_CAT_BUTTON_LABELS = {
+        all: 'ทั้งหมด',
+        child: 'เด็ก',
+        project: 'โครงการ',
+        need: 'รายการสิ่งของ',
+    };
 
     const tabButtons = Array.from(document.querySelectorAll('[data-view-tab]'));
     const chartsView = document.getElementById('foundationDashboardChartsView');
     const listView = document.getElementById('foundationDashboardListView');
     const buttons = Array.from(document.querySelectorAll('[data-filter-cat]'));
     const featurePanels = Array.from(document.querySelectorAll('[data-feature-panel]'));
-    const rows = Array.from(document.querySelectorAll('tr[data-cat]'));
+    const rows = [];
+    let listRowsRendered = false;
+
+    function escapeHtml(text) {
+        return String(text ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatMoneyCell(n) {
+        return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function renderTableRows(donations) {
+        const tbody = document.getElementById('fdDonationTableBody');
+        if (!tbody) {
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        (donations || []).forEach((d) => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-cat', d.cat || '');
+            tr.setAttribute('data-donate-date', d.date || '');
+            tr.setAttribute('data-donate-month', d.month || '');
+            tr.setAttribute('data-donate-year', d.year || '');
+            tr.setAttribute('data-donate-week', d.week || '');
+            tr.setAttribute('data-amount', String(d.amount ?? 0));
+            tr.setAttribute('data-search', d.search || '');
+            const tax = (d.tax_display || '').trim();
+            tr.innerHTML =
+                '<td>' + escapeHtml(d.dt_label || '-') + '</td>' +
+                '<td class="fd-receipt-ref">' + escapeHtml(d.receipt_ref || '') + '</td>' +
+                '<td>' + escapeHtml(d.donor_name || '') + '</td>' +
+                '<td class="' + (tax === '' ? 'b--muted' : '') + '">' + escapeHtml(tax !== '' ? tax : 'ยังไม่ระบุ') + '</td>' +
+                '<td>' + escapeHtml(d.channel || '') + '</td>' +
+                '<td>' + escapeHtml(d.target_cell || '') + '</td>' +
+                '<td>' + escapeHtml(d.plan_label || '') + '</td>' +
+                '<td class="admin-dir-num">' + formatMoneyCell(d.amount) + '</td>';
+            frag.appendChild(tr);
+        });
+        tbody.replaceChildren();
+        tbody.appendChild(frag);
+        rows.splice(0, rows.length, ...Array.from(document.querySelectorAll('#fdDonationTableBody tr[data-cat]')));
+        listRowsRendered = true;
+    }
+
+    function ensureListRowsRendered() {
+        if (listRowsRendered) {
+            return;
+        }
+        if (chartsLoaded && FD_STATIC.table_pagination) {
+            return;
+        }
+        const tbody = document.getElementById('fdDonationTableBody');
+        if (!tbody || getDonations().length === 0) {
+            listRowsRendered = true;
+            return;
+        }
+        renderTableRows(getDonations());
+    }
     const noRows = document.getElementById('foundationDashboardNoRows');
     const dateModeEl = document.getElementById('fdDateMode');
     const dateRangeWrapEl = document.getElementById('fdDateRangeWrap');
@@ -26,6 +94,18 @@
     const dateSummaryEl = document.getElementById('fdDateSummary');
     const listSearchEl = document.getElementById('fdListSearch');
     const listSummaryEl = document.getElementById('fdListSummary');
+    const tablePaginationEl = document.getElementById('fdTablePagination');
+    const tablePrevEl = document.getElementById('fdTablePrev');
+    const tableNextEl = document.getElementById('fdTableNext');
+    const tablePageInfoEl = document.getElementById('fdTablePageInfo');
+
+    let activeView = 'charts';
+    let chartsLoaded = !!(FD_STATIC.charts_preloaded || (fdDonations && fdDonations.length > 0));
+    let tablePage = 1;
+    let tablePerPage = Number(FD_STATIC.list_per_page || 50);
+    let tablePagination = { page: 1, per_page: tablePerPage, total_rows: 0, total_pages: 1, filtered_sum: 0 };
+    let tableLoading = false;
+    let searchDebounceTimer = null;
 
     let activeCat = 'all';
     let searchQuery = '';
@@ -38,6 +118,37 @@
     let lineChart = null;
     let pieChart = null;
     let barChart = null;
+    let chartsInitialized = false;
+    let serverFilterCounts = null;
+
+    function ensureChartsInitialized() {
+        if (chartsInitialized) {
+            return true;
+        }
+        if (!window.Chart) {
+            return false;
+        }
+        chartsInitialized = true;
+        initCharts();
+        refreshChartsAndInsights();
+        return true;
+    }
+
+    function waitForChartsAndInit() {
+        if (ensureChartsInitialized()) {
+            return;
+        }
+        let attempts = 0;
+        const timer = setInterval(() => {
+            attempts += 1;
+            if (ensureChartsInitialized() || attempts >= 100) {
+                clearInterval(timer);
+            }
+        }, 50);
+    }
+
+    window.drawdreamEnsureDashboardCharts = waitForChartsAndInit;
+    window.drawdreamEnsureDashboardList = ensureListRowsRendered;
 
     const fmtMoney = (n) => Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
@@ -102,7 +213,7 @@
     }
 
     function getFilteredDonations() {
-        return FD_DONATIONS.filter((d) => {
+        return getDonations().filter((d) => {
             const catOk = activeCat === 'all' || d.cat === activeCat;
             return catOk && donationMatchesDate(d);
         });
@@ -111,8 +222,8 @@
     function analyzeDonations(rows) {
         const sums = { child: 0, project: 0, need: 0 };
         const counts = { child: 0, project: 0, need: 0 };
-        const weekKeys = FD_WEEK_META.keys || [];
-        const weekLabels = FD_WEEK_META.labels || [];
+        const weekKeys = fdWeekMeta.keys || [];
+        const weekLabels = fdWeekMeta.labels || [];
         const weeklySums = weekKeys.map(() => 0);
         const donationsByWeek = weekKeys.map(() => []);
 
@@ -419,6 +530,32 @@
                 const row = a.pieBreakdown.find((b) => b.key === k);
                 return row ? row.count : 0;
             });
+            // ยอดเงินกับจำนวนครั้งคนละสเกล — แยนแกน Y ไม่ให้แท่งจำนวนครั้งหาย
+            const maxAmount = Math.max(...pieValues, 0);
+            const countValues = barChart.data.datasets[1].data;
+            const maxCount = Math.max(...countValues.map((v) => Number(v || 0)), 0);
+            barChart.options.scales = {
+                y: {
+                    beginAtZero: true,
+                    position: 'left',
+                    ticks: {
+                        callback: (v) => Number(v).toLocaleString('th-TH'),
+                    },
+                    suggestedMax: maxAmount > 0 ? maxAmount * 1.1 : undefined,
+                },
+                yCount: {
+                    beginAtZero: true,
+                    position: 'right',
+                    grid: { drawOnChartArea: false },
+                    ticks: {
+                        stepSize: maxCount > 0 ? Math.max(1, Math.ceil(maxCount / 5)) : 1,
+                        callback: (v) => String(Math.round(Number(v))),
+                    },
+                    suggestedMax: maxCount > 0 ? maxCount + 1 : undefined,
+                },
+            };
+            barChart.data.datasets[0].yAxisID = 'y';
+            barChart.data.datasets[1].yAxisID = 'yCount';
             barChart.update();
         }
     }
@@ -477,8 +614,93 @@
         return blob.includes(searchQuery.toLowerCase());
     };
 
+    const matchesSearchDonation = (d) => {
+        if (searchQuery === '') {
+            return true;
+        }
+        const blob = String(d.search || '').toLowerCase();
+        return blob.includes(searchQuery.toLowerCase());
+    };
+
+    function updateFilterCatButtons(counts) {
+        if (!counts || typeof counts !== 'object') {
+            return;
+        }
+        buttons.forEach((btn) => {
+            const cat = btn.getAttribute('data-filter-cat') || '';
+            const label = FILTER_CAT_BUTTON_LABELS[cat];
+            if (!label) {
+                return;
+            }
+            const n = Number(counts[cat] ?? 0);
+            btn.textContent = label + ' (' + n.toLocaleString('th-TH') + ')';
+        });
+    }
+
+    function computeFilterCountsFromDonations(donations) {
+        const counts = { all: 0, child: 0, project: 0, need: 0 };
+        (donations || []).forEach((d) => {
+            counts.all += 1;
+            const cat = d.cat || '';
+            if (Object.prototype.hasOwnProperty.call(counts, cat)) {
+                counts[cat] += 1;
+            }
+        });
+        return counts;
+    }
+
+    function hasActiveListFilters() {
+        if (activeWeekKey) {
+            return true;
+        }
+        if (searchQuery !== '') {
+            return true;
+        }
+        if (dateMode === 'day' && (dateFrom !== '' || dateTo !== '')) {
+            return true;
+        }
+        if (dateMode === 'month' && dateValue !== '') {
+            return true;
+        }
+        if (dateMode === 'year' && dateValue !== '') {
+            return true;
+        }
+        return false;
+    }
+
+    function syncFilterCatButtonsClientSide() {
+        if (activeView === 'list' && chartsLoaded && FD_STATIC.table_pagination) {
+            return;
+        }
+        if (!hasActiveListFilters()) {
+            if (serverFilterCounts) {
+                updateFilterCatButtons(serverFilterCounts);
+            }
+            return;
+        }
+        const filtered = getDonations().filter((d) => donationMatchesDate(d) && matchesSearchDonation(d));
+        updateFilterCatButtons(computeFilterCountsFromDonations(filtered));
+    }
+
     const updateListSummary = (visible, sumVisible) => {
         if (!listSummaryEl) {
+            return;
+        }
+        if (activeView === 'list' && chartsLoaded && FD_STATIC.table_pagination) {
+            const pg = tablePagination;
+            if (pg.total_rows === 0) {
+                listSummaryEl.textContent = 'ไม่พบรายการตามเงื่อนไขที่เลือก';
+                return;
+            }
+            const period = formatDateSummary();
+            let text = 'หน้า <strong>' + pg.page + '</strong> / ' + pg.total_pages
+                + ' · แสดง <strong>' + visible + '</strong> รายการในหน้านี้'
+                + ' · รวมในหน้านี้ <strong>' + fmtMoney(sumVisible) + '</strong> บาท'
+                + ' · ทั้งหมด <strong>' + pg.total_rows.toLocaleString('th-TH') + '</strong> รายการ';
+            if (period !== '') {
+                text += ' · ' + period;
+            }
+            listSummaryEl.innerHTML = text;
             return;
         }
         if (rows.length === 0) {
@@ -495,14 +717,126 @@
             text += ' · ' + period;
         }
         const totalAll = Number(FD_STATIC.total_donation_count || 0);
-        const listLimit = Number(FD_STATIC.list_limit || 500);
-        const listLoaded = Number(FD_STATIC.list_loaded || rows.length);
+        const chartsLimit = Number(FD_STATIC.charts_limit || 500);
+        const listLoaded = getDonations().length;
         if (totalAll > listLoaded) {
-            text += ' · ตารางแสดง ' + listLoaded + ' รายการล่าสุดจากทั้งหมด ' + totalAll.toLocaleString('th-TH') + ' รายการ';
-        } else if (listLoaded >= listLimit) {
-            text += ' · แสดงสูงสุด ' + listLimit + ' รายการล่าสุด';
+            text += ' · กราฟใช้ ' + listLoaded + ' รายการล่าสุดจากทั้งหมด ' + totalAll.toLocaleString('th-TH') + ' รายการ';
+        } else if (listLoaded >= chartsLimit) {
+            text += ' · กราฟใช้สูงสุด ' + chartsLimit + ' รายการล่าสุด';
         }
         listSummaryEl.innerHTML = text;
+    };
+
+    function updateTablePaginationUi() {
+        if (!tablePaginationEl) {
+            return;
+        }
+        const show = activeView === 'list' && chartsLoaded && FD_STATIC.table_pagination;
+        tablePaginationEl.hidden = !show;
+        if (!show) {
+            return;
+        }
+        const pg = tablePagination;
+        if (tablePageInfoEl) {
+            tablePageInfoEl.textContent = 'หน้า ' + pg.page + ' / ' + pg.total_pages
+                + ' (ทั้งหมด ' + pg.total_rows.toLocaleString('th-TH') + ' รายการ)';
+        }
+        if (tablePrevEl) {
+            tablePrevEl.disabled = tableLoading || pg.page <= 1;
+        }
+        if (tableNextEl) {
+            tableNextEl.disabled = tableLoading || pg.page >= pg.total_pages;
+        }
+    }
+
+    function buildTableFilterParams() {
+        const params = new URLSearchParams();
+        params.set('mode', 'table');
+        params.set('page', String(tablePage));
+        params.set('per_page', String(tablePerPage));
+        params.set('cat', activeCat || 'all');
+        if (activeWeekKey) {
+            params.set('week', activeWeekKey);
+            return params;
+        }
+        params.set('date_mode', dateMode || 'all');
+        if (dateMode === 'day') {
+            if (dateFrom) {
+                params.set('date_from', dateFrom);
+            }
+            if (dateTo) {
+                params.set('date_to', dateTo);
+            }
+        } else if (dateMode === 'month' && dateValue) {
+            params.set('date_month', dateValue);
+        } else if (dateMode === 'year' && dateValue) {
+            params.set('date_year', dateValue);
+        }
+        if (searchQuery) {
+            params.set('q', searchQuery);
+        }
+        return params;
+    }
+
+    function applyTableRowsDisplay() {
+        let visible = 0;
+        let sumVisible = 0;
+        rows.forEach((row) => {
+            row.style.display = '';
+            visible += 1;
+            sumVisible += Number(row.getAttribute('data-amount') || 0);
+        });
+        if (noRows) {
+            noRows.style.display = visible === 0 ? '' : 'none';
+        }
+        setActive(activeCat);
+        if (dateSummaryEl && activeView === 'list') {
+            const period = formatDateSummary();
+            dateSummaryEl.textContent = period !== '' ? period : '';
+        }
+        updateListSummary(visible, sumVisible);
+        updateTablePaginationUi();
+    }
+
+    window.drawdreamLoadDashboardTablePage = function (page) {
+        if (!chartsLoaded || !FD_STATIC.table_pagination) {
+            return Promise.resolve(false);
+        }
+        tablePage = Math.max(1, Number(page || 1));
+        const base = window.FD_DATA_URL || 'foundation_dashboard_data.php';
+        const params = buildTableFilterParams();
+        tableLoading = true;
+        updateTablePaginationUi();
+        return fetch(base + '?' + params.toString(), { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then((res) => res.json())
+            .then((data) => {
+                tableLoading = false;
+                if (!data || !data.ok || data.mode !== 'table') {
+                    if (window.drawdreamAlert) {
+                        window.drawdreamAlert('โหลดตารางบริจาคไม่สำเร็จ กรุณาลองใหม่', 'error');
+                    }
+                    updateTablePaginationUi();
+                    return false;
+                }
+                tablePagination = data.pagination || tablePagination;
+                tablePage = Number(tablePagination.page || tablePage);
+                listRowsRendered = false;
+                renderTableRows(data.donations || []);
+                applyTableRowsDisplay();
+                if (data.filter_counts) {
+                    serverFilterCounts = data.filter_counts;
+                    updateFilterCatButtons(data.filter_counts);
+                }
+                return true;
+            })
+            .catch(() => {
+                tableLoading = false;
+                if (window.drawdreamAlert) {
+                    window.drawdreamAlert('โหลดตารางบริจาคไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
+                }
+                updateTablePaginationUi();
+                return false;
+            });
     };
 
     const formatDateSummary = () => {
@@ -603,6 +937,12 @@
     };
 
     const applyFilter = () => {
+        if (activeView === 'list' && chartsLoaded && FD_STATIC.table_pagination) {
+            tablePage = 1;
+            window.drawdreamLoadDashboardTablePage(1);
+            refreshChartsAndInsights();
+            return;
+        }
         let visible = 0;
         let sumVisible = 0;
         rows.forEach((row) => {
@@ -624,12 +964,13 @@
         if (dateSummaryEl) {
             const period = formatDateSummary();
             if (period === '') {
-                dateSummaryEl.textContent = rows.length > 0 ? 'แสดงทุกวันที่ (สูงสุด ' + rows.length + ' รายการล่าสุด)' : '';
+                dateSummaryEl.textContent = rows.length > 0 ? 'แสดงทุกวันที่ (กราฟสูงสุด ' + getDonations().length + ' รายการล่าสุด)' : '';
             } else {
                 dateSummaryEl.textContent = period + ' · แสดง ' + visible + ' รายการ';
             }
         }
         updateListSummary(visible, sumVisible);
+        syncFilterCatButtonsClientSide();
         refreshChartsAndInsights();
     };
 
@@ -655,8 +996,20 @@
     };
 
     const setActiveView = (view) => {
-        const showCharts = view === 'charts';
+        activeView = view === 'list' ? 'list' : 'charts';
+        const showCharts = activeView === 'charts';
         placeDateFilter(view);
+        if (!showCharts) {
+            if (chartsLoaded && FD_STATIC.table_pagination) {
+                window.drawdreamLoadDashboardTablePage(tablePage);
+            } else {
+                ensureListRowsRendered();
+                applyFilter();
+            }
+        }
+        if (showCharts && !document.body.classList.contains('fd-dash-collapsed')) {
+            waitForChartsAndInit();
+        }
         if (chartsView) {
             chartsView.style.display = showCharts ? '' : 'none';
         }
@@ -664,10 +1017,11 @@
             listView.style.display = showCharts ? 'none' : '';
         }
         tabButtons.forEach((btn) => {
-            const active = btn.getAttribute('data-view-tab') === view;
+            const active = btn.getAttribute('data-view-tab') === activeView;
             btn.classList.toggle('admin-dir-btn--primary', active);
             btn.classList.toggle('admin-dir-btn--analytics', !active);
         });
+        updateTablePaginationUi();
     };
 
     function jumpToList(cat, weekKey) {
@@ -684,7 +1038,6 @@
         if (activeCat !== 'all' && ['child', 'project', 'need'].includes(activeCat)) {
             showFeaturePanel(activeCat);
         }
-        applyFilter();
         if (listView) {
             listView.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
@@ -733,6 +1086,8 @@
                     }],
                 },
                 options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: { position: 'bottom' },
                         tooltip: {
@@ -761,19 +1116,32 @@
                             label: 'ยอดเงิน (บาท)',
                             data: [0, 0, 0],
                             backgroundColor: 'rgba(74,91,168,.75)',
+                            yAxisID: 'y',
                         },
                         {
                             label: 'จำนวนครั้ง',
                             data: [0, 0, 0],
                             backgroundColor: 'rgba(245,158,11,.75)',
+                            yAxisID: 'yCount',
                         },
                     ],
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                    },
                     scales: {
-                        y: { beginAtZero: true },
+                        y: {
+                            beginAtZero: true,
+                            position: 'left',
+                        },
+                        yCount: {
+                            beginAtZero: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                        },
                     },
                 },
             });
@@ -837,7 +1205,27 @@
     if (listSearchEl) {
         listSearchEl.addEventListener('input', () => {
             searchQuery = (listSearchEl.value || '').trim();
-            applyFilter();
+            if (searchDebounceTimer) {
+                clearTimeout(searchDebounceTimer);
+            }
+            searchDebounceTimer = setTimeout(() => {
+                applyFilter();
+            }, 300);
+        });
+    }
+
+    if (tablePrevEl) {
+        tablePrevEl.addEventListener('click', () => {
+            if (tablePage > 1) {
+                window.drawdreamLoadDashboardTablePage(tablePage - 1);
+            }
+        });
+    }
+    if (tableNextEl) {
+        tableNextEl.addEventListener('click', () => {
+            if (tablePage < tablePagination.total_pages) {
+                window.drawdreamLoadDashboardTablePage(tablePage + 1);
+            }
         });
     }
 
@@ -861,11 +1249,309 @@
         });
     });
 
-    if (window.Chart) {
-        initCharts();
+    updateContextKpis(getDonations());
+    if (window.FD_FILTER_COUNTS) {
+        applyFilterCountsDom(window.FD_FILTER_COUNTS);
     }
-    updateContextKpis(FD_DONATIONS);
     applyFilter();
     setActiveView('charts');
     showFeaturePanel('child');
+
+    function formatSummaryMoney(n) {
+        return Number(n || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function applySummaryDom(summary, titles) {
+        if (!summary) {
+            return;
+        }
+        const set = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = text;
+            }
+        };
+        set('fdSummaryChildAmt', formatSummaryMoney(summary.sum_child));
+        set('fdSummaryProjectAmt', formatSummaryMoney(summary.sum_project));
+        set('fdSummaryNeedAmt', formatSummaryMoney(summary.sum_need));
+        set('fdSummaryTotalAmt', formatSummaryMoney(summary.sum_total));
+        set('fdSummaryDonationCnt', String(summary.donation_count ?? 0));
+        set('fdFeatureChildCnt', String(summary.row_count_child ?? 0));
+        set('fdFeatureChildAmt', formatSummaryMoney(summary.sum_child));
+        if (titles) {
+            const pt = document.getElementById('fdPieTitle');
+            const pi = document.getElementById('fdPieInsight');
+            if (pt && titles.pie_title) {
+                pt.textContent = titles.pie_title;
+            }
+            if (pi && titles.pie_insight) {
+                pi.textContent = titles.pie_insight;
+            }
+        }
+        const yearSel = document.getElementById('fdDateYear');
+        if (yearSel && Array.isArray(window.FD_DONATION_YEARS) && window.FD_DONATION_YEARS.length > 0) {
+            const cur = yearSel.value;
+            yearSel.replaceChildren();
+            window.FD_DONATION_YEARS.forEach((y) => {
+                const opt = document.createElement('option');
+                const yr = Number(y);
+                opt.value = String(yr);
+                opt.textContent = String(yr + 543) + ' (' + yr + ')';
+                yearSel.appendChild(opt);
+            });
+            if (cur) {
+                yearSel.value = cur;
+            }
+        }
+    }
+
+    function applyFilterCountsDom(filterCounts) {
+        if (filterCounts) {
+            serverFilterCounts = filterCounts;
+            updateFilterCatButtons(filterCounts);
+        }
+    }
+
+    function renderOpsPanel(groups) {
+        const panel = document.getElementById('fdOpsDynamic');
+        const loading = document.getElementById('fdOpsLoading');
+        if (!panel) {
+            return;
+        }
+        if (loading) {
+            loading.hidden = true;
+            loading.setAttribute('aria-hidden', 'true');
+        }
+        panel.setAttribute('aria-busy', 'false');
+        panel.replaceChildren();
+        (groups || []).forEach((group) => {
+            const gKey = String(group.key || '');
+            const wrap = document.createElement('div');
+            wrap.className = 'fd-ops-group fd-ops-group--' + gKey;
+            const head = document.createElement('div');
+            head.className = 'fd-ops-group__head';
+            head.innerHTML = '<span class="fd-ops-group__dot" aria-hidden="true"></span>' + escapeHtml(group.title || '');
+            wrap.appendChild(head);
+            const chips = document.createElement('div');
+            chips.className = 'fd-ops-chips';
+            (group.items || []).forEach((item) => {
+                const cnt = Number(item.count || 0);
+                let chipClass = 'fd-ops-chip';
+                if (cnt <= 0) {
+                    chipClass += ' fd-ops-chip--idle';
+                } else if (item.urgent) {
+                    chipClass += ' fd-ops-chip--warn';
+                } else {
+                    chipClass += ' fd-ops-chip--ok';
+                }
+                const a = document.createElement('a');
+                a.className = chipClass;
+                a.href = String(item.href || '#');
+                a.innerHTML = '<span class="fd-ops-chip__num">' + cnt + '</span><span>' + escapeHtml(item.label || '') + '</span>';
+                chips.appendChild(a);
+            });
+            wrap.appendChild(chips);
+            panel.appendChild(wrap);
+        });
+    }
+
+    function applyBootstrapDom(data) {
+        if (!data) {
+            return;
+        }
+        const counts = data.counts || {};
+        const set = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.textContent = text;
+            }
+        };
+        if (typeof counts.children === 'number') {
+            set('fdCountChildren', String(counts.children));
+            set('fdCountChildrenFeature', String(counts.children));
+        }
+        if (typeof counts.projects === 'number') {
+            set('fdCountProjects', String(counts.projects));
+        }
+        if (typeof counts.need_items === 'number') {
+            set('fdCountNeedItems', String(counts.need_items));
+        }
+        if (typeof counts.active_sponsors === 'number') {
+            set('fdCountActiveSponsors', String(counts.active_sponsors));
+        }
+        if (data.ops && data.ops.groups) {
+            renderOpsPanel(data.ops.groups);
+            FD_STATIC.ops = {
+                active_sponsors: Number(data.ops.active_sponsors || counts.active_sponsors || 0),
+                escrow_pending_baht: Number(data.ops.escrow_pending_baht || 0),
+                need_awaiting_delivery: Number(data.ops.need_awaiting_delivery || 0),
+            };
+            window.FD_STATIC = FD_STATIC;
+            updateContextKpis(getDonations());
+        }
+        const todo = data.next_todo;
+        const nextSec = document.getElementById('fdNextActionSection');
+        if (todo && nextSec) {
+            const textEl = document.getElementById('fdNextActionText');
+            const btnEl = document.getElementById('fdNextActionBtn');
+            if (textEl) {
+                textEl.textContent = String(todo.text || '');
+            }
+            if (btnEl) {
+                btnEl.textContent = String(todo.action_label || 'ทำเลย');
+                btnEl.href = String(todo.href || '#');
+            }
+            nextSec.hidden = false;
+        }
+        const pause = data.pause;
+        const pauseText = document.getElementById('fdPauseBannerText');
+        const pauseBtn = document.getElementById('fdPauseBannerBtn');
+        if (pause && pauseText && pause.summary_text) {
+            const base = pauseText.textContent.split('(')[0].trim();
+            pauseText.textContent = base + ' (' + pause.summary_text + ') — มูลนิธิจะไม่แสดงต่อสาธารณะและไม่สามารถเพิ่มเด็ก/โครงการ/สิ่งของใหม่ได้จนกว่าจะอัปเดตครบ';
+        }
+        if (pause && pauseBtn && pause.bulk_href) {
+            pauseBtn.href = pause.bulk_href;
+            pauseBtn.hidden = false;
+        }
+        if (data.account_paused) {
+            const banner = document.getElementById('fdPauseBanner');
+            if (banner) {
+                banner.hidden = false;
+            }
+        }
+    }
+
+    window.drawdreamLoadDashboardBootstrap = function () {
+        if (!FD_STATIC.bootstrap_via_ajax) {
+            return Promise.resolve(true);
+        }
+        const loading = document.getElementById('fdOpsLoading');
+        if (loading) {
+            loading.hidden = false;
+            loading.setAttribute('aria-hidden', 'false');
+        }
+        const url = (window.FD_DATA_URL || 'foundation_dashboard_data.php') + '?mode=bootstrap';
+        return fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data || !data.ok || data.mode !== 'bootstrap') {
+                    const loading = document.getElementById('fdOpsLoading');
+                    const panel = document.getElementById('fdOpsDynamic');
+                    if (loading) {
+                        loading.hidden = false;
+                        loading.textContent = 'อัปเดตตัวเลขไม่สำเร็จ';
+                    } else if (panel) {
+                        panel.innerHTML = '<div class="fd-ops-loading">อัปเดตตัวเลขไม่สำเร็จ</div>';
+                    }
+                    return false;
+                }
+                applyBootstrapDom(data);
+                if (loading) {
+                    loading.hidden = true;
+                    loading.setAttribute('aria-hidden', 'true');
+                }
+                return true;
+            })
+            .catch(() => {
+                const loading = document.getElementById('fdOpsLoading');
+                if (loading) {
+                    loading.hidden = false;
+                    loading.textContent = 'อัปเดตตัวเลขไม่สำเร็จ';
+                }
+                return false;
+            });
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof window.drawdreamLoadDashboardBootstrap === 'function') {
+            window.drawdreamLoadDashboardBootstrap();
+        }
+        if (FD_STATIC.charts_preloaded || (fdDonations && fdDonations.length > 0)) {
+            chartsLoaded = true;
+            window.FD_FULL_LOADED = true;
+            waitForChartsAndInit();
+            return;
+        }
+        if (FD_STATIC.donations_via_ajax && !window.FD_PRELOAD_PROMISE) {
+            window.FD_PRELOAD_PROMISE = window.drawdreamLoadDashboardDonations().then(function (ok) {
+                if (ok) {
+                    window.FD_FULL_LOADED = true;
+                    if (typeof window.drawdreamEnsureDashboardCharts === 'function') {
+                        window.drawdreamEnsureDashboardCharts();
+                    }
+                }
+                return ok;
+            });
+        }
+    });
+
+    window.drawdreamLoadDashboardDonations = function () {
+        const url = (window.FD_DATA_URL || 'foundation_dashboard_data.php') + '?mode=charts';
+        return fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data || !data.ok) {
+                    if (window.drawdreamAlert) {
+                        window.drawdreamAlert('โหลดข้อมูลแดชบอร์ดไม่สำเร็จ กรุณาลองใหม่', 'error');
+                    } else {
+                        alert('โหลดข้อมูลแดชบอร์ดไม่สำเร็จ กรุณาลองใหม่');
+                    }
+                    return false;
+                }
+                chartsLoaded = true;
+                fdDonations = data.donations || [];
+                window.FD_DONATIONS = fdDonations;
+                fdWeekMeta = data.week_meta || { labels: [], keys: [] };
+                window.FD_WEEK_META = fdWeekMeta;
+                window.FD_DONATION_YEARS = data.donation_years || [];
+                listRowsRendered = false;
+                const tbody = document.getElementById('fdDonationTableBody');
+                if (tbody) {
+                    tbody.replaceChildren();
+                }
+                rows.splice(0, rows.length);
+                applySummaryDom(data.summary, data.analysis_titles);
+                applyFilterCountsDom(data.filter_counts);
+                if (data.period_meta) {
+                    FD_STATIC.period = data.period_meta;
+                    FD_STATIC.total_donation_count = Number(data.period_meta.total_donation_count || 0);
+                    window.FD_STATIC = FD_STATIC;
+                }
+                if (data.sponsorship) {
+                    FD_STATIC.sponsorship = data.sponsorship;
+                    window.FD_STATIC = FD_STATIC;
+                }
+                chartsInitialized = false;
+                if (lineChart) {
+                    lineChart.destroy();
+                    lineChart = null;
+                }
+                if (pieChart) {
+                    pieChart.destroy();
+                    pieChart = null;
+                }
+                if (barChart) {
+                    barChart.destroy();
+                    barChart = null;
+                }
+                if (typeof window.drawdreamEnsureDashboardCharts === 'function') {
+                    window.drawdreamEnsureDashboardCharts();
+                }
+                updateContextKpis(getDonations());
+                applyFilter();
+                if (activeView === 'list' && FD_STATIC.table_pagination) {
+                    window.drawdreamLoadDashboardTablePage(1);
+                }
+                return true;
+            })
+            .catch(() => {
+                if (window.drawdreamAlert) {
+                    window.drawdreamAlert('โหลดข้อมูลแดชบอร์ดไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต', 'error');
+                } else {
+                    alert('โหลดข้อมูลแดชบอร์ดไม่สำเร็จ');
+                }
+                return false;
+            });
+    };
 })();

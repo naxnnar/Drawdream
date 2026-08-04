@@ -20,9 +20,7 @@ $admin_id = (int)$_SESSION['user_id'];
 $success  = "";
 $error    = "";
 
-drawdream_escrow_funds_ensure_schema($conn);
-drawdream_ensure_needlist_schema($conn);
-drawdream_ensure_foundation_project_service_charge_columns($conn);
+// schema: รันโดย tools/run_migrations.php ตอน deploy เท่านั้น
 
 // รับ success message จาก redirect
 if (isset($_GET['success']) && $_GET['success'] === 'transferred') {
@@ -276,7 +274,16 @@ function drawdream_needlist_delivery_lines(array $need): array
                 }
                 $scPaid = !empty($proj['service_charge_paid_at']);
                 $scPaidFmt = $scPaid ? date('d/m/Y H:i', strtotime((string)$proj['service_charge_paid_at'])) : '';
-                $is_done = $proj['project_status'] === 'purchasing'; ?>
+                $is_done = $proj['project_status'] === 'purchasing';
+                $foundationUpdated = $is_done && drawdream_project_has_outcome_posted($proj);
+                $foundationUpdateFmt = '';
+                if ($foundationUpdated) {
+                    $updateRaw = trim((string)($proj['update_at'] ?? ''));
+                    if ($updateRaw !== '' && !str_starts_with($updateRaw, '0000') && strtotime($updateRaw) !== false) {
+                        $foundationUpdateFmt = date('d/m/Y H:i', strtotime($updateRaw));
+                    }
+                }
+                ?>
             <div class="proj-card <?= $is_done ? 'purchasing' : 'completed' ?>">
                 <div class="proj-header">
                     <div>
@@ -329,7 +336,13 @@ function drawdream_needlist_delivery_lines(array $need): array
                         </button>
                     </form>
                 <?php else: ?>
-                    <div class="notified-badge">📨 แจ้งมูลนิธิแล้ว — รอมูลนิธิอัปเดตความคืบหน้า</div>
+                    <div class="notified-badge<?= $foundationUpdated ? ' notified-badge--updated' : '' ?>">
+                        📨 แจ้งมูลนิธิแล้ว —
+                        <?= $foundationUpdated ? 'มูลนิธิอัปเดตแล้ว' : 'รอมูลนิธิอัปเดตความคืบหน้า' ?>
+                        <?php if ($foundationUpdated && $foundationUpdateFmt !== ''): ?>
+                            <span class="notified-badge__time">(<?= htmlspecialchars($foundationUpdateFmt) ?>)</span>
+                        <?php endif; ?>
+                    </div>
                 <?php endif; ?>
             </div>
         <?php endwhile; else: ?>

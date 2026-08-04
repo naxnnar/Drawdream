@@ -27,5 +27,5 @@ if ($role === 'admin') {
 }
 
 // donor (ค่า default)
-header("Location: welcome.php");
+header("Location: homepage.php");
 exit();

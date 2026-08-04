@@ -123,7 +123,7 @@ function drawdream_finalize_child_donation(
             require_once __DIR__ . '/child_sponsorship.php';
         }
         if (function_exists('drawdream_child_sync_sponsorship_status')) {
-            drawdream_child_sync_sponsorship_status($conn, $childId);
+            drawdream_child_sync_sponsorship_status($conn, $childId, false);
         }
         $conn->commit();
         return true;

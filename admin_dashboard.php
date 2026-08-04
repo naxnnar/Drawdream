@@ -5,7 +5,9 @@
 
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
+require_once __DIR__ . '/includes/drawdream_project_status.php';
 require_once __DIR__ . '/includes/escrow_funds_schema.php';
+require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/user_activity_tracking.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
@@ -180,23 +182,27 @@ $user_activity = drawdream_admin_user_activity_stats($conn);
         </div>
 
         <div class="admin-metric-stats__row admin-metric-stats__row--2">
-            <div class="card stat-card donation-total">
-                <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
-                <div class="stat-divider" aria-hidden="true"></div>
-                <div class="stat-content">
-                    <div class="card-label">ยอดบริจาคทั้งหมด</div>
-                    <div class="card-value"><?= number_format($total_donation, 0) ?><span class="card-value-suffix">บาท</span></div>
+            <a href="admin_donations.php" class="admin-stat-card-wrap" title="ดูประวัติการบริจาคทั้งหมด">
+                <div class="card stat-card donation-total">
+                    <div class="stat-icon"><i class="bi bi-graph-up-arrow"></i></div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-content">
+                        <div class="card-label">ยอดบริจาคทั้งหมด</div>
+                        <div class="card-value"><?= number_format($total_donation, 0) ?><span class="card-value-suffix">บาท</span></div>
+                    </div>
                 </div>
-            </div>
+            </a>
 
-            <div class="card stat-card donation-today">
-                <div class="stat-icon"><i class="bi bi-calendar2-check-fill"></i></div>
-                <div class="stat-divider" aria-hidden="true"></div>
-                <div class="stat-content">
-                    <div class="card-label">ยอดบริจาควันนี้</div>
-                    <div class="card-value"><?= number_format($today_donation, 0) ?><span class="card-value-suffix">บาท</span></div>
+            <a href="admin_donations.php?period=today" class="admin-stat-card-wrap" title="ดูยอดบริจาควันนี้">
+                <div class="card stat-card donation-today">
+                    <div class="stat-icon"><i class="bi bi-calendar2-check-fill"></i></div>
+                    <div class="stat-divider" aria-hidden="true"></div>
+                    <div class="stat-content">
+                        <div class="card-label">ยอดบริจาควันนี้</div>
+                        <div class="card-value"><?= number_format($today_donation, 0) ?><span class="card-value-suffix">บาท</span></div>
+                    </div>
                 </div>
-            </div>
+            </a>
         </div>
 
         <div class="admin-metric-stats__row admin-metric-stats__row--2 admin-user-activity-row">
@@ -397,10 +403,9 @@ $user_activity = drawdream_admin_user_activity_stats($conn);
         <div class="section-box">
             <div class="section-title">
                 การบริจาคล่าสุด
+                <a href="admin_donations.php" class="section-link">ดูทั้งหมด</a>
                 <?php if (count($recent_donations) > 5): ?>
-                    <button type="button" class="section-link section-link-btn" id="btnDashDonationsMoreTop">ดูทั้งหมด</button>
-                <?php else: ?>
-                    <button type="button" class="section-link section-link-btn" disabled title="แสดงครบแล้วในรายการนี้">ดูทั้งหมด</button>
+                    <button type="button" class="section-link section-link-btn" id="btnDashDonationsMoreTop">แสดงเพิ่ม</button>
                 <?php endif; ?>
             </div>
             <?php if (!empty($recent_donations)): ?>

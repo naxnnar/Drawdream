@@ -253,6 +253,102 @@ h2 {
     text-decoration: underline;
 }
 
+.forgot-password-link {
+    margin-top: 12px;
+    text-align: right;
+    font-size: 13px;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.forgot-password-link a {
+    color: #888;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.forgot-password-link a:hover {
+    color: #C0392B;
+    text-decoration: underline;
+}
+
+.auth-hint {
+    margin-top: 16px;
+    color: #666;
+    font-size: 13px;
+    line-height: 1.5;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.auth-hint a {
+    color: #e0594a;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.auth-hint a:hover {
+    text-decoration: underline;
+}
+
+/* ฟอร์มสมัครมูลนิธิ — กระชับขึ้น ให้ที่อยู่+ธนาคาร+อีเมล/รหัสผ่านพอดีในจอ */
+.auth-container--foundation-register {
+    max-width: 440px;
+    padding: 20px 26px 24px;
+}
+
+.auth-container--foundation-register .logo {
+    width: 148px;
+    margin-bottom: 8px;
+}
+
+.auth-container--foundation-register h2 {
+    margin-bottom: 2px;
+    font-size: 20px;
+}
+
+.auth-container--foundation-register .subtitle {
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+
+.auth-container--foundation-register .form-group {
+    margin-bottom: 10px;
+}
+
+.auth-container--foundation-register .form-label {
+    margin-bottom: 4px !important;
+    font-size: 13px !important;
+}
+
+.auth-container--foundation-register .thai-address-block {
+    margin-bottom: 2px;
+}
+
+.auth-container--foundation-register .thai-address-line-grid {
+    margin-bottom: 8px;
+    gap: 8px 10px;
+}
+
+.auth-container--foundation-register .thai-address-hint {
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.auth-container--foundation-register .thai-address-grid {
+    gap: 8px 10px;
+}
+
+.auth-container--foundation-register .btn-submit {
+    margin-top: 4px;
+}
+
+.auth-container--foundation-register .back-link {
+    margin-top: 12px;
+}
+
+.auth-container--foundation-register .register-link {
+    margin-top: 12px;
+}
+
 /* ========== Responsive ========== */
 
 @media (max-width: 768px) {
@@ -268,6 +364,15 @@ h2 {
     .auth-container {
         padding: 28px 22px;
         border-radius: 20px;
+    }
+
+    .auth-container--foundation-register {
+        padding: 16px 18px 20px;
+    }
+
+    .auth-container--foundation-register .logo {
+        width: 128px;
+        margin-bottom: 6px;
     }
 
     .logo {

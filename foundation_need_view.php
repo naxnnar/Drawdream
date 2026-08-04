@@ -1,14 +1,21 @@
-﻿<?php
+<?php
 // foundation_need_view.php — มูลนิธิดูรายละเอียดรายการสิ่งของ (อ่านอย่างเดียว) โครง UI เดียวกับ foundation_project_view.php
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน need view
 
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
+require_once __DIR__ . '/includes/foundation_need_flash.php';
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
-    header('Location: foundation.php');
-    exit();
+drawdream_foundation_require_management_access();
+
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
+
+// ปล่อย session lock ก่อน render หน้ายาว + navbar (ลด 504 เมื่อมี mark_notif_read / feed คู่ขนาน)
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
 }
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
@@ -62,7 +69,6 @@ function foundation_need_view_status_meta(string $approve): array
 }
 
 $statusMeta = foundation_need_view_status_meta((string)($n['approve_item'] ?? 'pending'));
-$reviewNote = trim((string)($n['review_note'] ?? ''));
 
 $goal = (float)($n['total_price'] ?? 0);
 $raised = (float)($n['current_donate'] ?? 0);
@@ -164,7 +170,7 @@ if ($titleShort !== '') {
 }
 
 // ราคา
-$submittedTotal   = (float)($n['submitted_total_price'] ?? ($n['total_price'] ?? 0));
+$submittedTotal   = foundation_needlist_foundation_original_total_from_row($n);
 $currentTotal     = (float)($n['total_price'] ?? 0);
 $approvedTotal    = $currentTotal;
 $priceReviewedRaw = trim((string)($n['price_reviewed_at'] ?? ''));
@@ -175,22 +181,26 @@ if ($priceReviewedRaw !== '' && !str_starts_with($priceReviewedRaw, '0000-00-00'
 $adminChangedPrice = $priceReviewedFmt !== '' || abs($submittedTotal - $currentTotal) > 0.01;
 
 // ราคาต่อรายการ: หลังอนุมัติใช้ need_items_pricing_json (ราคาแอดมิน) ไม่เฉลี่ยยอดรวม
-$lineItemsView = foundation_needlist_submitted_line_items_from_row($n);
+$lineItemsView = foundation_needlist_foundation_original_line_items_from_row($n);
 $lineItemsCurrent = foundation_needlist_admin_line_items_from_row($n);
 $needStatus = strtolower(trim((string)($n['approve_item'] ?? '')));
 $useAdminLinePrices = in_array($needStatus, ['approved', 'purchasing', 'done'], true);
 $lineItemsTable = ($useAdminLinePrices && $lineItemsCurrent !== [])
     ? $lineItemsCurrent
     : ($lineItemsView !== [] ? $lineItemsView : $lineItemsCurrent);
-$lineItemsTableTotal = $currentTotal > 0 ? $currentTotal : 0.0;
-if ($lineItemsTableTotal <= 0) {
-    foreach ($lineItemsTable as $liRow) {
-        $lineItemsTableTotal += (float)($liRow['line_total'] ?? 0);
-    }
+$lineItemsTableSum = 0.0;
+foreach ($lineItemsTable as $liRow) {
+    $lineItemsTableSum += (float)($liRow['line_total'] ?? 0);
 }
+$lineItemsTableTotal = $lineItemsTableSum > 0 ? $lineItemsTableSum : $currentTotal;
 if ($lineItemsTableTotal <= 0) {
     $lineItemsTableTotal = $useAdminLinePrices ? $currentTotal : $submittedTotal;
 }
+$submittedBySlot = [];
+foreach ($lineItemsView as $subLi) {
+    $submittedBySlot[(int)($subLi['slot'] ?? 0)] = $subLi;
+}
+$showSubmittedPriceCol = $useAdminLinePrices && $lineItemsView !== [] && $adminChangedPrice;
 $lineCatsView = [];
 foreach ($lineItemsTable as $lv) {
     $cv = trim((string)($lv['category'] ?? ''));
@@ -220,6 +230,7 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
     <title>รายละเอียดรายการสิ่งของ — <?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/project.css?v=40">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=2">
     <style>
         /* ตารางราคาสิ่งของ */
         .fnv-price-section {
@@ -720,12 +731,14 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
         }
     </style>
 </head>
-<body class="foundation-project-view-page">
+<body class="foundation-project-view-page foundation-manage-page">
 
 <?php include 'navbar.php'; ?>
 
 <div class="foundation-project-view-wrap">
-    <a href="foundation.php#my-needlist-section" class="foundation-project-view-back">← กลับไปรายการสิ่งของ</a>
+    <a href="foundation_needlist_directory.php" class="foundation-project-view-back" data-foundation-back>← กลับ</a>
+
+    <?= drawdream_foundation_need_flash_render_html() ?>
 
     <article class="foundation-project-view-panel">
     <header class="foundation-project-view-hero">
@@ -746,7 +759,7 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
     <?php if (($n['approve_item'] ?? '') === 'pending'): ?>
         <div class="foundation-status-alert st-pending">รายการนี้รอแอดมินตรวจสอบ</div>
     <?php elseif (($n['approve_item'] ?? '') === 'rejected'): ?>
-        <div class="foundation-status-alert st-rejected">รายการนี้ไม่ผ่านการอนุมัติ<?= $reviewNote !== '' ? ': ' . htmlspecialchars($reviewNote) : '' ?></div>
+        <div class="foundation-status-alert st-rejected">รายการนี้ไม่ผ่านการอนุมัติ — ดูเหตุผลได้จากแจ้งเตือนในระบบ</div>
     <?php endif; ?>
 
     <?php if ($donateWindowExpired): ?>
@@ -850,12 +863,6 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
             <dd class="foundation-project-view-pre"><?= nl2br(htmlspecialchars($noteFree)) ?></dd>
         </div>
         <?php endif; ?>
-        <?php if ($reviewNote !== '' && ($n['approve_item'] ?? '') === 'approved'): ?>
-        <div class="foundation-project-view-row foundation-project-view-row--block">
-            <dt>บันทึกจากแอดมิน (ตอนอนุมัติ)</dt>
-            <dd class="foundation-project-view-pre"><?= nl2br(htmlspecialchars($reviewNote)) ?></dd>
-        </div>
-        <?php endif; ?>
     </dl>
 
     <?php /* =================== ราคาสิ่งของ =================== */ ?>
@@ -878,32 +885,45 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
         </div>
 
         <?php if (count($lineItemsTable) > 0): ?>
+        <div class="fnv-price-table-wrap">
         <table class="fnv-price-table">
             <thead>
                 <tr>
                     <th>รายการ</th>
                     <th style="text-align:center">จำนวน</th>
-                    <th style="text-align:right">ราคา/ชิ้น</th>
+                    <?php if ($showSubmittedPriceCol): ?>
+                    <th style="text-align:right">ราคา/ชิ้น (เดิม)</th>
+                    <?php endif; ?>
+                    <th style="text-align:right">ราคา/ชิ้น<?= $showSubmittedPriceCol ? ' (อนุมัติ)' : '' ?></th>
                     <th style="text-align:right">รวม</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($lineItemsTable as $idx => $li): ?>
+                <?php foreach ($lineItemsTable as $idx => $li):
+                    $slotKey = (int)($li['slot'] ?? 0);
+                    $oldLi = $submittedBySlot[$slotKey] ?? null;
+                    $oldUnit = $oldLi ? (float)($oldLi['price'] ?? 0) : 0.0;
+                    $unitChanged = $showSubmittedPriceCol && $oldUnit > 0 && abs($oldUnit - (float)$li['price']) > 0.0001;
+                ?>
                 <tr>
                     <td><?= htmlspecialchars($itemNamesView[$idx] ?? $li['category'], ENT_QUOTES, 'UTF-8') ?></td>
                     <td style="text-align:center"><?= number_format($li['qty'], 0) ?></td>
-                    <td style="text-align:right"><?= number_format($li['price'], 2) ?> บาท</td>
+                    <?php if ($showSubmittedPriceCol): ?>
+                    <td style="text-align:right;<?= $unitChanged ? ' color:#9ca3af; text-decoration:line-through;' : '' ?>"><?= number_format($oldUnit, 2) ?> บาท</td>
+                    <?php endif; ?>
+                    <td style="text-align:right;<?= $unitChanged ? ' font-weight:700; color:#0f766e;' : '' ?>"><?= number_format($li['price'], 2) ?> บาท</td>
                     <td style="text-align:right"><?= number_format($li['line_total'], 2) ?> บาท</td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="3" style="text-align:right">รวมทั้งหมด</td>
+                    <td colspan="<?= $showSubmittedPriceCol ? 4 : 3 ?>" style="text-align:right">รวมทั้งหมด</td>
                     <td style="text-align:right"><?= number_format($lineItemsTableTotal, 2) ?> บาท</td>
                 </tr>
             </tfoot>
         </table>
+        </div>
         <?php endif; ?>
 
         <?php if ($adminChangedPrice && $priceReviewedFmt !== ''): ?>
@@ -1027,17 +1047,25 @@ $createdFmt  = ($createdRaw !== '' && !str_starts_with($createdRaw, '0000-00-00'
     <?php endif; ?>
 
     <?php /* =================== Action links =================== */ ?>
-    <?php $canEdit = in_array($n['approve_item'] ?? '', ['pending', 'rejected'], true); ?>
+    <?php $canEdit = drawdream_foundation_needlist_may_edit($n); ?>
     <?php if ($canEdit): ?>
     <div class="fnv-actions">
-        <a href="foundation_add_need.php?edit=<?= (int)$itemId ?>" class="fnv-action-btn fnv-action-btn--edit">
-            ✏️ <?= ($n['approve_item'] ?? '') === 'rejected' ? 'แก้ไขและส่งใหม่' : 'แก้ไขรายการ' ?>
+        <a href="foundation_add_need.php?edit=<?= (int)$itemId ?>&amp;return_to=<?= rawurlencode('foundation_need_view.php?id=' . $itemId) ?>" class="fnv-action-btn fnv-action-btn--edit">
+            ✏️ <?php
+            $needStatus = strtolower(trim((string)($n['approve_item'] ?? '')));
+            if ($needStatus === 'rejected') {
+                echo 'แก้ไขและส่งใหม่';
+            } elseif ($needStatus === 'approved') {
+                echo 'แก้ไขและส่งอนุมัติใหม่';
+            } else {
+                echo 'แก้ไขรายการ';
+            }
+            ?>
         </a>
     </div>
     <?php endif; ?>
 
     </article>
 </div>
-
 </body>
 </html>

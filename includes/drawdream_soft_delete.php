@@ -3,12 +3,17 @@
 // includes/drawdream_soft_delete.php — ลบถาวรโปรไฟล์เด็ก/โครงการ (ไม่ใช้ soft delete)
 declare(strict_types=1);
 
+require_once __DIR__ . '/drawdream_schema_once.php';
+
 /**
  * ย้ายจาก soft delete: ลบแถวที่เคยซ่อนไว้ แล้ว DROP คอลัมน์ deleted_at / project_delete_reason
- * เรียกจาก db.php ผ่าน drawdream_migrate_remove_soft_delete_columns()
+ * เรียกจาก tools/run_migrations.php
  */
 function drawdream_migrate_remove_soft_delete_columns(mysqli $conn): void
 {
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
     if (drawdream_table_has_deleted_at_column($conn, 'foundation_children')) {
         $rs = $conn->query('SELECT child_id, foundation_id, photo_child, update_images FROM foundation_children WHERE deleted_at IS NOT NULL');
         if ($rs) {

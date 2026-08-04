@@ -923,6 +923,10 @@ body.admin-broadcast-modal-open {
     .dashboard {
         padding: 0 2vw;
     }
+    body.admin-sidebar-page .dashboard {
+        margin: 12px 0 20px;
+        padding: 0;
+    }
     .dash-title {
         font-size: 1.1rem;
         margin-bottom: 12px;
@@ -948,5 +952,36 @@ body.admin-broadcast-modal-open {
         height: 36px;
         font-size: 18px;
         border-radius: 8px;
+    }
+}
+
+@media (max-width: 991px) {
+    body.admin-sidebar-page .dashboard {
+        margin: 12px 0 20px;
+        padding: 0;
+    }
+
+    .chart-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .chart-controls__quick,
+    .chart-controls__custom {
+        justify-content: flex-start;
+    }
+
+    .chart-scroll canvas {
+        min-width: 100%;
+    }
+
+    .admin-broadcast-modal__actions {
+        flex-direction: column-reverse;
+    }
+
+    .btn-broadcast-cancel,
+    .btn-broadcast-submit {
+        width: 100%;
+        min-height: 44px;
     }
 }

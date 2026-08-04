@@ -164,7 +164,6 @@ if (!$paid) {
     exit;
 }
 
-drawdream_child_omise_subscription_ensure_schema($conn);
 $beforeStatus = 'none';
 $statusBeforeStmt = $conn->prepare('SELECT payment_status FROM donation WHERE omise_charge_id = ? ORDER BY donate_id DESC LIMIT 1');
 if ($statusBeforeStmt) {

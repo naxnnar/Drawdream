@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // detail_alin.php — เรื่องราวน้องอลิน (สตอรี่ตัวอย่าง)
 // สรุปสั้น: ไฟล์นี้แสดงรายละเอียดหน้า detail alin
 $stories = [
@@ -40,7 +40,7 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/child_story_detail.css?v=3">
+  <link rel="stylesheet" href="css/child_story_detail.css?v=4">
 </head>
 <body class="child-story-page">
 
@@ -76,60 +76,6 @@ $story = isset($stories[$id]) ? $stories[$id] : $stories['alin'];
       </div>
     </div>
   </div>
-</div>
-
-
-<!-- Footer -->
-<div class="row" style="background-color: #3f4f9a;"> 
-  <footer class="mt-auto text-light" >
-    <div class="container" >
-      <div class="row mt-3">
-        <div class="col-md-6 mb-3">
-          <img src="img/โลโก้.png" alt="DrawDream logo" class="footer-logo">
-          <p>ร่วมบริจาคเพื่อช่วยเหลือเด็กได้ที่<br>ธนาคารไทยพาณิชย์ <br>เลขที่บัญชี  011-1-11111-1</p>
-        </div>
-        
-        <div class="col-md-6 mb-3">
-          <center><h5>ติดต่อเรา</h5></center>
-          <p>
-            <i class="bi bi-geo-alt-fill"></i> ชั้น 3 อาคาร Drawdrem ถนนพหลโยธิน แขวงพญาไท เขตพญาไท กรุงเทพมหานคร 10400 
-          </p>
-
-          <div class="row text-center">
-            <div class="col-md-3"></div>
-            <div class="col-md-3">
-              <i class="bi bi-telephone-fill"></i> 0949278518
-            </div>
-            <div class="col-md-3">
-              <i class="bi bi-envelope-fill"></i> <a href="mailto:contact@drawdream.org" class="text-light">contact@drawdream.org</a>
-            </div>
-          </div>
-          <div class="row text-center mt-2">
-            <div class="col-md-4"></div>
-            <div class="col-md-1">
-              <button class="btn btn-light"><i class="bi bi-facebook"></i></button>
-            </div>
-            <div class="col-md-1">
-              <button class="btn btn-light"><i class="bi bi-tiktok"></i></button>
-            </div>
-            <div class="col-md-1">
-              <button class="btn btn-light"><i class="bi bi-instagram"></i></button>
-            </div>
-            <div class="col-md-1">
-              <button class="btn btn-light"><i class="bi bi-youtube"></i></button>
-            </div>
-          </div>
-
-        </div>
-      </div>
-      <hr class="mb-4">
-      <div class="row">
-        <div class="col-md-12 text-center">
-          <p>&copy; © All right reserved 2025 WVFT</p>
-        </div>
-      </div>
-    </div>
-  </footer>
 </div>
 
 </body>

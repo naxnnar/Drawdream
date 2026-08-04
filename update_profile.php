@@ -7,7 +7,6 @@ include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
 require_once __DIR__ . '/includes/notification_audit.php';
-require_once __DIR__ . '/includes/foundation_review_schema.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -24,6 +23,9 @@ if ($role === 'donor') {
 }
 
 $error = "";
+if (isset($_GET['msg']) && trim((string)$_GET['msg']) !== '') {
+    $error = trim((string)$_GET['msg']);
+}
 $success = "";
 
 // ดึงข้อมูลปัจจุบัน
@@ -41,9 +43,6 @@ if ($role === 'foundation') {
 }
 
 if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
-if ($role === 'foundation') {
-    drawdream_foundation_review_ensure_schema($conn);
-}
 
 $thai_addr_parsed = null;
 $thai_addr_init_json = 'null';
@@ -82,7 +81,7 @@ if (isset($_POST['update'])) {
     if ($role === 'foundation') {
         $foundation_name    = trim($_POST['foundation_name'] ?? '');
         $registration_number = trim($_POST['registration_number'] ?? '');
-        $phone              = trim($_POST['phone'] ?? '');
+        $phone              = drawdream_normalize_phone_digits(trim($_POST['phone'] ?? ''));
         $website            = trim($_POST['website'] ?? '');
         $facebook_url       = trim($_POST['facebook_url'] ?? '');
         $foundation_desc    = trim($_POST['foundation_desc'] ?? '');
@@ -90,8 +89,20 @@ if (isset($_POST['update'])) {
         $bank_account_number = preg_replace('/\D/', '', trim($_POST['bank_account_number'] ?? ''));
         $bank_account_name  = trim($_POST['bank_account_name'] ?? '');
 
-        if (empty($foundation_name)) {
+        if ($error === '' && empty($foundation_name)) {
             $error = "กรุณากรอกชื่อมูลนิธิ";
+        }
+
+        if ($error === '' && $phone !== '' && !drawdream_thai_phone_digits_ok($phone)) {
+            $error = 'เบอร์โทรศัพท์ต้องเป็นตัวเลข 9–10 หลัก';
+        }
+
+        if ($error === '' && (int)($profile['account_verified'] ?? 0) !== 1) {
+            $hasLogo = ($newProfileImage !== '')
+                || trim((string)($profile['foundation_image'] ?? '')) !== '';
+            if (!$hasLogo) {
+                $error = 'กรุณาอัปโหลดรูป/โลโก้มูลนิธิก่อนส่งให้แอดมินตรวจสอบ';
+            }
         }
 
         $addrP = trim((string)($_POST['addr_province'] ?? ''));
@@ -130,6 +141,12 @@ if (isset($_POST['update'])) {
             if ($bank_account_number !== '' && strlen($bank_account_number) !== 10) {
                 $error = 'เลขบัญชีต้องเป็นตัวเลขครบ 10 หลัก';
             }
+            if (strlen($website) > 255) {
+                $error = 'ลิงก์เว็บไซต์ยาวเกินไป (สูงสุด 255 ตัวอักษร)';
+            }
+            if (strlen($facebook_url) > 255) {
+                $error = 'ลิงก์ Facebook ยาวเกินไป (สูงสุด 255 ตัวอักษร) — ใส่ URL เพจอย่างเดียว เช่น https://facebook.com/ชื่อเพจ';
+            }
         }
 
         if ($error === '') {
@@ -165,7 +182,20 @@ if (isset($_POST['update'])) {
                     $user_id);
             }
 
-            if ($stmt->execute()) {
+            $saved = false;
+            try {
+                $saved = $stmt->execute();
+            } catch (mysqli_sql_exception $e) {
+                if (str_contains($e->getMessage(), 'facebook_url')) {
+                    $error = 'ลิงก์ Facebook ยาวเกินไป — ใส่ URL เพจอย่างเดียว เช่น https://facebook.com/ชื่อเพจ';
+                } elseif (str_contains($e->getMessage(), 'website')) {
+                    $error = 'ลิงก์เว็บไซต์ยาวเกินไป (สูงสุด 255 ตัวอักษร)';
+                } else {
+                    $error = 'บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง';
+                }
+            }
+
+            if ($error === '' && $saved) {
                 $wasRejected = ((int)($profile['account_verified'] ?? 0) === 2);
                 $isVerifiedNow = ((int)($profile['account_verified'] ?? 0) === 1);
 
@@ -175,7 +205,7 @@ if (isset($_POST['update'])) {
                     if ($foundationId > 0) {
                         $rst = $conn->prepare(
                             'UPDATE foundation_profile
-                             SET account_verified = 0, verified_at = NULL, review_note = NULL
+                             SET account_verified = 0, verified_at = NULL
                              WHERE foundation_id = ?'
                         );
                         if ($rst) {
@@ -294,7 +324,7 @@ if (isset($_POST['update'])) {
             </div>
             <div class="form-group">
                 <label class="form-label">เบอร์โทรศัพท์</label>
-                <input type="tel" name="phone" class="form-input" value="<?= htmlspecialchars($profile['phone'] ?? '') ?>">
+                <input type="tel" name="phone" id="foundation_phone" class="form-input" value="<?= htmlspecialchars($profile['phone'] ?? '') ?>" inputmode="numeric" autocomplete="tel" maxlength="10" minlength="9" pattern="0\d{8,9}" title="9–10 หลัก">
             </div>
 
             <div class="update-form-section-title">ข้อมูลบัญชีธนาคาร</div>
@@ -342,11 +372,11 @@ if (isset($_POST['update'])) {
             <?php endif; ?>
             <div class="form-group">
                 <label class="form-label">เว็บไซต์</label>
-                <input type="url" name="website" class="form-input" value="<?= htmlspecialchars($profile['website'] ?? '') ?>">
+                <input type="url" name="website" class="form-input" maxlength="255" value="<?= htmlspecialchars($profile['website'] ?? '') ?>">
             </div>
             <div class="form-group">
                 <label class="form-label">Facebook URL</label>
-                <input type="url" name="facebook_url" class="form-input" value="<?= htmlspecialchars($profile['facebook_url'] ?? '') ?>">
+                <input type="url" name="facebook_url" class="form-input" maxlength="255" value="<?= htmlspecialchars($profile['facebook_url'] ?? '') ?>">
             </div>
             <div class="form-group">
                 <label class="form-label">คำอธิบายมูลนิธิ</label>
@@ -444,6 +474,12 @@ document.addEventListener('DOMContentLoaded', function () {
   if (acc) {
     acc.addEventListener('input', function () {
       acc.value = acc.value.replace(/\D/g, '').slice(0, 10);
+    });
+  }
+  var phoneInput = document.getElementById('foundation_phone');
+  if (phoneInput) {
+    phoneInput.addEventListener('input', function () {
+      phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 10);
     });
   }
 });

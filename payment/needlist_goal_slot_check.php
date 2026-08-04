@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
+define('DRAWDREAM_DB_LIGHT', true);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
@@ -38,8 +39,14 @@ $response = [
     'abandoned' => false,
 ];
 
-if (!$canPay && $chargeId !== '' && isset($_SESSION['pending_charge_id']) && $_SESSION['pending_charge_id'] === $chargeId) {
-    if ((int)($_SESSION['pending_foundation_id'] ?? 0) === $foundationId) {
+$pendingChargeId = trim((string)($_SESSION['pending_charge_id'] ?? ''));
+$pendingFoundationId = (int)($_SESSION['pending_foundation_id'] ?? 0);
+
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+if (!$canPay && $chargeId !== '' && $pendingChargeId !== '' && $pendingChargeId === $chargeId) {
+    if ($pendingFoundationId === $foundationId) {
         drawdream_abandon_pending_donation_by_charge($conn, $donorUid, $chargeId);
         drawdream_clear_pending_payment_session();
         $response['abandoned'] = true;

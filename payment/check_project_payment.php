@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // payment/check_project_payment.php — ยืนยันการชำระโครงการ (หลัง Omise)
 // สรุปสั้น: ปิดธุรกรรมบริจาคโครงการและเพิ่มยอดโครงการโดยไม่ให้เกินเป้าหมาย
 /**
@@ -10,16 +10,22 @@
  * - ส่งแจ้งเตือนใบเสร็จอิเล็กทรอนิกส์
  */
 
-include __DIR__ . '/../db.php';
+include __DIR__ . '/../includes/payment_bootstrap.php';
 include __DIR__ . '/config.php';
-require_once __DIR__ . '/../includes/admin_audit_migrate.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
-require_once __DIR__ . '/../includes/donate_category_resolve.php';
 require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/../includes/drawdream_project_payment_finalize.php';
 require_once __DIR__ . '/omise_helpers.php';
 
+$isPollRequest = isset($_GET['poll']) && (string)$_GET['poll'] === '1';
+
 if (!isset($_SESSION['user_id'])) {
+    if ($isPollRequest) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'reason' => 'login_required'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header('Location: ../login.php');
     exit();
 }
@@ -28,14 +34,39 @@ $charge_id  = $_GET['charge_id'] ?? '';
 $project_id = (int)($_GET['project_id'] ?? 0);
 
 if (empty($charge_id)) {
+    if ($isPollRequest) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'reason' => 'missing_charge_id'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header('Location: ../project.php');
     exit();
 }
 
+$ptRow = null;
+$dup = $conn->prepare('SELECT donate_id, payment_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
+$dup->bind_param('s', $charge_id);
+$dup->execute();
+$ptRow = $dup->get_result()->fetch_assoc();
+
+$already_completed = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'completed');
+$already_unallocated = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === DRAWDREAM_DONATION_STATUS_PAID_UNALLOCATED);
+$already_refunded = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === DRAWDREAM_DONATION_STATUS_REFUNDED);
+$has_pending = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'pending');
+
 $is_mock = (strpos($charge_id, 'chrg_mock_') === 0);
 $charge  = [];
 
-if ($is_mock) {
+if ($already_completed && !$is_mock) {
+    $amountCompleted = (float)($ptRow['amount'] ?? 0);
+    $charge = [
+        'status'   => 'successful',
+        'paid'     => true,
+        'amount'   => (int)round(max(0, $amountCompleted) * 100),
+        'metadata' => ['project_id' => $project_id],
+    ];
+} elseif ($is_mock) {
     $charge = [
         'status'   => 'successful',
         'paid'     => true,
@@ -60,17 +91,6 @@ $is_test_mode    = drawdream_omise_is_test_mode();
 
 $is_success = ($paid === true) || ($status === 'successful') || $is_mock;
 $amount     = 0.0;
-
-$ptRow = null;
-$dup = $conn->prepare('SELECT donate_id, payment_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
-$dup->bind_param('s', $charge_id);
-$dup->execute();
-$ptRow = $dup->get_result()->fetch_assoc();
-
-$already_completed = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'completed');
-$already_unallocated = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === DRAWDREAM_DONATION_STATUS_PAID_UNALLOCATED);
-$already_refunded = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === DRAWDREAM_DONATION_STATUS_REFUNDED);
-$has_pending = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'pending');
 
 $donor_uid = (int)$_SESSION['user_id'];
 
@@ -225,7 +245,13 @@ if ($finalized_this_request && $receiptDonateId <= 0) {
     $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
 }
 if ($finalized_this_request && $receiptDonateId > 0) {
-    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
+    drawdream_send_e_receipt_notification_deferred($conn, $receiptDonateId);
+}
+if ($finalized_this_request) {
+    require_once dirname(__DIR__) . '/includes/homepage_impact_stats.php';
+    require_once dirname(__DIR__) . '/includes/project_public_list_cache.php';
+    drawdream_homepage_impact_stats_cache_bust();
+    drawdream_project_public_list_cache_bust();
 }
 
 if ($payment_ui === 'success' && $amount <= 0) {
@@ -246,6 +272,71 @@ if ($project_id > 0) {
         $stPn->execute();
         $project_name = trim((string)($stPn->get_result()->fetch_assoc()['project_name'] ?? ''));
     }
+}
+
+if ($payment_ui === 'success') {
+    if ($receiptDonateId <= 0 && is_array($ptRow)) {
+        $receiptDonateId = (int)($ptRow['donate_id'] ?? 0);
+    }
+    if ($receiptDonateId <= 0) {
+        $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+    }
+    $successDetail = 'จำนวน ' . number_format((float)$amount, 2) . ' บาท';
+    if ($project_name !== '') {
+        $successDetail = 'ขอบคุณที่ร่วมบริจาคให้โครงการ ' . $project_name . ' — ' . $successDetail;
+    }
+    if (!$isPollRequest) {
+        drawdream_try_payment_success_receipt_redirect(
+            $conn,
+            $receiptDonateId,
+            'ชำระเงินสำเร็จ!',
+            '../project.php',
+            $successDetail
+        );
+    }
+}
+
+if ($isPollRequest) {
+    header('Content-Type: application/json; charset=utf-8');
+    if ($payment_ui === 'success') {
+        $pollRedirect = '../project.php';
+        if ($receiptDonateId > 0 && drawdream_donation_eligible_for_e_receipt($conn, $receiptDonateId)) {
+            $receiptQuery = drawdream_payment_success_receipt_query(
+                $receiptDonateId,
+                'ชำระเงินสำเร็จ!',
+                '../project.php',
+                $successDetail ?? ''
+            );
+            if ($receiptQuery !== '') {
+                $pollRedirect = '../' . $receiptQuery;
+            }
+        }
+        echo json_encode([
+            'ok' => true,
+            'status' => 'success',
+            'redirect' => $pollRedirect,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($payment_ui === 'pending') {
+        echo json_encode(['ok' => true, 'status' => 'pending'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (in_array($payment_ui, ['paid_goal_late', 'paid_goal_refunded'], true)) {
+        echo json_encode([
+            'ok' => true,
+            'status' => $payment_ui,
+            'redirect' => 'check_project_payment.php?charge_id=' . rawurlencode($charge_id)
+                . '&project_id=' . (int)$project_id,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo json_encode([
+        'ok' => false,
+        'status' => (string)$payment_ui,
+        'failure_message' => (string)$failure_message,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 ?>
 <!DOCTYPE html>

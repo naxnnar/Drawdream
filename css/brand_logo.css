@@ -14,9 +14,9 @@
 
 .admin-brand-logo {
     display: block;
-    height: 88px;
+    height: 120px;
     width: auto;
-    max-width: 320px;
+    max-width: min(100%, 280px);
     max-height: none;
     margin: 0 auto;
     object-fit: contain;
@@ -71,8 +71,8 @@
     object-fit: contain;
 }
 
-footer img[alt*="DrawDream"],
-footer img[alt*="Draw Dream"] {
+footer:not(.site-footer) img[alt*="DrawDream"],
+footer:not(.site-footer) img[alt*="Draw Dream"] {
     height: 2.75rem;
     width: auto;
     max-width: min(220px, 100%);
@@ -81,6 +81,12 @@ footer img[alt*="Draw Dream"] {
     margin-right: auto;
     object-fit: contain;
     object-position: left top;
+}
+
+footer.site-footer .site-footer__logo-cell .footer-logo {
+    margin-left: auto;
+    margin-right: auto;
+    object-position: center center;
 }
 
 @media (max-width: 767.98px) {
@@ -102,8 +108,8 @@ footer img[alt*="Draw Dream"] {
 
     .footer-logo,
     .site-footer .footer-logo,
-    footer img[alt*="DrawDream"],
-    footer img[alt*="Draw Dream"] {
+    footer:not(.site-footer) img[alt*="DrawDream"],
+    footer:not(.site-footer) img[alt*="Draw Dream"] {
         height: 2.5rem;
         max-height: 2.5rem;
         max-width: min(100%, 200px);

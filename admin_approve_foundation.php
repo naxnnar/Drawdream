@@ -14,7 +14,6 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
 }
 
 $notifFoundationUrl = 'admin_notifications.php#admin-pending-foundations';
-drawdream_foundation_review_ensure_schema($conn);
 
 // ======== ประมวลผล POST (จากศูนย์แจ้งเตือน) ========
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -29,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'approve') {
             $stmt = $conn->prepare(
                 'UPDATE foundation_profile
-                 SET account_verified = 1, verified_at = NOW(), review_note = NULL
+                 SET account_verified = 1, verified_at = NOW()
                  WHERE foundation_id = ? AND account_verified = 0'
             );
             $stmt->bind_param('i', $foundation_id);
@@ -61,10 +60,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $rejectUid = (int)$fp['user_id'];
                 $stUpd = $conn->prepare(
                     'UPDATE foundation_profile
-                     SET account_verified = 2, review_note = ?
+                     SET account_verified = 2
                      WHERE foundation_id = ? AND account_verified = 0'
                 );
-                $stUpd->bind_param('si', $reject_reason, $foundation_id);
+                $stUpd->bind_param('i', $foundation_id);
                 $stUpd->execute();
                 drawdream_send_notification(
                     $conn,

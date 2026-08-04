@@ -4,6 +4,8 @@
 // สรุปสั้น: ตรวจและปรับ schema ตาราง needlist ให้รองรับฟีเจอร์ปัจจุบัน
 declare(strict_types=1);
 
+require_once __DIR__ . '/drawdream_schema_once.php';
+
 /** ปัดจำนวนเงินเป็นบาททศนิยม 2 ตำแหน่ง (เก็บใน JSON / DB ให้ตรงที่มูลนิธิกรอก ไม่มี float ยาว) */
 function drawdream_needlist_round_money(float $amount): float
 {
@@ -23,6 +25,116 @@ function drawdream_needlist_service_charge_rate(): float
 function drawdream_needlist_compute_service_charge(float $donatedAmount): float
 {
     return drawdream_needlist_round_money(max(0.0, $donatedAmount) * drawdream_needlist_service_charge_rate());
+}
+
+function drawdream_needlist_service_charge_payment_link(int $itemId): string
+{
+    return 'payment/needlist_service_charge.php?item_id=' . max(0, $itemId);
+}
+
+/** หน้ารายละเอียดรายการสิ่งของ — มูลนิธิกดปุ่มชำระค่าบริการจากหน้านี้ */
+function drawdream_needlist_service_charge_view_link(int $itemId): string
+{
+    return 'foundation_need_view.php?id=' . max(0, $itemId);
+}
+
+/** ความยาวสูงสุดคอลัมน์ item_name (สรุปชื่อรายการ — รายละเอียดเต็มอยู่ใน need_items_json) */
+function foundation_needlist_item_name_max_length(): int
+{
+    return 255;
+}
+
+/** สร้างข้อความ item_name ให้พอดีคอลัมน์ DB */
+function foundation_needlist_build_item_name_label(array $itemNames): string
+{
+    $maxLen = foundation_needlist_item_name_max_length();
+    $names = array_values(array_filter(array_map(static fn($n) => trim((string)$n), $itemNames)));
+    if ($names === []) {
+        return '';
+    }
+    $joined = implode(', ', $names);
+    if (mb_strlen($joined, 'UTF-8') <= $maxLen) {
+        return $joined;
+    }
+    $extra = count($names) - 1;
+    if ($extra <= 0) {
+        return mb_substr($names[0], 0, $maxLen, 'UTF-8');
+    }
+    $suffix = ', และอีก ' . $extra . ' รายการ';
+    $budget = $maxLen - mb_strlen($suffix, 'UTF-8');
+    if ($budget < 8) {
+        return mb_substr($names[0], 0, $maxLen, 'UTF-8');
+    }
+
+    return rtrim(mb_substr($names[0], 0, $budget, 'UTF-8')) . $suffix;
+}
+
+/**
+ * มูลนิธิแก้ไขรายการสิ่งของได้หรือไม่
+ * - pending / rejected: ได้เสมอ
+ * - approved + ยอดบริจาค 0 + ยังไม่ชำระค่าบริการ: แก้แล้วส่งรออนุมัติใหม่
+ */
+function drawdream_foundation_needlist_may_edit(array $row): bool
+{
+    $status = strtolower(trim((string)($row['approve_item'] ?? '')));
+    if (in_array($status, ['pending', 'rejected'], true)) {
+        return true;
+    }
+    if ($status !== 'approved') {
+        return false;
+    }
+    if ((float)($row['current_donate'] ?? 0) > 0.0001) {
+        return false;
+    }
+    $scPaid = trim((string)($row['service_charge_paid_at'] ?? ''));
+    if ($scPaid !== '' && !str_starts_with($scPaid, '0000-00-00')) {
+        return false;
+    }
+
+    return true;
+}
+
+/** หลังบันทึกแก้ไข — ต้องกลับเป็น pending และแจ้งแอดมินใหม่หรือไม่ */
+function drawdream_foundation_needlist_resubmit_on_save(array $row): bool
+{
+    $status = strtolower(trim((string)($row['approve_item'] ?? '')));
+    if ($status === 'rejected') {
+        return true;
+    }
+    if ($status === 'approved') {
+        return drawdream_foundation_needlist_may_edit($row);
+    }
+
+    return false;
+}
+
+/** รายการสิ่งของครบเป้าแล้วแต่ยังไม่ชำระค่าบริการ (รายการแรก) */
+function drawdream_needlist_first_unpaid_service_charge_item_id(mysqli $conn, int $foundationId): int
+{
+    if ($foundationId <= 0) {
+        return 0;
+    }
+    $st = $conn->prepare(
+        "SELECT item_id FROM foundation_needlist
+         WHERE foundation_id = ?
+           AND LOWER(TRIM(COALESCE(approve_item,''))) = 'approved'
+           AND COALESCE(total_price, 0) > 0
+           AND COALESCE(current_donate, 0) >= COALESCE(total_price, 0) - 0.01
+           AND (
+             service_charge_paid_at IS NULL
+             OR TRIM(COALESCE(service_charge_paid_at, '')) = ''
+             OR service_charge_paid_at LIKE '0000-00-00%'
+           )
+         ORDER BY item_id ASC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('i', $foundationId);
+    $st->execute();
+
+    return (int)($st->get_result()->fetch_assoc()['item_id'] ?? 0);
 }
 
 /** บันทึก service_charge ลง DB เมื่อครบเป้า — เก็บไว้ดูในตารางเท่านั้น */
@@ -88,6 +200,9 @@ function drawdream_needlist_backfill_service_charges(mysqli $conn): void
  */
 function drawdream_ensure_needlist_schema(mysqli $conn): void
 {
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
     static $ensured = false;
     if ($ensured) {
         return;
@@ -124,6 +239,29 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_need_items_pricing_json'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN submitted_need_items_pricing_json LONGTEXT NULL DEFAULT NULL AFTER submitted_total_price');
     }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_need_items_json'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN submitted_need_items_json LONGTEXT NULL DEFAULT NULL AFTER submitted_need_items_pricing_json');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'foundation_original_total_price'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN foundation_original_total_price DECIMAL(12,2) NULL DEFAULT NULL AFTER submitted_need_items_json');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'foundation_original_need_items_pricing_json'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN foundation_original_need_items_pricing_json LONGTEXT NULL DEFAULT NULL AFTER foundation_original_total_price');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'foundation_original_need_items_json'")) && $c->num_rows === 0) {
+        @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN foundation_original_need_items_json LONGTEXT NULL DEFAULT NULL AFTER foundation_original_need_items_pricing_json');
+    }
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'item_name'")) && ($col = $c->fetch_assoc())) {
+        $type = strtolower((string)($col['Type'] ?? ''));
+        if (preg_match('/^varchar\((\d+)\)/i', $type, $vm) && (int)($vm[1] ?? 0) < foundation_needlist_item_name_max_length()) {
+            @$conn->query(
+                'ALTER TABLE foundation_needlist MODIFY COLUMN item_name VARCHAR('
+                . foundation_needlist_item_name_max_length()
+                . ") NOT NULL DEFAULT ''"
+            );
+        }
+    }
+
     if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'desired_brand'")) && $c->num_rows === 0) {
         @$conn->query('ALTER TABLE foundation_needlist ADD COLUMN desired_brand VARCHAR(200) NULL DEFAULT NULL');
     }
@@ -211,6 +349,33 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
            AND TRIM(need_items_pricing_json) <> ''
            AND price_reviewed_at IS NULL"
     );
+    @$conn->query(
+        "UPDATE foundation_needlist
+         SET submitted_need_items_json = need_items_json
+         WHERE (submitted_need_items_json IS NULL OR TRIM(submitted_need_items_json) = '')
+           AND need_items_json IS NOT NULL
+           AND TRIM(need_items_json) <> ''"
+    );
+    if (($c = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'foundation_original_total_price'")) && $c->num_rows > 0) {
+        @$conn->query(
+            "UPDATE foundation_needlist
+             SET foundation_original_total_price = submitted_total_price,
+                 foundation_original_need_items_pricing_json = submitted_need_items_pricing_json,
+                 foundation_original_need_items_json = submitted_need_items_json
+             WHERE foundation_original_total_price IS NULL
+               AND price_reviewed_at IS NOT NULL
+               AND submitted_total_price IS NOT NULL"
+        );
+        @$conn->query(
+            "UPDATE foundation_needlist
+             SET submitted_total_price = total_price,
+                 submitted_need_items_pricing_json = need_items_pricing_json,
+                 submitted_need_items_json = need_items_json
+             WHERE price_reviewed_at IS NOT NULL
+               AND need_items_pricing_json IS NOT NULL
+               AND TRIM(need_items_pricing_json) <> ''"
+        );
+    }
     @$conn->query(
         "UPDATE foundation_needlist
          SET price_reviewed_at = created_at
@@ -323,6 +488,7 @@ function drawdream_ensure_needlist_schema(mysqli $conn): void
         'category',
         'previous_total_price',
         'submitted_items_json',
+        'review_note',
         'reviewed_by_user_id',
         'reviewed_at',
         'price_reviewed_by_user_id',
@@ -468,7 +634,59 @@ function foundation_needlist_pricing_maps_from_json(string $rawPricing): array
 }
 
 /**
- * รายการ + ราคาต่อชิ้นที่มูลนิธิเสนอตอนส่ง (snapshot ไม่เปลี่ยนเมื่อแอดมินแก้)
+ * ราคารวมที่มูลนิธิเสนอครั้งแรก (เก็บใน foundation_original_* หลังแอดมินอนุมัติ)
+ */
+function foundation_needlist_foundation_original_total_from_row(array $row): float
+{
+    $orig = (float)($row['foundation_original_total_price'] ?? 0);
+    if ($orig > 0) {
+        return $orig;
+    }
+    $submitted = (float)($row['submitted_total_price'] ?? 0);
+    $current = (float)($row['total_price'] ?? 0);
+    if ($submitted > 0 && abs($submitted - $current) > 0.01) {
+        return $submitted;
+    }
+
+    return $submitted > 0 ? $submitted : $current;
+}
+
+/**
+ * รายการ + ราคาต่อชิ้นที่มูลนิธิเสนอครั้งแรก (สำหรับเปรียบเทียบกับราคาแอดมิน)
+ *
+ * @param array<string,mixed> $row
+ * @return list<array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}>
+ */
+function foundation_needlist_foundation_original_line_items_from_row(array $row): array
+{
+    $origPricing = trim((string)($row['foundation_original_need_items_pricing_json'] ?? ''));
+    $origItems = trim((string)($row['foundation_original_need_items_json'] ?? ''));
+    if ($origPricing !== '') {
+        $tmp = $row;
+        $tmp['need_items_pricing_json'] = $origPricing;
+        if ($origItems !== '') {
+            $tmp['need_items_json'] = $origItems;
+        }
+
+        return foundation_needlist_line_items_from_row($tmp, false);
+    }
+    $submittedRaw = trim((string)($row['submitted_need_items_pricing_json'] ?? ''));
+    $adminRaw = trim((string)($row['need_items_pricing_json'] ?? ''));
+    if ($submittedRaw !== '' && $adminRaw !== '' && $submittedRaw !== $adminRaw) {
+        return foundation_needlist_submitted_line_items_from_row($row);
+    }
+    $fromItems = foundation_needlist_line_items_from_row($row, true);
+    foreach ($fromItems as $li) {
+        if ((float)($li['price'] ?? 0) > 0) {
+            return $fromItems;
+        }
+    }
+
+    return [];
+}
+
+/**
+ * รายการ + ราคาต่อชิ้นที่เก็บใน submitted_* (ราคาปัจจุบัน — ตรงกับที่แอดมินอนุมัติหลัง approve)
  *
  * @param array<string,mixed> $row
  * @return list<array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}>
@@ -479,6 +697,10 @@ function foundation_needlist_submitted_line_items_from_row(array $row): array
     if ($submittedRaw !== '') {
         $tmp = $row;
         $tmp['need_items_pricing_json'] = $submittedRaw;
+        $submittedItemsRaw = trim((string)($row['submitted_need_items_json'] ?? ''));
+        if ($submittedItemsRaw !== '') {
+            $tmp['need_items_json'] = $submittedItemsRaw;
+        }
         return foundation_needlist_line_items_from_row($tmp, false);
     }
     $fromItems = foundation_needlist_line_items_from_row($row, true);
@@ -665,6 +887,88 @@ function foundation_needlist_items_json_strip_prices(string $itemsJson): string
 }
 
 /**
+ * สร้าง JSON รายการ + ราคาสำหรับอนุมัติ (รองรับแถวที่ไม่มี need_items_json แต่มียอดรวม/จำนวน)
+ *
+ * @param array<string,mixed> $row
+ * @return array{items_json:?string,pricing_json:?string,total:float,lines:list<array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}>}
+ */
+function foundation_needlist_approval_payload_from_row(array $row, ?float $totalOverride = null): array
+{
+    $empty = ['items_json' => null, 'pricing_json' => null, 'total' => 0.0, 'lines' => []];
+    $lines = foundation_needlist_donor_picker_lines_from_row($row);
+    if ($lines !== []) {
+        $encoded = foundation_needlist_encode_line_items_json($lines);
+        $total = (float)($encoded['total'] ?? 0);
+        if ($totalOverride !== null && $totalOverride > 0 && abs($total - $totalOverride) > 0.0001 && $lines !== []) {
+            $scale = $total > 0 ? ($totalOverride / $total) : 1.0;
+            $scaled = [];
+            foreach ($lines as $li) {
+                $qty = (float)($li['qty'] ?? 0);
+                $price = drawdream_needlist_round_money((float)($li['price'] ?? 0) * $scale);
+                if ($qty <= 0 || $price <= 0) {
+                    continue;
+                }
+                $scaled[] = [
+                    'slot' => (int)($li['slot'] ?? 0),
+                    'category' => (string)($li['category'] ?? ''),
+                    'item_name' => (string)($li['item_name'] ?? ''),
+                    'qty' => $qty,
+                    'price' => $price,
+                    'line_total' => drawdream_needlist_round_money($qty * $price),
+                ];
+            }
+            if ($scaled !== []) {
+                $encoded = foundation_needlist_encode_line_items_json($scaled);
+            }
+        }
+        if ((float)($encoded['total'] ?? 0) > 0) {
+            return [
+                'items_json' => $encoded['items_json'] ?? null,
+                'pricing_json' => $encoded['pricing_json'] ?? null,
+                'total' => (float)($encoded['total'] ?? 0),
+                'lines' => $lines,
+            ];
+        }
+    }
+
+    $qty = (float)($row['qty_needed'] ?? 0);
+    $total = $totalOverride;
+    if ($total === null || $total <= 0) {
+        $total = (float)($row['submitted_total_price'] ?? 0);
+    }
+    if ($total <= 0) {
+        $total = (float)($row['total_price'] ?? 0);
+    }
+    if ($qty <= 0 || $total <= 0) {
+        return $empty;
+    }
+    $unit = drawdream_needlist_round_money($total / $qty);
+    if ($unit <= 0) {
+        return $empty;
+    }
+    $name = trim((string)($row['item_name'] ?? ''));
+    if ($name === '') {
+        $name = 'รายการสิ่งของ';
+    }
+    $single = [[
+        'slot' => 1,
+        'category' => '',
+        'item_name' => $name,
+        'qty' => $qty,
+        'price' => $unit,
+        'line_total' => drawdream_needlist_round_money($total),
+    ]];
+    $encoded = foundation_needlist_encode_line_items_json($single);
+
+    return [
+        'items_json' => $encoded['items_json'] ?? null,
+        'pricing_json' => $encoded['pricing_json'] ?? null,
+        'total' => (float)($encoded['total'] ?? 0),
+        'lines' => $single,
+    ];
+}
+
+/**
  * สร้าง JSON รายการ + ราคาจากแถวที่แก้แล้ว (ใช้ตอนมูลนิธิ/แอดมินบันทึก)
  *
  * @param list<array{slot:int,category:string,item_name:string,qty:float,price:float,line_total?:float}> $lineItems
@@ -789,4 +1093,187 @@ function foundation_needlist_admin_delivery_from_row(array $row): array
         'at_fmt' => $atFmt,
         'has' => $text !== '' || $images !== [],
     ];
+}
+
+/**
+ * รายการสิ่งของย่อยสำหรับหน้าแอดมินตรวจ/อนุมัติ (ฟอร์ม + POST ใช้ชุดเดียวกัน)
+ *
+ * @param array<string,mixed> $row
+ * @return list<array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}>
+ */
+function foundation_needlist_review_line_items_from_row(array $row): array
+{
+    $status = strtolower(trim((string)($row['approve_item'] ?? '')));
+    if ($status === 'pending') {
+        $lines = foundation_needlist_submitted_line_items_from_row($row);
+        if ($lines !== []) {
+            return $lines;
+        }
+
+        return foundation_needlist_line_items_from_row($row, true);
+    }
+
+    return foundation_needlist_admin_line_items_from_row($row);
+}
+
+/**
+ * รายการสำหรับหน้าเลือกสิ่งของผู้บริจาค (รองรับข้อมูลเก่า / หลังแอดมินอนุมัติ)
+ *
+ * @param array<string,mixed> $row
+ * @return list<array{slot:int,category:string,item_name:string,qty:float,price:float,line_total:float}>
+ */
+function foundation_needlist_donor_picker_lines_from_row(array $row): array
+{
+    $lines = foundation_needlist_review_line_items_from_row($row);
+    if ($lines === []) {
+        $lines = foundation_needlist_line_items_from_row($row, false);
+    }
+    if ($lines === []) {
+        $lines = foundation_needlist_admin_line_items_from_row($row);
+    }
+    if ($lines !== []) {
+        $out = [];
+        foreach ($lines as $idx => $li) {
+            $name = trim((string)($li['item_name'] ?? ''));
+            if ($name === '') {
+                $name = trim((string)($li['category'] ?? ''));
+            }
+            $qty = (float)($li['qty'] ?? 0);
+            $price = (float)($li['price'] ?? 0);
+            $lineTotal = (float)($li['line_total'] ?? 0);
+            if ($lineTotal <= 0 && $qty > 0 && $price > 0) {
+                $lineTotal = drawdream_needlist_round_money($qty * $price);
+            }
+            if ($name === '' || $qty <= 0 || $price <= 0) {
+                continue;
+            }
+            $out[] = [
+                'slot' => (int)($li['slot'] ?? ($idx + 1)),
+                'category' => (string)($li['category'] ?? ''),
+                'item_name' => $name,
+                'qty' => $qty,
+                'price' => $price,
+                'line_total' => $lineTotal > 0 ? $lineTotal : drawdream_needlist_round_money($qty * $price),
+            ];
+        }
+        if ($out !== []) {
+            return $out;
+        }
+    }
+
+    $nameTokens = [];
+    $rawNames = trim((string)($row['item_name'] ?? ''));
+    if ($rawNames !== '') {
+        $parts = preg_split('/\s*(?:,|\||\R)\s*/u', $rawNames);
+        if (is_array($parts)) {
+            foreach ($parts as $p) {
+                $t = trim((string)$p);
+                if ($t !== '') {
+                    $nameTokens[] = $t;
+                }
+            }
+        }
+    }
+    $fallbackQty = (float)($row['qty_needed'] ?? 0);
+    $fallbackTotal = (float)($row['total_price'] ?? 0);
+    if ($fallbackQty > 0 && $fallbackTotal > 0) {
+        $unit = drawdream_needlist_round_money($fallbackTotal / $fallbackQty);
+        if ($unit > 0) {
+            if (count($nameTokens) > 1) {
+                $perQty = $fallbackQty / count($nameTokens);
+                $out = [];
+                foreach ($nameTokens as $i => $token) {
+                    $q = $perQty > 0 ? $perQty : 1.0;
+                    $out[] = [
+                        'slot' => $i + 1,
+                        'category' => '',
+                        'item_name' => $token,
+                        'qty' => $q,
+                        'price' => $unit,
+                        'line_total' => drawdream_needlist_round_money($q * $unit),
+                    ];
+                }
+                return $out;
+            }
+            $label = $nameTokens[0] ?? ($rawNames !== '' ? $rawNames : 'รายการสิ่งของ');
+            return [[
+                'slot' => 1,
+                'category' => '',
+                'item_name' => $label,
+                'qty' => $fallbackQty,
+                'price' => $unit,
+                'line_total' => drawdream_needlist_round_money($fallbackTotal),
+            ]];
+        }
+    }
+
+    return [];
+}
+
+/**
+ * รายการที่ขาดก่อนเปิดรับบริจาคได้ (ว่าง = พร้อม)
+ *
+ * @param array<string,mixed> $row
+ * @return list<string>
+ */
+function foundation_needlist_readiness_issues(array $row, bool $requireFoundationImage = true): array
+{
+    $issues = [];
+    $lines = foundation_needlist_review_line_items_from_row($row);
+    if ($lines === []) {
+        $lines = foundation_needlist_donor_picker_lines_from_row($row);
+    }
+    if ($lines === []) {
+        $lines = foundation_needlist_line_items_from_row($row, true);
+    }
+    if ($lines === []) {
+        $lines = foundation_needlist_admin_line_items_from_row($row);
+    }
+    if ($lines === []) {
+        $issues[] = 'ไม่มีรายการสิ่งของย่อย (ชื่อ · ราคา · จำนวน)';
+        return $issues;
+    }
+    foreach ($lines as $idx => $li) {
+        $n = (int)($li['slot'] ?? ($idx + 1));
+        $name = trim((string)($li['item_name'] ?? ''));
+        $qty = (float)($li['qty'] ?? 0);
+        $price = (float)($li['price'] ?? 0);
+        if ($name === '') {
+            $issues[] = "รายการที่ {$n}: ไม่มีชื่อสิ่งของ";
+        }
+        if ($qty <= 0) {
+            $issues[] = "รายการที่ {$n}: ไม่มีจำนวน";
+        }
+        if ($price <= 0) {
+            $issues[] = "รายการที่ {$n}: ไม่มีราคา";
+        }
+    }
+    if (foundation_needlist_item_filenames_from_row($row) === []) {
+        $issues[] = 'ไม่มีรูปสิ่งของ (อย่างน้อย 1 รูป)';
+    }
+    if ($requireFoundationImage) {
+        $fdnImg = foundation_needlist_normalize_filename((string)($row['need_foundation_image'] ?? ''));
+        if ($fdnImg === '') {
+            $issues[] = 'ไม่มีรูปมูลนิธิ';
+        }
+    }
+
+    return $issues;
+}
+
+/** @param array<string,mixed> $row */
+function foundation_needlist_is_donation_ready(array $row, bool $requireFoundationImage = true): bool
+{
+    return foundation_needlist_readiness_issues($row, $requireFoundationImage) === [];
+}
+
+/** @param array<string,mixed> $row */
+function foundation_needlist_readiness_message_th(array $row, bool $requireFoundationImage = true): string
+{
+    $issues = foundation_needlist_readiness_issues($row, $requireFoundationImage);
+    if ($issues === []) {
+        return '';
+    }
+
+    return implode(' · ', $issues);
 }

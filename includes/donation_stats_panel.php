@@ -80,6 +80,44 @@ function drawdream_donation_stats_panel_values(mysqli $conn, int $categoryId, in
 }
 
 /**
+ * นับผู้บริจาคแยกตามโครงการในครั้งเดียว (ลด N+1 บนหน้ารายการโครงการ)
+ *
+ * @param list<int> $projectIds
+ * @return array<int,int> project_id => distinct donor count
+ */
+function drawdream_project_donor_counts_batch(mysqli $conn, int $categoryId, array $projectIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $projectIds), static fn(int $x): bool => $x > 0)));
+    if ($categoryId <= 0 || $ids === []) {
+        return [];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+    $types = 'i' . str_repeat('i', count($ids));
+    $st = $conn->prepare(
+        "SELECT target_id AS project_id, COUNT(DISTINCT donor_id) AS cnt
+         FROM donation
+         WHERE category_id = ? AND target_id IN ($placeholders) AND payment_status = 'completed'
+         GROUP BY target_id"
+    );
+    if (!$st) {
+        return [];
+    }
+
+    $bindArgs = array_merge([$categoryId], $ids);
+    $st->bind_param($types, ...$bindArgs);
+    $st->execute();
+    $res = $st->get_result();
+
+    $out = [];
+    while ($row = $res->fetch_assoc()) {
+        $out[(int)($row['project_id'] ?? 0)] = (int)($row['cnt'] ?? 0);
+    }
+
+    return $out;
+}
+
+/**
  * @param array{donor_count:int,total_amount:float,month_amount:float,education_fund:float} $vals
  */
 function drawdream_render_donation_stats_panel(array $vals, string $ariaLabel = 'สรุปตัวเลขการบริจาค', ?string $panelDomId = null): void

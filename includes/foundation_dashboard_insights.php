@@ -468,17 +468,90 @@ function foundation_dashboard_donations_json_payload(
         $ts = $tsRaw !== '' ? strtotime($tsRaw) : false;
         $dt = strtolower(trim((string)($r['donate_type'] ?? '')));
         $isSub = in_array($dt, ['child_subscription', 'child_subscription_charge'], true);
+        $amt = (float)($r['amount'] ?? 0);
+        $targetLabel = foundation_dashboard_row_target_label($r, $cat, $childMap, $projectMap);
+        $planLabel = foundation_dashboard_donation_plan_label($dt, $amt);
+        $fullName = trim((string)($r['first_name'] ?? '') . ' ' . (string)($r['last_name'] ?? ''));
+        if ($fullName === '') {
+            $fullName = trim((string)($r['donor_email'] ?? ''));
+        }
+        if ($fullName === '') {
+            $fullName = 'ผู้บริจาคไม่ระบุตัวตน';
+        }
+        $companyName = trim((string)($r['receipt_company_name'] ?? ''));
+        $companyTaxId = trim((string)($r['receipt_company_tax_id'] ?? ''));
+        $profileTaxId = trim((string)($r['tax_id'] ?? ''));
+        $taxDisplay = ($companyName !== '' && $companyTaxId !== '') ? $companyTaxId : $profileTaxId;
+        $targetKind = $cat === 'child' ? 'เด็ก' : ($cat === 'project' ? 'โครงการ' : 'สิ่งของ');
+        $targetCell = $targetKind . ': ' . $targetLabel;
+        $donateId = (int)($r['donate_id'] ?? 0);
+        $receiptRef = foundation_dashboard_donation_receipt_ref($donateId, $tsRaw);
+        $channel = drawdream_donate_type_label_thai($dt);
+        $searchBlob = implode(' ', array_filter([
+            $fullName,
+            $receiptRef,
+            $taxDisplay,
+            $targetCell,
+            $channel,
+            $planLabel,
+        ], static fn ($v) => trim((string)$v) !== ''));
+
         $out[] = [
-            'amount' => (float)($r['amount'] ?? 0),
+            'amount' => $amt,
             'cat' => $cat,
-            'target' => foundation_dashboard_row_target_label($r, $cat, $childMap, $projectMap),
+            'target' => $targetLabel,
             'date' => $ts !== false ? date('Y-m-d', $ts) : '',
             'month' => $ts !== false ? date('Y-m', $ts) : '',
             'year' => $ts !== false ? date('Y', $ts) : '',
             'week' => $ts !== false ? date('o-W', $ts) : '',
             'is_sub' => $isSub,
+            'dt_label' => $ts !== false ? date('d/m/Y H:i:s', $ts) : '-',
+            'receipt_ref' => $receiptRef,
+            'donor_name' => $fullName,
+            'tax_display' => $taxDisplay,
+            'channel' => $channel,
+            'target_cell' => $targetCell,
+            'plan_label' => $planLabel,
+            'search' => $searchBlob,
         ];
     }
 
     return $out;
+}
+
+function foundation_dashboard_donation_receipt_ref(int $donateId, string $transferDatetime): string
+{
+    $ts = strtotime($transferDatetime);
+    $receiptRefDate = $ts !== false ? date('Ymd', $ts) : date('Ymd');
+
+    return 'DD-' . $receiptRefDate . '-' . str_pad((string)$donateId, 7, '0', STR_PAD_LEFT);
+}
+
+function foundation_dashboard_donation_plan_label(string $donateType, float $amount): string
+{
+    $dt = strtolower(trim($donateType));
+    if (!in_array($dt, ['child_subscription', 'child_subscription_charge'], true)) {
+        return 'ครั้งเดียว';
+    }
+    $code = abs($amount - 4200.0) < 0.01 ? 'semiannual' : (abs($amount - 8400.0) < 0.01 ? 'yearly' : 'monthly');
+    $planLabel = foundation_dashboard_recurring_plan_label($code);
+    if ($amount > 0) {
+        $planLabel .= ' · ' . number_format($amount, 0) . ' บ.';
+    }
+
+    return $planLabel;
+}
+
+function foundation_dashboard_recurring_plan_label(string $code): string
+{
+    $labels = [
+        'monthly' => 'รายเดือน',
+        'semiannual' => 'ราย 6 เดือน',
+        'yearly' => 'รายปี',
+        'daily' => 'รายวัน (QR)',
+        'one_time' => 'ครั้งเดียว',
+    ];
+    $k = strtolower(trim($code));
+
+    return $labels[$k] ?? ($k !== '' ? $k : '-');
 }

@@ -19,16 +19,16 @@ function foundation_dashboard_build_todos(
         return [];
     }
 
-    drawdream_ensure_foundation_project_service_charge_columns($conn);
-
     $todos = [];
     $fn = trim($foundationName);
     $monthStart = (new DateTimeImmutable('first day of this month midnight'))->format('Y-m-d H:i:s');
 
     if (!$accountVerified) {
         $todos[] = [
+            'key' => 'account_verify',
             'priority' => 'high',
-            'text' => 'บัญชีมูลนิธียังไม่ได้รับการยืนยัน — ตรวจสอบโปรไฟล์และเอกสารให้ครบก่อนเปิดรับบริจาคเต็มรูปแบบ',
+            'action_label' => 'ตรวจโปรไฟล์',
+            'text' => 'บัญชีมูลนิธียังรอการยืนยัน — ขั้นที่ 2: รอแอดมินตรวจ (โดยทั่วไป 1–3 วันทำการ) ตรวจโปรไฟล์ให้ครบ',
             'href' => 'profile.php',
         ];
     }
@@ -50,9 +50,11 @@ function foundation_dashboard_build_todos(
         $n = (int)($stScDue->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'project_service_charge',
                 'priority' => 'high',
-                'text' => foundation_dashboard_todo_count_th($n, 'โครงการ') . 'ระดมทุนครบแล้ว — ชำระค่าบริการระบบเพื่อให้ดำเนินการต่อได้',
-                'href' => 'foundation_projects_directory.php',
+                'action_label' => 'ชำระค่าบริการโครงการ',
+                'text' => foundation_dashboard_todo_count_th($n, 'โครงการ') . 'ระดมทุนครบแล้ว — ชำระค่าบริการระบบเพื่อให้ดำเนินการต่อได้ (ทีละโครงการ)',
+                'href' => 'foundation_projects_directory.php?task=service_charge',
             ];
         }
     }
@@ -71,7 +73,9 @@ function foundation_dashboard_build_todos(
         $n = (int)($stWaitAdmin->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'project_wait_escrow',
                 'priority' => 'normal',
+                'action_label' => 'ดูสถานะโครงการ',
                 'text' => foundation_dashboard_todo_count_th($n, 'โครงการ') . 'ชำระค่าบริการแล้ว — รอแอดมินยืนยันโอนเงิน (หลังนั้นจะอัปโหลดผลลัพธ์ได้)',
                 'href' => 'foundation_projects_directory.php',
             ];
@@ -95,20 +99,24 @@ function foundation_dashboard_build_todos(
         $n = (int)($stProjOutcome->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'project_outcome',
                 'priority' => 'high',
-                'text' => foundation_dashboard_todo_count_th($n, 'โครงการ') . 'พร้อมอัปเดตผลลัพธ์แล้ว — โพสต์รูป/ข้อความให้ผู้บริจาคเห็น',
-                'href' => 'foundation_post_update.php',
+                'action_label' => 'อัปเดตโครงการ',
+                'text' => foundation_dashboard_todo_count_th($n, 'โครงการ') . 'พร้อมอัปเดตผลลัพธ์แล้ว — โพสต์รูป/ข้อความให้ผู้บริจาคเห็น (หลายโครงการพร้อมกันได้)',
+                'href' => 'foundation_bulk_project_outcome.php',
             ];
         }
     }
 
     // เด็กที่มีผู้อุปการะ — ต้องอัปเดตข้อความภายใน 1 เดือนนับจากวันเริ่มอุปการะ (รอบครบทุกเดือน)
-    $childOutcomeDueCnt = drawdream_foundation_count_children_outcome_due($conn, $foundationId);
+    $childOutcomeDueCnt = drawdream_foundation_count_children_outcome_due_cached($conn, $foundationId);
     if ($childOutcomeDueCnt > 0) {
         $todos[] = [
+            'key' => 'child_outcome',
             'priority' => 'high',
-            'text' => 'มีเด็ก ' . $childOutcomeDueCnt . ' คนที่ถึงกำหนดส่งข้อความจากเด็ก (รอบ 1 เดือนนับจากวันมีผู้อุปการะ) — อัปเดตให้ผู้อุปการะ',
-            'href' => 'foundation_children_directory.php',
+            'action_label' => 'อัปเดตจดหมายเด็ก',
+            'text' => 'มีเด็ก ' . $childOutcomeDueCnt . ' คนที่ถึงกำหนดส่งข้อความจากเด็ก (รอบ 1 เดือนนับจากวันมีผู้อุปการะ) — อัปเดตให้ผู้อุปการะพร้อมกันได้',
+            'href' => 'foundation_bulk_child_outcome.php',
         ];
     }
 
@@ -127,9 +135,11 @@ function foundation_dashboard_build_todos(
         $n = (int)($stNeedSc->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'need_service_charge',
                 'priority' => 'high',
-                'text' => foundation_dashboard_todo_count_th($n, 'รายการสิ่งของ') . 'ระดมครบแล้ว — ชำระค่าบริการระบบเพื่อดำเนินการจัดซื้อ',
-                'href' => 'foundation_needlist_directory.php',
+                'action_label' => 'ชำระค่าบริการสิ่งของ',
+                'text' => foundation_dashboard_todo_count_th($n, 'รายการสิ่งของ') . 'ระดมครบแล้ว — ชำระค่าบริการระบบเพื่อดำเนินการจัดซื้อ (ทีละรายการ)',
+                'href' => 'foundation_needlist_directory.php?task=service_charge',
             ];
         }
     }
@@ -151,9 +161,11 @@ function foundation_dashboard_build_todos(
         $n = (int)($stNeedOutcome->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'need_outcome',
                 'priority' => 'normal',
-                'text' => foundation_dashboard_todo_count_th($n, 'รายการสิ่งของ') . 'จัดส่งแล้ว — โพสต์ผลการจัดส่งให้ผู้บริจาคเห็น',
-                'href' => 'foundation_post_needlist_result.php',
+                'action_label' => 'อัปเดตผลสิ่งของ',
+                'text' => foundation_dashboard_todo_count_th($n, 'รายการสิ่งของ') . 'จัดส่งแล้ว — โพสต์ผลการจัดส่งให้ผู้บริจาคเห็น (หลายรายการพร้อมกันได้)',
+                'href' => 'foundation_bulk_needlist_outcome.php',
             ];
         }
     }
@@ -170,7 +182,9 @@ function foundation_dashboard_build_todos(
         $n = (int)($stProjPending->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'project_pending',
                 'priority' => 'normal',
+                'action_label' => 'ดูโครงการ',
                 'text' => foundation_dashboard_todo_count_th($n, 'โครงการ') . 'รอแอดมินอนุมัติ — ตรวจสอบว่าส่งข้อมูลครบหรือไม่',
                 'href' => 'foundation_projects_directory.php',
             ];
@@ -189,7 +203,9 @@ function foundation_dashboard_build_todos(
         $n = (int)($stChildPending->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'child_pending',
                 'priority' => 'normal',
+                'action_label' => 'ดูรายชื่อเด็ก',
                 'text' => 'มีเด็ก ' . $n . ' คนที่โปรไฟล์ยังรออนุมัติจากแอดมิน',
                 'href' => 'foundation_children_directory.php',
             ];
@@ -208,7 +224,9 @@ function foundation_dashboard_build_todos(
         $n = (int)($stNeedPending->get_result()->fetch_assoc()['c'] ?? 0);
         if ($n > 0) {
             $todos[] = [
+                'key' => 'need_pending',
                 'priority' => 'normal',
+                'action_label' => 'ดูรายการสิ่งของ',
                 'text' => foundation_dashboard_todo_count_th($n, 'รายการสิ่งของ') . 'รอแอดมินอนุมัติ',
                 'href' => 'foundation_needlist_directory.php',
             ];
@@ -235,4 +253,24 @@ function foundation_dashboard_todo_count_th(int $n, string $noun): string
     }
 
     return 'มี ' . $n . ' ' . $noun . ' ';
+}
+
+function foundation_dashboard_first_need_item_id(mysqli $conn, int $foundationId, string $extraWhere): int
+{
+    if ($foundationId <= 0 || $extraWhere === '') {
+        return 0;
+    }
+    $sql = "SELECT item_id FROM foundation_needlist WHERE foundation_id = ? AND {$extraWhere} ORDER BY item_id ASC LIMIT 1";
+    $st = $conn->prepare($sql);
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('i', $foundationId);
+    $st->execute();
+    return (int)($st->get_result()->fetch_assoc()['item_id'] ?? 0);
+}
+
+function foundation_dashboard_need_wizard_href(int $itemId): string
+{
+    return $itemId > 0 ? ('foundation_need_wizard.php?item_id=' . $itemId) : 'foundation_needlist_directory.php';
 }

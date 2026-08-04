@@ -28,6 +28,12 @@ function drawdream_table_has_column(mysqli $conn, string $table, string $column)
 /** คอลัมน์ presence บน `user` (เฉพาะ “ใช้งานอยู่ตอนนี้”) */
 function drawdream_ensure_user_activity_columns(mysqli $conn): void
 {
+    if (!function_exists('drawdream_schema_migrations_allowed')) {
+        require_once __DIR__ . '/drawdream_schema_once.php';
+    }
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
     static $done = false;
     if ($done) {
         return;
@@ -63,6 +69,11 @@ function drawdream_migrate_legacy_user_presence(mysqli $conn): void
     }
     $migrated = true;
 
+    $marker = dirname(__DIR__) . '/config/user_presence_legacy_migrated.txt';
+    if (is_file($marker)) {
+        return;
+    }
+
     $tPres = @$conn->query("SHOW TABLES LIKE 'user_presence'");
     if ($tPres && $tPres->num_rows > 0) {
         @$conn->query(
@@ -72,6 +83,29 @@ function drawdream_migrate_legacy_user_presence(mysqli $conn): void
              WHERE u.last_seen_at IS NULL OR p.last_seen_at > u.last_seen_at'
         );
     }
+
+    @file_put_contents($marker, date('c'));
+}
+
+/** อัปเดต last_seen_at โดยไม่รัน migration — ใช้หลังสมัคร/ล็อกอินบนหน้า DB_LIGHT */
+function drawdream_touch_user_presence_fast(mysqli $conn, int $userId): void
+{
+    if ($userId <= 0) {
+        return;
+    }
+    static $hasCol = null;
+    if ($hasCol === null) {
+        $hasCol = drawdream_table_has_column($conn, 'user', 'last_seen_at');
+    }
+    if (!$hasCol) {
+        return;
+    }
+    $st = @$conn->prepare('UPDATE `user` SET last_seen_at = NOW() WHERE user_id = ?');
+    if (!$st) {
+        return;
+    }
+    $st->bind_param('i', $userId);
+    @$st->execute();
 }
 
 /** @deprecated */
@@ -126,6 +160,10 @@ function drawdream_log_user_login(mysqli $conn, int $userId, string $_via = 'pas
     if ($userId <= 0) {
         return;
     }
+    if (defined('DRAWDREAM_DB_LIGHT') && DRAWDREAM_DB_LIGHT) {
+        drawdream_touch_user_presence_fast($conn, $userId);
+        return;
+    }
     drawdream_touch_user_presence_only($conn, $userId);
 }
 
@@ -133,7 +171,7 @@ function drawdream_log_user_login(mysqli $conn, int $userId, string $_via = 'pas
  * ผู้ใช้ที่มี “ธุรกรรมจริง” อย่างน้อย 2 วันปฏิทิน (รวมจากตารางเดิม)
  *
  * - ผู้บริจาค: donation สำเร็จ (payment_status = completed)
- * - มูลนิธิ: ส่งโครงการ (foundation_project.start_date) / เสนอสิ่งของ (foundation_needlist.created_at)
+ * - มูลนิธิ: ส่งโครงการ / เสนอสิ่งของ / เพิ่มโปรไฟล์เด็ก (foundation_children.created_at)
  * - แอดมิน: อนุมัติสิ่งของ (admin + target_entity need + สถานะอนุมัติ)
  */
 function drawdream_count_returning_transaction_users(mysqli $conn): int
@@ -186,6 +224,26 @@ function drawdream_count_returning_transaction_users(mysqli $conn): int
                 INNER JOIN foundation_profile fp ON fp.foundation_id = p.foundation_id
                 WHERE fp.user_id IS NOT NULL AND fp.user_id > 0
                   AND {$projDay} IS NOT NULL";
+        }
+    }
+
+    if (drawdream_table_exists($conn, 'foundation_children')
+        && drawdream_table_exists($conn, 'foundation_profile')
+        && drawdream_table_has_column($conn, 'foundation_profile', 'user_id')
+        && drawdream_table_has_column($conn, 'foundation_profile', 'foundation_id')
+    ) {
+        $childDay = null;
+        if (drawdream_table_has_column($conn, 'foundation_children', 'created_at')) {
+            $childDay = 'DATE(c.created_at)';
+        } elseif (drawdream_table_has_column($conn, 'foundation_children', 'approve_at')) {
+            $childDay = 'DATE(c.approve_at)';
+        }
+        if ($childDay !== null) {
+            $parts[] = "SELECT fp.user_id AS user_id, {$childDay} AS activity_day
+                FROM foundation_children c
+                INNER JOIN foundation_profile fp ON fp.foundation_id = c.foundation_id
+                WHERE fp.user_id IS NOT NULL AND fp.user_id > 0
+                  AND {$childDay} IS NOT NULL";
         }
     }
 

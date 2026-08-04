@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/drawdream_project_service_charge.php';
 require_once __DIR__ . '/child_sponsorship.php';
+require_once __DIR__ . '/child_omise_subscription.php';
 require_once __DIR__ . '/escrow_funds_schema.php';
 
 /**
@@ -16,7 +17,7 @@ require_once __DIR__ . '/escrow_funds_schema.php';
  *   child_outcome_due: int
  * }
  */
-function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, string $foundationName): array
+function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, string $foundationName, ?array $childIds = null, ?int $activeSponsors = null): array
 {
     if ($foundationId <= 0) {
         return [
@@ -27,9 +28,6 @@ function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, s
             'child_outcome_due' => 0,
         ];
     }
-
-    drawdream_ensure_foundation_project_service_charge_columns($conn);
-    drawdream_escrow_funds_ensure_schema($conn);
 
     $fn = trim($foundationName);
     $projScope = '(foundation_id = ? OR (foundation_id IS NULL AND foundation_name = ?))';
@@ -96,26 +94,30 @@ function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, s
         [$foundationId, $fn, $monthStart]
     );
 
-    $childIds = [];
-    $stChild = $conn->prepare(
-        'SELECT child_id FROM foundation_children WHERE foundation_id = ?'
-    );
-    if ($stChild) {
-        $stChild->bind_param('i', $foundationId);
-        $stChild->execute();
-        $rs = $stChild->get_result();
-        while ($row = $rs->fetch_assoc()) {
-            $childIds[] = (int)($row['child_id'] ?? 0);
+    $childIds = $childIds ?? [];
+    if ($childIds === []) {
+        $stChild = $conn->prepare(
+            'SELECT child_id FROM foundation_children WHERE foundation_id = ?'
+        );
+        if ($stChild) {
+            $stChild->bind_param('i', $foundationId);
+            $stChild->execute();
+            $rs = $stChild->get_result();
+            while ($row = $rs->fetch_assoc()) {
+                $childIds[] = (int)($row['child_id'] ?? 0);
+            }
         }
     }
 
-    $activeSponsors = 0;
-    if ($childIds !== []) {
-        $activeMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIds);
-        $activeSponsors = count($activeMap);
+    if ($activeSponsors === null) {
+        $activeSponsors = 0;
+        if ($childIds !== []) {
+            $activeMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIds);
+            $activeSponsors = count($activeMap);
+        }
     }
 
-    $childOutcomeDue = drawdream_foundation_count_children_outcome_due($conn, $foundationId);
+    $childOutcomeDue = drawdream_foundation_count_children_outcome_due_cached($conn, $foundationId);
 
     $needPending = $count(
         $conn,
@@ -197,7 +199,7 @@ function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, s
                     'key' => 'outcome_due',
                     'label' => 'รอโพสต์ผล',
                     'count' => $projOutcomeDue,
-                    'href' => 'foundation_post_update.php',
+                    'href' => 'foundation_bulk_project_outcome.php',
                     'urgent' => $projOutcomeDue > 0,
                 ],
             ],
@@ -217,7 +219,7 @@ function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, s
                     'key' => 'outcome_due',
                     'label' => 'ถึงกำหนดส่งข้อความ',
                     'count' => $childOutcomeDue,
-                    'href' => 'foundation_children_directory.php',
+                    'href' => 'foundation_bulk_child_outcome.php',
                     'urgent' => $childOutcomeDue > 0,
                 ],
             ],
@@ -244,7 +246,7 @@ function foundation_dashboard_build_ops_stats(mysqli $conn, int $foundationId, s
                     'key' => 'outcome_due',
                     'label' => 'รอโพสต์ผลจัดส่ง',
                     'count' => $needOutcomeDue,
-                    'href' => 'foundation_post_needlist_result.php',
+                    'href' => 'foundation_bulk_needlist_outcome.php',
                     'urgent' => $needOutcomeDue > 0,
                 ],
             ],
@@ -323,64 +325,45 @@ function foundation_dashboard_donation_period_meta(
         )
     ";
 
-    $monthAgg = static function (mysqli $conn, string $monthKey, string $where, string $types, array $params): array {
-        $sql = "SELECT COALESCE(SUM(d.amount),0) AS s, COUNT(*) AS c
+    $monthAgg = static function (mysqli $conn, string $thisKey, string $prevKey, string $where, string $types, array $params): array {
+        $sql = "SELECT
+                    COALESCE(SUM(CASE WHEN DATE_FORMAT(d.transfer_datetime, '%Y-%m') = ? THEN d.amount ELSE 0 END), 0) AS this_sum,
+                    COALESCE(SUM(CASE WHEN DATE_FORMAT(d.transfer_datetime, '%Y-%m') = ? THEN 1 ELSE 0 END), 0) AS this_cnt,
+                    COALESCE(SUM(CASE WHEN DATE_FORMAT(d.transfer_datetime, '%Y-%m') = ? THEN d.amount ELSE 0 END), 0) AS prev_sum,
+                    COALESCE(SUM(CASE WHEN DATE_FORMAT(d.transfer_datetime, '%Y-%m') = ? THEN 1 ELSE 0 END), 0) AS prev_cnt,
+                    COUNT(*) AS total_cnt
                 FROM donation d
-                WHERE {$where}
-                  AND DATE_FORMAT(d.transfer_datetime, '%Y-%m') = ?";
+                WHERE {$where}";
         $st = $conn->prepare($sql);
         if (!$st) {
-            return ['sum' => 0.0, 'count' => 0];
+            return [
+                'this_month' => ['sum' => 0.0, 'count' => 0],
+                'prev_month' => ['sum' => 0.0, 'count' => 0],
+                'total_donation_count' => 0,
+            ];
         }
-        $bindTypes = $types . 's';
-        $bindParams = array_merge($params, [$monthKey]);
+        $bindTypes = $types . 'ssss';
+        $bindParams = array_merge($params, [$thisKey, $thisKey, $prevKey, $prevKey]);
         $st->bind_param($bindTypes, ...$bindParams);
         $st->execute();
         $row = $st->get_result()->fetch_assoc() ?: [];
 
         return [
-            'sum' => (float)($row['s'] ?? 0),
-            'count' => (int)($row['c'] ?? 0),
+            'this_month' => ['sum' => (float)($row['this_sum'] ?? 0), 'count' => (int)($row['this_cnt'] ?? 0)],
+            'prev_month' => ['sum' => (float)($row['prev_sum'] ?? 0), 'count' => (int)($row['prev_cnt'] ?? 0)],
+            'total_donation_count' => (int)($row['total_cnt'] ?? 0),
         ];
     };
 
     $baseTypes = 'iiiiisi';
     $baseParams = [$childCat, $foundationId, $projCat, $foundationId, $fn, $needCat, $foundationId];
 
-    $thisMonth = $monthAgg($conn, $thisKey, $baseWhere, $baseTypes, $baseParams);
-    $prevMonth = $monthAgg($conn, $prevKey, $baseWhere, $baseTypes, $baseParams);
-
-    $totalCount = 0;
-    $stTotal = $conn->prepare("SELECT COUNT(*) AS c FROM donation d WHERE {$baseWhere}");
-    if ($stTotal) {
-        $stTotal->bind_param($baseTypes, ...$baseParams);
-        $stTotal->execute();
-        $totalCount = (int)($stTotal->get_result()->fetch_assoc()['c'] ?? 0);
-    }
-
-    $lastAt = '';
-    $stLast = $conn->prepare(
-        "SELECT d.transfer_datetime FROM donation d
-         WHERE {$baseWhere}
-         ORDER BY d.transfer_datetime DESC, d.donate_id DESC
-         LIMIT 1"
-    );
-    if ($stLast) {
-        $stLast->bind_param($baseTypes, ...$baseParams);
-        $stLast->execute();
-        $lastRaw = trim((string)($stLast->get_result()->fetch_assoc()['transfer_datetime'] ?? ''));
-        if ($lastRaw !== '') {
-            $ts = strtotime($lastRaw);
-            if ($ts !== false) {
-                $lastAt = date('d/m/Y H:i', $ts);
-            }
-        }
-    }
+    $agg = $monthAgg($conn, $thisKey, $prevKey, $baseWhere, $baseTypes, $baseParams);
 
     return [
-        'this_month' => ['key' => $thisKey, 'sum' => $thisMonth['sum'], 'count' => $thisMonth['count']],
-        'prev_month' => ['key' => $prevKey, 'sum' => $prevMonth['sum'], 'count' => $prevMonth['count']],
-        'last_donation_at' => $lastAt,
-        'total_donation_count' => $totalCount,
+        'this_month' => ['key' => $thisKey, 'sum' => $agg['this_month']['sum'], 'count' => $agg['this_month']['count']],
+        'prev_month' => ['key' => $prevKey, 'sum' => $agg['prev_month']['sum'], 'count' => $agg['prev_month']['count']],
+        'last_donation_at' => '',
+        'total_donation_count' => $agg['total_donation_count'],
     ];
 }

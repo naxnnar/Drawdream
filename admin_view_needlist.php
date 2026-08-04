@@ -68,7 +68,7 @@ if (!$row) {
 $flashOk = '';
 $flashErr = '';
 
-$foundationLineItems = foundation_needlist_submitted_line_items_from_row($row);
+$foundationLineItems = foundation_needlist_foundation_original_line_items_from_row($row);
 $adminLineItems = foundation_needlist_admin_line_items_from_row($row);
 $apStatusView = strtolower(trim((string)($row['approve_item'] ?? '')));
 $priceReviewedView = trim((string)($row['price_reviewed_at'] ?? ''));
@@ -117,10 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             $newPricingStr = $encoded['pricing_json'];
             $upd = $conn->prepare(
                 "UPDATE foundation_needlist
-                 SET submitted_total_price  = COALESCE(submitted_total_price, total_price),
+                 SET submitted_total_price  = ?,
                      total_price            = ?,
                      need_items_json        = ?,
                      need_items_pricing_json = ?,
+                     submitted_need_items_pricing_json = ?,
+                     submitted_need_items_json = ?,
                      price_reviewed_at      = NOW()
                  WHERE item_id = ?
                  LIMIT 1"
@@ -128,7 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             if (!$upd) {
                 $flashErr = 'Prepare failed: ' . $conn->error;
             } else {
-                $upd->bind_param('dssi', $newTotal, $newJsonStr, $newPricingStr, $itemId);
+                $upd->bind_param('ddssssi', $newTotal, $newTotal, $newJsonStr, $newPricingStr, $newPricingStr, $newJsonStr, $itemId);
                 if ($upd->execute()) {
                     if ($foundationUserId > 0) {
                         $oldTotal = (float)($row['total_price'] ?? 0);
@@ -159,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
         } else {
             $upd = $conn->prepare(
                 "UPDATE foundation_needlist
-                 SET submitted_total_price = COALESCE(submitted_total_price, total_price),
+                 SET submitted_total_price = ?,
                      total_price = ?,
                      price_reviewed_at = NOW()
                  WHERE item_id = ?
@@ -168,7 +170,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string)($_POST['action'] ?? '') ==
             if (!$upd) {
                 $flashErr = 'Prepare failed: ' . $conn->error;
             } else {
-                $upd->bind_param('di', $newApprovedTotal, $itemId);
+                $upd->bind_param('ddi', $newApprovedTotal, $newApprovedTotal, $itemId);
                 if ($upd->execute()) {
                     if ($foundationUserId > 0) {
                         $msg  = 'แอดมินอัปเดตราคาสิ่งของรายการ "' . (string)($row['item_name'] ?? '') . '"';
@@ -197,7 +199,7 @@ if (isset($_GET['price_updated']) && $_GET['price_updated'] === '1') {
     $st->bind_param('i', $itemId);
     $st->execute();
     $row = $st->get_result()->fetch_assoc() ?: $row;
-    $foundationLineItems = foundation_needlist_submitted_line_items_from_row($row);
+    $foundationLineItems = foundation_needlist_foundation_original_line_items_from_row($row);
     $adminLineItems = foundation_needlist_admin_line_items_from_row($row);
     $apStatusView = strtolower(trim((string)($row['approve_item'] ?? '')));
     $priceReviewedView = trim((string)($row['price_reviewed_at'] ?? ''));
@@ -440,12 +442,6 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                     <div class="admin-record-k">ปิดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</div>
                     <div class="admin-record-v"><?= htmlspecialchars($endStatLabel, ENT_QUOTES, 'UTF-8') ?></div>
                 </div>
-                <?php if ($apLower !== 'pending' && trim((string)($row['review_note'] ?? '')) !== ''): ?>
-                <div class="admin-record-field admin-record-field--full">
-                    <div class="admin-record-k">หมายเหตุจากแอดมิน</div>
-                    <div class="admin-record-v"><?= htmlspecialchars((string)$row['review_note'], ENT_QUOTES, 'UTF-8') ?></div>
-                </div>
-                <?php endif; ?>
             </div>
 
             <div class="admin-record-stats donation-stats-panel" aria-label="สรุปตัวเลขรายการสิ่งของ">
@@ -474,7 +470,7 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
             </div>
 
             <?php
-                $submittedTotalView = (float)($row['submitted_total_price'] ?? ($row['total_price'] ?? 0));
+                $submittedTotalView = foundation_needlist_foundation_original_total_from_row($row);
                 $approvedTotalView = (float)($row['total_price'] ?? 0);
                 $reviewPriceRaw = trim((string)($row['price_reviewed_at'] ?? ''));
                 $reviewPriceLabel = ($reviewPriceRaw !== '' && !str_starts_with($reviewPriceRaw, '0000-00-00') && strtotime($reviewPriceRaw) !== false)

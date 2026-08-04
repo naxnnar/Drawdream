@@ -1,14 +1,15 @@
 ﻿<?php
 // foundation_children_directory.php — รายการเด็กของมูลนิธิ (มุมมองตารางแบบแอดมิน)
-declare(strict_types=1);
 
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
 
-if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'foundation') {
-    header('Location: index.php');
-    exit();
-}
+drawdream_foundation_require_management_access();
+
+require_once __DIR__ . '/includes/foundation_account_verified.php';
+drawdream_foundation_require_account_verified($conn);
 
 $uid = (int)$_SESSION['user_id'];
 $stFp = $conn->prepare('SELECT foundation_id, foundation_name FROM foundation_profile WHERE user_id = ? LIMIT 1');
@@ -33,19 +34,15 @@ $stRows = $conn->prepare(
      ORDER BY child_id DESC'
 );
 $rows = [];
+$sponsorUiByChild = [];
 if ($stRows) {
     $stRows->bind_param('i', $foundationId);
     $stRows->execute();
     $rows = $stRows->get_result()->fetch_all(MYSQLI_ASSOC);
-    // รีเฟรชสถานะจากแพ็กเกจรายรอบ (monthly/6m/yearly) ทุกครั้งก่อนแสดงตาราง
-    foreach ($rows as $rSync) {
-        $cidSync = (int)($rSync['child_id'] ?? 0);
-        if ($cidSync > 0) {
-            drawdream_child_sync_sponsorship_status($conn, $cidSync);
-        }
+    $childIds = array_map(static fn (array $r): int => (int)($r['child_id'] ?? 0), $rows);
+    if ($childIds !== []) {
+        $sponsorUiByChild = drawdream_child_sponsorship_ui_status_batch($conn, $childIds);
     }
-    $stRows->execute();
-    $rows = $stRows->get_result()->fetch_all(MYSQLI_ASSOC);
 }
 
 function foundation_child_profile_status_th(string $ap): string
@@ -91,12 +88,14 @@ function foundation_child_sponsor_status_class(string $st): string
     <title>เด็กทั้งหมด | <?= htmlspecialchars($foundationName) ?></title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/admin_directory.css">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=1">
 </head>
-<body>
+<body class="foundation-manage-page">
 <?php include 'navbar.php'; ?>
 
 <div class="admin-directory-page">
     <div class="admin-directory-head">
+        <a href="foundation_dashboard.php" class="admin-directory-back" data-foundation-back>← กลับ</a>
         <h1 class="admin-directory-title">เด็กทั้งหมด</h1>
     </div>
 
@@ -118,15 +117,17 @@ function foundation_child_sponsor_status_class(string $st): string
                     $cid = (int)($r['child_id'] ?? 0);
                     $img = trim((string)($r['photo_child'] ?? ''));
                     $approve = (string)($r['approve_profile'] ?? '');
-                    $uiSponsor = drawdream_child_sponsorship_ui_status($conn, $cid);
+                    $uiSponsor = $sponsorUiByChild[$cid] ?? ['label' => 'รออุปการะ', 'detail' => ''];
                     $sponsor = trim((string)($uiSponsor['label'] ?? ''));
-                    if ($sponsor === '') { $sponsor = 'รออุปการะ'; }
+                    if ($sponsor === '') {
+                        $sponsor = 'รออุปการะ';
+                    }
                     $sponsorDetail = trim((string)($uiSponsor['detail'] ?? ''));
                     ?>
                     <tr>
                         <td>
                             <?php if ($img !== ''): ?>
-                                <img class="admin-dir-thumb" src="uploads/childern/<?= htmlspecialchars($img) ?>" alt="">
+                                <img class="admin-dir-thumb" src="uploads/childern/<?= htmlspecialchars($img) ?>" alt="" loading="lazy" decoding="async">
                             <?php else: ?>
                                 <span class="b--muted">—</span>
                             <?php endif; ?>
@@ -154,4 +155,3 @@ function foundation_child_sponsor_status_class(string $st): string
 </div>
 </body>
 </html>
-

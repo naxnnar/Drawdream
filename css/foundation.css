@@ -154,6 +154,51 @@
     font-size: 14px;
     line-height: 1.5;
 }
+
+.foundation-onboarding-banner {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    max-width: 960px;
+    margin: 0 auto 18px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #eff6ff 0%, #fef3c7 100%);
+    border: 1px solid #bfdbfe;
+    color: #1e3a5f;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.foundation-onboarding-banner__icon {
+    font-size: 1.6rem;
+    color: #d97706;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.foundation-onboarding-banner__body p {
+    margin: 6px 0 10px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #334155;
+}
+
+.foundation-onboarding-banner__link {
+    display: inline-block;
+    font-weight: 600;
+    color: #1d4ed8;
+    text-decoration: none;
+}
+
+.foundation-onboarding-banner__link:hover {
+    text-decoration: underline;
+}
+
+.nav-profile-menu-item--disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+}
 /* ---- shared buttons ---- */
 .urgent-item-card {
     background: transparent !important;
@@ -511,6 +556,23 @@
     min-height: 1.5rem;
     font-size: 14px;
     color: #64748b;
+    text-align: center;
+}
+.fc-fb-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #1877f2;
+    font-weight: 600;
+    text-decoration: none;
+}
+.fc-fb-link:hover {
+    color: #0d65d9;
+    text-decoration: underline;
+}
+.fc-fb-link .bi-facebook {
+    font-size: 1.1rem;
+    line-height: 1;
 }
 
 .fc-progress-block {
@@ -697,6 +759,7 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 36px;
+    align-items: stretch;
 }
 .fd-interest-carousel {
     position: relative;
@@ -709,6 +772,9 @@
 }
 .fd-interest-card {
     position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     border-radius: 12px;
     overflow: hidden;
     box-shadow: 0 6px 22px rgba(22, 27, 45, 0.16);
@@ -761,6 +827,7 @@
 }
 .fd-interest-top {
     position: relative;
+    flex-shrink: 0;
 }
 .fd-interest-cover {
     width: 100%;
@@ -799,11 +866,15 @@
     color: #111;
 }
 .fd-interest-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     background: #3C5099;
     color: #fff;
     padding: 18px 20px 20px;
     text-align: center;
     font-family: 'Sarabun', sans-serif;
+    min-height: 11.5rem;
 }
 .fd-interest-name {
     font-family: 'Prompt', sans-serif;
@@ -811,14 +882,22 @@
     font-weight: 700;
     margin: 0 0 8px;
     color: #fff;
+    min-height: 2.75rem;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 .fd-interest-desc {
     margin: 0;
+    flex: 1;
     font-size: 0.96rem;
     line-height: 1.45;
     color: rgba(255, 255, 255, 0.92);
+    min-height: calc(4 * 1.45 * 0.96rem);
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -1072,35 +1151,6 @@
     }
 }
 
-/* ฟุตเตอร์ต่อจากโลโก้ (includes/site_footer.php) */
-body.foundation-page .site-footer-outer {
-    margin-top: 0;
-}
-body.foundation-page .site-footer .footer-contact-col {
-    padding-top: 0 !important;
-}
-body.foundation-page .site-footer .footer-address {
-    text-align: left;
-    max-width: none;
-    margin: 0;
-}
-body.foundation-page .site-footer .social-links.site-footer__social {
-    display: flex;
-    justify-content: center;
-    gap: 18px;
-}
-body.foundation-page .site-footer .social-link {
-    color: #ffffff;
-    font-size: 1.85rem;
-    line-height: 1;
-    text-decoration: none;
-    transition: transform 0.15s ease, opacity 0.15s ease;
-}
-body.foundation-page .site-footer .social-link:hover {
-    opacity: 0.85;
-    transform: translateY(-1px);
-}
-
 @media (max-width: 900px) {
     .fd-community-hero {
         grid-template-columns: 1fr;
@@ -1216,11 +1266,14 @@ body.foundation-page .site-footer .social-link:hover {
 .fd-interest-carousel--scroll .fd-interest-grid {
     display: flex;
     gap: 24px;
+    align-items: stretch;
 }
 .fd-interest-carousel--scroll .fd-interest-card {
     flex: 0 0 calc((100% - 48px) / 3);
     min-width: 300px;
     scroll-snap-align: start;
+    height: auto;
+    align-self: stretch;
 }
 .fd-interest-carousel--scroll .fd-interest-viewport::-webkit-scrollbar {
     width: 0;
@@ -1290,6 +1343,18 @@ body.foundation-page .site-footer .social-link:hover {
 .btn-donate:hover { background: #2e3d78; transform: translateY(-2px); }
 /* การ์ดสไลด์หน้ามูลนิธิ: ปุ่มบริจาคหลัก vs ปุ่มดูผลลัพธ์ (ไม่ชนกับ CTA เดิม) */
 .btn-donate.btn-donate--primary-cta { border-color: #3C5099; }
+.btn-donate.btn-donate--need-outcome {
+    background: #5B7B58;
+    color: #fff;
+    border-color: #5B7B58;
+    box-shadow: 0 4px 15px rgba(91, 123, 88, 0.35);
+}
+.btn-donate.btn-donate--need-outcome:hover {
+    background: #4d694a;
+    color: #fff;
+    border-color: #4d694a;
+    transform: translateY(-2px);
+}
 .btn-donate.btn-donate--outcome {
     background: #fff;
     color: #2e3f7f;
@@ -1473,6 +1538,17 @@ body.foundation-donate-page {
 }
 .fd-progress-remaining strong {
     color: #1f7a4f;
+}
+.fd-progress-picker-note {
+    margin: 0 0 10px;
+    font-size: 13px;
+    line-height: 1.45;
+    color: #64748b;
+    font-weight: 500;
+}
+.fd-progress-picker-note strong {
+    color: #1f7a4f;
+    font-weight: 700;
 }
 .fd-bar { background: #E5D4C1; border-radius: 20px; height: 16px; overflow: hidden; margin-bottom: 8px; }
 .fd-bar > div { background: #CC583F; height: 100%; border-radius: 20px; transition: width 0.5s; }
@@ -1743,11 +1819,11 @@ body.foundation-donate-page .fd-right #foundationDonateForm {
     width: 100%;
 }
 
-/* ปุ่มย้อนกลับวงกลมมุมขวาบน — สไตล์เดียวกับหน้าโครงการ (ปุ่มบนภาพโครงการ) */
+/* ปุ่มย้อนกลับวงกลมมุมซ้ายบนบนภาพปก */
 body.foundation-donate-page .fd-donate-back-circle {
     position: absolute;
     top: 20px;
-    right: 20px;
+    left: 20px;
     z-index: 2;
     width: 40px;
     height: 40px;
@@ -3014,6 +3090,28 @@ body.foundation-child-letter-page .child-letter-submit:active {
     }
 }
 
+/* foundation_bulk_child_outcome.php — หลายจดหมายในหน้าเดียว */
+body.foundation-bulk-child-letter-page .child-letter-bulk-intro {
+    margin: -8px 0 20px;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: #64748b;
+    text-align: center;
+}
+body.foundation-bulk-child-letter-page .child-letter-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin-bottom: 4px;
+}
+body.foundation-bulk-child-letter-page .child-letter-bulk-form {
+    margin: 0;
+}
+body.foundation-bulk-child-letter-page .child-letter-submit--bulk {
+    max-width: 360px;
+    margin-top: 28px;
+}
+
 /* ============================================================
    My Needlist Section  (foundation page)
    ============================================================ */
@@ -3465,4 +3563,74 @@ body.foundation-add-need-page .need-current-thumb {
     object-fit: cover;
     border-radius: 10px;
     border: 1px solid #e5e7eb;
+}
+
+/* Footer — ให้ตรงกับ about.php */
+body.foundation-page .footer-wrap {
+    background-color: #3f4f9a;
+}
+
+body.foundation-page .footer-wrap .container {
+    background: transparent !important;
+}
+
+body.foundation-page .footer-wrap p,
+body.foundation-page .footer-wrap h5,
+body.foundation-page .footer-wrap span,
+body.foundation-page .footer-wrap div {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+body.foundation-page .site-footer .footer-contact-col {
+    padding-top: 0 !important;
+}
+
+body.foundation-page .site-footer__contact-body .site-footer__address,
+body.foundation-page .site-footer .footer-address {
+    text-align: center !important;
+    max-width: 640px;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+body.foundation-page .footer-contact-title {
+    margin-top: 0;
+}
+
+body.foundation-page .site-footer__social.social-links,
+body.foundation-page .social-links {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    width: 100%;
+}
+
+body.foundation-page .site-footer .social-link {
+    color: #ffffff;
+    font-size: 1.85rem;
+    line-height: 1;
+    text-decoration: none;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+body.foundation-page .site-footer .social-link:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+}
+
+body.foundation-page .need-card--pending-verify {
+    border-style: dashed;
+    background: #f8fafc;
+}
+body.foundation-page .need-card-body--compact {
+    padding: 14px 16px 16px;
+}
+body.foundation-page .need-card-status-row {
+    margin-bottom: 8px;
+}
+body.foundation-page .need-card-verify-hint {
+    margin: 8px 0 0;
+    font-size: 0.86rem;
+    color: #9a3412;
+    line-height: 1.45;
 }

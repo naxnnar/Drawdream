@@ -94,6 +94,238 @@ function drawdream_child_subscription_history_row_needs_backfill(array $row): bo
     return $donateId <= 0 || $scheduleId === '' || $chargeId === '' || $nextCharge === '';
 }
 
+/** @param array<string,mixed>|null $payload */
+function drawdream_child_subscription_history_extract_next_charge_at(?array $payload): ?string
+{
+    if (!is_array($payload)) {
+        return null;
+    }
+    foreach (['next_charge_at', 'next_charge_at_before_cancel'] as $key) {
+        $v = trim((string)($payload[$key] ?? ''));
+        if ($v !== '' && strtotime($v) !== false) {
+            return date('Y-m-d H:i:s', strtotime($v));
+        }
+    }
+
+    return null;
+}
+
+/** แถว reserving ล่าสุดของคู่เด็ก–ผู้บริจาค (0 = ไม่มี) */
+function drawdream_child_subscription_history_open_reservation_id(
+    mysqli $conn,
+    int $childId,
+    int $donorUserId
+): int {
+    if ($childId <= 0 || $donorUserId <= 0) {
+        return 0;
+    }
+    drawdream_child_subscription_history_ensure_schema($conn);
+    $st = $conn->prepare(
+        "SELECT history_id
+         FROM child_subscription_history
+         WHERE child_id = ? AND donor_user_id = ?
+           AND LOWER(TRIM(COALESCE(current_status, ''))) = 'reserving'
+         ORDER BY history_id DESC
+         LIMIT 1"
+    );
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('ii', $childId, $donorUserId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+
+    return (int)($row['history_id'] ?? 0);
+}
+
+function drawdream_child_subscription_history_promote_reservation(
+    mysqli $conn,
+    int $historyId,
+    ?int $donateId,
+    ?string $scheduleId,
+    ?string $chargeId,
+    string $eventType,
+    ?string $planCode,
+    ?float $amountBaht,
+    ?string $nextChargeAt
+): bool {
+    if ($historyId <= 0) {
+        return false;
+    }
+    $eventTypeNorm = trim($eventType);
+    if ($eventTypeNorm === 'subscription_reserving') {
+        $eventTypeNorm = 'subscription_created';
+    }
+    $donateIdBind = ($donateId !== null && (int)$donateId > 0) ? (int)$donateId : null;
+    $scheduleIdBind = ($scheduleId !== null && trim($scheduleId) !== '') ? trim($scheduleId) : null;
+    $nextChargeAtBind = ($nextChargeAt !== null && trim($nextChargeAt) !== '') ? trim($nextChargeAt) : null;
+    $chargeIdBind = ($chargeId !== null && trim($chargeId) !== '') ? trim($chargeId) : null;
+    $planCodeBind = ($planCode !== null && trim($planCode) !== '') ? trim($planCode) : null;
+    $amountBahtBind = ($amountBaht !== null && $amountBaht > 0) ? (float)$amountBaht : null;
+
+    $upd = $conn->prepare(
+        "UPDATE child_subscription_history
+         SET donate_id = ?,
+             recurring_schedule_id = ?,
+             recurring_next_charge_at = ?,
+             omise_charge_id = ?,
+             event_type = ?,
+             current_status = 'active',
+             recurring_plan_code = CASE
+                 WHEN recurring_plan_code IS NULL OR TRIM(recurring_plan_code) = '' THEN ?
+                 ELSE recurring_plan_code
+             END,
+             amount_baht = CASE
+                 WHEN amount_baht IS NULL OR amount_baht <= 0 THEN ?
+                 ELSE amount_baht
+             END
+         WHERE history_id = ?
+           AND LOWER(TRIM(COALESCE(current_status, ''))) = 'reserving'
+         LIMIT 1"
+    );
+    if (!$upd) {
+        return false;
+    }
+    $upd->bind_param(
+        'isssssdi',
+        $donateIdBind,
+        $scheduleIdBind,
+        $nextChargeAtBind,
+        $chargeIdBind,
+        $eventTypeNorm,
+        $planCodeBind,
+        $amountBahtBind,
+        $historyId
+    );
+
+    return $upd->execute() && $upd->affected_rows > 0;
+}
+
+function drawdream_child_subscription_history_cancel_open_reservation(
+    mysqli $conn,
+    int $childId,
+    int $donorUserId,
+    string $eventType = 'subscription_reserve_released'
+): bool {
+    $historyId = drawdream_child_subscription_history_open_reservation_id($conn, $childId, $donorUserId);
+    if ($historyId <= 0) {
+        return false;
+    }
+    $eventTypeNorm = trim($eventType) !== '' ? trim($eventType) : 'subscription_reserve_released';
+    $upd = $conn->prepare(
+        "UPDATE child_subscription_history
+         SET event_type = ?,
+             current_status = 'cancelled'
+         WHERE history_id = ?
+           AND LOWER(TRIM(COALESCE(current_status, ''))) = 'reserving'
+         LIMIT 1"
+    );
+    if (!$upd) {
+        return false;
+    }
+    $upd->bind_param('si', $eventTypeNorm, $historyId);
+
+    return $upd->execute() && $upd->affected_rows > 0;
+}
+
+/** ลบแถว reserving ที่หมดอายุหรือมี active ของคู่เดียวกันแล้ว */
+function drawdream_child_subscription_history_cleanup_stale_reservations(mysqli $conn, ?int $childId = null): int
+{
+    drawdream_child_subscription_history_ensure_schema($conn);
+    if (!function_exists('drawdream_child_subscription_reserve_ttl_minutes')) {
+        require_once __DIR__ . '/child_omise_subscription.php';
+    }
+    $ttl = drawdream_child_subscription_reserve_ttl_minutes();
+    if ($ttl < 1) {
+        $ttl = 10;
+    }
+
+    if ($childId !== null && $childId > 0) {
+        $stExpired = $conn->prepare(
+            "DELETE FROM child_subscription_history
+             WHERE child_id = ?
+               AND LOWER(TRIM(COALESCE(current_status, ''))) = 'reserving'
+               AND created_at < (NOW() - INTERVAL ? MINUTE)"
+        );
+        $deleted = 0;
+        if ($stExpired) {
+            $stExpired->bind_param('ii', $childId, $ttl);
+            $stExpired->execute();
+            $deleted += $stExpired->affected_rows;
+        }
+        $stOrphan = $conn->prepare(
+            "DELETE FROM child_subscription_history
+             WHERE history_id IN (
+                 SELECT history_id FROM (
+                     SELECT h.history_id
+                     FROM child_subscription_history h
+                     INNER JOIN child_subscription_history a
+                       ON a.child_id = h.child_id
+                      AND a.donor_user_id = h.donor_user_id
+                      AND LOWER(TRIM(COALESCE(a.current_status, ''))) = 'active'
+                      AND a.history_id > h.history_id
+                     WHERE h.child_id = ?
+                       AND LOWER(TRIM(COALESCE(h.current_status, ''))) = 'reserving'
+                 ) stale_ids
+             )"
+        );
+        if ($stOrphan) {
+            $stOrphan->bind_param('i', $childId);
+            $stOrphan->execute();
+            $deleted += $stOrphan->affected_rows;
+        }
+
+        return $deleted;
+    }
+
+    $deleted = 0;
+    $expiredSql = "DELETE FROM child_subscription_history
+                   WHERE LOWER(TRIM(COALESCE(current_status, ''))) = 'reserving'
+                     AND created_at < (NOW() - INTERVAL {$ttl} MINUTE)";
+    if ($conn->query($expiredSql)) {
+        $deleted += (int)$conn->affected_rows;
+    }
+    $orphanSql = <<<'SQL'
+DELETE FROM child_subscription_history
+WHERE history_id IN (
+    SELECT history_id FROM (
+        SELECT h.history_id
+        FROM child_subscription_history h
+        INNER JOIN child_subscription_history a
+          ON a.child_id = h.child_id
+         AND a.donor_user_id = h.donor_user_id
+         AND LOWER(TRIM(COALESCE(a.current_status, ''))) = 'active'
+         AND a.history_id > h.history_id
+        WHERE LOWER(TRIM(COALESCE(h.current_status, ''))) = 'reserving'
+    ) stale_ids
+)
+SQL;
+    if ($conn->query($orphanSql)) {
+        $deleted += (int)$conn->affected_rows;
+    }
+
+    return $deleted;
+}
+
+function drawdream_child_subscription_history_after_active_change(
+    mysqli $conn,
+    int $childId,
+    int $donorUserId,
+    string $eventType
+): void {
+    if (
+        in_array($eventType, ['subscription_created', 'charge_success'], true)
+    ) {
+        drawdream_child_subscription_history_backfill_active_row($conn, $childId, $donorUserId);
+    }
+    if (!function_exists('drawdream_child_sync_sponsorship_status')) {
+        require_once __DIR__ . '/child_sponsorship.php';
+    }
+    if (function_exists('drawdream_child_sync_sponsorship_status')) {
+        drawdream_child_sync_sponsorship_status($conn, $childId);
+    }
+}
+
 /**
  * เติมข้อมูลชำระ/รอบถัดไปให้แถว active ล่าสุดจาก donation + แผนรายรอบ
  */
@@ -289,6 +521,43 @@ function drawdream_child_subscription_history_log(
         return;
     }
     drawdream_child_subscription_history_ensure_schema($conn);
+    $nextChargeAt = drawdream_child_subscription_history_extract_next_charge_at($payload);
+    $eventTypeBind = trim($eventType);
+    $currentStatusBind = ($currentStatus !== null && trim($currentStatus) !== '') ? trim($currentStatus) : null;
+    $statusNorm = strtolower(trim((string)($currentStatusBind ?? '')));
+
+    if ($eventTypeBind === 'subscription_reserve_released' && $statusNorm === 'cancelled') {
+        if (drawdream_child_subscription_history_cancel_open_reservation($conn, $childId, $donorUserId, $eventTypeBind)) {
+            drawdream_child_subscription_history_cleanup_stale_reservations($conn, $childId);
+            return;
+        }
+    }
+
+    if (
+        in_array($eventTypeBind, ['subscription_created', 'charge_success'], true)
+        && $statusNorm === 'active'
+    ) {
+        $resId = drawdream_child_subscription_history_open_reservation_id($conn, $childId, $donorUserId);
+        if (
+            $resId > 0
+            && drawdream_child_subscription_history_promote_reservation(
+                $conn,
+                $resId,
+                $donateId,
+                $scheduleId,
+                $chargeId,
+                $eventTypeBind,
+                $planCode,
+                $amountBaht,
+                $nextChargeAt
+            )
+        ) {
+            drawdream_child_subscription_history_cleanup_stale_reservations($conn, $childId);
+            drawdream_child_subscription_history_after_active_change($conn, $childId, $donorUserId, $eventTypeBind);
+            return;
+        }
+    }
+
     $stmt = $conn->prepare(
         'INSERT INTO child_subscription_history (
             child_id, donor_user_id, donate_id, recurring_schedule_id, recurring_next_charge_at, omise_charge_id,
@@ -298,26 +567,10 @@ function drawdream_child_subscription_history_log(
     if (!$stmt) {
         return;
     }
-    $nextChargeAt = null;
-    if (is_array($payload)) {
-        $candidates = [
-            (string)($payload['next_charge_at'] ?? ''),
-            (string)($payload['next_charge_at_before_cancel'] ?? ''),
-        ];
-        foreach ($candidates as $candidate) {
-            $v = trim($candidate);
-            if ($v !== '' && strtotime($v) !== false) {
-                $nextChargeAt = date('Y-m-d H:i:s', strtotime($v));
-                break;
-            }
-        }
-    }
     $donateIdBind = ($donateId !== null && (int)$donateId > 0) ? (int)$donateId : null;
     $scheduleIdBind = ($scheduleId !== null && trim($scheduleId) !== '') ? trim($scheduleId) : null;
     $nextChargeAtBind = ($nextChargeAt !== null && trim($nextChargeAt) !== '') ? $nextChargeAt : null;
     $chargeIdBind = ($chargeId !== null && trim($chargeId) !== '') ? trim($chargeId) : null;
-    $eventTypeBind = trim($eventType);
-    $currentStatusBind = ($currentStatus !== null && trim($currentStatus) !== '') ? trim($currentStatus) : null;
     $planCodeBind = ($planCode !== null && trim($planCode) !== '') ? trim($planCode) : null;
     $amountBahtBind = ($amountBaht !== null && $amountBaht > 0) ? (float)$amountBaht : null;
 
@@ -363,19 +616,10 @@ function drawdream_child_subscription_history_log(
 
     if (
         in_array($eventTypeBind, ['subscription_created', 'charge_success'], true)
-        && strtolower(trim((string)($currentStatusBind ?? ''))) === 'active'
+        && $statusNorm === 'active'
     ) {
-        drawdream_child_subscription_history_backfill_active_row($conn, $childId, $donorUserId);
-    }
-
-    $statusNorm = strtolower(trim((string)($currentStatusBind ?? '')));
-    if ($statusNorm === 'active' && in_array($eventTypeBind, ['subscription_created', 'charge_success'], true)) {
-        if (!function_exists('drawdream_child_sync_sponsorship_status')) {
-            require_once __DIR__ . '/child_sponsorship.php';
-        }
-        if (function_exists('drawdream_child_sync_sponsorship_status')) {
-            drawdream_child_sync_sponsorship_status($conn, $childId);
-        }
+        drawdream_child_subscription_history_cleanup_stale_reservations($conn, $childId);
+        drawdream_child_subscription_history_after_active_change($conn, $childId, $donorUserId, $eventTypeBind);
     }
 }
 

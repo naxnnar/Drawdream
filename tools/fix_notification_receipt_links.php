@@ -159,7 +159,7 @@ foreach ($broken as $n) {
     // หา donation ที่น่าจะเป็นคู่: ผู้บริจาคคนเดียวกัน + completed + ยอดตรง (ถ้ามี) + ใกล้เวลา
     $candidates = [];
     $st = $conn->prepare(
-        "SELECT donate_id, donor_id, amount, payment_status, donate_type, target_id, transfer_datetime, created_at
+        "SELECT donate_id, donor_id, amount, payment_status, donate_type, target_id, transfer_datetime
          FROM donation
          WHERE donor_id = ? AND LOWER(TRIM(COALESCE(payment_status,''))) = 'completed'
          ORDER BY donate_id"
@@ -186,7 +186,7 @@ foreach ($broken as $n) {
             $score += 100;
         }
         // ใกล้เวลาแจ้งเตือน
-        $dTime = (string)($d['transfer_datetime'] ?? $d['created_at'] ?? '');
+        $dTime = (string)($d['transfer_datetime'] ?? '');
         if ($dTime !== '' && $createdAt !== '') {
             $diff = abs(strtotime($createdAt) - strtotime($dTime));
             if ($diff <= 3600) {

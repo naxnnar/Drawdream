@@ -8,56 +8,47 @@ declare(strict_types=1);
  * - race ครบเป้า -> คืนเงินอัตโนมัติ + UI แจ้งชัดเจน
  */
 
-include __DIR__ . '/../db.php';
+include __DIR__ . '/../includes/payment_bootstrap.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/../includes/drawdream_needlist_payment_finalize.php';
 require_once __DIR__ . '/omise_helpers.php';
 
+$isPollRequest = isset($_GET['poll']) && (string)$_GET['poll'] === '1';
+
 if (!isset($_SESSION['user_id'])) {
+    if ($isPollRequest) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'reason' => 'login_required'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header('Location: ../login.php');
     exit();
 }
 
-drawdream_payment_transaction_ensure_schema($conn);
-
 $charge_id = $_GET['charge_id'] ?? '';
 $fid       = (int)($_GET['fid'] ?? 0);
+$donor_uid = (int)$_SESSION['user_id'];
+$sessionPendingAmount = (float)($_SESSION['pending_amount'] ?? 0);
+$sessionPendingFid = (int)($_SESSION['pending_foundation_id'] ?? 0);
+$sessionPendingFoundation = trim((string)($_SESSION['pending_foundation'] ?? ''));
+
+if ($isPollRequest && session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
 
 if ($charge_id === '') {
+    if ($isPollRequest) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'reason' => 'missing_charge_id'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
     header('Location: ../foundation.php');
     exit();
 }
-
-$is_mock = (strpos($charge_id, 'chrg_mock_') === 0);
-$charge  = [];
-
-if ($is_mock) {
-    $charge = [
-        'status'   => 'successful',
-        'paid'     => true,
-        'amount'   => ($_SESSION['pending_amount'] ?? 0) * 100,
-        'metadata' => ['foundation_id' => (int)($_SESSION['pending_foundation_id'] ?? $fid)],
-    ];
-} else {
-    $fetched = drawdream_omise_fetch_charge($charge_id, true);
-    $charge = is_array($fetched) ? $fetched : [];
-}
-
-if ($fid <= 0) {
-    $fid = (int)($charge['metadata']['foundation_id'] ?? ($_SESSION['pending_foundation_id'] ?? 0));
-}
-
-$status          = $charge['status'] ?? 'unknown';
-$paid            = $charge['paid'] ?? false;
-$failure_code    = $charge['failure_code'] ?? '';
-$failure_message = $charge['failure_message'] ?? '';
-$expires_at      = $charge['expires_at'] ?? '';
-$is_test_mode    = drawdream_omise_is_test_mode();
-
-$is_success = ($paid === true) || ($status === 'successful') || $is_mock;
-$amount     = 0.0;
 
 $ptRow = null;
 $dup = $conn->prepare('SELECT donate_id, payment_status, amount FROM donation WHERE omise_charge_id = ? LIMIT 1');
@@ -70,7 +61,45 @@ $already_unallocated = is_array($ptRow) && (($ptRow['payment_status'] ?? '') ===
 $already_refunded = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === DRAWDREAM_DONATION_STATUS_REFUNDED);
 $has_pending = is_array($ptRow) && (($ptRow['payment_status'] ?? '') === 'pending');
 
-$donor_uid = (int)$_SESSION['user_id'];
+$is_mock = (strpos($charge_id, 'chrg_mock_') === 0);
+$charge  = [];
+
+if ($already_completed && !$is_mock) {
+    $amountCompleted = (float)($ptRow['amount'] ?? 0);
+    $charge = [
+        'status'   => 'successful',
+        'paid'     => true,
+        'amount'   => (int)round(max(0, $amountCompleted) * 100),
+        'metadata' => ['foundation_id' => $fid],
+    ];
+} elseif ($is_mock) {
+    $charge = [
+        'status'   => 'successful',
+        'paid'     => true,
+        'amount'   => (int)round(max(0, $sessionPendingAmount) * 100),
+        'metadata' => ['foundation_id' => $sessionPendingFid > 0 ? $sessionPendingFid : $fid],
+    ];
+} else {
+    if ($isPollRequest && drawdream_omise_test_auto_mark_paid_enabled()) {
+        drawdream_omise_ensure_test_charge_paid($charge_id);
+    }
+    $fetched = drawdream_omise_fetch_charge($charge_id, true);
+    $charge = is_array($fetched) ? $fetched : [];
+}
+
+if ($fid <= 0) {
+    $fid = (int)($charge['metadata']['foundation_id'] ?? ($sessionPendingFid > 0 ? $sessionPendingFid : 0));
+}
+
+$status          = $charge['status'] ?? 'unknown';
+$paid            = $charge['paid'] ?? false;
+$failure_code    = $charge['failure_code'] ?? '';
+$failure_message = $charge['failure_message'] ?? '';
+$expires_at      = $charge['expires_at'] ?? '';
+$is_test_mode    = drawdream_omise_is_test_mode();
+
+$is_success = ($paid === true) || ($status === 'successful') || $is_mock;
+$amount     = 0.0;
 
 if (!$is_mock && $has_pending && !$already_completed && !$already_unallocated && !$already_refunded && !$is_success
     && in_array($status, ['failed', 'expired'], true)) {
@@ -110,25 +139,27 @@ if ($already_refunded) {
 } elseif ($is_success && $fid > 0) {
     $amount = ($charge['amount'] ?? 0) / 100;
     if ($amount <= 0) {
-        $amount = (float)($_SESSION['pending_amount'] ?? 0);
+        $amount = $sessionPendingAmount;
     }
 
     if ($has_pending) {
         $donate_id_from_pt = (int)($ptRow['donate_id'] ?? 0);
+        $picks = drawdream_pending_needlist_picks_resolve($conn, $charge_id);
         $finalize = drawdream_finalize_needlist_donation(
             $conn,
             $fid,
             $donate_id_from_pt,
             $charge_id,
             (float)$amount,
-            $donor_uid
+            $donor_uid,
+            $picks
         );
 
         if ($finalize === DRAWDREAM_PROJECT_FINALIZE_OK) {
             $payment_ui = 'success';
             $finalized_this_request = true;
             $receiptDonateId = $donate_id_from_pt;
-            unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
+            unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['pending_need_item_picks'], $_SESSION['qr_image']);
         } elseif (drawdream_needlist_finalize_is_goal_race($finalize)) {
             $late = drawdream_handle_needlist_late_payment(
                 $conn,
@@ -140,70 +171,60 @@ if ($already_refunded) {
                 $finalize
             );
             $payment_ui = $late['refunded'] ? 'paid_goal_refunded' : 'paid_goal_late';
-            unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
+            unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['pending_need_item_picks'], $_SESSION['qr_image']);
         } else {
             $payment_ui = 'failed';
             $failure_message = 'ชำระเงินสำเร็จแล้ว แต่ระบบบันทึกรายการไม่สำเร็จ กรุณาติดต่อผู้ดูแลระบบพร้อมอ้างอิง Charge';
         }
     } else {
-        $category_id = drawdream_get_or_create_needitem_donate_category_id($conn);
-        $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
-        if ($conn->begin_transaction()) {
-            try {
-                $stmt = $conn->prepare("
-                    INSERT INTO donation (
-                        category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                        omise_charge_id, donate_type
-                    ) VALUES (?, ?, ?, ?, 'completed', NOW(), ?, ?)
-                ");
-                $stmt->bind_param('iiidss', $category_id, $fid, $donor_uid, $amount, $charge_id, $dtNeed);
-                $stmt->execute();
-                $receiptDonateId = (int)$conn->insert_id;
-
-                $bump = drawdream_needlist_bump_open_items($conn, $fid, (float)$amount, $receiptDonateId, $charge_id);
-                if ($bump !== DRAWDREAM_PROJECT_FINALIZE_OK) {
-                    throw new RuntimeException('needlist bump:' . $bump);
-                }
-                $conn->commit();
+        $picks = drawdream_pending_needlist_picks_resolve($conn, $charge_id);
+        if ($picks === []) {
+            $payment_ui = 'failed';
+            $failure_message = 'ไม่พบรายการสิ่งของที่เลือก — กรุณาบริจาคใหม่อีกครั้ง';
+        } else {
+            $complete = drawdream_needlist_complete_successful_payment(
+                $conn,
+                $fid,
+                $donor_uid,
+                $charge_id,
+                (float)$amount,
+                $picks,
+                0
+            );
+            if ($complete === DRAWDREAM_PROJECT_FINALIZE_OK) {
                 $payment_ui = 'success';
                 $finalized_this_request = true;
-                unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
-            } catch (Throwable $e) {
-                $conn->rollback();
-                $receiptDonateId = 0;
-                $msg = $e->getMessage();
-                if (str_starts_with($msg, 'needlist bump:') && drawdream_needlist_finalize_is_goal_race(substr($msg, strlen('needlist bump:')))) {
-                    $reason = substr($msg, strlen('needlist bump:'));
-                    $pendIns = 'pending';
-                    $insLate = $conn->prepare(
-                        'INSERT INTO donation (
-                            category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-                            omise_charge_id, donate_type
-                        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
-                    );
-                    $lateId = 0;
-                    if ($insLate) {
-                        $insLate->bind_param('iiidsss', $category_id, $fid, $donor_uid, $amount, $pendIns, $charge_id, $dtNeed);
-                        if ($insLate->execute()) {
-                            $lateId = (int)$conn->insert_id;
-                        }
+                $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+                unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['pending_need_item_picks'], $_SESSION['qr_image']);
+            } elseif (drawdream_needlist_finalize_is_goal_race($complete)) {
+                $category_id = drawdream_get_or_create_needitem_donate_category_id($conn);
+                $dtNeed = DRAWDREAM_DONATE_TYPE_NEED_ITEM;
+                $pendIns = 'pending';
+                $insLate = $conn->prepare(
+                    'INSERT INTO donation (
+                        category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
+                        omise_charge_id, donate_type
+                    ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?)'
+                );
+                $lateId = 0;
+                if ($insLate) {
+                    $insLate->bind_param('iiidsss', $category_id, $fid, $donor_uid, $amount, $pendIns, $charge_id, $dtNeed);
+                    if ($insLate->execute()) {
+                        $lateId = (int)$conn->insert_id;
                     }
-                    if ($lateId > 0) {
-                        $late = drawdream_handle_needlist_late_payment($conn, $lateId, (float)$amount, $fid, $charge_id, $donor_uid, $reason);
-                        $payment_ui = $late['refunded'] ? 'paid_goal_refunded' : 'paid_goal_late';
-                        unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['qr_image']);
-                    } else {
-                        $payment_ui = 'paid_goal_late';
-                        $failure_message = 'ชำระเงินแล้ว แต่รายการครบเป้าก่อนหน้านี้ — กรุณาติดต่อผู้ดูแลพร้อมอ้างอิง Charge';
-                    }
-                } else {
-                    $payment_ui = 'failed';
-                    $failure_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาติดต่อผู้ดูแลระบบ';
                 }
+                if ($lateId > 0) {
+                    $late = drawdream_handle_needlist_late_payment($conn, $lateId, (float)$amount, $fid, $charge_id, $donor_uid, $complete);
+                    $payment_ui = $late['refunded'] ? 'paid_goal_refunded' : 'paid_goal_late';
+                    unset($_SESSION['pending_charge_id'], $_SESSION['pending_amount'], $_SESSION['pending_foundation'], $_SESSION['pending_foundation_id'], $_SESSION['pending_donate_id'], $_SESSION['pending_need_item_picks'], $_SESSION['qr_image']);
+                } else {
+                    $payment_ui = 'paid_goal_late';
+                    $failure_message = 'ชำระเงินแล้ว แต่รายการครบเป้าก่อนหน้านี้ — กรุณาติดต่อผู้ดูแลพร้อมอ้างอิง Charge';
+                }
+            } else {
+                $payment_ui = 'failed';
+                $failure_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล กรุณาติดต่อผู้ดูแลระบบ';
             }
-        } else {
-            $payment_ui = 'failed';
-            $failure_message = 'ระบบขัดข้องชั่วคราว กรุณาลองใหม่อีกครั้ง';
         }
     }
 } else {
@@ -214,17 +235,23 @@ if ($finalized_this_request && $receiptDonateId <= 0) {
     $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
 }
 if ($finalized_this_request && $receiptDonateId > 0) {
-    drawdream_send_e_receipt_notification_by_donate_id($conn, $receiptDonateId);
+    drawdream_send_e_receipt_notification_deferred($conn, $receiptDonateId);
+}
+if ($finalized_this_request) {
+    require_once dirname(__DIR__) . '/includes/homepage_impact_stats.php';
+    require_once dirname(__DIR__) . '/includes/foundation_public_page_cache.php';
+    drawdream_homepage_impact_stats_cache_bust();
+    drawdream_foundation_public_page_cache_bust();
 }
 
 if ($payment_ui === 'success' && $amount <= 0) {
-    $amount = ($charge['amount'] ?? ($_SESSION['pending_amount'] ?? 0) * 100) / 100;
+    $amount = ($charge['amount'] ?? ($sessionPendingAmount * 100)) / 100;
 }
 if (($payment_ui === 'paid_goal_late' || $payment_ui === 'paid_goal_refunded') && $amount <= 0) {
-    $amount = ($charge['amount'] ?? ($_SESSION['pending_amount'] ?? 0) * 100) / 100;
+    $amount = ($charge['amount'] ?? ($sessionPendingAmount * 100)) / 100;
 }
 
-$foundation_name = trim((string)($_SESSION['pending_foundation'] ?? ''));
+$foundation_name = $sessionPendingFoundation;
 if ($foundation_name === '' && $fid > 0) {
     $stFn = $conn->prepare('SELECT foundation_name FROM foundation_profile WHERE foundation_id = ? LIMIT 1');
     if ($stFn) {
@@ -232,6 +259,73 @@ if ($foundation_name === '' && $fid > 0) {
         $stFn->execute();
         $foundation_name = trim((string)($stFn->get_result()->fetch_assoc()['foundation_name'] ?? ''));
     }
+}
+
+if ($payment_ui === 'success') {
+    if ($receiptDonateId <= 0 && is_array($ptRow)) {
+        $receiptDonateId = (int)($ptRow['donate_id'] ?? 0);
+    }
+    if ($receiptDonateId <= 0) {
+        $receiptDonateId = drawdream_receipt_completed_donation_id_by_charge($conn, $charge_id);
+    }
+    $successDetail = 'จำนวน ' . number_format((float)$amount, 2) . ' บาท';
+    if ($foundation_name !== '') {
+        $successDetail = 'ขอบคุณที่สมทบทุนสิ่งของให้ ' . $foundation_name . ' — ' . $successDetail;
+    }
+    if (!$isPollRequest) {
+        drawdream_try_payment_success_receipt_redirect(
+            $conn,
+            $receiptDonateId,
+            'ชำระเงินสำเร็จ!',
+            '../foundation.php',
+            $successDetail
+        );
+    }
+}
+
+if ($isPollRequest) {
+    header('Content-Type: application/json; charset=utf-8');
+    if ($payment_ui === 'success') {
+        $pollRedirect = '../foundation.php';
+        if ($receiptDonateId > 0 && drawdream_donation_eligible_for_e_receipt($conn, $receiptDonateId)) {
+            $receiptQuery = drawdream_payment_success_receipt_query(
+                $receiptDonateId,
+                'ชำระเงินสำเร็จ!',
+                '../foundation.php',
+                $successDetail ?? ''
+            );
+            if ($receiptQuery !== '') {
+                $pollRedirect = '../' . $receiptQuery;
+            }
+        }
+        echo json_encode([
+            'ok' => true,
+            'status' => 'success',
+            'redirect' => $pollRedirect,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($payment_ui === 'pending') {
+        echo json_encode(['ok' => true, 'status' => 'pending'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if (in_array($payment_ui, ['paid_goal_late', 'paid_goal_refunded'], true)) {
+        echo json_encode([
+            'ok' => true,
+            'status' => $payment_ui,
+            'redirect' => 'check_needlist_payment.php?charge_id=' . rawurlencode($charge_id)
+                . '&fid=' . (int)$fid,
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    echo json_encode([
+        'ok' => false,
+        'status' => (string)$payment_ui,
+        'failure_message' => (string)$failure_message,
+        'redirect' => 'check_needlist_payment.php?charge_id=' . rawurlencode($charge_id)
+            . '&fid=' . (int)$fid,
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 ?>
 <!DOCTYPE html>

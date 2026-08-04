@@ -1,8 +1,6 @@
 <?php
-
 // foundation_edit_profile.php — มูลนิธิแก้ไขโปรไฟล์องค์กร
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน edit profile
-declare(strict_types=1);
 
 /**
  * ทางลัดจากหน้ามูลนิธิ → ฟอร์มแก้ไขข้อมูลมูลนิธิ (update_profile.php)
@@ -14,7 +12,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 if (($_SESSION['role'] ?? '') !== 'foundation') {
-    header('Location: welcome.php');
+    header('Location: homepage.php');
     exit;
 }
 

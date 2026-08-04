@@ -120,6 +120,87 @@ function drawdream_receipt_completed_donation_id_by_charge(mysqli $conn, string 
  * - donation ต้องอยู่สถานะ completed
  * - ต้องหา donor_id ได้ (ใช้เป็นผู้รับแจ้งเตือน)
  */
+/**
+ * URL หน้าใบเสร็จหลังบริจาค/อุปการะสำเร็จ (relative จาก root โปรเจกต์)
+ */
+function drawdream_payment_success_receipt_query(
+    int $donateId,
+    string $successTitle,
+    string $returnUrl = '',
+    string $successDetail = ''
+): string {
+    if ($donateId <= 0) {
+        return '';
+    }
+    $params = [
+        'donate_id' => (string)$donateId,
+        'success' => '1',
+        'success_title' => $successTitle !== '' ? $successTitle : 'บริจาคสำเร็จ',
+    ];
+    if ($successDetail !== '') {
+        $params['success_detail'] = $successDetail;
+    }
+    if ($returnUrl !== '') {
+        $params['return'] = $returnUrl;
+    }
+
+    return 'donation_receipt.php?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+}
+
+/** ส่ง redirect ให้เบราว์เซอร์แล้วปิดการเชื่อมต่อ — งานหนักทำหลัง flush ได้ */
+function drawdream_payment_flush_redirect(string $url): void
+{
+    header('Location: ' . $url);
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+    while (ob_get_level() > 0) {
+        @ob_end_flush();
+    }
+    if (function_exists('fastcgi_finish_request')) {
+        @fastcgi_finish_request();
+    }
+}
+
+/**
+ * Redirect ไปหน้าใบเสร็จพร้อมแบนเนอร์/ Swal สำเร็จ — คืน false ถ้าไม่มีใบเสร็จ (ให้ fallback หน้าเดิม)
+ *
+ * @param string $receiptPagePrefix เช่น '../' จาก payment/
+ */
+function drawdream_try_payment_success_receipt_redirect(
+    mysqli $conn,
+    int $donateId,
+    string $successTitle,
+    string $returnUrl = '',
+    string $successDetail = '',
+    string $receiptPagePrefix = '../'
+): bool {
+    if ($donateId <= 0 || !drawdream_donation_eligible_for_e_receipt($conn, $donateId)) {
+        return false;
+    }
+    $q = drawdream_payment_success_receipt_query($donateId, $successTitle, $returnUrl, $successDetail);
+    if ($q === '') {
+        return false;
+    }
+    drawdream_payment_flush_redirect($receiptPagePrefix . $q);
+    exit;
+}
+
+/** ส่งแจ้งเตือนใบเสร็จหลัง redirect — ลดเวลารอผู้บริจาคบนหน้ายืนยัน */
+function drawdream_send_e_receipt_notification_deferred(mysqli $conn, int $donateId): void
+{
+    if ($donateId <= 0) {
+        return;
+    }
+    register_shutdown_function(static function () use ($conn, $donateId): void {
+        try {
+            drawdream_send_e_receipt_notification_by_donate_id($conn, $donateId);
+        } catch (Throwable $e) {
+            error_log('[drawdream_e_receipt_deferred] ' . $e->getMessage());
+        }
+    });
+}
+
 function drawdream_send_e_receipt_notification_by_donate_id(mysqli $conn, int $donateId): bool
 {
     if ($donateId <= 0 || !drawdream_donation_eligible_for_e_receipt($conn, $donateId)) {

@@ -97,6 +97,7 @@ function drawdream_payment_transaction_ensure_schema_inner(mysqli $conn): void
     $cols = [
         'omise_charge_id' => 'VARCHAR(80) NULL DEFAULT NULL',
         'donate_type' => 'VARCHAR(40) NULL DEFAULT NULL',
+        'need_item_picks_json' => 'LONGTEXT NULL DEFAULT NULL',
     ];
     foreach ($cols as $name => $def) {
         $c = @$conn->query("SHOW COLUMNS FROM donation LIKE '" . $conn->real_escape_string($name) . "'");

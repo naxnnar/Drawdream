@@ -3,10 +3,9 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน profile
 
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php';
-require_once __DIR__ . '/includes/admin_audit_migrate.php';
-require_once __DIR__ . '/includes/donate_category_resolve.php';
-require_once __DIR__ . '/includes/child_omise_subscription.php';
+require_once __DIR__ . '/includes/csrf.php';
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -16,31 +15,6 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = (int)$_SESSION['user_id'];
 $role = $_SESSION['role'] ?? '';
 
-// ======== ฟังก์ชันเช็คโครงการสำเร็จ ========
-function checkCompletedProjects($conn) {
-    // เช็คโครงการที่ครบเป้าหมาย
-    $conn->query("
-        UPDATE foundation_project 
-        SET project_status = 'completed'
-        WHERE project_status = 'approved'
-        AND current_donate >= goal_amount
-        AND goal_amount > 0
-       
-    ");
-
-    // เช็คโครงการที่หมดเวลา
-    $conn->query("
-        UPDATE foundation_project 
-        SET project_status = 'completed'
-        WHERE project_status = 'approved'
-        AND end_date < CURDATE()
-       
-    ");
-}
-
-// เรียกเช็คทุกครั้งที่โหลดหน้า
-checkCompletedProjects($conn);
-
 if ($role === 'foundation') {
     $stmt = $conn->prepare("SELECT fp.*, u.email FROM foundation_profile fp 
                            JOIN `user` u ON fp.user_id = u.user_id 
@@ -49,107 +23,9 @@ if ($role === 'foundation') {
     $stmt->execute();
     $profile = $stmt->get_result()->fetch_assoc();
 
-    $foundationName = trim((string)($profile['foundation_name'] ?? ''));
-    $foundationId   = (int)($profile['foundation_id'] ?? 0);
-
-    // --- สรุปยอดบริจาคตามหมวด (เด็ก / โครงการ / สิ่งของ) ---
-    $finance_child_total  = 0.0;
-    $finance_project_total = 0.0;
-    $finance_need_total   = 0.0;
-    $foundation_finance_rows = [];
-
-    $childDonateCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
-
-    if ($foundationId > 0) {
-        $nq = $conn->prepare("SELECT COALESCE(SUM(current_donate), 0) AS t FROM foundation_needlist WHERE foundation_id = ?");
-        $nq->bind_param("i", $foundationId);
-        $nq->execute();
-        $finance_need_total = (float)($nq->get_result()->fetch_assoc()['t'] ?? 0);
-    }
-
-    if ($foundationName !== '') {
-        $pq = $conn->prepare("
-            SELECT COALESCE(SUM(d.amount), 0) AS t
-            FROM donation d
-            INNER JOIN donate_category dc ON dc.category_id = d.category_id
-                AND TRIM(COALESCE(dc.project_donate, '')) NOT IN ('', '-')
-            INNER JOIN foundation_project p ON p.project_id = d.target_id AND p.foundation_name = ?
-            WHERE d.payment_status = 'completed'
-        ");
-        $pq->bind_param("s", $foundationName);
-        $pq->execute();
-        $finance_project_total = (float)($pq->get_result()->fetch_assoc()['t'] ?? 0);
-    }
-
-    if ($foundationId > 0 && $childDonateCategoryId > 0) {
-        $cq = $conn->prepare("
-            SELECT COALESCE(SUM(d.amount), 0) AS t
-            FROM donation d
-            INNER JOIN foundation_children fc ON fc.child_id = d.target_id AND fc.foundation_id = ?
-            WHERE d.category_id = ? AND d.payment_status = 'completed'
-        ");
-        $cq->bind_param("ii", $foundationId, $childDonateCategoryId);
-        $cq->execute();
-        $finance_child_total = (float)($cq->get_result()->fetch_assoc()['t'] ?? 0);
-    }
-
-    $finance_grand_total = $finance_child_total + $finance_project_total + $finance_need_total;
-
-    if ($foundationName !== '') {
-        $lr = $conn->prepare("
-            SELECT d.transfer_datetime AS ts, d.amount, 'project' AS cat_key, p.project_name AS title
-            FROM donation d
-            INNER JOIN donate_category dc ON dc.category_id = d.category_id
-                AND TRIM(COALESCE(dc.project_donate, '')) NOT IN ('', '-')
-            INNER JOIN foundation_project p ON p.project_id = d.target_id AND p.foundation_name = ?
-            WHERE d.payment_status = 'completed'
-            ORDER BY d.transfer_datetime DESC
-        ");
-        $lr->bind_param("s", $foundationName);
-        $lr->execute();
-        foreach ($lr->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-            $foundation_finance_rows[] = $row;
-        }
-    }
-
-    if ($foundationId > 0) {
-        $lrNeed = $conn->prepare("
-            SELECT d.transfer_datetime AS ts, d.amount, 'need' AS cat_key, COALESCE(fp.foundation_name, 'มูลนิธิของคุณ') AS title
-            FROM donation d
-            INNER JOIN donate_category dc ON dc.category_id = d.category_id
-                AND TRIM(COALESCE(dc.needitem_donate, '')) NOT IN ('', '-')
-            LEFT JOIN foundation_profile fp ON fp.foundation_id = d.target_id
-            WHERE d.payment_status = 'completed'
-              AND d.target_id = ?
-            ORDER BY d.transfer_datetime DESC
-        ");
-        $lrNeed->bind_param("i", $foundationId);
-        $lrNeed->execute();
-        foreach ($lrNeed->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-            $foundation_finance_rows[] = $row;
-        }
-    }
-
-    if ($foundationId > 0 && $childDonateCategoryId > 0) {
-        $lr2 = $conn->prepare("
-            SELECT d.transfer_datetime AS ts, d.amount, 'child' AS cat_key, fc.child_name AS title
-            FROM donation d
-            INNER JOIN foundation_children fc ON fc.child_id = d.target_id AND fc.foundation_id = ?
-            WHERE d.category_id = ? AND d.payment_status = 'completed'
-            ORDER BY d.transfer_datetime DESC
-        ");
-        $lr2->bind_param("ii", $foundationId, $childDonateCategoryId);
-        $lr2->execute();
-        foreach ($lr2->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
-            $foundation_finance_rows[] = $row;
-        }
-    }
-
-    usort($foundation_finance_rows, static function ($a, $b) {
-        return strtotime((string)$b['ts']) <=> strtotime((string)$a['ts']);
-    });
-
 } elseif ($role === 'donor') {
+    require_once __DIR__ . '/includes/donate_category_resolve.php';
+    require_once __DIR__ . '/includes/child_omise_subscription.php';
     $donor_active_child_subscriptions = [];
     $stmt = $conn->prepare("SELECT d.*, u.email FROM donor d 
                            JOIN `user` u ON d.user_id = u.user_id 
@@ -198,6 +74,7 @@ if ($role === 'foundation') {
     $donor_active_child_subscriptions = drawdream_donor_list_active_child_subscriptions($conn, $user_id);
 
 } elseif ($role === 'admin') {
+    require_once __DIR__ . '/includes/admin_audit_migrate.php';
     $stmt = $conn->prepare("SELECT email FROM `user` WHERE user_id = ? LIMIT 1");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
@@ -234,10 +111,14 @@ if ($role === 'foundation') {
     $stmt3->execute();
     $logs = $stmt3->get_result()->fetch_all(MYSQLI_ASSOC);
 } else {
-    die("Role ไม่รองรับ");
+    require_once __DIR__ . '/includes/drawdream_user_error.php';
+    drawdream_user_error_redirect('ไม่พบข้อมูลโปรไฟล์หรือสิทธิ์ไม่ถูกต้อง', 'homepage.php', 'profile.php unsupported role: ' . $role);
 }
 
-if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
+if (!$profile) {
+    require_once __DIR__ . '/includes/drawdream_user_error.php';
+    drawdream_user_error_redirect('ไม่พบข้อมูลโปรไฟล์', 'homepage.php', 'profile.php missing profile user_id=' . $user_id);
+}
 
 ?>
 <!DOCTYPE html>
@@ -247,9 +128,12 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>โปรไฟล์ | DrawDream</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <?php require_once __DIR__ . '/includes/vendor_assets.php'; echo drawdream_bootstrap_icons_link(); ?>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/profile.css?v=19">
+    <link rel="stylesheet" href="css/profile.css?v=22">
+    <?php if ($role === 'foundation'): ?>
+    <link rel="prefetch" href="update_profile.php">
+    <?php endif; ?>
 </head>
 <body>
 
@@ -315,14 +199,30 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     </div>
 
     <?php if ($role === 'foundation'): ?>
+        <?php
+        $acctVerified = (int)($profile['account_verified'] ?? 0);
+        if ($acctVerified !== 1):
+            $step1Done = true;
+            $step2Current = ($acctVerified === 0);
+            $step3Todo = true;
+        ?>
+        <div class="foundation-account-stepper" style="margin:16px 0;padding:14px 16px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;">
+            <div style="font-weight:600;margin-bottom:10px;color:#0f172a;">สถานะการยืนยันบัญชีมูลนิธิ</div>
+            <ol style="margin:0;padding:0;list-style:none;display:grid;gap:8px;font-size:.9rem;">
+                <li style="color:#166534;">✓ ขั้นที่ 1 — สมัครและกรอกโปรไฟล์แล้ว</li>
+                <li style="color:<?= $step2Current ? '#b45309' : '#64748b' ?>;">
+                    <?= $step2Current ? '⏳' : '○' ?> ขั้นที่ 2 — รอแอดมินตรวจสอบ (โดยทั่วไป 1–3 วันทำการ)
+                </li>
+                <li style="color:#94a3b8;">○ ขั้นที่ 3 — เปิดรับบริจาคได้เต็มรูปแบบ</li>
+            </ol>
+            <?php if ($acctVerified === 2): ?>
+            <p style="margin:10px 0 0;font-size:.86rem;color:#9f1239;">บัญชียังไม่ผ่าน — แก้ไขโปรไฟล์แล้วบันทึกเพื่อส่งตรวจใหม่</p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
         <?php if ((int)($profile['account_verified'] ?? 0) === 2): ?>
             <div class="alert-bank alert-bank--foundation" style="background:#fff1f2;border-color:#fecdd3;color:#9f1239;">
-                โปรไฟล์มูลนิธิของคุณยังไม่ผ่านการอนุมัติ
-                <?php if (trim((string)($profile['review_note'] ?? '')) !== ''): ?>
-                    <div style="margin-top:6px;">
-                        <strong>เหตุผล:</strong> <?= nl2br(htmlspecialchars((string)$profile['review_note'])) ?>
-                    </div>
-                <?php endif; ?>
+                โปรไฟล์มูลนิธิของคุณยังไม่ผ่านการอนุมัติ — ดูเหตุผลได้จากแจ้งเตือนในระบบ
                 <div style="margin-top:8px;">กรุณาแก้ไขข้อมูล แล้วบันทึกเพื่อส่งตรวจสอบใหม่</div>
             </div>
         <?php elseif (!empty($profile['account_verified']) && empty($profile['bank_account_number'])): ?>
@@ -337,84 +237,19 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                 <span class="profile-menu-label">แก้ไขโปรไฟล์</span>
                 <span class="profile-menu-arrow">›</span>
             </a>
-            <button type="button" class="profile-menu-btn profile-menu-btn--history" id="openFoundationFinance">
+            <button type="button" class="profile-menu-btn profile-menu-btn--history" id="openFoundationFinance" aria-controls="foundationFinancePanel" aria-expanded="false">
                 <span class="profile-menu-icon"><i class="bi bi-cash-stack"></i></span>
                 <span class="profile-menu-label">ยอดบริจาค</span>
                 <span class="profile-menu-arrow">›</span>
             </button>
-            <a href="foundation_dashboard.php" class="profile-menu-btn profile-menu-btn--dashboard">
-                <span class="profile-menu-icon"><i class="bi bi-grid-1x2-fill"></i></span>
-                <span class="profile-menu-label">แดชบอร์ด</span>
-                <span class="profile-menu-arrow">›</span>
-            </a>
         </div>
 
-        <?php
-        $foundation_cat_labels = [
-            'child'   => ['label' => 'เด็ก', 'short' => 'เด็ก'],
-            'project' => ['label' => 'โครงการ', 'short' => 'โครงการ'],
-            'need'    => ['label' => 'สิ่งของ', 'short' => 'สิ่งของ'],
-        ];
-        ?>
         <div class="logs-section donor-history-panel foundation-projects-panel foundation-finance-panel" id="foundationFinancePanel" hidden>
             <h2>ยอดบริจาค</h2>
             <p class="foundation-finance-lead">สรุปตามช่องทางบริจาค (เด็ก / โครงการ / สิ่งของ) และรายการล่าสุดที่ระบบบันทึกได้</p>
-
-            <div class="foundation-finance-summary">
-                <div class="foundation-finance-card foundation-finance-card--child">
-                    <span class="foundation-finance-card__cat"><?= htmlspecialchars($foundation_cat_labels['child']['label']) ?></span>
-                    <span class="foundation-finance-card__amount"><?= number_format($finance_child_total, 2) ?> <small>บาท</small></span>
-                </div>
-                <div class="foundation-finance-card foundation-finance-card--project">
-                    <span class="foundation-finance-card__cat"><?= htmlspecialchars($foundation_cat_labels['project']['label']) ?></span>
-                    <span class="foundation-finance-card__amount"><?= number_format($finance_project_total, 2) ?> <small>บาท</small></span>
-                </div>
-                <div class="foundation-finance-card foundation-finance-card--need">
-                    <span class="foundation-finance-card__cat"><?= htmlspecialchars($foundation_cat_labels['need']['label']) ?></span>
-                    <span class="foundation-finance-card__amount"><?= number_format($finance_need_total, 2) ?> <small>บาท</small></span>
-                </div>
+            <div id="foundationFinanceContent" class="foundation-finance-content" data-loaded="0">
+                <div class="foundation-finance-loading" role="status" aria-live="polite">กำลังโหลดยอดบริจาค…</div>
             </div>
-            <div class="foundation-finance-total-row">
-                รวมทั้งหมด <strong><?= number_format($finance_grand_total, 2) ?> บาท</strong>
-            </div>
-            <h3 class="foundation-finance-subhead">รายการล่าสุด</h3>
-            <?php if (!empty($foundation_finance_rows)): ?>
-                <div class="foundation-finance-list">
-                    <?php foreach ($foundation_finance_rows as $idx => $fr): ?>
-                        <?php
-                            $is_extra_fin = $idx >= 5;
-                            $ck = $fr['cat_key'] ?? 'project';
-                            $meta = $foundation_cat_labels[$ck] ?? $foundation_cat_labels['project'];
-                            $ts = $fr['ts'] ?? '';
-                            $title = trim((string)($fr['title'] ?? ''));
-                            if ($title === '') {
-                                $title = '—';
-                            }
-                        ?>
-                        <div class="foundation-finance-row<?= $is_extra_fin ? ' foundation-finance-row--extra' : '' ?>"<?= $is_extra_fin ? ' style="display:none;"' : '' ?>>
-                            <span class="foundation-finance-badge foundation-finance-badge--<?= htmlspecialchars($ck) ?>"><?= htmlspecialchars($meta['short']) ?></span>
-                            <div class="foundation-finance-row__body">
-                                <div class="foundation-finance-row__title"><?= htmlspecialchars($title) ?></div>
-                                <div class="foundation-finance-row__time"><?= $ts ? date('d/m/Y H:i', strtotime((string)$ts)) : '—' ?></div>
-                            </div>
-                            <span class="foundation-finance-row__amount"><?= number_format((float)($fr['amount'] ?? 0), 2) ?> ฿</span>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-                <?php if (count($foundation_finance_rows) > 5): ?>
-                <div class="donation-more-wrap">
-                    <button type="button" class="btn-donation-more" id="btn-foundation-finance-more">ดูเพิ่มเติม</button>
-                </div>
-                <?php endif; ?>
-            <?php else: ?>
-                <div class="foundation-empty-projects foundation-finance-empty">
-                    <?php if ($finance_grand_total > 0): ?>
-                        ยังไม่มีรายการแยกรายครั้ง (เช่น บริจาคเฉพาะสิ่งของจะแสดงเฉพาะในช่องสรุปด้านบน)
-                    <?php else: ?>
-                        ยังไม่มียอดบริจาคที่บันทึกในระบบ
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
         </div>
 
     <?php elseif ($role === 'donor'): ?>
@@ -484,8 +319,20 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
             <?php if (!empty($donation_history)): ?>
                 <div class="donor-summary-head">
                     <div class="donor-summary-head-actions">
+                        <label class="donor-history-search-wrap" for="donation-history-search">
+                            <span class="visually-hidden">ค้นหาประวัติ</span>
+                            <input type="search" id="donation-history-search" class="donor-history-search" placeholder="ค้นหาชื่อ / ยอด / เลขอ้างอิง" autocomplete="off" enterkeyhint="search">
+                        </label>
+                        <label class="donor-year-filter-wrap" for="donation-type-filter">
+                            <select id="donation-type-filter" class="donor-year-filter donor-type-filter" aria-label="กรองตามประเภท">
+                                <option value="all">ทุกประเภท</option>
+                                <option value="child">อุปการะเด็ก</option>
+                                <option value="project">โครงการ</option>
+                                <option value="need">สิ่งของ</option>
+                            </select>
+                        </label>
                         <label class="donor-year-filter-wrap" for="donation-year-filter">
-                            <select id="donation-year-filter" class="donor-year-filter">
+                            <select id="donation-year-filter" class="donor-year-filter" aria-label="กรองตามปี">
                                 <option value="all">ทุกปี</option>
                                 <?php foreach ($year_options as $yr): ?>
                                     <option value="<?= htmlspecialchars($yr) ?>"><?= htmlspecialchars($yr) ?></option>
@@ -495,26 +342,44 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                         <button type="button" class="btn-donation-all" id="btn-donation-all">ดูรายการทั้งหมด</button>
                     </div>
                 </div>
+                <p class="donor-history-filter-empty" id="donationHistoryFilterEmpty" hidden>ไม่พบรายการที่ตรงกับตัวกรอง</p>
                 <div class="donation-summary">
                     <div class="donation-summary-primary">บริจาคทั้งหมด <strong><?= number_format($total_donated, 2) ?> บาท</strong></div>
                     <div class="donation-summary-secondary">จาก <?= $don_count ?> รายการ</div>
                 </div>
                 <?php foreach ($donation_history as $idx => $don): ?>
-                    <?php $yr = date('Y', strtotime((string)$don['transfer_datetime'])); ?>
-                    <div class="log-item log-item--donation" data-year="<?= htmlspecialchars($yr) ?>"<?= $idx >= 5 ? ' hidden' : '' ?>>
+                    <?php
+                    $yr = date('Y', strtotime((string)$don['transfer_datetime']));
+                    $histChild = trim((string)($don['child_name_by_target'] ?? ''));
+                    $histProject = trim((string)($don['project_name_by_target'] ?? ''));
+                    $histFoundation = trim((string)($don['foundation_name_by_target'] ?? ''));
+                    $histCatChild = drawdream_donate_cat_label_is_active($don['child_donate'] ?? null);
+                    $histCatProject = drawdream_donate_cat_label_is_active($don['project_donate'] ?? null);
+                    $histCatNeed = drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null);
+                    if ($histCatChild || $histChild !== '') {
+                        $histDonateType = 'child';
+                    } elseif ($histCatProject || $histProject !== '') {
+                        $histDonateType = 'project';
+                    } elseif ($histCatNeed || $histFoundation !== '') {
+                        $histDonateType = 'need';
+                    } else {
+                        $histDonateType = 'other';
+                    }
+                    $histSearchBlob = mb_strtolower(implode(' ', array_filter([
+                        $histChild,
+                        $histProject,
+                        $histFoundation,
+                        (string)($don['omise_charge_id'] ?? ''),
+                        number_format((float)$don['amount'], 2, '.', ''),
+                        (string)($don['donate_id'] ?? ''),
+                    ])), 'UTF-8');
+                    ?>
+                    <div class="log-item log-item--donation" data-year="<?= htmlspecialchars($yr) ?>" data-donate-type="<?= htmlspecialchars($histDonateType) ?>" data-search="<?= htmlspecialchars($histSearchBlob, ENT_QUOTES, 'UTF-8') ?>"<?= $idx >= 5 ? ' hidden' : '' ?>>
                         <?php if ((int)($don['donate_id'] ?? 0) > 0): ?>
                         <a class="log-item-hit" href="donation_receipt.php?donate_id=<?= (int)$don['donate_id'] ?>" aria-label="ดูใบเสร็จการบริจาค"></a>
                         <?php endif; ?>
                         <div class="donor-donation-main">
                             <div class="log-action">
-                                <?php
-                                $histChild = trim((string)($don['child_name_by_target'] ?? ''));
-                                $histProject = trim((string)($don['project_name_by_target'] ?? ''));
-                                $histFoundation = trim((string)($don['foundation_name_by_target'] ?? ''));
-                                $histCatChild = drawdream_donate_cat_label_is_active($don['child_donate'] ?? null);
-                                $histCatProject = drawdream_donate_cat_label_is_active($don['project_donate'] ?? null);
-                                $histCatNeed = drawdream_donate_cat_label_is_active($don['needitem_donate'] ?? null);
-                                ?>
                                 <?php if ($histCatChild && $histChild !== ''): ?>
                                     อุปการะเด็ก — <?= htmlspecialchars($histChild) ?>
                                 <?php elseif ($histCatProject && $histProject !== ''): ?>
@@ -553,8 +418,8 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
                             </div>
                         </div>
                         <?php if ((int)($don['donate_id'] ?? 0) > 0): ?>
-                            <a class="log-receipt-link" href="donation_receipt.php?donate_id=<?= (int)$don['donate_id'] ?>">
-                                ดูใบเสร็จอิเล็กทรอนิกส์
+                            <a class="log-receipt-link" href="donation_receipt.php?donate_id=<?= (int)$don['donate_id'] ?>" title="เปิดใบเสร็จและดาวน์โหลด PDF">
+                                <i class="bi bi-download" aria-hidden="true"></i> ใบเสร็จ / PDF
                             </a>
                         <?php endif; ?>
                     </div>
@@ -620,7 +485,7 @@ if (!$profile) die("ไม่พบข้อมูลโปรไฟล์");
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<?php require_once __DIR__ . '/includes/vendor_assets.php'; echo drawdream_sweetalert2_js_tag('', false); ?>
 <script>
 function showModal(data) {
     const modal = document.getElementById('detailModal');
@@ -689,30 +554,103 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
 
     var openFin = document.getElementById('openFoundationFinance');
     var finPanel = document.getElementById('foundationFinancePanel');
-    if (openFin && finPanel) {
-        openFin.addEventListener('click', function() {
-            finPanel.hidden = false;
-            finPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var finContent = document.getElementById('foundationFinanceContent');
+    var finLoaded = false;
+    var finLoading = false;
+
+    function bindFoundationFinanceMore() {
+        var finMoreBtn = document.getElementById('btn-foundation-finance-more');
+        if (!finMoreBtn) return;
+        finMoreBtn.addEventListener('click', function() {
+            [].slice.call(document.querySelectorAll('.foundation-finance-row--extra')).forEach(function(el) {
+                el.style.display = 'flex';
+            });
+            var finMoreWrap = finMoreBtn.closest('.donation-more-wrap');
+            if (finMoreWrap) {
+                finMoreWrap.style.display = 'none';
+            } else {
+                finMoreBtn.style.display = 'none';
+            }
         });
     }
 
+    function loadFoundationFinance(done) {
+        if (finLoaded || finLoading || !finContent) {
+            if (done) done();
+            return;
+        }
+        finLoading = true;
+        fetch('profile_foundation_finance.php', { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(res) {
+                if (!res.ok) throw new Error('load failed');
+                return res.text();
+            })
+            .then(function(html) {
+                finContent.innerHTML = html;
+                finContent.setAttribute('data-loaded', '1');
+                finLoaded = true;
+                bindFoundationFinanceMore();
+                if (done) done();
+            })
+            .catch(function() {
+                finContent.innerHTML = '<div class="foundation-finance-empty">โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</div>';
+            })
+            .finally(function() {
+                finLoading = false;
+                if (openFin) openFin.classList.remove('profile-menu-btn--pending');
+            });
+    }
+
+    function openFoundationFinancePanel() {
+        if (!finPanel) return;
+        finPanel.hidden = false;
+        if (openFin) openFin.setAttribute('aria-expanded', 'true');
+        finPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!finLoaded && !finLoading) {
+            if (openFin) openFin.classList.add('profile-menu-btn--pending');
+            loadFoundationFinance();
+        }
+    }
+
+    if (openFin && finPanel) {
+        openFin.addEventListener('click', openFoundationFinancePanel);
+    }
+    try {
+        var finParams = new URLSearchParams(window.location.search);
+        if (finParams.get('finance') === '1') {
+            openFoundationFinancePanel();
+        }
+    } catch (eFin) { /* ignore */ }
+
     // ประวัติบริจาค:
-    // - เริ่มต้นแสดง 5 รายการแรกของปีที่เลือก
-    // - กด "ดูรายการทั้งหมด" แล้วค่อยแสดงครบทุกรายการของปีนั้น
+    // - เริ่มต้นแสดง 5 รายการแรกของปี/ประเภทที่เลือก
+    // - กด "ดูรายการทั้งหมด" แล้วค่อยแสดงครบทุกรายการที่ตรงตัวกรอง
     var yearFilter = document.getElementById('donation-year-filter');
+    var typeFilter = document.getElementById('donation-type-filter');
+    var searchInput = document.getElementById('donation-history-search');
+    var filterEmpty = document.getElementById('donationHistoryFilterEmpty');
     var showAllBtn = document.getElementById('btn-donation-all');
     var items = [].slice.call(document.querySelectorAll('.log-item--donation'));
     var expandedAll = false;
     function applyFilter() {
         var year = yearFilter ? yearFilter.value : 'all';
+        var dtype = typeFilter ? typeFilter.value : 'all';
+        var q = searchInput ? searchInput.value.trim().toLowerCase() : '';
         var visibleCount = 0;
         var hasMoreThanFive = false;
+        var matchedAny = false;
         items.forEach(function(el) {
-            var ok = (year === 'all') || (el.getAttribute('data-year') === year);
+            var okYear = (year === 'all') || (el.getAttribute('data-year') === year);
+            var elType = el.getAttribute('data-donate-type') || 'other';
+            var okType = (dtype === 'all') || (elType === dtype);
+            var blob = el.getAttribute('data-search') || '';
+            var okSearch = q === '' || blob.indexOf(q) !== -1;
+            var ok = okYear && okType && okSearch;
             if (!ok) {
                 el.hidden = true;
                 return;
             }
+            matchedAny = true;
             if (!expandedAll && visibleCount >= 5) {
                 el.hidden = true;
                 hasMoreThanFive = true;
@@ -721,13 +659,15 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
             }
             visibleCount++;
         });
+        if (filterEmpty) {
+            filterEmpty.hidden = matchedAny;
+        }
         if (showAllBtn) {
             showAllBtn.style.display = hasMoreThanFive ? '' : 'none';
         }
     }
     if (showAllBtn) {
         showAllBtn.addEventListener('click', function() {
-            // กดแล้วขยายรายการทั้งหมดของปีที่เลือก
             expandedAll = true;
             applyFilter();
             showAllBtn.style.display = 'none';
@@ -735,9 +675,24 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
     }
     if (yearFilter) {
         yearFilter.addEventListener('change', function() {
-            // เปลี่ยนปีให้กลับไปโหมดเริ่มต้น (เห็น 5 รายการก่อน)
             expandedAll = false;
             applyFilter();
+        });
+    }
+    if (typeFilter) {
+        typeFilter.addEventListener('change', function() {
+            expandedAll = false;
+            applyFilter();
+        });
+    }
+    if (searchInput) {
+        var searchTimer = null;
+        searchInput.addEventListener('input', function() {
+            expandedAll = false;
+            if (searchTimer) {
+                clearTimeout(searchTimer);
+            }
+            searchTimer = setTimeout(applyFilter, 180);
         });
     }
     applyFilter();
@@ -753,21 +708,6 @@ document.getElementById('detailModal').addEventListener('click', function(e) {
             if (wrap) wrap.style.display = 'none';
         });
     })();
-
-    var finMoreBtn = document.getElementById('btn-foundation-finance-more');
-    if (finMoreBtn) {
-        finMoreBtn.addEventListener('click', function() {
-            [].slice.call(document.querySelectorAll('.foundation-finance-row--extra')).forEach(function(el) {
-                el.style.display = 'flex';
-            });
-            var finMoreWrap = finMoreBtn.closest('.donation-more-wrap');
-            if (finMoreWrap) {
-                finMoreWrap.style.display = 'none';
-            } else {
-                finMoreBtn.style.display = 'none';
-            }
-        });
-    }
 
     var cancelForms = document.querySelectorAll('.js-confirm-cancel-sub');
     cancelForms.forEach(function (form) {

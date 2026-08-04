@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // notifications.php — ประวัติการแจ้งเตือนทั้งหมด (ผู้บริจาค + มูลนิธิ)
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน notifications
@@ -15,7 +15,8 @@ if (!isset($_SESSION['user_id']) || !in_array($role, ['foundation', 'donor'], tr
 
 $uid = (int)$_SESSION['user_id'];
 
-if (isset($_GET['mark_all'])) {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['mark_all'])) {
+    drawdream_csrf_require_valid('notifications.php');
     drawdream_notifications_mark_all_read($conn, $uid);
     $_SESSION['dismiss_auto_need_round_open'] = 1;
     $_SESSION['dismiss_auto_child_outcome'] = 1;
@@ -78,6 +79,11 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
             color: #4A5BA8;
             text-decoration: none;
             white-space: nowrap;
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            font-family: inherit;
         }
         .mark-all-link:hover { text-decoration: underline; }
 
@@ -208,7 +214,11 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
             <?php endif; ?>
         </div>
         <?php if ($unread_count > 0): ?>
-            <a href="notifications.php?mark_all=1" class="mark-all-link">ทำเครื่องหมายว่าอ่านทั้งหมด</a>
+            <form method="post" action="notifications.php" style="display:inline;margin:0;">
+                <?= drawdream_csrf_field() ?>
+                <input type="hidden" name="mark_all" value="1">
+                <button type="submit" class="mark-all-link">ทำเครื่องหมายว่าอ่านทั้งหมด</button>
+            </form>
         <?php endif; ?>
     </div>
     <p class="page-sub">แจ้งเตือนในระบบ (กระดิ่ง) — ไม่ส่งอีเมลอัตโนมัติ แสดงประวัติล่าสุดไม่เกิน 200 รายการ</p>
@@ -234,9 +244,11 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
                 $time_diff = date('d/m/Y H:i', (int)$created);
             }
 
-            $rawLink = drawdream_normalize_child_donate_notification_link(
+            $rawLink = drawdream_normalize_notification_link(
                 trim((string)($row['link'] ?? '')),
-                (string)($row['title'] ?? '')
+                (string)($row['title'] ?? ''),
+                $conn,
+                $uid
             );
             $isUnread = (int)($row['is_read'] ?? 0) === 0;
             $cardClasses = 'notif-card notif--' . htmlspecialchars($typeClass, ENT_QUOTES, 'UTF-8')
@@ -261,7 +273,7 @@ $unread_count = drawdream_notifications_unread_count($conn, $uid);
             <?php endif; ?>
                 <div class="notif-icon"><?= $icon ?></div>
                 <div class="notif-body">
-                    <div class="notif-title"><?= htmlspecialchars((string)$row['title']) ?></div>
+                    <div class="notif-title"><?= htmlspecialchars((string)($row['title'] ?? '') === 'อัปเดตผลลัพธ์เด็ก' ? 'อัปเดตจดหมายเด็ก' : (string)$row['title']) ?></div>
                     <div class="notif-message"><?= htmlspecialchars((string)$row['message']) ?></div>
                     <div class="notif-time"><?= htmlspecialchars($time_diff) ?></div>
                 </div>

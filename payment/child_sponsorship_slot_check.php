@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 
+define('DRAWDREAM_DB_LIGHT', true);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/child_omise_subscription.php';
@@ -23,7 +24,6 @@ if ($childId <= 0) {
     exit;
 }
 
-drawdream_child_omise_subscription_ensure_schema($conn);
 $status = drawdream_child_subscription_slot_status($conn, $childId, $donorUid);
 
 echo json_encode([

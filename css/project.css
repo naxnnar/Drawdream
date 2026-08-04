@@ -447,6 +447,9 @@ body.admin-approve-projects-page {
 }
 .foundation-status-pill.st-pending { background: #e3a91f; }
 .foundation-status-pill.st-completed { background: #3C5099; }
+.foundation-status-pill.st-sc-due { background: #f59e0b; color: #1f2937; }
+.foundation-status-pill.st-wait-admin { background: #0ea5e9; color: #fff; }
+.foundation-status-pill.st-await-outcome,
 .foundation-status-pill.st-purchasing { background: #eab308; color: #1f2937; }
 .foundation-status-pill.st-rejected { background: #d66565; }
 
@@ -683,7 +686,7 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
 
 .search-input {
     width: 100%;
-    padding: 1rem 3.5rem 1rem 1.5rem;
+    padding: 1rem 7.5rem 1rem 1.5rem;
     font-size: 1rem;
     color: #333;
     background-color: #f5f0e8;
@@ -695,6 +698,17 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
     font-family: 'Sarabun', sans-serif;
 }
 
+.search-hint {
+    max-width: 780px;
+    margin: -12px auto 18px;
+    padding: 0 4px;
+    font-size: 0.92rem;
+    color: #666;
+    text-align: center;
+    line-height: 1.45;
+    font-family: 'Sarabun', sans-serif;
+}
+
 .search-input::placeholder {
     color: #666;
 }
@@ -703,32 +717,95 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
     box-shadow: 0 0 0 3px rgba(245, 201, 66, 0.3);
 }
 
-/* override style.css .search-box button à¸—à¸µà¹ˆà¸¡à¸µà¸ªà¸µà¹€à¸«à¸¥à¸·à¸­à¸‡ */
+/* override style.css .search-box button ที่มีสีเหลือง */
 .search-box .search-button,
 .search-button {
     position: absolute;
-    right: 1rem;
+    right: 0.45rem;
     top: 50%;
     transform: translateY(-50%);
-    background: none !important;
+    background: #3C5099 !important;
+    color: #fff !important;
     border: none !important;
-    border-radius: 0 !important;
+    border-radius: 10px !important;
     box-shadow: none !important;
     cursor: pointer;
-    padding: 0.5rem;
-    display: flex;
+    padding: 0.45rem 0.85rem;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: opacity 0.2s;
+    gap: 0.35rem;
+    transition: background 0.2s, opacity 0.2s;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    min-height: 40px;
+}
+
+.search-button-icon {
+    flex-shrink: 0;
+    stroke: currentColor;
+}
+
+.search-button-label {
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .search-button:hover {
-    opacity: 0.7;
+    opacity: 1;
+    background: #2d4580 !important;
 }
 
 .search-button span {
-    font-size: 1.5rem;
-    color: #333;
+    font-size: 1rem;
+    color: inherit;
+}
+
+.filter-pills-wrap {
+    max-width: 780px;
+    margin: 0 auto;
+}
+
+.filter-clear-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.filter-clear-all {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #d1d5db;
+    color: #3C5099;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    font-family: 'Sarabun', sans-serif;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.filter-clear-all:hover {
+    background: #f0f2fa;
+    border-color: #3C5099;
+    color: #2d4580;
+}
+
+.filter-clear-all--empty {
+    margin-top: 18px;
+    background: #3C5099;
+    border-color: #3C5099;
+    color: #fff;
+}
+
+.filter-clear-all--empty:hover {
+    background: #2d4580;
+    border-color: #2d4580;
+    color: #fff;
 }
 
 .filter-pills {
@@ -919,6 +996,31 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
 .loc-region-item.active {
     background: #3C5099;
     color: white;
+}
+
+@media (max-width: 768px) {
+    .loc-panel {
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: min(320px, calc(100vw - 32px));
+        max-width: calc(100vw - 32px);
+    }
+
+    .loc-col-left {
+        width: 42%;
+    }
+
+    .loc-col-right {
+        width: 58%;
+        flex: 1;
+    }
+
+    .loc-region-item,
+    .loc-province-item {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
 }
 
 .loc-province-item {
@@ -1770,14 +1872,37 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
 /* ======== No Projects ======== */
 .no-projects {
     text-align: center;
-    padding: 60px 20px;
+    padding: 48px 20px 60px;
     grid-column: 1 / -1;
 }
 
 .no-projects-icon {
-    font-size: 64px;
-    margin-bottom: 20px;
-    opacity: 0.3;
+    font-size: 48px;
+    margin-bottom: 14px;
+    line-height: 1;
+}
+
+.no-projects-title {
+    color: #444;
+    font-size: 1.15rem;
+    font-weight: 700;
+    font-family: 'Prompt', sans-serif;
+    margin: 0 0 12px;
+}
+
+.no-projects-filters {
+    list-style: none;
+    margin: 0 auto 8px;
+    padding: 0;
+    max-width: 420px;
+    color: #666;
+    font-size: 0.98rem;
+    line-height: 1.55;
+    font-family: 'Sarabun', sans-serif;
+}
+
+.no-projects-filters li + li {
+    margin-top: 4px;
 }
 
 .no-projects p {
@@ -1866,6 +1991,21 @@ body.mode-outcome-project .foundation-project-list .project-outcome-wrap[data-al
         gap: 4px;
     }
     .search-container { max-width: 100%; }
+    .search-input {
+        padding-right: 6.5rem;
+    }
+    .search-button {
+        padding: 0.4rem 0.65rem;
+        min-height: 38px;
+    }
+    .search-button-label {
+        display: inline;
+    }
+    .search-hint {
+        margin-top: -8px;
+        margin-bottom: 14px;
+        font-size: 0.88rem;
+    }
     .filter-pills {
         grid-template-columns: 1fr 1fr;
         max-width: 420px;

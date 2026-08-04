@@ -49,38 +49,62 @@ $password = (string)($dbConfig['password'] ?? '');
 $database = (string)($dbConfig['database'] ?? 'drawdream_db');
 
 if (function_exists('mysqli_init') && function_exists('mysqli_real_connect')) {
-    $connInit = mysqli_init();
-    if (!$connInit) {
-        die('Connection failed: cannot initialize MySQL client');
-    }
-
     $sslCa = trim((string)(getenv('DB_SSL_CA') !== false ? getenv('DB_SSL_CA') : ''));
     $sslMode = strtolower(trim((string)(getenv('DB_SSL_MODE') !== false ? getenv('DB_SSL_MODE') : 'require')));
     $useSsl = ($sslMode !== 'disable') || str_contains($host, 'aivencloud.com');
-    $sslFlags = 0;
-    if ($useSsl) {
-        if ($sslCa !== '' && is_file($sslCa)) {
-            mysqli_ssl_set($connInit, null, null, $sslCa, null, null);
-        } elseif (defined('MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT')) {
-            $sslFlags = MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT;
+
+    $conn = null;
+    $lastConnectError = '';
+    $connectAttempts = (int)(getenv('DB_CONNECT_RETRIES') ?: 3);
+    if ($connectAttempts < 1) {
+        $connectAttempts = 1;
+    }
+
+    for ($attempt = 1; $attempt <= $connectAttempts; $attempt++) {
+        $connInit = mysqli_init();
+        if (!$connInit) {
+            $lastConnectError = 'cannot initialize MySQL client';
+            break;
+        }
+
+        $sslFlags = 0;
+        if ($useSsl) {
+            if ($sslCa !== '' && is_file($sslCa)) {
+                mysqli_ssl_set($connInit, null, null, $sslCa, null, null);
+            } elseif (defined('MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT')) {
+                $sslFlags = MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT;
+            }
+        }
+
+        try {
+            $connOk = @mysqli_real_connect(
+                $connInit,
+                $host,
+                $user,
+                $password,
+                $database,
+                $port,
+                null,
+                $sslFlags
+            );
+            if ($connOk) {
+                $conn = $connInit;
+                break;
+            }
+            $lastConnectError = (string)mysqli_connect_error();
+        } catch (Throwable $e) {
+            $lastConnectError = $e->getMessage();
+        }
+
+        if ($attempt < $connectAttempts) {
+            usleep(250000 * $attempt);
         }
     }
 
-    $connOk = @mysqli_real_connect(
-        $connInit,
-        $host,
-        $user,
-        $password,
-        $database,
-        $port,
-        null,
-        $sslFlags
-    );
-    if (!$connOk) {
+    if (!$conn) {
         $hint = $password === '' ? ' (DB_PASSWORD/AIVEN_PASSWORD ยังว่าง)' : '';
-        die('Connection failed: ' . htmlspecialchars(mysqli_connect_error(), ENT_QUOTES, 'UTF-8') . $hint);
+        die('Connection failed: ' . htmlspecialchars($lastConnectError, ENT_QUOTES, 'UTF-8') . $hint);
     }
-    $conn = $connInit;
 } else {
     $conn = mysqli_connect($host, $user, $password, $database, $port);
     if (!$conn) {
@@ -99,56 +123,26 @@ mysqli_set_charset($conn, 'utf8mb4');
 date_default_timezone_set('Asia/Bangkok');
 @mysqli_query($conn, "SET time_zone = '+07:00'");
 
-require_once __DIR__ . '/includes/drawdream_project_status.php';
-require_once __DIR__ . '/includes/admin_audit_migrate.php';
-require_once __DIR__ . '/includes/drawdream_soft_delete.php';
-require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
-require_once __DIR__ . '/includes/drawdream_project_updates_schema.php';
-require_once __DIR__ . '/includes/notification_audit.php';
-require_once __DIR__ . '/includes/csrf.php';
-require_once __DIR__ . '/includes/user_activity_tracking.php';
-require_once __DIR__ . '/includes/payment_transaction_schema.php';
-require_once __DIR__ . '/includes/child_omise_subscription.php';
-require_once __DIR__ . '/includes/child_subscription_history.php';
-require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
+require_once __DIR__ . '/includes/drawdream_schema_once.php';
 
-// Migration cache — dev: ทุก 1 ชม. | production: รันครั้งเดียวจนกว่าจะลบไฟล์หรือตั้ง DRAWDREAM_FORCE_MIGRATION=1
-$_ddMigrationCache = __DIR__ . '/config/migration_done.txt';
-$_ddAppEnv = strtolower(trim((string)(getenv('APP_ENV') ?: '')));
-$_ddIsProduction = in_array($_ddAppEnv, ['production', 'prod'], true);
-$_ddForceMigration = trim((string)(getenv('DRAWDREAM_FORCE_MIGRATION') ?: '')) === '1';
-
-if ($_ddIsProduction && !$_ddForceMigration) {
-    $_ddNeedMigration = !is_file($_ddMigrationCache);
-} else {
-    $_ddMigrationTtl = 3600;
-    $_ddNeedMigration = $_ddForceMigration
-        || !is_file($_ddMigrationCache)
-        || (time() - (int)filemtime($_ddMigrationCache)) > $_ddMigrationTtl;
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
+if (isset($_GET['preview_mode'])) {
+    drawdream_foundation_preview_process_request();
 }
 
-if ($_ddNeedMigration) {
-    drawdream_normalize_foundation_project_statuses($conn);
-    drawdream_ensure_admin_audit_table($conn);
-    drawdream_admin_deduplicate_entity_rows($conn);
-    drawdream_migrate_remove_soft_delete_columns($conn);
-    drawdream_ensure_needlist_schema($conn);
-    drawdream_ensure_foundation_project_update_columns($conn);
-    drawdream_notifications_migrate_legacy_on_boot($conn);
-    drawdream_ensure_user_activity_columns($conn);
-    drawdream_payment_transaction_ensure_schema($conn);
-    drawdream_child_omise_subscription_ensure_schema($conn);
-    drawdream_ensure_notifications_table($conn);
-    drawdream_child_subscription_history_ensure_schema($conn);
-    drawdream_ensure_foundation_project_service_charge_columns($conn);
+if (!defined('DRAWDREAM_DB_LIGHT')) {
+    require_once __DIR__ . '/includes/csrf.php';
+    require_once __DIR__ . '/includes/user_activity_tracking.php';
 
-    @file_put_contents($_ddMigrationCache, date('Y-m-d H:i:s'));
-}
-unset($_ddMigrationCache, $_ddIsProduction, $_ddForceMigration, $_ddAppEnv, $_ddNeedMigration);
+    drawdream_session_reconcile_user($conn);
 
-if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] > 0) {
-    drawdream_record_user_presence($conn);
+    if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] > 0) {
+        drawdream_record_user_presence($conn);
+    }
 }
+
+drawdream_foundation_preview_persist_session_role();
+drawdream_foundation_preview_enforce_donor_only();
 
 if (!function_exists('drawdream_project_image_storage_path')) {
     /**

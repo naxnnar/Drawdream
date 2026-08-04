@@ -3,10 +3,13 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน foundation
 
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php';
 require_once __DIR__ . '/includes/needlist_donate_window.php';
+require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/includes/utf8_helpers.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';
+require_once __DIR__ . '/includes/foundation_public_page_cache.php';
 
 /**
  * หา path รูปในโฟลเดอร์ img/ เมื่อชื่อไฟล์ไม่มีนามสกุล (ลอง .jpg .jpeg .png .webp)
@@ -26,102 +29,208 @@ function drawdream_community_img(string $baseName): string {
 }
 
 $is_verified = drawdream_foundation_account_is_verified($conn);
+$foundationPageMsg = trim((string)($_GET['msg'] ?? ''));
 
+$roleViewer = $_SESSION['role'] ?? '';
+$isFoundationManageView = ($roleViewer === 'foundation');
+$userId = (int)($_SESSION['user_id'] ?? 0);
+
+$foundationRows = [];
+$donationTotals = [];
+$goalTotals = [];
+$donationTotalsSlideTrack = [];
+$goalTotalsSlideTrack = [];
+$needOutcomeFoundations = [];
+$needDoneFoundations = [];
+$needPurchasingFoundations = [];
+$needlistByFoundation = [];
+$foundationPublicFromCache = false;
+
+if (!$isFoundationManageView) {
+    $cachedFoundationPage = drawdream_foundation_public_page_cache_get();
+    if ($cachedFoundationPage !== null) {
+        $foundationRows = $cachedFoundationPage['foundationRows'];
+        $donationTotals = $cachedFoundationPage['donationTotals'];
+        $goalTotals = $cachedFoundationPage['goalTotals'];
+        $donationTotalsSlideTrack = $cachedFoundationPage['donationTotalsSlideTrack'];
+        $goalTotalsSlideTrack = $cachedFoundationPage['goalTotalsSlideTrack'];
+        $needOutcomeFoundations = $cachedFoundationPage['needOutcomeFoundations'];
+        $needDoneFoundations = $cachedFoundationPage['needDoneFoundations'];
+        $needPurchasingFoundations = $cachedFoundationPage['needPurchasingFoundations'];
+        $needlistByFoundation = $cachedFoundationPage['needlistByFoundation'];
+        $foundationPublicFromCache = true;
+    }
+}
+
+if (!$foundationPublicFromCache) {
 // ถ้าเป็นมูลนิธิ: ดูของตัวเองได้แม้ยังไม่อนุมัติ
 // ถ้าเป็นผู้ใช้ทั่วไป/ผู้บริจาค: แสดงเฉพาะมูลนิธิที่อนุมัติแล้วเท่านั้น
-if (($_SESSION['role'] ?? '') === 'foundation') {
-    $userId = (int)($_SESSION['user_id'] ?? 0);
-    $foundations = mysqli_query($conn, "SELECT * FROM foundation_profile WHERE user_id = $userId ORDER BY foundation_id DESC");
+if ($isFoundationManageView) {
+    $stOwn = $conn->prepare('SELECT * FROM foundation_profile WHERE user_id = ? ORDER BY foundation_id DESC');
+    if ($stOwn) {
+        $stOwn->bind_param('i', $userId);
+        $stOwn->execute();
+        $foundations = $stOwn->get_result();
+    } else {
+        $foundations = false;
+    }
 } else {
     $foundations = mysqli_query($conn, "SELECT * FROM foundation_profile WHERE account_verified = 1 ORDER BY foundation_id DESC");
 }
-if (!$foundations) die("Query foundations failed: " . mysqli_error($conn));
+if (!$foundations) {
+    error_log('foundation.php foundations query: ' . mysqli_error($conn));
+    $foundationRows = [];
+} else {
+    while ($row = $foundations->fetch_assoc()) {
+        $foundationRows[] = $row;
+    }
+}
 
-// ✅ ยอดบริจาค/เป้าหมายเฉพาะรายการที่ยังเปิดรับบริจาคตามระยะเวลา
 $needOpenPub = drawdream_needlist_sql_open_for_donation();
 $donationTotals = [];
-$q = mysqli_query($conn, "
-    SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
-    FROM foundation_needlist
-    WHERE $needOpenPub
-    GROUP BY foundation_id
-");
-if ($q) while ($r = mysqli_fetch_assoc($q)) $donationTotals[(int)$r['foundation_id']] = (float)$r['total'];
-
 $goalTotals = [];
-$q2 = mysqli_query($conn, "
-    SELECT
-        foundation_id,
-        COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
-    FROM foundation_needlist
-    WHERE $needOpenPub
-    GROUP BY foundation_id
-");
-if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
-
-/* ยอดรวม «แถบความคืบหน้าในการ์ดสไลด์» — รายการเดียวกับที่โชว์ (approved/purchasing/done)
- * เมื่อไม่มีรอบเปิดรับอยู่ การใช้เฉพาะยอด open จะได้ 0/0 ทั้งที่ครบเป้าแล้ว */
 $donationTotalsSlideTrack = [];
-$qTrack = mysqli_query($conn, "
-    SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
-    FROM foundation_needlist
-    WHERE approve_item IN ('approved', 'purchasing', 'done')
-    GROUP BY foundation_id
-");
-if ($qTrack) {
-    while ($r = mysqli_fetch_assoc($qTrack)) {
-        $donationTotalsSlideTrack[(int)$r['foundation_id']] = (float)$r['total'];
-    }
-}
 $goalTotalsSlideTrack = [];
-$qTrackG = mysqli_query($conn, "
-    SELECT foundation_id, COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
-    FROM foundation_needlist
-    WHERE approve_item IN ('approved', 'purchasing', 'done')
-    GROUP BY foundation_id
-");
-if ($qTrackG) {
-    while ($r = mysqli_fetch_assoc($qTrackG)) {
-        $goalTotalsSlideTrack[(int)$r['foundation_id']] = (float)$r['goal'];
-    }
-}
-
 $needOutcomeFoundations = [];
 $needDoneFoundations = [];
-$qOutcome = mysqli_query($conn, "
-    SELECT DISTINCT foundation_id
-    FROM foundation_needlist
-    WHERE approve_item = 'done'
-      AND (
-        COALESCE(TRIM(update_text), '') <> ''
-        OR (update_images IS NOT NULL AND TRIM(update_images) <> '' AND TRIM(update_images) <> '[]')
-      )
-");
-if ($qOutcome) {
-    while ($r = mysqli_fetch_assoc($qOutcome)) {
-        $needOutcomeFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+$needPurchasingFoundations = [];
+
+if (!$isFoundationManageView) {
+    $q = mysqli_query($conn, "
+        SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
+        FROM foundation_needlist
+        WHERE $needOpenPub
+        GROUP BY foundation_id
+    ");
+    if ($q) while ($r = mysqli_fetch_assoc($q)) $donationTotals[(int)$r['foundation_id']] = (float)$r['total'];
+
+    $q2 = mysqli_query($conn, "
+        SELECT
+            foundation_id,
+            COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
+        FROM foundation_needlist
+        WHERE $needOpenPub
+        GROUP BY foundation_id
+    ");
+    if ($q2) while ($r = mysqli_fetch_assoc($q2)) $goalTotals[(int)$r['foundation_id']] = (float)$r['goal'];
+
+    $qTrack = mysqli_query($conn, "
+        SELECT foundation_id, COALESCE(SUM(current_donate), 0) AS total
+        FROM foundation_needlist
+        WHERE approve_item IN ('approved', 'purchasing', 'done')
+        GROUP BY foundation_id
+    ");
+    if ($qTrack) {
+        while ($r = mysqli_fetch_assoc($qTrack)) {
+            $donationTotalsSlideTrack[(int)$r['foundation_id']] = (float)$r['total'];
+        }
     }
-}
-$qDone = mysqli_query($conn, "
-    SELECT DISTINCT foundation_id
-    FROM foundation_needlist
-    WHERE approve_item = 'done'
-");
-if ($qDone) {
-    while ($r = mysqli_fetch_assoc($qDone)) {
-        $needDoneFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+    $qTrackG = mysqli_query($conn, "
+        SELECT foundation_id, COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
+        FROM foundation_needlist
+        WHERE approve_item IN ('approved', 'purchasing', 'done')
+        GROUP BY foundation_id
+    ");
+    if ($qTrackG) {
+        while ($r = mysqli_fetch_assoc($qTrackG)) {
+            $goalTotalsSlideTrack[(int)$r['foundation_id']] = (float)$r['goal'];
+        }
+    }
+
+    $qOutcome = mysqli_query($conn, "
+        SELECT DISTINCT foundation_id
+        FROM foundation_needlist
+        WHERE approve_item = 'done'
+          AND (
+            COALESCE(TRIM(update_text), '') <> ''
+            OR (update_images IS NOT NULL AND TRIM(update_images) <> '' AND TRIM(update_images) <> '[]')
+          )
+    ");
+    if ($qOutcome) {
+        while ($r = mysqli_fetch_assoc($qOutcome)) {
+            $needOutcomeFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+        }
+    }
+    $qDone = mysqli_query($conn, "
+        SELECT DISTINCT foundation_id
+        FROM foundation_needlist
+        WHERE approve_item = 'done'
+    ");
+    if ($qDone) {
+        while ($r = mysqli_fetch_assoc($qDone)) {
+            $needDoneFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+        }
+    }
+
+    $qPurch = mysqli_query($conn, "
+        SELECT DISTINCT foundation_id
+        FROM foundation_needlist
+        WHERE approve_item = 'purchasing'
+    ");
+    if ($qPurch) {
+        while ($r = mysqli_fetch_assoc($qPurch)) {
+            $needPurchasingFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+        }
     }
 }
 
-$needPurchasingFoundations = [];
-$qPurch = mysqli_query($conn, "
-    SELECT DISTINCT foundation_id
-    FROM foundation_needlist
-    WHERE approve_item = 'purchasing'
-");
-if ($qPurch) {
-    while ($r = mysqli_fetch_assoc($qPurch)) {
-        $needPurchasingFoundations[(int)($r['foundation_id'] ?? 0)] = true;
+/* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — มูลนิธิจัดการรายการตัวเองไม่ใช้สไลด์สาธารณะ */
+$needlistByFoundation = [];
+if (!$isFoundationManageView && $foundationRows !== []) {
+    $batchFids = [];
+    foreach ($foundationRows as $fRow) {
+        $batchFid = (int)($fRow['foundation_id'] ?? 0);
+        if ($batchFid > 0) {
+            $batchFids[] = $batchFid;
+        }
+    }
+    $batchFids = array_values(array_unique($batchFids));
+    if ($batchFids !== []) {
+        $ph = implode(',', array_fill(0, count($batchFids), '?'));
+        $types = str_repeat('i', count($batchFids));
+        $stBatchNeed = $conn->prepare("
+            SELECT foundation_id, item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image,
+                   approve_item, donate_window_end_at, current_donate, total_price
+            FROM foundation_needlist
+            WHERE foundation_id IN ($ph)
+              AND (
+                approve_item IN ('approved', 'purchasing')
+                OR approve_item = 'done'
+              )
+            ORDER BY foundation_id ASC, urgent DESC, item_id DESC
+        ");
+        if ($stBatchNeed) {
+            $stBatchNeed->bind_param($types, ...$batchFids);
+            $stBatchNeed->execute();
+            $batchRes = $stBatchNeed->get_result();
+            while ($batchRow = $batchRes->fetch_assoc()) {
+                $batchFid = (int)($batchRow['foundation_id'] ?? 0);
+                if ($batchFid <= 0) {
+                    continue;
+                }
+                if (!isset($needlistByFoundation[$batchFid])) {
+                    $needlistByFoundation[$batchFid] = [];
+                }
+                if (count($needlistByFoundation[$batchFid]) < 120) {
+                    $needlistByFoundation[$batchFid][] = $batchRow;
+                }
+            }
+        }
+    }
+}
+
+    if (!$isFoundationManageView) {
+        drawdream_foundation_public_page_cache_set(
+            $foundationRows,
+            $donationTotals,
+            $goalTotals,
+            $donationTotalsSlideTrack,
+            $goalTotalsSlideTrack,
+            $needOutcomeFoundations,
+            $needDoneFoundations,
+            $needPurchasingFoundations,
+            $needlistByFoundation
+        );
     }
 }
 
@@ -138,20 +247,13 @@ $foundation_needlist_row_open = static function (array $row): bool {
     return $ts !== false && $ts > time();
 };
 
-/* ดึงรายการอนุมัติเพียงพอสำหรับสไลด์ — LIMIT 3 เดิมทำให้แถวที่มีรูปถูกตัดออก */
-$stmtAll = $conn->prepare("
-    SELECT item_id, item_name, qty_needed, urgent, item_image, item_image_2, item_image_3, need_foundation_image,
-           approve_item, donate_window_end_at, current_donate, total_price
-    FROM foundation_needlist
-    WHERE foundation_id = ?
-      AND (
-        approve_item IN ('approved', 'purchasing')
-        OR approve_item = 'done'
-      )
-    ORDER BY urgent DESC, item_id DESC
-    LIMIT 120
-");
-if (!$stmtAll) die("Prepare failed: " . $conn->error);
+/** รายการครบยอดแล้ว — ย้ายไปแท็บผลลัพธ์ที่สำเร็จแล้ว */
+$foundation_needlist_row_goal_met = static function (array $row): bool {
+    return drawdream_needlist_item_goal_met(
+        (float)($row['current_donate'] ?? 0),
+        (float)($row['total_price'] ?? 0)
+    );
+};
 
 // ดึงรายการสิ่งของที่เสนอทั้งหมด (สำหรับ foundation role)
 $myNeedlist = [];
@@ -159,14 +261,38 @@ $myFoundationId = 0;
 $myNeedlistGoalMet = false;
 $myNeedlistResultReady = false;
 $myNeedProposeBlock = ['blocked' => false, 'reason' => '', 'donate_end_at' => null];
-if (($_SESSION['role'] ?? '') === 'foundation') {
-    // ดึง foundation_id จาก foundation_profile ก่อน
-    $rowFp = mysqli_fetch_assoc(mysqli_query($conn, "SELECT foundation_id FROM foundation_profile WHERE user_id = $userId LIMIT 1"));
-    $myFoundationId = (int)($rowFp['foundation_id'] ?? 0);
+if ($isFoundationManageView) {
+    $myFoundationId = (int)($foundationRows[0]['foundation_id'] ?? 0);
 
     if ($myFoundationId > 0) {
-        $mc = $donationTotals[$myFoundationId] ?? 0;
-        $mg = $goalTotals[$myFoundationId] ?? 0;
+        $stOpenDon = $conn->prepare(
+            "SELECT COALESCE(SUM(current_donate), 0) AS total
+             FROM foundation_needlist
+             WHERE foundation_id = ? AND $needOpenPub"
+        );
+        if ($stOpenDon) {
+            $stOpenDon->bind_param('i', $myFoundationId);
+            $stOpenDon->execute();
+            $mc = (float)(($stOpenDon->get_result()->fetch_assoc()['total'] ?? 0));
+            $donationTotals[$myFoundationId] = $mc;
+        } else {
+            $mc = 0.0;
+        }
+
+        $stOpenGoal = $conn->prepare(
+            "SELECT COALESCE(SUM(COALESCE(total_price, 0)), 0) AS goal
+             FROM foundation_needlist
+             WHERE foundation_id = ? AND $needOpenPub"
+        );
+        if ($stOpenGoal) {
+            $stOpenGoal->bind_param('i', $myFoundationId);
+            $stOpenGoal->execute();
+            $mg = (float)(($stOpenGoal->get_result()->fetch_assoc()['goal'] ?? 0));
+            $goalTotals[$myFoundationId] = $mg;
+        } else {
+            $mg = 0.0;
+        }
+
         $myNeedlistGoalMet = $mg > 0 && $mc >= $mg;
 
         $myNeedProposeBlock = drawdream_foundation_needlist_propose_blocked($conn, $myFoundationId);
@@ -181,7 +307,7 @@ if (($_SESSION['role'] ?? '') === 'foundation') {
 
     if ($myFoundationId > 0) {
         $stmtMine = $conn->prepare("
-            SELECT item_id, item_name, desired_brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at
+            SELECT item_id, item_name, desired_brand, total_price, urgent, item_image, item_image_2, item_image_3, need_foundation_image, approve_item, note, donate_window_end_at, current_donate, service_charge_paid_at
             FROM foundation_needlist
             WHERE foundation_id = ?
             ORDER BY item_id DESC
@@ -224,29 +350,17 @@ function foundation_profile_complete_public(array $f): bool {
     return true;
 }
 
-$foundationRows = [];
-if ($foundations && mysqli_num_rows($foundations) > 0) {
-    while ($row = mysqli_fetch_assoc($foundations)) {
-        $foundationRows[] = $row;
-    }
-}
-
 $foundationSlidesOpen = [];
 $foundationSlidesDone = [];
 $interestFoundations = [];
+if (!$isFoundationManageView) {
 foreach ($foundationRows as $f) {
     $fid = (int)$f['foundation_id'];
     if (trim((string)($f['foundation_name'] ?? '')) !== '') {
         $interestFoundations[] = $f;
     }
 
-    $stmtAll->bind_param('i', $fid);
-    $stmtAll->execute();
-    $res = $stmtAll->get_result();
-    $items = [];
-    while ($row = $res->fetch_assoc()) {
-        $items[] = $row;
-    }
+    $items = $needlistByFoundation[$fid] ?? [];
     if (count($items) === 0) {
         continue;
     }
@@ -254,34 +368,44 @@ foreach ($foundationRows as $f) {
     $openItems = [];
     $doneItems = [];
     foreach ($items as $row) {
-        if ($foundation_needlist_row_open($row)) {
+        $rowGoalMet = $foundation_needlist_row_goal_met($row);
+        if ($foundation_needlist_row_open($row) && !$rowGoalMet) {
             $openItems[] = $row;
         }
-        if (in_array((string)($row['approve_item'] ?? ''), ['purchasing', 'done'], true)) {
+        $ap = (string)($row['approve_item'] ?? '');
+        if (in_array($ap, ['purchasing', 'done'], true)
+            || ($rowGoalMet && $ap === 'approved')) {
             $doneItems[] = $row;
         }
     }
 
-    $goalOpen = $goalTotals[$fid] ?? 0;
-    if ($goalOpen > 0 && $openItems !== []) {
-        $currentOpen = $donationTotals[$fid] ?? 0;
-        $foundationSlidesOpen[] = [
-            'f' => $f,
-            'items' => $openItems,
-            'fid' => $fid,
-            'current' => $currentOpen,
-            'goal' => $goalOpen,
-            'percent' => min(100, round(($currentOpen / $goalOpen) * 100, 2)),
-            'mode' => 'open',
-        ];
+    if ($openItems !== []) {
+        $currentOpen = 0.0;
+        $goalOpen = 0.0;
+        foreach ($openItems as $row) {
+            $currentOpen += (float)($row['current_donate'] ?? 0);
+            $goalOpen += (float)($row['total_price'] ?? 0);
+        }
+        if ($goalOpen > 0) {
+            $foundationSlidesOpen[] = [
+                'f' => $f,
+                'items' => $openItems,
+                'fid' => $fid,
+                'current' => $currentOpen,
+                'goal' => $goalOpen,
+                'percent' => min(100, round(($currentOpen / $goalOpen) * 100, 2)),
+                'mode' => 'open',
+            ];
+        }
     }
 
-    $hasNeedResult = !empty($needOutcomeFoundations[$fid])
-        || !empty($needDoneFoundations[$fid])
-        || !empty($needPurchasingFoundations[$fid]);
-    if ($hasNeedResult && $doneItems !== []) {
-        $currentTrack = $donationTotalsSlideTrack[$fid] ?? 0;
-        $goalTrack = $goalTotalsSlideTrack[$fid] ?? 0;
+    if ($doneItems !== []) {
+        $currentTrack = 0.0;
+        $goalTrack = 0.0;
+        foreach ($doneItems as $row) {
+            $currentTrack += (float)($row['current_donate'] ?? 0);
+            $goalTrack += (float)($row['total_price'] ?? 0);
+        }
         $foundationSlidesDone[] = [
             'f' => $f,
             'items' => $doneItems,
@@ -292,6 +416,7 @@ foreach ($foundationRows as $f) {
             'mode' => 'done',
         ];
     }
+}
 }
 
 $needTabPanels = [
@@ -312,6 +437,8 @@ $needTabPanels = [
 ];
 $defaultNeedTab = $foundationSlidesOpen !== [] ? 'open' : 'done';
 $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
+$justRegistered = isset($_GET['registered']) && (string)$_GET['registered'] === '1';
+$showFoundationOnboarding = $isFoundationManageView && !$is_verified;
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -320,17 +447,35 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>มูลนิธิ | DrawDream</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <?php require_once __DIR__ . '/includes/vendor_assets.php'; drawdream_foundation_page_assets_head(); ?>
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/foundation.css?v=51">
+  <link rel="stylesheet" href="css/brand_logo.css?v=3">
+  <link rel="stylesheet" href="css/site_footer.css?v=3">
+  <link rel="stylesheet" href="css/foundation.css?v=58">
+  <link rel="stylesheet" href="css/foundation_manage.css?v=2">
 </head>
 <body class="foundation-page">
 
   <?php include 'navbar.php'; ?>
 
   <div class="page-wrap">
+
+    <?php if ($showFoundationOnboarding): ?>
+      <div class="foundation-onboarding-banner" role="status">
+        <div class="foundation-onboarding-banner__icon" aria-hidden="true"><i class="bi bi-hourglass-split"></i></div>
+        <div class="foundation-onboarding-banner__body">
+          <strong>บัญชีมูลนิธิรอแอดมินตรวจสอบ</strong>
+          <p>ตอนนี้ดูหน้ามูลนิธิและแก้โปรไฟล์ได้ — หลังอนุมัติแล้วจึงจะเสนอสิ่งของ โครงการ และใช้แดชบอร์ดได้เต็มรูปแบบ (โดยทั่วไป 1–3 วันทำการ)</p>
+          <a href="update_profile.php" class="foundation-onboarding-banner__link">ตรวจสอบ / แก้ไขโปรไฟล์มูลนิธิ</a>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($foundationPageMsg !== ''): ?>
+      <div class="alert alert-warning foundation-page-flash" role="status" style="max-width:960px;margin:0 auto 16px;padding:12px 16px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;">
+        <?= htmlspecialchars($foundationPageMsg, ENT_QUOTES, 'UTF-8') ?>
+      </div>
+    <?php endif; ?>
 
     <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
       <div class="foundation-view-wrap">
@@ -352,7 +497,7 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
                   <span class="foundation-manage-btn foundation-manage-btn-disabled" aria-disabled="true" title="อัปเดตได้เมื่อแอดมินยืนยันจัดส่งสิ่งของแล้ว (สถานะ done)">อัปเดตผลลัพธ์สิ่งของ</span>
                 <?php endif; ?>
               <?php else: ?>
-                <p class="foundation-pending-inline-msg">บัญชีมูลนิธิยังรอการตรวจสอบจากผู้ดูแลระบบ — หลังอนุมัติแล้วจึงจะสร้างหรือจัดการโปรไฟล์เด็กได้</p>
+                <p class="foundation-pending-inline-msg">บัญชีมูลนิธิยังรอการตรวจสอบจากผู้ดูแลระบบ — หลังอนุมัติแล้วจึงจะเสนอหรือจัดการรายการสิ่งของได้</p>
               <?php endif; ?>
             </div>
           </div>
@@ -361,14 +506,21 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
         <div class="my-needlist-section" id="my-needlist-section">
           <h3 class="my-needlist-title" style="font-family:'Prompt',sans-serif;font-size:1.4em;color:#2e3f7f;margin-bottom:18px;">รายการสิ่งของที่เสนอทั้งหมด</h3>
           <p class="needlist-cycle-hint">ระบบปิดรับบริจาคอัตโนมัติเมื่อครบ 1 เดือนนับจากวันที่แอดมินอนุมัติรายการ และจึงจะเสนอรอบใหม่ได้</p>
+          <?php
+          require_once __DIR__ . '/includes/foundation_need_flash.php';
+          echo drawdream_foundation_need_flash_render_html();
+          ?>
           <?php if (!empty($_GET['need_created'])): ?>
             <div class="alert alert-success needlist-flash" role="status">เสนอรายการสิ่งของสำเร็จ รอแอดมินอนุมัติ</div>
           <?php endif; ?>
           <?php if (!empty($_GET['need_updated'])): ?>
             <div class="alert alert-success needlist-flash" role="status">อัปเดตรายการสิ่งของแล้ว</div>
           <?php endif; ?>
+          <?php if (!empty($_GET['need_resubmitted'])): ?>
+            <div class="alert alert-success needlist-flash" role="status">แก้ไขรายการแล้ว ส่งให้แอดมินตรวจอนุมัติใหม่</div>
+          <?php endif; ?>
           <?php if (!empty($_GET['need_edit_locked'])): ?>
-            <div class="alert alert-warning needlist-flash" role="status">รายการที่อนุมัติแล้วไม่สามารถแก้ไขได้</div>
+            <div class="alert alert-warning needlist-flash" role="status">รายการนี้มีผู้บริจาคแล้วหรืออยู่ขั้นตอนถัดไป จึงแก้ไขไม่ได้</div>
           <?php endif; ?>
           <?php if (!empty($_GET['need_round_wait'])): ?>
             <?php
@@ -418,12 +570,13 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
               $statusPillClass = ['pending' => 'st-pending', 'approved' => 'st-approved', 'rejected' => 'st-rejected'][$status] ?? 'st-pending';
               $dweRaw = trim((string)($nl['donate_window_end_at'] ?? ''));
               $donateWindowExpired = ($status === 'approved' && $dweRaw !== '' && !str_starts_with($dweRaw, '0000-00-00') && strtotime($dweRaw) !== false && strtotime($dweRaw) < time());
-              $canEditNeed = in_array($status, ['pending', 'rejected'], true);
+              $canEditNeed = drawdream_foundation_needlist_may_edit($nl);
             ?>
             <?php
               $cardGoal = (float)($nl['total_price'] ?? 0);
             ?>
-            <div class="need-card">
+            <div class="need-card<?= !$is_verified ? ' need-card--pending-verify' : '' ?>">
+              <?php if ($is_verified): ?>
               <a class="need-card-tap-link" href="foundation_need_view.php?id=<?= (int)($nl['item_id'] ?? 0) ?>" aria-label="ดูรายละเอียดรายการสิ่งของ"></a>
               <div class="need-card-img-wrap">
                 <div class="need-card-img-primary">
@@ -472,12 +625,21 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
                 <?php endif; ?>
                 <div class="need-edit-wrap">
                   <?php if ($canEditNeed): ?>
-                    <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>" onclick="event.stopPropagation();">แก้ไขรายการนี้</a>
+                    <a class="need-card-edit-link" href="foundation_add_need.php?edit=<?= (int)($nl['item_id'] ?? 0) ?>&amp;return_to=<?= rawurlencode('foundation.php#my-needlist-section') ?>" onclick="event.stopPropagation();"><?= $status === 'approved' ? 'แก้ไขและส่งอนุมัติใหม่' : 'แก้ไขรายการนี้' ?></a>
                   <?php else: ?>
-                    <span class="need-card-edit-link need-card-edit-link--disabled" aria-disabled="true" title="รายการอนุมัติแล้ว — ไม่สามารถแก้ไขได้">แก้ไขรายการนี้</span>
+                    <span class="need-card-edit-link need-card-edit-link--disabled" aria-disabled="true" title="แก้ไขได้เฉพาะรายการที่รออนุมัติ/ไม่อนุมัติ หรืออนุมัติแล้วแต่ยังไม่มียอดบริจาค">แก้ไขรายการนี้</span>
                   <?php endif; ?>
                 </div>
               </div>
+              <?php else: ?>
+              <div class="need-card-body need-card-body--compact">
+                <div class="need-card-status-row">
+                  <span class="foundation-status-pill <?= htmlspecialchars($statusPillClass) ?>"><?= htmlspecialchars($statusLabel) ?></span>
+                </div>
+                <div class="need-card-name"><?= htmlspecialchars($nl['item_name']) ?></div>
+                <p class="need-card-verify-hint">รอแอดมินอนุมัติบัญชีเพื่อดูรายละเอียดและจัดการรายการ</p>
+              </div>
+              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
@@ -558,7 +720,6 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
               $goal = $slide['goal'];
               $percent = $slide['percent'];
               $slideMode = $slide['mode'] ?? $panelMode;
-              $needGoalMet = $goal > 0 && $current >= $goal;
               $foundationImage = $f['foundation_image'] ?? '';
               $facebookUrl = $f['facebook_url'] ?? '';
               $heroProposalImage = '';
@@ -634,13 +795,9 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
                   <?php endif; ?>
                 </div>
                 <?php if ($slideMode === 'open'): ?>
-                  <?php if (!$needGoalMet): ?>
-                    <a class="btn-donate btn-donate--primary-cta" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
-                  <?php else: ?>
-                    <p class="fc-goal-met-hint">ครบเป้าหมายแล้ว — ดูผลลัพธ์ได้ที่แท็บ「ผลลัพธ์ที่สำเร็จแล้ว」</p>
-                  <?php endif; ?>
+                  <a class="btn-donate btn-donate--primary-cta" href="payment/foundation_donate.php?fid=<?= $fid ?>">บริจาค</a>
                 <?php else: ?>
-                  <a class="btn-donate btn-donate--outcome" href="needlist_result.php?fid=<?= $fid ?>">ดูผลลัพธ์</a>
+                  <a class="btn-donate btn-donate--need-outcome" href="needlist_result.php?fid=<?= $fid ?>">ผลลัพธ์ทุนสิ่งของ</a>
                 <?php endif; ?>
               </div>
               <div class="fc-right">
@@ -654,8 +811,15 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
                   <?php endif; ?>
                 </div>
                 <div class="fc-right-meta">
-                  <?php if (!empty($facebookUrl)): ?>
-                    <div class="fb">Facebook: <?= htmlspecialchars($facebookUrl) ?></div>
+                  <?php if (!empty($facebookUrl)):
+                    $fbHref = trim((string)$facebookUrl);
+                    if ($fbHref !== '' && !preg_match('#^https?://#i', $fbHref)) {
+                        $fbHref = 'https://' . ltrim($fbHref, '/');
+                    }
+                  ?>
+                    <a class="fc-fb-link" href="<?= htmlspecialchars($fbHref, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">
+                      <i class="bi bi-facebook" aria-hidden="true"></i> Facebook
+                    </a>
                   <?php endif; ?>
                 </div>
               </div>
@@ -708,7 +872,7 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
             <?php else: ?>
               <div class="fd-interest-cover fd-interest-cover--empty">ไม่มีรูป</div>
             <?php endif; ?>
-            <a class="fd-interest-pill-btn" href="payment/foundation_donate.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
+            <a class="fd-interest-pill-btn" href="foundation_donate_info.php?fid=<?= $ifid ?>">ร่วมบริจาค</a>
           </div>
           <div class="fd-interest-body">
             <h3 class="fd-interest-name"><?= htmlspecialchars($inf['foundation_name'] ?? 'มูลนิธิ') ?></h3>
@@ -780,331 +944,33 @@ $hasAnySlides = $foundationSlidesOpen !== [] || $foundationSlidesDone !== [];
   </div>
 
   <?php if (($_SESSION['role'] ?? '') !== 'foundation'): ?>
+  <div class="footer-wrap page-section" style="background-color:#3f4f9a;">
   <?php include __DIR__ . '/includes/site_footer.php'; ?>
-  <?php endif; ?>
-
-  <?php if (($_SESSION['role'] ?? '') !== 'foundation' && count($interestFoundations) > 3): ?>
-  <script>
-  (function () {
-    var carousel = document.querySelector('.fd-interest-carousel');
-    if (!carousel) return;
-    var viewport = carousel.querySelector('[data-interest-viewport]');
-    var prevBtn = carousel.querySelector('[data-interest-prev]');
-    var nextBtn = carousel.querySelector('[data-interest-next]');
-    if (!viewport || !prevBtn || !nextBtn) return;
-
-    function getStep() {
-      var card = viewport.querySelector('.fd-interest-card');
-      if (!card) return 320;
-      var styles = window.getComputedStyle(viewport.querySelector('.fd-interest-grid'));
-      var gap = parseFloat(styles.columnGap || styles.gap || '24') || 24;
-      return card.getBoundingClientRect().width + gap;
-    }
-
-    function syncButtons() {
-      var maxLeft = viewport.scrollWidth - viewport.clientWidth - 2;
-      prevBtn.disabled = viewport.scrollLeft <= 2;
-      nextBtn.disabled = viewport.scrollLeft >= maxLeft;
-    }
-
-    prevBtn.addEventListener('click', function () {
-      viewport.scrollBy({ left: -getStep(), behavior: 'smooth' });
-    });
-    nextBtn.addEventListener('click', function () {
-      viewport.scrollBy({ left: getStep(), behavior: 'smooth' });
-    });
-    viewport.addEventListener('scroll', syncButtons, { passive: true });
-    window.addEventListener('resize', syncButtons);
-    syncButtons();
-  })();
-  </script>
-  <?php endif; ?>
-
-  <?php if (($_SESSION['role'] ?? '') !== 'foundation' && $hasAnySlides): ?>
-  <script>
-  (function() {
-    var tabSection = document.querySelector('.fd-need-tabs-section');
-    var carouselStates = [];
-
-    function initCarousel(root) {
-      var slides = [].slice.call(root.querySelectorAll('.foundation-slide'));
-      var dots = [].slice.call(root.querySelectorAll('.foundation-hero-dot'));
-      var prevBtn = root.querySelector('[data-hero-prev]');
-      var nextBtn = root.querySelector('[data-hero-next]');
-      var n = slides.length;
-      var state = {
-        root: root,
-        slides: slides,
-        dots: dots,
-        i: 0,
-        n: n,
-        ms: parseInt(root.getAttribute('data-interval') || '10000', 10),
-        timer: null
-      };
-
-      function go(to) {
-        if (n <= 1) return;
-        state.i = ((to % n) + n) % n;
-        slides.forEach(function(s, j) {
-          var on = j === state.i;
-          s.classList.toggle('is-active', on);
-          s.setAttribute('aria-hidden', on ? 'false' : 'true');
-        });
-        dots.forEach(function(d, j) {
-          var on = j === state.i;
-          d.classList.toggle('is-active', on);
-          d.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-        if (typeof window.drawdreamRestartNeedImgRotators === 'function') {
-          var activeSlide = slides[state.i];
-          if (activeSlide) {
-            window.drawdreamRestartNeedImgRotators(activeSlide);
-          }
-        }
-      }
-
-      state.go = go;
-      state.startAuto = function() {
-        state.stopAuto();
-        if (n <= 1) return;
-        if (!root.closest('.fd-need-tab-panel') || root.closest('.fd-need-tab-panel.is-active')) {
-          state.timer = setInterval(function() { go(state.i + 1); }, state.ms);
-        }
-      };
-      state.stopAuto = function() {
-        if (state.timer) {
-          clearInterval(state.timer);
-          state.timer = null;
-        }
-      };
-
-      dots.forEach(function(d) {
-        d.addEventListener('click', function() {
-          go(parseInt(d.getAttribute('data-go') || '0', 10));
-          state.startAuto();
-        });
-      });
-      if (prevBtn) {
-        prevBtn.addEventListener('click', function () {
-          go(state.i - 1);
-          state.startAuto();
-        });
-      }
-      if (nextBtn) {
-        nextBtn.addEventListener('click', function () {
-          go(state.i + 1);
-          state.startAuto();
-        });
-      }
-
-      carouselStates.push(state);
-      return state;
-    }
-
-    function startActiveCarousel() {
-      carouselStates.forEach(function(s) { s.stopAuto(); });
-      var activePanel = document.querySelector('.fd-need-tab-panel.is-active');
-      if (!activePanel) return;
-      var activeRoot = activePanel.querySelector('.foundation-hero-carousel');
-      if (!activeRoot) return;
-      carouselStates.forEach(function(s) {
-        if (s.root === activeRoot) s.startAuto();
-      });
-    }
-
-    var activateTab = function() {};
-    if (tabSection) {
-      var dropdown = tabSection.querySelector('[data-need-dropdown]');
-      var trigger = tabSection.querySelector('.fd-need-dropdown__trigger');
-      var triggerLabel = tabSection.querySelector('.fd-need-dropdown__label');
-      var menu = tabSection.querySelector('.fd-need-dropdown__menu');
-      var options = [].slice.call(tabSection.querySelectorAll('[data-need-tab]'));
-      var panels = [].slice.call(tabSection.querySelectorAll('[data-need-panel]'));
-
-      function setMenuOpen(open) {
-        if (!dropdown || !trigger || !menu) return;
-        dropdown.classList.toggle('is-open', open);
-        trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        menu.hidden = !open;
-      }
-
-      activateTab = function(id) {
-        options.forEach(function(opt) {
-          var on = opt.getAttribute('data-need-tab') === id;
-          opt.classList.toggle('is-active', on);
-          opt.setAttribute('aria-selected', on ? 'true' : 'false');
-          if (on && triggerLabel) {
-            triggerLabel.textContent = opt.textContent.trim();
-          }
-        });
-        panels.forEach(function(panel) {
-          var on = panel.getAttribute('data-need-panel') === id;
-          panel.classList.toggle('is-active', on);
-          panel.hidden = !on;
-        });
-        setMenuOpen(false);
-        startActiveCarousel();
-      };
-
-      if (trigger && menu) {
-        trigger.addEventListener('click', function() {
-          setMenuOpen(!dropdown.classList.contains('is-open'));
-        });
-      }
-
-      options.forEach(function(opt) {
-        opt.addEventListener('click', function() {
-          activateTab(opt.getAttribute('data-need-tab') || 'open');
-        });
-      });
-
-      document.addEventListener('click', function(e) {
-        if (!dropdown || !dropdown.classList.contains('is-open')) return;
-        if (!dropdown.contains(e.target)) {
-          setMenuOpen(false);
-        }
-      });
-
-      document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') setMenuOpen(false);
-      });
-    }
-
-    [].slice.call(document.querySelectorAll('.foundation-hero-carousel')).forEach(initCarousel);
-    startActiveCarousel();
-
-    var hash = window.location.hash || '';
-    if (hash && hash.indexOf('#f') === 0) {
-      var fid = hash.replace('#f', '').replace(/-(open|done)$/, '');
-      var target = document.querySelector('[data-foundation-id="' + fid + '"]');
-      if (!target) {
-        target = document.querySelector(hash);
-      }
-      if (target && target.classList.contains('foundation-slide')) {
-        var panel = target.closest('[data-need-panel]');
-        if (panel && tabSection) {
-          activateTab(panel.getAttribute('data-need-panel') || 'open');
-        }
-        var root = target.closest('.foundation-hero-carousel');
-        carouselStates.forEach(function(s) {
-          if (s.root === root) {
-            var idx = parseInt(target.getAttribute('data-slide-index') || '0', 10) || 0;
-            s.go(idx);
-            s.startAuto();
-          }
-        });
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-  })();
-  </script>
+  </div>
   <?php endif; ?>
 
   <script>
-  (function () {
-    var rotatorStates = [];
-
-    function rotatorShouldRun(el) {
-      if (!el.classList.contains('need-img-rotator--multi')) return false;
-      var panel = el.closest('.fd-need-tab-panel');
-      if (panel && panel.hidden) return false;
-      var slide = el.closest('.foundation-slide');
-      if (slide && !slide.classList.contains('is-active')) return false;
-      if (el.classList.contains('fc-needlist-showcase-carousel') && window.matchMedia('(min-width: 769px)').matches) {
-        return false;
-      }
-      return true;
-    }
-
-    function initNeedImgRotator(el) {
-      var slides = [].slice.call(el.querySelectorAll('.need-img-rotator__slide'));
-      var dots = [].slice.call(el.querySelectorAll('.need-img-rotator__dot'));
-      var n = slides.length;
-      if (n <= 1) return;
-      var i = 0;
-      var ms = parseInt(el.getAttribute('data-interval') || '3000', 10);
-      var timer = null;
-      var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-      function go(to) {
-        i = ((to % n) + n) % n;
-        slides.forEach(function (s, j) {
-          s.classList.toggle('is-active', j === i);
-        });
-        dots.forEach(function (d, j) {
-          var on = j === i;
-          d.classList.toggle('is-active', on);
-          d.setAttribute('aria-selected', on ? 'true' : 'false');
-        });
-      }
-
-      var state = {
-        el: el,
-        start: function () {
-          state.stop();
-          if (reducedMotion || !rotatorShouldRun(el)) return;
-          timer = setInterval(function () { go(i + 1); }, ms);
-        },
-        stop: function () {
-          if (timer) {
-            clearInterval(timer);
-            timer = null;
-          }
-        }
-      };
-
-      dots.forEach(function (d) {
-        d.addEventListener('click', function (e) {
-          e.preventDefault();
-          e.stopPropagation();
-          go(parseInt(d.getAttribute('data-go') || '0', 10));
-          state.start();
-        });
-      });
-
-      el.addEventListener('mouseenter', state.stop);
-      el.addEventListener('mouseleave', state.start);
-      el.addEventListener('touchstart', state.stop, { passive: true });
-      el.addEventListener('touchend', function () {
-        window.setTimeout(state.start, 2500);
-      }, { passive: true });
-
-      rotatorStates.push(state);
-      state.start();
-    }
-
-    window.drawdreamRestartNeedImgRotators = function (scope) {
-      rotatorStates.forEach(function (s) {
-        if (scope && scope !== s.el && !(scope.contains && scope.contains(s.el))) return;
-        s.stop();
-        s.start();
-      });
-    };
-
-    [].slice.call(document.querySelectorAll('.need-img-rotator--multi')).forEach(initNeedImgRotator);
-    window.addEventListener('resize', function () {
-      window.drawdreamRestartNeedImgRotators();
-    });
-  })();
+  window.FOUNDATION_PAGE = {
+    interestCarousel: <?= (($_SESSION['role'] ?? '') !== 'foundation' && count($interestFoundations) > 3) ? 'true' : 'false' ?>,
+    needSlides: <?= (($_SESSION['role'] ?? '') !== 'foundation' && $hasAnySlides) ? 'true' : 'false' ?>,
+    foundationManage: <?= (($_SESSION['role'] ?? '') === 'foundation') ? 'true' : 'false' ?>
+  };
   </script>
-
-  <?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
+  <script src="js/foundation_page.js?v=1" defer></script>
+  <?php if ($justRegistered || ($foundationPageMsg !== '' && $showFoundationOnboarding)): ?>
+  <?php
+  require_once __DIR__ . '/includes/vendor_assets.php';
+  echo drawdream_sweetalert2_js_tag('', false) . "\n";
+  ?>
+  <script src="js/drawdream-swal.js"></script>
   <script>
-  (function() {
-    var btn = document.getElementById('toggleEditNeedBtn');
-    var section = document.getElementById('my-needlist-section');
-    function setNeedEditMode(on) {
-      document.body.classList.toggle('mode-edit-need', on);
-      if (btn) btn.classList.toggle('btn-mode-active', on);
-    }
-    if (btn && section) {
-      btn.addEventListener('click', function() {
-        var turnOn = !document.body.classList.contains('mode-edit-need');
-        setNeedEditMode(turnOn);
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
-  })();
+  document.addEventListener('DOMContentLoaded', function () {
+    <?php if ($justRegistered): ?>
+    drawdreamAlert(<?= json_encode($foundationPageMsg !== '' ? $foundationPageMsg : 'สมัครสมาชิกสำเร็จ — บัญชีมูลนิธิรอแอดมินตรวจสอบก่อนใช้งานเต็มรูปแบบ', JSON_UNESCAPED_UNICODE) ?>, 'success');
+    <?php elseif ($foundationPageMsg !== ''): ?>
+    drawdreamAlert(<?= json_encode($foundationPageMsg, JSON_UNESCAPED_UNICODE) ?>, 'info');
+    <?php endif; ?>
+  });
   </script>
   <?php endif; ?>
 

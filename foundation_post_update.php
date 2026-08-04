@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // foundation_post_update.php — โพสต์อัปเดตความคืบหน้าโครงการ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post update
@@ -226,12 +226,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$readonly) {
     <title>อัปเดตโครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=1">
 </head>
-<body class="foundation-post-update-page">
+<body class="foundation-post-update-page foundation-manage-page">
 <?php include 'navbar.php'; ?>
 
 <div class="wrap">
-    <a href="profile.php" class="back-link" aria-label="ย้อนกลับ" title="ย้อนกลับ" onclick="if (window.history.length > 1) { event.preventDefault(); history.back(); }">←</a>
+    <a href="profile.php" class="back-link" aria-label="ย้อนกลับ" title="ย้อนกลับ" data-foundation-back>←</a>
     <div class="page-title">📢 อัปเดตผลลัพธ์โครงการ</div>
 
     <?php if ($success): ?>

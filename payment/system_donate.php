@@ -29,7 +29,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
   <link rel="stylesheet" href="../css/system_donate.css?v=1">
 </head>
 <body class="system-donate-page">
-  <a href="../homepage.php#support" class="donate-back-btn" aria-label="ย้อนกลับ"><i class="bi bi-arrow-left"></i></a>
+  <a href="../about_support.php#support" class="donate-back-btn" aria-label="ย้อนกลับ"><i class="bi bi-arrow-left"></i></a>
 
   <main class="donate-stage">
     <section class="donate-card">

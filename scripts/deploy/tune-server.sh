@@ -13,6 +13,12 @@ opcache.revalidate_freq=2
 EOF
 ln -sf /etc/php/${PHP_VER}/fpm/conf.d/99-drawdream-opcache.ini /etc/php/${PHP_VER}/cli/conf.d/99-drawdream-opcache.ini
 
+cat >/etc/php/${PHP_VER}/fpm/conf.d/99-drawdream-upload.ini <<'EOF'
+upload_max_filesize = 32M
+post_max_size = 36M
+EOF
+ln -sf /etc/php/${PHP_VER}/fpm/conf.d/99-drawdream-upload.ini /etc/php/${PHP_VER}/cli/conf.d/99-drawdream-upload.ini
+
 SITE="/etc/nginx/sites-available/drawdream"
 if [[ -f "$SITE" ]] && ! grep -q 'gzip on' "$SITE"; then
   sed -i '/client_max_body_size/a \
@@ -35,3 +41,13 @@ fi
 nginx -t
 systemctl restart php${PHP_VER}-fpm nginx
 echo "OK: OPcache + Nginx tuning applied"
+
+# PHP-FPM pool — ลด 504 เมื่อมี request ช้าพร้อมกัน
+POOL="/etc/php/${PHP_VER}/fpm/pool.d/www.conf"
+if [[ -f "$POOL" ]]; then
+  sed -i 's/^pm.max_children = .*/pm.max_children = 12/' "$POOL"
+  sed -i 's/^;\\?pm.max_requests = .*/pm.max_requests = 500/' "$POOL"
+  grep -q '^pm.max_requests' "$POOL" || echo 'pm.max_requests = 500' >> "$POOL"
+  systemctl restart php${PHP_VER}-fpm
+  echo "OK: pm.max_children=12"
+fi

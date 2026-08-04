@@ -53,7 +53,6 @@ if ($donorUid <= 0 || $childId <= 0) {
     child_subscription_cancel_redirect('ไม่พบข้อมูลรายการที่ต้องการยกเลิก', false, $childId, $returnTo);
 }
 
-drawdream_child_omise_subscription_ensure_schema($conn);
 drawdream_donor_ensure_active_subscription_record($conn, $donorUid, $childId);
 
 $st = $conn->prepare(

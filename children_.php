@@ -6,10 +6,13 @@
 // ------------------------------
 // Session and database bootstrap
 // ------------------------------
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php'; // เชื่อมต่อฐานข้อมูล
+require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';
+require_once __DIR__ . '/includes/children_public_list_cache.php';
 
 // ------------------------------
 // Current user context
@@ -54,18 +57,34 @@ if ($role === 'foundation' && isset($_POST['bulk_action'])) {
       $deleted = 0;
       $blocked = 0;
       $failedDelete = 0;
+
+      $ph = implode(',', array_fill(0, count($childIds), '?'));
+      $types = str_repeat('i', count($childIds));
+      $stRows = $conn->prepare(
+          "SELECT * FROM foundation_children WHERE foundation_id = ? AND child_id IN ($ph)"
+      );
+      $childRowsById = [];
+      if ($stRows) {
+          $bindTypes = 'i' . $types;
+          $stRows->bind_param($bindTypes, $foundationId, ...$childIds);
+          $stRows->execute();
+          $rsRows = $stRows->get_result();
+          while ($crow = $rsRows->fetch_assoc()) {
+              $childRowsById[(int)($crow['child_id'] ?? 0)] = $crow;
+          }
+      }
+
+      $donationTotalsMap = drawdream_child_donation_totals_batch($conn, $childIds);
+      $activeSubMap = drawdream_child_ids_with_any_active_subscription_batch($conn, $childIds);
+
       foreach ($childIds as $cid) {
-        $st = $conn->prepare("SELECT * FROM foundation_children WHERE foundation_id = ? AND child_id = ? LIMIT 1");
-        $st->bind_param("ii", $foundationId, $cid);
-        $st->execute();
-        $crow = $st->get_result()->fetch_assoc();
+        $crow = $childRowsById[$cid] ?? null;
         if (!$crow) {
           continue;
         }
-        $totalDon = drawdream_child_total_donations($conn, $cid);
+        $totalDon = (float)($donationTotalsMap[$cid] ?? 0);
         $cycleSponsored = drawdream_child_is_cycle_sponsored($conn, $cid, $crow);
-        $hasActiveSubscription = drawdream_child_has_any_active_subscription($conn, $cid);
-        // ลบได้เฉพาะ "ยังไม่มีผู้อุปการะ" และ "ไม่เคยได้รับเงินบริจาคเลย (ยอดสะสม = 0)"
+        $hasActiveSubscription = !empty($activeSubMap[$cid]);
         $mayDelete = ($totalDon <= 0) && !$cycleSponsored && !$hasActiveSubscription;
         if ($mayDelete) {
           if (drawdream_hard_delete_child($conn, $foundationId, $cid, $crow)) {
@@ -113,6 +132,21 @@ function children_row_profile_status_meta(array $child): array
 // ------------------------------
 // Build listing query by role
 // ------------------------------
+$waiting_children = [];
+$sponsored_children = [];
+$all_list_rows = [];
+$usedDonorListCache = false;
+
+if ($role === 'donor' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+  $cachedSplit = drawdream_children_public_list_cache_get();
+  if ($cachedSplit !== null) {
+    $waiting_children = $cachedSplit['waiting'];
+    $sponsored_children = $cachedSplit['sponsored'];
+    $usedDonorListCache = true;
+  }
+}
+
+if (!$usedDonorListCache) {
 if ($role === 'donor') {
   $sql = "SELECT * FROM foundation_children WHERE approve_profile IN ('อนุมัติ', 'กำลังดำเนินการ') ORDER BY child_id DESC";
   $result = $conn->query($sql);
@@ -139,34 +173,50 @@ if ($role === 'donor') {
 }
 
 // แยกกลุ่ม: รออุปการะ vs มีผู้อุปการะ (เฉพาะ Omise subscription active — รายเดือน / 6 เดือน / รายปี)
-$waiting_children = [];
-$sponsored_children = [];
-$all_list_rows = [];
 if ($result && $result->num_rows > 0) {
   while ($row = $result->fetch_assoc()) {
     $all_list_rows[] = $row;
   }
 }
+if ($role === 'foundation' && $all_list_rows !== []) {
+  $all_list_rows = drawdream_dedupe_child_profile_rows($all_list_rows);
+}
+
 $childRejectReasonUi = [];
 if ($role === 'foundation' && $all_list_rows !== []) {
     require_once __DIR__ . '/includes/notification_audit.php';
     $childRejectReasonUi = drawdream_foundation_child_profile_reject_reasons_for_children_batch($conn, $all_list_rows);
 }
-$cycleTotals = drawdream_child_cycle_totals_batch($conn, $all_list_rows);
+$needsCycleTotals = ($role === 'foundation' || $role === 'admin');
+$cycleTotals = ($needsCycleTotals && $all_list_rows !== [])
+    ? drawdream_child_cycle_totals_batch($conn, $all_list_rows)
+    : [];
 $childIdsForTotals = array_map(static fn ($r) => (int)($r['child_id'] ?? 0), $all_list_rows);
 $childDonationTotals = ($role === 'foundation' && $childIdsForTotals !== [])
     ? drawdream_child_donation_totals_batch($conn, $childIdsForTotals)
     : [];
 $planSponsoredMap = drawdream_child_ids_with_active_plan_sponsorship($conn, $childIdsForTotals);
+$planCoverageMap = $childIdsForTotals !== []
+    ? drawdream_child_ids_with_plan_coverage_now_batch($conn, $childIdsForTotals)
+    : [];
 
 foreach ($all_list_rows as $row) {
   $cid = (int)($row['child_id'] ?? 0);
   $cycleAmt = (float)($cycleTotals[$cid] ?? 0);
-  if (drawdream_child_is_showcase_sponsored($conn, $cid, $row, $cycleAmt, $planSponsoredMap)) {
+  if (drawdream_child_is_showcase_sponsored($conn, $cid, $row, $cycleAmt, $planSponsoredMap, $planCoverageMap)) {
     $sponsored_children[] = $row;
   } else {
     $waiting_children[] = $row;
   }
+}
+
+if ($role === 'donor' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
+  drawdream_children_public_list_cache_set($waiting_children, $sponsored_children);
+}
+} else {
+$childRejectReasonUi = [];
+$cycleTotals = [];
+$childDonationTotals = [];
 }
 
 $child_grid_sections = [
@@ -206,11 +256,9 @@ if ($role === 'foundation') {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <link rel="stylesheet" href="css/navbar.css">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <?php require_once __DIR__ . '/includes/vendor_assets.php'; drawdream_foundation_page_assets_head(); ?>
   <!-- link css -->
-  <link rel="stylesheet" href="css/children.css?v=45">
+  <link rel="stylesheet" href="css/children.css?v=46">
   <?php if ($role === 'admin'): ?>
   <link rel="stylesheet" href="css/admin_directory.css">
   <?php endif; ?>
@@ -226,8 +274,8 @@ if ($role === 'foundation') {
 
 <?php if ($role === 'foundation'): ?>
 <div class="page-header">
-  <h1>บริจาครายบุคคล</h1>
-  <p>ร่วมสนับสนุนเด็กที่ต้องการความช่วยเหลือ เลือกบริจาคโดยตรงให้กับเด็กแต่ละคนได้ที่นี่</p>
+  <h1>จัดการโปรไฟล์เด็ก</h1>
+  <p>ดูและจัดการโปรไฟล์เด็กในมูลนิธิของคุณ เพิ่ม แก้ไข หรืออัปเดตผลลัพธ์ได้ที่นี่</p>
 </div>
 <?php endif; ?>
 
@@ -255,7 +303,7 @@ if ($role === 'foundation') {
     <?php if (!empty($_GET['msg'] ?? '')): ?>
         <?php if (!empty($_GET['msg'])): ?>
           <?php $swalIcon = (isset($_GET['msg_icon']) && $_GET['msg_icon'] === 'warning') ? 'warning' : 'success'; ?>
-          <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+          <?php require_once __DIR__ . '/includes/vendor_assets.php'; echo drawdream_sweetalert2_js_tag('', false); ?>
           <script>
           Swal.fire({
             icon: <?php echo json_encode($swalIcon); ?>,
@@ -316,7 +364,7 @@ if ($role === 'foundation') {
                     }
                     $profMeta = children_row_profile_status_meta($r);
                     $cycleAmtRow = (float)($cycleTotals[$cid] ?? 0);
-                    $sponsoredRow = drawdream_child_is_showcase_sponsored($conn, $cid, $r, $cycleAmtRow, $planSponsoredMap);
+                    $sponsoredRow = drawdream_child_is_showcase_sponsored($conn, $cid, $r, $cycleAmtRow, $planSponsoredMap, $planCoverageMap);
                     $sponsorLabel = $sponsoredRow ? 'อุปการะแล้ว' : 'รออุปการะ';
                     $sponsorDetail = '';
                     $sponsorPillClass = 'admin-pill--danger';
@@ -405,7 +453,7 @@ if ($role === 'foundation') {
           && (!$foundationAccountVerified || !$maySoftDeleteCard);
         // ตั้งปลายทางตอนกดการ์ดเด็ก:
         // - admin -> หน้าโปรไฟล์ตรวจสอบของแอดมิน
-        // - คนทั่วไป/ผู้บริจาค -> หน้าบริจาคเด็ก
+        // - คนทั่วไป/ผู้บริจาค/มูลนิธิ -> หน้าบริจาคเด็ก
         $cardViewUrl = ($role === 'admin')
           ? ('admin_view_child.php?id=' . (int)$child['child_id'])
           : ('children_donate.php?id=' . (int)$child['child_id']);
@@ -429,7 +477,7 @@ if ($role === 'foundation') {
           </label>
           <?php endif; ?>
           <div class="card-img danger-bg">
-            <img src="uploads/childern/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="รูปเด็ก">
+            <img src="uploads/childern/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="รูปเด็ก" loading="lazy" decoding="async">
           </div>
           <div class="card-info">
               <h3><?php echo htmlspecialchars($child['child_name']); ?></h3>
@@ -455,21 +503,11 @@ if ($role === 'foundation') {
               <?php endif; ?>
               <?php if ($role === 'foundation' && $foundationAccountVerified): ?>
                 <div class="edit-pill-wrap">
-                  <?php
-                    $apForEdit = $child['approve_profile'] ?? '';
-                    $editWarn = ($apForEdit === 'อนุมัติ' || $apForEdit === 'กำลังดำเนินการ');
-                    $eid = (int)$child['child_id'];
-                  ?>
+                  <?php $eid = (int)$child['child_id']; ?>
                   <?php if ($sponsoredLocked): ?>
                   <button type="button" class="btn-edit-pill" disabled title="เด็กที่ได้รับการอุปการะครบยอดในเดือนนี้ ไม่สามารถแก้ไขโปรไฟล์ได้">แก้ไขโปรไฟล์</button>
                   <?php else: ?>
-                  <button type="button" class="btn-edit-pill" <?php
-                    if ($editWarn) {
-                      echo 'onclick="event.stopPropagation(); if(confirm(\'การแก้ไขหลังอนุมัติจะส่งให้แอดมินตรวจสอบอีกครั้งก่อนเผยแพร่ข้อมูลใหม่ ต้องการดำเนินการต่อหรือไม่\')) { window.location.href=\'foundation_add_children.php?edit=' . $eid . '\'; }"';
-                    } else {
-                      echo 'onclick="event.stopPropagation(); window.location.href=\'foundation_add_children.php?edit=' . $eid . '\';"';
-                    }
-                  ?>>
+                  <button type="button" class="btn-edit-pill" onclick="event.stopPropagation(); window.location.href='foundation_add_children.php?edit=<?= $eid ?>';">
                     แก้ไขโปรไฟล์
                   </button>
                   <?php endif; ?>
@@ -539,6 +577,7 @@ if ($role === 'foundation') {
     // ถ้าไม่ใช่บริบทจัดการของมูลนิธิ ให้หยุดแค่ส่วนจัดการ แต่ยังคลิกการ์ดได้ตามปกติ
     if (!isFoundationManageContext) return;
 
+    let bulkSubmitting = false;
     function submitBulkDelete() {
       const selectedCount = Array.from(checks).filter(c => c.checked && !c.disabled).length;
       if (!selectedCount) {
@@ -548,9 +587,24 @@ if ($role === 'foundation') {
       if (!confirm('ยืนยันลบโปรไฟล์ที่เลือก ' + selectedCount + ' รายการ?')) {
         return;
       }
+      if (bulkSubmitting) return;
+      bulkSubmitting = true;
+      if (toggleDeleteBtn) {
+        toggleDeleteBtn.disabled = true;
+        toggleDeleteBtn.textContent = 'กำลังลบ…';
+      }
       if (bulkActionInput) bulkActionInput.value = 'delete';
       bulkForm.submit();
     }
+
+    bulkForm.addEventListener('submit', function () {
+      if (bulkSubmitting) return;
+      bulkSubmitting = true;
+      if (toggleDeleteBtn) {
+        toggleDeleteBtn.disabled = true;
+        toggleDeleteBtn.textContent = 'กำลังลบ…';
+      }
+    });
 
     function clearChecks() {
       checks.forEach(c => { c.checked = false; });

@@ -29,6 +29,7 @@
     .fd-donate-all-btn:active,
     .submit-btn:active,
     .donate-back-btn:active,
+    .donor-flow-back-circle:active,
     .payment-qr-top-back:active,
     .nav-about-dropdown__trigger:active {
         transform: scale(0.98);

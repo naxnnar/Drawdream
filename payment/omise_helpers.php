@@ -362,6 +362,37 @@ function drawdream_omise_mark_charge_as_paid_for_test(string $chargeId, bool $fo
     return is_array($decoded) ? $decoded : null;
 }
 
+/**
+ * โหมดทดสอบ: พยายาม mark_as_paid จนกว่า charge จะ successful (ใช้ตอนโหลดหน้า QR)
+ */
+function drawdream_omise_ensure_test_charge_paid(string $chargeId, int $maxAttempts = 4): ?array
+{
+    if (!drawdream_omise_test_auto_mark_paid_enabled()) {
+        return null;
+    }
+    $chargeId = trim($chargeId);
+    if ($chargeId === '' || strpos($chargeId, 'chrg_mock_') === 0) {
+        return null;
+    }
+
+    $last = null;
+    for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+        $fetched = drawdream_omise_fetch_charge($chargeId, false);
+        if (is_array($fetched) && !drawdream_omise_charge_is_awaiting_payment($fetched)) {
+            return $fetched;
+        }
+        $last = drawdream_omise_mark_charge_as_paid_for_test($chargeId, false);
+        if (is_array($last) && !drawdream_omise_charge_is_awaiting_payment($last)) {
+            return $last;
+        }
+        if ($attempt < $maxAttempts - 1) {
+            usleep(350000);
+        }
+    }
+
+    return $last;
+}
+
 /** มูลนิธิกดชำระค่าบริการ 5% — โหมดทดสอบ Omise: mark as paid ทันที ไม่ต้องไป Dashboard */
 function drawdream_foundation_service_charge_auto_mark_on_pay(string $chargeId): void
 {

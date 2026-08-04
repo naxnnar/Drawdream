@@ -11,7 +11,6 @@ require_once __DIR__ . '/../includes/donate_type.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/notification_audit.php';
 require_once __DIR__ . '/omise_helpers.php';
-drawdream_ensure_needlist_schema($conn);
 
 $wantJson = isset($_GET['format']) && $_GET['format'] === 'json';
 

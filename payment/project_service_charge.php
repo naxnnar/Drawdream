@@ -2,12 +2,12 @@
 // payment/project_service_charge.php — สร้าง QR ชำระค่าบริการระบบโครงการ (มูลนิธิ)
 declare(strict_types=1);
 
-include __DIR__ . '/../db.php';
+include __DIR__ . '/../includes/payment_bootstrap.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_project_service_charge.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
+require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/omise_helpers.php';
-drawdream_ensure_foundation_project_service_charge_columns($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: ../project.php?view=foundation');
@@ -39,7 +39,7 @@ if ($projectId <= 0) {
 $st = $conn->prepare(
     'SELECT p.project_id, p.project_name, p.foundation_id, p.service_charge, p.service_charge_paid_at,
             COALESCE(p.current_donate, 0) AS current_donate, COALESCE(p.goal_amount, 0) AS goal_amount,
-            p.project_status
+            p.project_status, p.end_date
      FROM foundation_project p
      WHERE p.project_id = ? AND p.foundation_name = ?
      LIMIT 1'
@@ -64,7 +64,7 @@ if (!empty($row['service_charge_paid_at'])) {
 $serviceCharge = (float)($row['service_charge'] ?? 0);
 $raised = (float)($row['current_donate'] ?? 0);
 $goal = (float)($row['goal_amount'] ?? 0);
-if (!drawdream_project_goal_met($raised, $goal)) {
+if (!drawdream_project_service_charge_due_from_row($row)) {
     header('Location: ../foundation_project_view.php?id=' . $projectId . '&sc_err=not_ready');
     exit();
 }
@@ -133,14 +133,12 @@ $_SESSION['pending_psc_qr_image'] = $qr_image;
 $_SESSION['pending_psc_project_name'] = $projectName;
 
 if (drawdream_foundation_service_charge_skip_qr_after_pay($charge_id)) {
-    drawdream_foundation_service_charge_auto_mark_on_pay($charge_id);
-    header(
-        'Location: check_project_service_charge_payment.php?project_id=' . $projectId
+    drawdream_payment_flush_redirect(
+        'check_project_service_charge_payment.php?project_id=' . $projectId
         . '&charge_id=' . rawurlencode($charge_id)
     );
     exit();
 }
-
 header(
     'Location: project_service_charge_qr.php?project_id=' . $projectId
     . '&charge_id=' . rawurlencode($charge_id)

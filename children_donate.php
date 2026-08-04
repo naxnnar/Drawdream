@@ -3,19 +3,22 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน children donate
 
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php';
+require_once __DIR__ . '/includes/csrf.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';
 require_once __DIR__ . '/includes/child_sponsorship.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/payment/config.php';
 require_once __DIR__ . '/payment/omise_helpers.php';
 require_once __DIR__ . '/includes/child_omise_subscription.php';
-require_once __DIR__ . '/includes/notification_audit.php';
 require_once __DIR__ . '/includes/child_outcome_history.php';
 require_once __DIR__ . '/includes/return_to.php';
+require_once __DIR__ . '/includes/donate_type.php';
 
 $child_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if (isset($_GET['notif_read']) && isset($_SESSION['user_id'])) {
+    require_once __DIR__ . '/includes/notification_audit.php';
     $notifReadId = (int)$_GET['notif_read'];
     if ($notifReadId > 0) {
         drawdream_notifications_mark_read($conn, (int)$_SESSION['user_id'], $notifReadId);
@@ -51,25 +54,48 @@ $result = $stmt->get_result();
 $child = $result->fetch_assoc();
 
 if (!$child) {
-    echo "<script>alert('ไม่พบข้อมูลเด็กที่ระบุ'); window.location='children_.php';</script>";
-    exit();
+    require_once __DIR__ . '/includes/drawdream_user_error.php';
+    drawdream_user_error_redirect('ไม่พบข้อมูลเด็กที่ระบุ', 'children_.php', 'children_donate missing child_id=' . $child_id);
 }
 
-// Donation stats for this child
+// Donation stats + ยอดรอบเดือนในคิวรีเดียว (ลด round-trip ไป Aiven)
 $donationStats = ['donor_count' => 0, 'total_amount' => 0, 'cycle_amount' => 0];
 $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
-$stmtDs = $conn->prepare(
-    "SELECT COUNT(DISTINCT donor_id) AS donor_count, COALESCE(SUM(amount),0) AS total_amount
-     FROM donation
-     WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'"
-);
-$stmtDs->bind_param("ii", $childCategoryId, $child_id);
+$cycleBounds = drawdream_child_current_cycle_bounds(drawdream_child_anchor_datetime($child));
+$dtOne = DRAWDREAM_DONATE_TYPE_CHILD_ONE_TIME;
+if ($cycleBounds !== null) {
+    [$cycleEffectiveStart, $cycleMonthEnd] = $cycleBounds;
+    $cycleStartStr = $cycleEffectiveStart->format('Y-m-d H:i:s');
+    $cycleEndStr = $cycleMonthEnd->format('Y-m-d H:i:s');
+    $stmtDs = $conn->prepare(
+        "SELECT COUNT(DISTINCT donor_id) AS donor_count,
+                COALESCE(SUM(amount), 0) AS total_amount,
+                COALESCE(SUM(
+                    CASE
+                        WHEN transfer_datetime >= ? AND transfer_datetime < ?
+                             AND COALESCE(donate_type, '') <> ?
+                        THEN amount ELSE 0
+                    END
+                ), 0) AS cycle_amount
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'"
+    );
+    $stmtDs->bind_param('sssii', $cycleStartStr, $cycleEndStr, $dtOne, $childCategoryId, $child_id);
+} else {
+    $stmtDs = $conn->prepare(
+        "SELECT COUNT(DISTINCT donor_id) AS donor_count,
+                COALESCE(SUM(amount), 0) AS total_amount,
+                0 AS cycle_amount
+         FROM donation
+         WHERE category_id = ? AND target_id = ? AND payment_status = 'completed'"
+    );
+    $stmtDs->bind_param('ii', $childCategoryId, $child_id);
+}
 $stmtDs->execute();
 $dsRow = $stmtDs->get_result()->fetch_assoc();
 if ($dsRow) {
     $donationStats = $dsRow;
 }
-$donationStats['cycle_amount'] = drawdream_child_cycle_total($conn, $child_id, $child);
 
 // รายชื่อผู้บริจาค + สถานะแผนรายรอบ — เฉพาะมูลนิธิ/แอดมิน (ผู้บริจาคไม่ใช้ ลด query ไป Aiven)
 $sponsorDisplayRows = [];
@@ -99,64 +125,130 @@ $cycleAmountCached = (float)($donationStats['cycle_amount'] ?? 0);
 $cycleTargetAmount = drawdream_child_cycle_target_amount($conn, $child_id);
 $coverageWindow = drawdream_child_plan_coverage_window($conn, $child_id);
 $hasPlanCoverageNow = (bool)($coverageWindow['current'] ?? false);
+$planCoverageMapOne = $hasPlanCoverageNow ? [$child_id => true] : [];
+$planMapShowcase = drawdream_child_ids_with_active_plan_sponsorship($conn, [$child_id]);
 $isCycleSponsored = $hasPlanCoverageNow
     || ($cycleTargetAmount > 0 && $cycleAmountCached >= $cycleTargetAmount);
-$anyPlanSponsor = drawdream_child_has_any_active_subscription($conn, $child_id);
+$anyPlanSponsor = !empty($planMapShowcase[$child_id]);
+$profileOpenForDonation = in_array(
+    (string)($child['approve_profile'] ?? ''),
+    ['อนุมัติ', 'กำลังดำเนินการ'],
+    true
+);
 
-$canDonate = drawdream_child_can_receive_daily_donation($conn, $child_id, $child)
+$canDonate = $profileOpenForDonation
     && !$anyPlanSponsor
     && !$isCycleSponsored;
 $donorUid = (int)($_SESSION['user_id'] ?? 0);
-$activeChildSub = ($role === 'donor' && $donorUid > 0)
-    ? drawdream_donor_active_child_subscription_for_child($conn, $donorUid, $child_id)
-    : null;
-$hasActiveChildSub = is_array($activeChildSub);
-$canStartChildSub = ($role === 'donor' && $donorUid > 0)
-    ? drawdream_child_can_start_omise_subscription($conn, $child_id, $child, $donorUid)
-    : false;
-$recurringBlockedForDonor = ($role === 'donor' && $donorUid > 0)
-    ? drawdream_child_subscription_recurring_blocked_for_donor($conn, $child_id, $donorUid)
-    : $anyPlanSponsor;
-$planMapShowcase = drawdream_child_ids_with_active_plan_sponsorship($conn, [$child_id]);
+$activeChildSub = null;
+$hasActiveChildSub = false;
+$canStartChildSub = false;
+$recurringBlockedForDonor = $anyPlanSponsor;
+if ($role === 'donor' && $donorUid > 0) {
+    if ($anyPlanSponsor) {
+        $recurringBlockedForDonor = true;
+    } else {
+        $reserveHolder = drawdream_child_subscription_reserving_holder_user_id($conn, $child_id);
+        $recurringBlockedForDonor = $reserveHolder > 0 && $reserveHolder !== $donorUid;
+    }
+    $donorSubStatus = drawdream_child_donor_latest_subscription_status($conn, $child_id, $donorUid);
+    $hasActiveChildSub = ($donorSubStatus === 'active');
+    if ($hasActiveChildSub) {
+        $activeChildSub = drawdream_donor_active_child_subscription_for_child($conn, $donorUid, $child_id);
+        if (!is_array($activeChildSub)) {
+            $hasActiveChildSub = false;
+        }
+    }
+    $canStartChildSub = $profileOpenForDonation
+        && !$anyPlanSponsor
+        && !$isCycleSponsored
+        && !$hasActiveChildSub;
+}
+
+// หลังอุปการะสำเร็จแต่ยังไปหน้าเดิม (sub_ok) — พาไปใบเสร็จทันที ไม่ค้างแค่ Swal
+if (
+    $donorUid > 0
+    && $child_id > 0
+    && isset($_GET['sub_ok'])
+    && (string)$_GET['sub_ok'] === '1'
+    && !isset($_GET['success'])
+) {
+    require_once __DIR__ . '/includes/e_receipt.php';
+    $stSubReceipt = $conn->prepare(
+        "SELECT donate_id FROM donation
+         WHERE donor_id = ? AND target_id = ?
+           AND payment_status = 'completed'
+           AND LOWER(TRIM(COALESCE(donate_type, ''))) IN ('child_subscription', 'child_subscription_charge')
+         ORDER BY donate_id DESC
+         LIMIT 1"
+    );
+    if ($stSubReceipt) {
+        $stSubReceipt->bind_param('ii', $donorUid, $child_id);
+        $stSubReceipt->execute();
+        $subReceiptRow = $stSubReceipt->get_result()->fetch_assoc();
+        $subDonateId = (int)($subReceiptRow['donate_id'] ?? 0);
+        if ($subDonateId > 0 && drawdream_donation_eligible_for_e_receipt($conn, $subDonateId)) {
+            $subDetail = trim((string)($_GET['sub_msg'] ?? ''));
+            $receiptUrl = drawdream_payment_success_receipt_query(
+                $subDonateId,
+                'อุปการะสำเร็จ',
+                'children_donate.php?id=' . $child_id,
+                $subDetail
+            );
+            if ($receiptUrl !== '') {
+                header('Location: ' . $receiptUrl);
+                exit;
+            }
+        }
+    }
+}
+
 $donorShowcaseSponsored = drawdream_child_is_showcase_sponsored(
     $conn,
     $child_id,
     $child,
     (float)($donationStats['cycle_amount'] ?? 0),
-    $planMapShowcase
+    $planMapShowcase,
+    $planCoverageMapOne
 );
 $latestCancelledSubAny = null;
 $latestCancelledSubForDonor = null;
 $planLabelMap = ['monthly' => 'รายเดือน', 'semiannual' => 'ราย 6 เดือน', 'yearly' => 'รายปี'];
 $cycleMonthLabel = date('m/Y');
-    $stLatestCancelledAny = $conn->prepare(
-        "SELECT recurring_plan_code AS plan_code,
+// ประวัติยกเลิกอุปการะ — เฉพาะผู้บริจาค/มูลนิธิที่ใช้แสดงแท็บผลลัพธ์ (ลด query สำหรับแอดมินตรวจโปรไฟล์)
+$needCancelledSubHistory = ($role === 'donor' && $donorUid > 0)
+    || $role === 'foundation'
+    || ($role === 'admin' && isset($_GET['view']) && (string)$_GET['view'] === 'outcome');
+if ($needCancelledSubHistory) {
+    $stCancelledHistory = $conn->prepare(
+        "SELECT donor_user_id, recurring_plan_code AS plan_code,
                 recurring_next_charge_at AS last_charge_at, created_at
          FROM child_subscription_history
          WHERE child_id = ? AND LOWER(TRIM(current_status)) IN ('cancelled','cancle','canceled')
          ORDER BY history_id DESC
-         LIMIT 1"
+         LIMIT 12"
     );
-    if ($stLatestCancelledAny) {
-        $stLatestCancelledAny->bind_param('i', $child_id);
-        $stLatestCancelledAny->execute();
-        $latestCancelledSubAny = $stLatestCancelledAny->get_result()->fetch_assoc() ?: null;
-    }
-    if ($role === 'donor' && $donorUid > 0) {
-        $stLatestCancelledForDonor = $conn->prepare(
-            "SELECT recurring_plan_code AS plan_code,
-                    recurring_next_charge_at AS last_charge_at, created_at
-             FROM child_subscription_history
-             WHERE child_id = ? AND donor_user_id = ? AND LOWER(TRIM(current_status)) IN ('cancelled','cancle','canceled')
-             ORDER BY history_id DESC
-             LIMIT 1"
-        );
-        if ($stLatestCancelledForDonor) {
-            $stLatestCancelledForDonor->bind_param('ii', $child_id, $donorUid);
-            $stLatestCancelledForDonor->execute();
-            $latestCancelledSubForDonor = $stLatestCancelledForDonor->get_result()->fetch_assoc() ?: null;
+    if ($stCancelledHistory) {
+        $stCancelledHistory->bind_param('i', $child_id);
+        $stCancelledHistory->execute();
+        $cancelRows = $stCancelledHistory->get_result()->fetch_all(MYSQLI_ASSOC);
+        foreach ($cancelRows as $cancelRow) {
+            if ($latestCancelledSubAny === null) {
+                $latestCancelledSubAny = $cancelRow;
+            }
+            if ($latestCancelledSubForDonor === null
+                && $role === 'donor'
+                && $donorUid > 0
+                && (int)($cancelRow['donor_user_id'] ?? 0) === $donorUid) {
+                $latestCancelledSubForDonor = $cancelRow;
+            }
+            if ($latestCancelledSubAny !== null
+                && ($latestCancelledSubForDonor !== null || $role !== 'donor' || $donorUid <= 0)) {
+                break;
+            }
         }
     }
+}
 if (is_array($latestCancelledSubAny)) {
     $sp = drawdream_child_subscription_plan((string)($latestCancelledSubAny['plan_code'] ?? ''));
     $latestCancelledSubAny['amount_thb'] = is_array($sp) ? (float)($sp['amount_thb'] ?? 0) : 0.0;
@@ -205,8 +297,12 @@ $cycleProgressPercent = $cycleTargetAmount > 0
     ? min(100.0, max(0.0, ($cycleAmountNow / $cycleTargetAmount) * 100.0))
     : 0.0;
 /** บริจาครายวัน (PromptPay): ขั้นต่ำ 20 บาท ไม่จำกัดยอดสูงสุดต่อครั้ง — เปิดได้แม้มีผู้อุปการะรายรอบแล้ว */
-$dailyCanDonate = drawdream_child_can_receive_daily_donation($conn, $child_id, $child);
+$dailyCanDonate = $profileOpenForDonation;
 $childHasPlanSponsor = $donorShowcaseSponsored || $hasActiveChildSub || $anyPlanSponsor || $recurringBlockedForDonor;
+/** ล็อกแท็บรายเดือน/รายปีสำหรับผู้บริจาคอื่น — ไม่แสดง "มีผู้อุปการะแล้ว" กับผู้อุปการะคนปัจจุบัน */
+$childRecurringLockedForViewer = !$hasActiveChildSub
+    && ($anyPlanSponsor || $recurringBlockedForDonor || $donorShowcaseSponsored);
+$childSubFormHidden = $childRecurringLockedForViewer || $hasActiveChildSub;
 $showDonorDonationBox = ($role === 'donor')
     && ($canStartChildSub || !$isLoggedIn || ($childHasPlanSponsor && $dailyCanDonate));
 $sponsorshipLabel = $isCycleSponsored ? 'อุปการะแล้ว' : 'รออุปการะ';
@@ -286,13 +382,14 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
     <title>โปรไฟล์ - <?php echo htmlspecialchars($child['child_name']); ?></title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/children.css?v=48">
+    <?php require_once __DIR__ . '/includes/vendor_assets.php'; drawdream_foundation_page_assets_head(); ?>
+    <link rel="stylesheet" href="css/children.css?v=57">
     <?php if ($isAdmin): ?>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/admin_directory.css">
     <?php endif; ?>
+    <?php require_once __DIR__ . '/includes/vendor_assets.php'; echo drawdream_sweetalert2_js_tag('', false); ?>
+    <script src="js/drawdream-swal.js?v=1"></script>
 </head>
 <body class="<?php
     echo $isAdmin ? 'admin-child-review-page' : '';
@@ -302,18 +399,22 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
 <?php include 'navbar.php'; ?>
 
 <?php if (!empty($_GET['msg'] ?? '')): ?>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <?php echo drawdream_sweetalert2_js_tag('', true); ?>
     <script>
-    Swal.fire({ icon: 'info', title: <?php echo json_encode((string)$_GET['msg'], JSON_UNESCAPED_UNICODE); ?>, confirmButtonText: 'ตกลง' });
+    document.addEventListener('DOMContentLoaded', function () {
+        Swal.fire({ icon: 'info', title: <?php echo json_encode((string)$_GET['msg'], JSON_UNESCAPED_UNICODE); ?>, confirmButtonText: 'ตกลง' });
+    });
     </script>
 <?php endif; ?>
 <?php if (isset($_GET['sub_msg']) && $_GET['sub_msg'] !== ''): ?>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <?php echo drawdream_sweetalert2_js_tag('', true); ?>
     <script>
-    Swal.fire({
-        icon: <?php echo (!empty($_GET['sub_ok'])) ? "'success'" : "'error'"; ?>,
-        title: <?php echo json_encode((string)$_GET['sub_msg'], JSON_UNESCAPED_UNICODE); ?>,
-        confirmButtonText: 'ตกลง'
+    document.addEventListener('DOMContentLoaded', function () {
+        Swal.fire({
+            icon: <?php echo (!empty($_GET['sub_ok'])) ? "'success'" : "'error'"; ?>,
+            title: <?php echo json_encode((string)$_GET['sub_msg'], JSON_UNESCAPED_UNICODE); ?>,
+            confirmButtonText: 'ตกลง'
+        });
     });
     </script>
 <?php endif; ?>
@@ -451,7 +552,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             <button type="submit" name="action" value="approve" class="btn btn-success admin-review-action-btn"
                                     onclick="return confirm('ยืนยันอนุมัติโปรไฟล์เด็กคนนี้?');">อนุมัติ</button>
                             <button type="submit" name="action" value="reject" class="btn btn-danger admin-review-action-btn"
-                                    onclick="var t=this.form.querySelector('[name=reject_reason]');if(!t||!t.value.trim()){alert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');if(t)t.focus();return false;}return confirm('ยืนยันไม่อนุมัติโปรไฟล์เด็กคนนี้?');">ไม่อนุมัติ</button>
+                                    onclick="var t=this.form.querySelector('[name=reject_reason]');if(!t||!t.value.trim()){drawdreamAlert('กรุณากรอกเหตุผลเมื่อไม่อนุมัติ');if(t)t.focus();return false;}return confirm('ยืนยันไม่อนุมัติโปรไฟล์เด็กคนนี้?');">ไม่อนุมัติ</button>
                         </div>
                     </form>
                     <?php endif; ?>
@@ -473,8 +574,9 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
 
         <div class="profile-inner">
             <div class="col-left">
-                <div class="child-img-container">
-                    <img src="uploads/childern/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="Profile">
+                <div class="child-img-container child-img-container--with-back">
+                    <a href="children_.php" class="donor-flow-back-circle" aria-label="กลับรายชื่อเด็ก"><span aria-hidden="true">←</span></a>
+                    <img src="uploads/childern/<?php echo htmlspecialchars($child['photo_child']); ?>" alt="Profile" width="320" height="400" decoding="async" fetchpriority="high">
                 </div>
                 <?php if ($role === 'donor' && $hasActiveChildSub): ?>
                 <form method="post" action="payment/child_subscription_cancel.php" class="child-cancel-below-photo-form js-confirm-cancel-sub" data-child-name="<?php echo htmlspecialchars((string)($child['child_name'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
@@ -580,11 +682,9 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                 <div class="child-subscription-box mt-2">
                     <?php if (drawdream_omise_is_test_mode()): ?>
                     <div class="child-omise-test-hint" role="note">
-                        <strong>โหมดทดสอบ Omise</strong> — กรอกในหน้าต่างบัตร:
-                        เลข <span class="child-omise-test-hint__mono">4242&nbsp;4242&nbsp;4242&nbsp;4242</span>,
-                        หมดอายุอนาคต เช่น <span class="child-omise-test-hint__mono">12/29</span>,
-                        CVV <span class="child-omise-test-hint__mono">123</span>,
-                        ชื่ออะไรก็ได้
+                        <strong>โหมดทดสอบ Omise</strong> — กดบริจาคแล้วระบบใส่เลขบัตรทดสอบให้อัตโนมัติ
+                        (<span class="child-omise-test-hint__mono">4242…</span>, <span class="child-omise-test-hint__mono">12/29</span>, CVV <span class="child-omise-test-hint__mono">123</span>)
+                        กรอกแค่<strong>ชื่อบนบัตร</strong>แล้วกด Pay
                     </div>
                     <?php endif; ?>
                     <div class="sub-plan-grid" role="tablist" aria-label="เลือกรูปแบบการบริจาค">
@@ -629,28 +729,123 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             </div>
                             <div class="sub-summary-amt"><span id="subAmountLabel">700</span> บาท</div>
                         </div>
-                        <form id="childSubForm" method="post" action="<?php echo $isLoggedIn ? 'payment/child_subscription_create.php' : htmlspecialchars($loginRequiredDonateUrl, ENT_QUOTES, 'UTF-8'); ?>" class="child-sub-form"<?php echo $childHasPlanSponsor ? ' hidden' : ''; ?>>
+                        <form id="childSubForm" method="post" action="<?php echo $isLoggedIn ? 'payment/child_subscription_create.php' : htmlspecialchars($loginRequiredDonateUrl, ENT_QUOTES, 'UTF-8'); ?>" class="child-sub-form"<?php echo $childSubFormHidden ? ' hidden' : ''; ?>>
                             <?= $isLoggedIn ? drawdream_csrf_field() : '' ?>
                             <input type="hidden" name="child_id" value="<?php echo (int)$child['child_id']; ?>">
                             <input type="hidden" name="plan" id="subPlanField" value="monthly">
                             <input type="hidden" name="omiseToken" id="omiseTokenField" value="">
                             <button type="<?php echo $isLoggedIn ? 'button' : 'submit'; ?>" class="btn-submit-donation btn-submit-donation--sub" id="btnChildSubscribe">บริจาค</button>
                         </form>
-                        <?php if ($childHasPlanSponsor): ?>
+                        <?php if ($childRecurringLockedForViewer): ?>
                         <button type="button" class="btn-submit-donation btn-submit-donation--sub" id="btnChildSponsorLocked" hidden disabled aria-disabled="true" title="เด็กคนนี้มีผู้อุปการะแล้ว">มีผู้อุปการะแล้ว</button>
                         <?php endif; ?>
                     </div>
                 </div>
-                <script type="text/javascript" src="https://cdn.omise.co/omise.js"></script>
+                <?php if ($isLoggedIn && $showDonorDonationBox): ?>
+                <div class="drawdream-omise-modal" id="childSubCardModal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="childSubCardModalTitle">
+                    <div class="drawdream-omise-modal__backdrop" data-close-card-modal tabindex="-1"></div>
+                    <div class="drawdream-omise-modal__panel">
+                        <div class="drawdream-omise-modal__topbar">
+                            <div class="drawdream-omise-modal__brand">
+                                <span class="drawdream-omise-modal__brand-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                </span>
+                                <div class="drawdream-omise-modal__brand-text">
+                                    <div class="drawdream-omise-modal__brand-name">Omise</div>
+                                    <div class="drawdream-omise-modal__brand-secure">Secured by Omise</div>
+                                </div>
+                            </div>
+                            <button type="button" class="drawdream-omise-modal__close" data-close-card-modal aria-label="ปิด">&times;</button>
+                        </div>
+                        <h2 class="drawdream-omise-modal__section-title" id="childSubCardModalTitle">Credit / Debit</h2>
+                        <div class="drawdream-omise-modal__fields">
+                            <div class="drawdream-omise-modal__field drawdream-omise-modal__field--card">
+                                <input type="text" id="childSubCardNumber" class="drawdream-omise-modal__input" autocomplete="cc-number" inputmode="numeric" placeholder=" ">
+                                <label class="drawdream-omise-modal__float-label" for="childSubCardNumber">Card number</label>
+                                <span class="drawdream-omise-modal__card-brand" id="childSubCardBrand" aria-hidden="true">VISA</span>
+                            </div>
+                            <div class="drawdream-omise-modal__field">
+                                <input type="text" id="childSubCardName" class="drawdream-omise-modal__input" autocomplete="cc-name" placeholder=" " inputmode="text">
+                                <label class="drawdream-omise-modal__float-label" for="childSubCardName">Name on card</label>
+                            </div>
+                            <div class="drawdream-omise-modal__row">
+                                <div class="drawdream-omise-modal__field drawdream-omise-modal__col">
+                                    <input type="text" id="childSubCardExp" class="drawdream-omise-modal__input" autocomplete="cc-exp" inputmode="numeric" placeholder=" " maxlength="5">
+                                    <label class="drawdream-omise-modal__float-label" for="childSubCardExp">Expiry date</label>
+                                </div>
+                                <div class="drawdream-omise-modal__field drawdream-omise-modal__col drawdream-omise-modal__field--cvv">
+                                    <input type="text" id="childSubCardCvv" class="drawdream-omise-modal__input" autocomplete="cc-csc" inputmode="numeric" placeholder=" " maxlength="4">
+                                    <label class="drawdream-omise-modal__float-label" for="childSubCardCvv">Security code</label>
+                                    <span class="drawdream-omise-modal__cvv-help" title="รหัส 3 หลักหลังบัตร" aria-hidden="true">?</span>
+                                </div>
+                            </div>
+                            <div class="drawdream-omise-modal__field drawdream-omise-modal__field--select">
+                                <select id="childSubCardCountry" class="drawdream-omise-modal__input drawdream-omise-modal__select" disabled aria-readonly="true">
+                                    <option selected>Thailand</option>
+                                </select>
+                                <label class="drawdream-omise-modal__float-label" for="childSubCardCountry">Country or region</label>
+                                <span class="drawdream-omise-modal__select-chevron" aria-hidden="true"></span>
+                            </div>
+                        </div>
+                        <button type="button" class="drawdream-omise-modal__pay" id="childSubCardModalPay">
+                            Pay <span id="childSubCardModalAmt">700.00</span> THB
+                        </button>
+                    </div>
+                </div>
+                <div class="drawdream-pay-loading" id="childSubPayLoading" hidden aria-hidden="true" role="status" aria-live="polite">
+                    <div class="drawdream-pay-loading__panel">
+                        <div class="drawdream-pay-loading__spinner" aria-hidden="true"></div>
+                        <p class="drawdream-pay-loading__title">กำลังดำเนินการชำระเงิน</p>
+                        <p class="drawdream-pay-loading__hint">กรุณารอสักครู่ อย่าปิดหน้านี้</p>
+                    </div>
+                </div>
+                <?php endif; ?>
                 <script>
                 (function () {
                     var isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
                     var childId = <?php echo (int)$child_id; ?>;
                     var loginRequiredMsg = <?php echo json_encode($loginRequiredDonateMsg, JSON_UNESCAPED_UNICODE); ?>;
-                    var planSponsorLocked = <?php echo $childHasPlanSponsor ? 'true' : 'false'; ?>;
+                    var planSponsorLocked = <?php echo $childRecurringLockedForViewer ? 'true' : 'false'; ?>;
+                    var preferDailyDonateTab = <?php echo $childHasPlanSponsor ? 'true' : 'false'; ?>;
+                    var viewerHasActiveChildSub = <?php echo $hasActiveChildSub ? 'true' : 'false'; ?>;
                     var pk = <?php echo json_encode(OMISE_PUBLIC_KEY, JSON_UNESCAPED_UNICODE); ?>;
-                    if (typeof OmiseCard !== 'undefined') {
-                        OmiseCard.configure({ publicKey: pk });
+                    var omiseLoadPromise = null;
+                    function ensureOmiseReady(done) {
+                        if (typeof Omise !== 'undefined' && typeof Omise.setPublicKey === 'function') {
+                            Omise.setPublicKey(pk);
+                            done();
+                            return;
+                        }
+                        if (!omiseLoadPromise) {
+                            omiseLoadPromise = new Promise(function (resolve, reject) {
+                                var s = document.createElement('script');
+                                s.src = 'https://cdn.omise.co/omise.js';
+                                s.async = true;
+                                s.onload = function () {
+                                    if (typeof Omise !== 'undefined' && typeof Omise.setPublicKey === 'function') {
+                                        Omise.setPublicKey(pk);
+                                        resolve();
+                                        return;
+                                    }
+                                    reject(new Error('omise'));
+                                };
+                                s.onerror = function () { reject(new Error('omise')); };
+                                document.head.appendChild(s);
+                            });
+                        }
+                        omiseLoadPromise.then(done).catch(function () {
+                            drawdreamAlert('ระบบชำระเงินยังโหลดไม่สมบูรณ์ กรุณารีเฟรชหน้า');
+                        });
+                    }
+                    if (!planSponsorLocked) {
+                        var preloadOmise = function () {
+                            ensureOmiseReady(function () {});
+                        };
+                        if (typeof requestIdleCallback === 'function') {
+                            requestIdleCallback(preloadOmise, { timeout: 4000 });
+                        } else {
+                            window.setTimeout(preloadOmise, 1800);
+                        }
                     }
                     var modeBtns = document.querySelectorAll('.sub-mode-btn');
                     var sectionDaily = document.getElementById('subSectionDaily');
@@ -665,6 +860,283 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                     var subForm = document.getElementById('childSubForm');
                     var lockedBtn = document.getElementById('btnChildSponsorLocked');
                     var satang = 70000;
+                    var cardModal = document.getElementById('childSubCardModal');
+                    var cardModalPay = document.getElementById('childSubCardModalPay');
+                    var cardModalAmt = document.getElementById('childSubCardModalAmt');
+                    var payLoading = document.getElementById('childSubPayLoading');
+                    var payLoadingTitle = payLoading ? payLoading.querySelector('.drawdream-pay-loading__title') : null;
+                    var payLoadingHint = payLoading ? payLoading.querySelector('.drawdream-pay-loading__hint') : null;
+                    var omiseTestMode = <?php echo drawdream_omise_is_test_mode() ? 'true' : 'false'; ?>;
+                    var childSubPaySubmitting = false;
+                    var omiseTestCardDefaults = {
+                        number: '4242 4242 4242 4242',
+                        expiry: '12/29',
+                        cvv: '123'
+                    };
+
+                    function showChildSubPayLoading(title, hint) {
+                        if (payLoadingTitle && title) {
+                            payLoadingTitle.textContent = title;
+                        }
+                        if (payLoadingHint && hint) {
+                            payLoadingHint.textContent = hint;
+                        }
+                        if (payLoading) {
+                            payLoading.hidden = false;
+                            payLoading.setAttribute('aria-hidden', 'false');
+                        }
+                        document.body.classList.add('drawdream-pay-loading-open');
+                    }
+
+                    function hideChildSubPayLoading() {
+                        if (payLoading) {
+                            payLoading.hidden = true;
+                            payLoading.setAttribute('aria-hidden', 'true');
+                        }
+                        document.body.classList.remove('drawdream-pay-loading-open');
+                        if (payLoadingTitle) {
+                            payLoadingTitle.textContent = 'กำลังดำเนินการชำระเงิน';
+                        }
+                        if (payLoadingHint) {
+                            payLoadingHint.textContent = 'กรุณารอสักครู่ อย่าปิดหน้านี้';
+                        }
+                    }
+
+                    function resetChildSubPayUi() {
+                        childSubPaySubmitting = false;
+                        hideChildSubPayLoading();
+                        cardBtn.disabled = false;
+                        if (cardModalPay) {
+                            cardModalPay.disabled = false;
+                        }
+                    }
+
+                    function buildChildSubReceiptUrl(data) {
+                        if (!data) {
+                            return '';
+                        }
+                        var url = data.redirect ? String(data.redirect).trim() : '';
+                        if (url.indexOf('donation_receipt.php') >= 0) {
+                            return url.split('#')[0];
+                        }
+                        var donateId = parseInt(String(data.donate_id || '0'), 10);
+                        if (donateId > 0) {
+                            return 'donation_receipt.php?donate_id=' + encodeURIComponent(String(donateId))
+                                + '&success=1&success_title=' + encodeURIComponent('อุปการะสำเร็จ')
+                                + '&return=' + encodeURIComponent('children_donate.php?id=' + childId);
+                        }
+                        return '';
+                    }
+
+                    function goChildSubReceipt(data) {
+                        var url = buildChildSubReceiptUrl(data);
+                        if (!url) {
+                            return false;
+                        }
+                        if (typeof closeChildSubCardModal === 'function') {
+                            closeChildSubCardModal();
+                        }
+                        hideChildSubPayLoading();
+                        document.body.classList.remove('drawdream-omise-modal-open');
+                        document.body.classList.remove('drawdream-pay-loading-open');
+                        window.location.href = url;
+                        return true;
+                    }
+
+                    function submitChildSubscriptionForm(tokenId) {
+                        if (!form || childSubPaySubmitting) {
+                            return;
+                        }
+                        childSubPaySubmitting = true;
+                        showChildSubPayLoading('กำลังบันทึกการอุปการะ', 'เชื่อมต่อ Omise และบันทึกข้อมูล…');
+                        var fd = new FormData(form);
+                        fd.set('omiseToken', tokenId);
+                        fd.append('ajax', '1');
+                        var payTimer = window.setTimeout(function () {
+                            if (payLoadingHint) {
+                                payLoadingHint.textContent = 'ใช้เวลานานกว่าปกติ กรุณารอต่ออีกสักครู่…';
+                            }
+                        }, 12000);
+                        fetch(form.action, {
+                            method: 'POST',
+                            body: fd,
+                            credentials: 'same-origin',
+                            headers: { 'Accept': 'application/json' }
+                        })
+                            .then(function (res) {
+                                return res.json().catch(function () { return null; }).then(function (data) {
+                                    return { res: res, data: data };
+                                });
+                            })
+                            .then(function (pack) {
+                                window.clearTimeout(payTimer);
+                                var data = pack.data;
+                                if (data && data.ok === false) {
+                                    resetChildSubPayUi();
+                                    drawdreamAlert((data.message) ? data.message : 'ไม่สามารถบันทึกการอุปการะได้ กรุณาลองใหม่');
+                                    return;
+                                }
+                                if (data && data.ok !== false && (data.status === 'success' || data.redirect || data.donate_id)) {
+                                    if (goChildSubReceipt(data)) {
+                                        return;
+                                    }
+                                }
+                                resetChildSubPayUi();
+                                drawdreamAlert((data && data.message) ? data.message : 'ไม่สามารถบันทึกการอุปการะได้ กรุณาลองใหม่');
+                            })
+                            .catch(function () {
+                                window.clearTimeout(payTimer);
+                                resetChildSubPayUi();
+                                drawdreamAlert('เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ กรุณาลองใหม่');
+                            });
+                    }
+
+                    function formatModalAmount(st) {
+                        return (st / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    }
+
+                    function syncModalAmountLabel() {
+                        if (cardModalAmt) {
+                            cardModalAmt.textContent = formatModalAmount(satang);
+                        }
+                    }
+
+                    function openChildSubCardModal() {
+                        if (!cardModal) {
+                            return;
+                        }
+                        syncModalAmountLabel();
+                        var numEl = document.getElementById('childSubCardNumber');
+                        var nameEl = document.getElementById('childSubCardName');
+                        var expEl = document.getElementById('childSubCardExp');
+                        var cvvEl = document.getElementById('childSubCardCvv');
+                        if (omiseTestMode) {
+                            if (numEl) {
+                                numEl.value = omiseTestCardDefaults.number;
+                                formatCardNumberInput(numEl);
+                            }
+                            if (expEl) {
+                                expEl.value = omiseTestCardDefaults.expiry;
+                            }
+                            if (cvvEl) {
+                                cvvEl.value = omiseTestCardDefaults.cvv;
+                            }
+                            if (nameEl) {
+                                nameEl.value = '';
+                            }
+                        } else {
+                            if (numEl) numEl.value = '';
+                            if (nameEl) nameEl.value = '';
+                            if (expEl) expEl.value = '';
+                            if (cvvEl) cvvEl.value = '';
+                            var brandEl = document.getElementById('childSubCardBrand');
+                            if (brandEl) brandEl.classList.remove('is-visible');
+                        }
+                        cardModal.hidden = false;
+                        cardModal.setAttribute('aria-hidden', 'false');
+                        document.body.classList.add('drawdream-omise-modal-open');
+                        applySlotCheckToPayButton();
+                        var focusEl = (omiseTestMode && nameEl) ? nameEl : numEl;
+                        if (focusEl) {
+                            focusEl.focus();
+                        }
+                    }
+
+                    function formatCardNumberInput(el) {
+                        if (!el) return;
+                        var digits = digitsOnly(el.value).slice(0, 19);
+                        var parts = [];
+                        for (var i = 0; i < digits.length; i += 4) {
+                            parts.push(digits.slice(i, i + 4));
+                        }
+                        el.value = parts.join(' ');
+                        var brandEl = document.getElementById('childSubCardBrand');
+                        if (brandEl) {
+                            brandEl.classList.toggle('is-visible', digits.charAt(0) === '4' && digits.length >= 1);
+                        }
+                    }
+
+                    function formatCardExpiryInput(el) {
+                        if (!el) return;
+                        var digits = digitsOnly(el.value).slice(0, 4);
+                        if (digits.length >= 3) {
+                            var month = parseInt(digits.slice(0, 2), 10);
+                            if (month === 0) {
+                                digits = '01' + digits.slice(2);
+                            }
+                        }
+                        if (digits.length >= 3) {
+                            el.value = digits.slice(0, 2) + '/' + digits.slice(2);
+                        } else {
+                            el.value = digits;
+                        }
+                    }
+
+                    function validateCardExpiry(raw) {
+                        var s = String(raw || '').replace(/\s/g, '');
+                        if (!s) {
+                            return { ok: false, message: 'กรุณากรอกวันหมดอายุ MM/YY (เช่น 04/29)' };
+                        }
+                        if (s.indexOf('/') === -1) {
+                            return { ok: false, message: 'กรุณากรอกวันหมดอายุแบบ MM/YY (เช่น 04/29)' };
+                        }
+                        var parts = s.split('/');
+                        if (parts[1] === undefined || parts[1] === '') {
+                            return { ok: false, message: 'กรุณากรอกปีหมดอายุ 2 หลัก (เช่น 04/29)' };
+                        }
+                        var month = parseInt(parts[0], 10);
+                        var year = parseInt(parts[1], 10);
+                        if (isNaN(month) || isNaN(year)) {
+                            return { ok: false, message: 'วันหมดอายุไม่ถูกต้อง กรุณาใช้รูปแบบ MM/YY (เช่น 04/29)' };
+                        }
+                        if (month < 1 || month > 12) {
+                            return { ok: false, message: 'เดือนหมดอายุต้องเป็น 01–12 (คุณใส่ ' + parts[0] + ') — ตัวอย่าง: 04/29' };
+                        }
+                        if (parts[1].length < 2) {
+                            return { ok: false, message: 'กรุณากรอกปีหมดอายุ 2 หลัก (เช่น 04/29)' };
+                        }
+                        if (year < 100) {
+                            year += 2000;
+                        }
+                        return { ok: true, exp: { month: month, year: year } };
+                    }
+
+                    (function bindCardModalInputs() {
+                        var numEl = document.getElementById('childSubCardNumber');
+                        var expEl = document.getElementById('childSubCardExp');
+                        var cvvEl = document.getElementById('childSubCardCvv');
+                        if (numEl) {
+                            numEl.addEventListener('input', function () { formatCardNumberInput(numEl); });
+                        }
+                        if (expEl) {
+                            expEl.addEventListener('input', function () { formatCardExpiryInput(expEl); });
+                        }
+                        if (cvvEl) {
+                            cvvEl.addEventListener('input', function () {
+                                cvvEl.value = digitsOnly(cvvEl.value).slice(0, 4);
+                            });
+                        }
+                    })();
+
+                    function closeChildSubCardModal() {
+                        if (!cardModal) {
+                            return;
+                        }
+                        cardModal.hidden = true;
+                        cardModal.setAttribute('aria-hidden', 'true');
+                        document.body.classList.remove('drawdream-omise-modal-open');
+                    }
+
+                    if (cardModal) {
+                        cardModal.querySelectorAll('[data-close-card-modal]').forEach(function (el) {
+                            el.addEventListener('click', closeChildSubCardModal);
+                        });
+                        document.addEventListener('keydown', function (ev) {
+                            if (ev.key === 'Escape' && !cardModal.hidden) {
+                                closeChildSubCardModal();
+                            }
+                        });
+                    }
 
                     function buildChildDonateLoginUrl(amount) {
                         var path = 'children_donate.php?id=' + childId;
@@ -713,6 +1185,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             periodLabel.textContent = btn.getAttribute('data-period-text') || '';
                         }
                         satang = parseInt(btn.getAttribute('data-satang') || '70000', 10);
+                        syncModalAmountLabel();
                     }
 
                     function syncYearly() {
@@ -720,6 +1193,7 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                         amountLabel.textContent = '8400';
                         if (periodLabel) periodLabel.textContent = 'รายปี';
                         satang = 840000;
+                        syncModalAmountLabel();
                     }
 
                     function syncSubscriptionLockedUi(mode) {
@@ -780,96 +1254,193 @@ foreach (['.png', '.jpg', '.jpeg', '.webp'] as $ext) {
                             var n = parseInt(dailyInput.value, 10);
                             if (isNaN(n) || n < 20) {
                                 e.preventDefault();
-                                alert('กรุณาระบุจำนวนเงินอย่างน้อย 20 บาท');
+                                drawdreamAlert('กรุณาระบุจำนวนเงินอย่างน้อย 20 บาท');
                                 dailyInput.focus();
                                 return;
                             }
                         });
                     }
 
-                    applyMode(planSponsorLocked ? 'daily' : 'monthly');
+                    applyMode(preferDailyDonateTab ? 'daily' : 'monthly');
 
                     var form = document.getElementById('childSubForm');
                     var tok = document.getElementById('omiseTokenField');
                     var cardBtn = document.getElementById('btnChildSubscribe');
                     var childIdForSlot = <?php echo (int)$child['child_id']; ?>;
+                    var slotCheckOk = <?php echo ($canStartChildSub && !$childRecurringLockedForViewer) ? 'true' : 'null'; ?>;
 
-                    function openChildSubscribeCard() {
-                        OmiseCard.open({
-                            amount: satang,
-                            currency: 'THB',
-                            defaultPaymentMethod: 'credit_card',
-                            onCreateTokenSuccess: function (nonce) {
-                                if (typeof nonce === 'string' && nonce.indexOf('tokn_') === 0) {
-                                    tok.value = nonce;
-                                    form.submit();
-                                } else {
-                                    alert('โทเค็นไม่ถูกต้อง กรุณาลองใหม่');
-                                }
-                            }
-                        });
+                    function applySlotCheckToPayButton() {
+                        if (!cardModalPay) {
+                            return;
+                        }
+                        cardModalPay.disabled = slotCheckOk !== true;
                     }
 
-                    function checkChildSponsorSlotThenPay() {
+                    function fetchChildSponsorSlotStatus() {
                         var url = 'payment/child_sponsorship_slot_check.php?child_id='
                             + encodeURIComponent(String(childIdForSlot));
                         return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
                             .then(function (res) { return res.json(); })
                             .then(function (data) {
-                                if (data && data.can_subscribe) {
-                                    return true;
-                                }
-                                var msg = (data && data.message)
-                                    ? data.message
-                                    : 'ไม่สามารถสมัครอุปการะได้ในขณะนี้';
-                                alert(msg);
-                                if (data && (data.reason === 'taken' || data.reason === 'reserving')) {
-                                    window.location.reload();
-                                }
-                                return false;
+                                slotCheckOk = !!(data && data.can_subscribe);
+                                return { ok: slotCheckOk, data: data };
                             })
                             .catch(function () {
-                                alert('ตรวจสอบสิทธิ์อุปการะไม่สำเร็จ กรุณาลองใหม่');
-                                return false;
+                                slotCheckOk = false;
+                                return { ok: false, data: null };
                             });
                     }
 
-                    if (isLoggedIn && cardBtn && form && tok && typeof OmiseCard !== 'undefined') {
+                    function handleSlotUnavailable(data) {
+                        var msg = (data && data.message)
+                            ? data.message
+                            : 'ไม่สามารถสมัครอุปการะได้ในขณะนี้';
+                        drawdreamAlert(msg);
+                        if (data && (data.reason === 'taken' || data.reason === 'reserving')) {
+                            window.location.reload();
+                        }
+                    }
+
+                    function refreshChildSponsorSlotUi() {
+                        fetchChildSponsorSlotStatus().then(function (result) {
+                            if (!result.ok
+                                && result.data
+                                && result.data.reason !== 'already_active'
+                                && (result.data.reason === 'taken' || result.data.reason === 'reserving')) {
+                                if (sectionCard && !sectionCard.hasAttribute('hidden')) {
+                                    applyMode('daily');
+                                    if (typeof drawdreamAlert === 'function') {
+                                        drawdreamAlert(result.data.message || 'มีผู้อุปการะสมัครไปก่อนแล้ว', 'warning');
+                                    }
+                                }
+                            }
+                            if (cardModal && !cardModal.hidden) {
+                                applySlotCheckToPayButton();
+                                if (!result.ok) {
+                                    closeChildSubCardModal();
+                                    handleSlotUnavailable(result.data);
+                                }
+                            }
+                        });
+                    }
+
+                    function digitsOnly(val) {
+                        return String(val || '').replace(/\D/g, '');
+                    }
+
+                    function parseCardExpiry(raw) {
+                        var result = validateCardExpiry(raw);
+                        return result.ok ? result.exp : null;
+                    }
+
+                    function submitChildSubscriptionCard() {
+                        if (slotCheckOk !== true) {
+                            drawdreamAlert('กำลังตรวจสอบสิทธิ์อุปการะ กรุณารอสักครู่แล้วลองอีกครั้ง');
+                            return;
+                        }
+                        var nameEl = document.getElementById('childSubCardName');
+                        var numEl = document.getElementById('childSubCardNumber');
+                        var expEl = document.getElementById('childSubCardExp');
+                        var cvvEl = document.getElementById('childSubCardCvv');
+                        var name = nameEl ? nameEl.value.trim() : '';
+                        var number = digitsOnly(numEl ? numEl.value : '');
+                        var expiryCheck = validateCardExpiry(expEl ? expEl.value : '');
+                        var exp = expiryCheck.ok ? expiryCheck.exp : null;
+                        var cvv = digitsOnly(cvvEl ? cvvEl.value : '');
+
+                        if (!name) {
+                            drawdreamAlert('กรุณากรอกชื่อบนบัตร');
+                            if (nameEl) nameEl.focus();
+                            return;
+                        }
+                        if (number.length < 13) {
+                            drawdreamAlert('กรุณากรอกเลขบัตรให้ครบ');
+                            if (numEl) numEl.focus();
+                            return;
+                        }
+                        if (!expiryCheck.ok) {
+                            drawdreamAlert(expiryCheck.message);
+                            if (expEl) expEl.focus();
+                            return;
+                        }
+                        if (cvv.length < 3) {
+                            drawdreamAlert('กรุณากรอกรหัส CVV');
+                            if (cvvEl) cvvEl.focus();
+                            return;
+                        }
+                        if (typeof Omise === 'undefined' || typeof Omise.createToken !== 'function') {
+                            ensureOmiseReady(function () {
+                                submitChildSubscriptionCard();
+                            });
+                            return;
+                        }
+                        if (childSubPaySubmitting) {
+                            return;
+                        }
+
+                        cardBtn.disabled = true;
+                        if (cardModalPay) {
+                            cardModalPay.disabled = true;
+                        }
+                        showChildSubPayLoading('กำลังยืนยันบัตร', 'กรุณารอสักครู่…');
+                        Omise.createToken('card', {
+                            name: name,
+                            number: number,
+                            expiration_month: exp.month,
+                            expiration_year: exp.year,
+                            security_code: cvv
+                        }, function (statusCode, response) {
+                            if (statusCode === 200 && response && response.id) {
+                                tok.value = response.id;
+                                submitChildSubscriptionForm(response.id);
+                                return;
+                            }
+                            resetChildSubPayUi();
+                            var msg = (response && response.message)
+                                ? response.message
+                                : 'ไม่สามารถยืนยันบัตรได้ กรุณาตรวจสอบข้อมูลอีกครั้ง';
+                            drawdreamAlert(msg);
+                        });
+                    }
+
+                    if (isLoggedIn && cardBtn && form && tok) {
                         cardBtn.addEventListener('click', function (e) {
                             e.preventDefault();
                             if (planSponsorLocked) {
                                 return;
                             }
-                            checkChildSponsorSlotThenPay().then(function (ok) {
-                                if (ok) {
-                                    openChildSubscribeCard();
-                                }
-                            });
+                            openChildSubCardModal();
+                            if (slotCheckOk !== true) {
+                                fetchChildSponsorSlotStatus().then(function (result) {
+                                    applySlotCheckToPayButton();
+                                    if (!result.ok) {
+                                        closeChildSubCardModal();
+                                        handleSlotUnavailable(result.data);
+                                    }
+                                });
+                            }
                         });
                     }
 
-                    if (isLoggedIn && !planSponsorLocked && childIdForSlot > 0) {
+                    if (isLoggedIn && cardModalPay) {
+                        cardModalPay.addEventListener('click', function () {
+                            submitChildSubscriptionCard();
+                        });
+                    }
+
+                    if (isLoggedIn && !planSponsorLocked && !viewerHasActiveChildSub && childIdForSlot > 0) {
+                        fetchChildSponsorSlotStatus();
                         window.setInterval(function () {
                             if (document.hidden) {
                                 return;
                             }
-                            fetch('payment/child_sponsorship_slot_check.php?child_id='
-                                + encodeURIComponent(String(childIdForSlot)),
-                                { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-                                .then(function (res) { return res.json(); })
-                                .then(function (data) {
-                                    if (data && !data.can_subscribe
-                                        && (data.reason === 'taken' || data.reason === 'reserving')) {
-                                        if (sectionCard && !sectionCard.hasAttribute('hidden')) {
-                                            applyMode('daily');
-                                            if (typeof alert === 'function') {
-                                                alert(data.message || 'มีผู้อุปการะสมัครไปก่อนแล้ว');
-                                            }
-                                        }
-                                    }
-                                })
-                                .catch(function () { /* ignore poll errors */ });
-                        }, 15000);
+                            var cardOpen = cardModal && !cardModal.hidden;
+                            var monthlyOpen = sectionCard && !sectionCard.hasAttribute('hidden');
+                            if (!cardOpen && !monthlyOpen) {
+                                return;
+                            }
+                            refreshChildSponsorSlotUi();
+                        }, 20000);
                     }
                 })();
                 </script>
@@ -1008,7 +1579,6 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php endif; ?>
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
 (function () {
     var forms = document.querySelectorAll('.js-confirm-cancel-sub');

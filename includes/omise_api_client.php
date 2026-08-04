@@ -43,7 +43,8 @@ function drawdream_omise_curl_apply_omise_defaults($ch): void
         CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
         CURLOPT_SSL_VERIFYPEER => true,
         CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_TIMEOUT => 90,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 20,
     ];
     $ca = drawdream_omise_curl_ca_bundle_path();
     if ($ca !== null) {
@@ -58,27 +59,31 @@ function drawdream_omise_curl_apply_omise_defaults($ch): void
  */
 function drawdream_omise_post_form(string $path, array $fields): array
 {
+    static $curlHandle = null;
     $path = '/' . ltrim($path, '/');
     $url = rtrim(OMISE_API_URL, '/') . $path;
-    $ch = curl_init($url);
-    drawdream_omise_curl_apply_omise_defaults($ch);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => http_build_query($fields),
-    ]);
-    $maxAttempts = 3;
+    if ($curlHandle === null) {
+        $curlHandle = curl_init();
+        drawdream_omise_curl_apply_omise_defaults($curlHandle);
+        curl_setopt($curlHandle, CURLOPT_TCP_KEEPALIVE, 1);
+    }
+    curl_setopt($curlHandle, CURLOPT_URL, $url);
+    curl_setopt($curlHandle, CURLOPT_POST, true);
+    curl_setopt($curlHandle, CURLOPT_POSTFIELDS, http_build_query($fields));
+    curl_setopt($curlHandle, CURLOPT_HTTPGET, false);
+    $maxAttempts = 2;
     $response = false;
     $curlErr = '';
     $httpCode = 0;
     for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
-        $response = curl_exec($ch);
-        $curlErr = curl_error($ch);
-        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $response = curl_exec($curlHandle);
+        $curlErr = curl_error($curlHandle);
+        $httpCode = (int)curl_getinfo($curlHandle, CURLINFO_HTTP_CODE);
         $shouldRetry = ($response === false || $response === '') || $httpCode >= 500 || $httpCode === 429;
         if (!$shouldRetry || $attempt === $maxAttempts) {
             break;
         }
-        usleep((int)(200000 * $attempt));
+        usleep(100000);
     }
     if ($response === false || $response === '') {
         $msg = $curlErr !== '' ? $curlErr : ('เชื่อมต่อ Omise ไม่ได้ (HTTP ' . $httpCode . ')');
@@ -131,9 +136,36 @@ function drawdream_omise_map_error_message(string $raw, int $httpCode = 0): stri
  * @param array<string, string> $metadata
  * @return array<string, mixed>
  */
+/**
+ * หักบัตรด้วย token ครั้งเดียว (ไม่ต้องสร้าง customer ก่อน — ลด 1 รอบ Omise สำหรับผู้บริจาคใหม่)
+ *
+ * @param array<string, string> $metadata
+ * @return array<string, mixed>
+ */
+function drawdream_omise_create_token_charge(
+    string $token,
+    int $amountSatang,
+    string $description,
+    array $metadata
+): array {
+    $fields = [
+        'amount' => (string)$amountSatang,
+        'currency' => 'thb',
+        'card' => $token,
+        'description' => $description,
+        'capture' => 'true',
+    ];
+    foreach ($metadata as $mk => $mv) {
+        $fields['metadata[' . $mk . ']'] = (string)$mv;
+    }
+
+    return drawdream_omise_post_form('/charges', $fields);
+}
+
+/** cardRef = card_xxx หรือ tokn_xxx (Omise รองรับทั้งสองแบบบน charge) */
 function drawdream_omise_create_card_charge(
     string $customerId,
-    string $cardId,
+    string $cardRef,
     int $amountSatang,
     string $description,
     array $metadata
@@ -142,7 +174,7 @@ function drawdream_omise_create_card_charge(
         'amount' => (string)$amountSatang,
         'currency' => 'thb',
         'customer' => $customerId,
-        'card' => $cardId,
+        'card' => $cardRef,
         'description' => $description,
         'capture' => 'true',
     ];
@@ -150,4 +182,18 @@ function drawdream_omise_create_card_charge(
         $fields['metadata[' . $mk . ']'] = (string)$mv;
     }
     return drawdream_omise_post_form('/charges', $fields);
+}
+
+/** @param array<string, mixed> $charge */
+function drawdream_omise_charge_card_id(array $charge): string
+{
+    $card = $charge['card'] ?? null;
+    if (is_array($card)) {
+        return trim((string)($card['id'] ?? ''));
+    }
+    if (is_string($card) && str_starts_with($card, 'card_')) {
+        return trim($card);
+    }
+
+    return '';
 }

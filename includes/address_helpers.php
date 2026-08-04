@@ -93,6 +93,12 @@ function drawdream_build_address_line_from_post(array $post): string
 
 function drawdream_merge_foundation_address_from_post(array $post): string
 {
+    $line = drawdream_build_address_line_from_post($post);
+    $hiddenGeo = trim((string)($post['addr_full_hidden'] ?? ''));
+    if ($hiddenGeo !== '' && preg_match('/ต\./u', $hiddenGeo)) {
+        return $line !== '' ? $line . ' ' . $hiddenGeo : $hiddenGeo;
+    }
+
     $p = trim((string)($post['addr_province'] ?? ''));
     $a = trim((string)($post['addr_amphoe'] ?? ''));
     $tRaw = trim((string)($post['addr_tambon'] ?? ''));
@@ -115,7 +121,21 @@ function drawdream_merge_foundation_address_from_post(array $post): string
     }
 
     $geo = 'ต.' . $t . ' อ.' . $a . ' จ.' . $p . ' ' . $z;
-    $line = drawdream_build_address_line_from_post($post);
 
     return $line !== '' ? $line . ' ' . $geo : $geo;
+}
+
+/** คืนเฉพาะตัวเลขจากเบอร์โทร */
+function drawdream_normalize_phone_digits(string $raw): string
+{
+    return preg_replace('/\D/', '', trim($raw));
+}
+
+/** เบอร์โทรไทย 9–10 หลัก (มือถือหรือสำนักงาน) ขึ้นต้นด้วย 0 */
+function drawdream_thai_phone_digits_ok(string $raw): bool
+{
+    $digits = drawdream_normalize_phone_digits($raw);
+    $len = strlen($digits);
+
+    return $len >= 9 && $len <= 10 && ctype_digit($digits) && str_starts_with($digits, '0');
 }

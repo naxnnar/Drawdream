@@ -150,6 +150,9 @@ function drawdream_notifications_unread_count(mysqli $conn, int $userId): int
  */
 function drawdream_notifications_migrate_legacy_on_boot(mysqli $conn): void
 {
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
     drawdream_ensure_notifications_table($conn);
     $legacyTitles = [
         'ส่งรายการสิ่งของแล้ว',
@@ -382,6 +385,9 @@ function drawdream_foundation_child_profile_reject_reasons_for_children_batch(my
 
 function drawdream_ensure_admin_notif_columns(mysqli $conn): void
 {
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
     $c = @$conn->query("SHOW COLUMNS FROM `admin` WHERE Field = 'notif_recipient_user_id'");
     if ($c && $c->num_rows === 0) {
         @$conn->query("ALTER TABLE `admin` ADD COLUMN notif_recipient_user_id INT UNSIGNED NULL DEFAULT NULL AFTER remark");
@@ -439,6 +445,113 @@ function drawdream_normalize_child_donate_notification_link(string $link, string
     }
 
     return $path;
+}
+
+/** แจ้งเตือนชำระค่าบริการโครงการ — ลิงก์ไปหน้ารายละเอียด (ไม่ใช่ post_update) */
+function drawdream_normalize_project_service_charge_notification_link(string $link, string $title): string
+{
+    $raw = trim($link);
+    if ($raw === '') {
+        return $raw;
+    }
+    $isProjectScNotif = str_contains($title, 'ได้รับเงินครบ')
+        || str_contains($title, 'ปิดรับบริจาค');
+    if (!$isProjectScNotif) {
+        return $raw;
+    }
+    if (preg_match('~^https?://[^/]+/(.+)$~i', $raw, $hostMatch)) {
+        $raw = $hostMatch[1];
+    }
+    if (preg_match('~foundation_post_update\.php\?project_id=(\d+)~i', $raw, $m)) {
+        return drawdream_project_service_charge_view_link((int)$m[1]);
+    }
+    if (preg_match('~foundation_project_view\.php\?(?:.*&)?id=(\d+)~i', $raw)) {
+        return ltrim($raw, '/');
+    }
+
+    return trim($link);
+}
+
+function drawdream_is_foundation_child_letter_update_notification(string $title): bool
+{
+    return in_array(trim($title), ['อัปเดตจดหมายเด็ก', 'อัปเดตผลลัพธ์เด็ก'], true);
+}
+
+/** แจ้งเตือนมูลนิธิ — ลิงก์ไปหน้าอัปเดตจดหมายเด็ก */
+function drawdream_normalize_foundation_child_outcome_notification_link(string $link, string $title): string
+{
+    $raw = trim($link);
+    if ($raw === '' || !drawdream_is_foundation_child_letter_update_notification($title)) {
+        return $raw;
+    }
+    if (preg_match('~^https?://[^/]+/(.+)$~i', $raw, $hostMatch)) {
+        $raw = $hostMatch[1];
+    }
+    if (preg_match('~foundation_child_outcome\.php\?(?:.*&)?id=\d+~i', $raw)) {
+        return ltrim($raw, '/');
+    }
+    if (preg_match('~^/?children_\.php~i', $raw)) {
+        return 'children_.php';
+    }
+
+    return trim($link);
+}
+
+function drawdream_is_needlist_goal_met_notification(string $title): bool
+{
+    return str_contains(trim($title), 'รายการสิ่งของได้รับเงินครบเป้าหมาย');
+}
+
+/** แจ้งเตือนครบยอดสิ่งของ — ลิงก์ไปหน้ารายละเอียด (กดปุ่มชำระค่าบริการจากหน้านั้น) */
+function drawdream_normalize_needlist_service_charge_notification_link(
+    string $link,
+    string $title,
+    ?mysqli $conn = null,
+    int $foundationUserId = 0
+): string {
+    $raw = trim($link);
+    if ($raw === '' || !drawdream_is_needlist_goal_met_notification($title)) {
+        return $raw;
+    }
+    if (!function_exists('drawdream_needlist_service_charge_view_link')) {
+        require_once __DIR__ . '/drawdream_needlist_schema.php';
+    }
+    if (preg_match('~foundation_need_view\.php\?(?:.*&)?id=(\d+)~i', $raw, $m)) {
+        return drawdream_needlist_service_charge_view_link((int)$m[1]);
+    }
+    if (preg_match('~needlist_service_charge\.php\?(?:.*&)?item_id=(\d+)~i', $raw, $m)) {
+        return drawdream_needlist_service_charge_view_link((int)$m[1]);
+    }
+    if ($conn !== null && $foundationUserId > 0) {
+        $st = $conn->prepare('SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $foundationUserId);
+            $st->execute();
+            $foundationId = (int)($st->get_result()->fetch_assoc()['foundation_id'] ?? 0);
+            $itemId = drawdream_needlist_first_unpaid_service_charge_item_id($conn, $foundationId);
+            if ($itemId > 0) {
+                return drawdream_needlist_service_charge_view_link($itemId);
+            }
+        }
+    }
+
+    return $raw;
+}
+
+function drawdream_normalize_notification_link(
+    string $link,
+    string $title,
+    ?mysqli $conn = null,
+    int $userId = 0
+): string {
+    $normalized = drawdream_normalize_child_donate_notification_link($link, $title);
+    if (!function_exists('drawdream_project_service_charge_view_link')) {
+        require_once __DIR__ . '/drawdream_project_service_charge.php';
+    }
+    $normalized = drawdream_normalize_project_service_charge_notification_link($normalized, $title);
+    $normalized = drawdream_normalize_needlist_service_charge_notification_link($normalized, $title, $conn, $userId);
+
+    return drawdream_normalize_foundation_child_outcome_notification_link($normalized, $title);
 }
 
 /**

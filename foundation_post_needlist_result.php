@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // foundation_post_needlist_result.php — มูลนิธิโพสต์ผลลัพธ์การระดมสิ่งของ (หลังครบเป้าหมาย)
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน post needlist result
@@ -61,7 +61,7 @@ $success = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $resultReady) {
-    drawdream_csrf_require_valid('foundation_post_needlist_result.php?item_id=' . (int)$itemId);
+    drawdream_csrf_require_valid('foundation_post_needlist_result.php?fid=' . $fid);
     $description = trim((string)($_POST['outcome_text'] ?? ''));
     $newImageNames = [];
     $uploadDir = __DIR__ . '/uploads/evidence';
@@ -188,12 +188,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $error) {
     <title>ผลลัพธ์สิ่งของมูลนิธิ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/foundation.css">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=1">
 </head>
-<body class="foundation-post-update-page">
+<body class="foundation-post-update-page foundation-manage-page">
 <?php include 'navbar.php'; ?>
 
 <div class="wrap">
-    <a href="foundation.php" class="back-link" aria-label="ย้อนกลับ" title="ย้อนกลับ">←</a>
+    <a href="foundation.php" class="back-link" aria-label="ย้อนกลับ" title="ย้อนกลับ" data-foundation-back>←</a>
     <div class="page-title">ผลลัพธ์การระดมสิ่งของมูลนิธิ</div>
 
     <?php if ($success): ?>

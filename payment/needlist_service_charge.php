@@ -7,7 +7,6 @@ include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_needlist_schema.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/omise_helpers.php';
-drawdream_ensure_needlist_schema($conn);
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
     header('Location: ../foundation.php');

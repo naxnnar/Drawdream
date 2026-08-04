@@ -1,15 +1,13 @@
 <?php
 // payment/child_donate.php — รับ POST สร้าง Omise charge แล้วไป scan_qr.php (PromptPay จริงจาก Omise test/live)
 // สรุปสั้น: รับจำนวนเงินบริจาคเด็ก สร้าง charge และบันทึกรายการ pending ก่อนพาไปหน้า QR
-include '../db.php';
+require_once dirname(__DIR__) . '/includes/payment_bootstrap.php';
 include 'config.php';
 drawdream_payment_require_omise_keys();
 require_once __DIR__ . '/omise_helpers.php';
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
-require_once dirname(__DIR__) . '/includes/pending_child_donation.php';
 require_once dirname(__DIR__) . '/includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/return_to.php';
-drawdream_child_sponsorship_ensure_columns($conn);
 
 if (!isset($_SESSION['user_id'])) {
     $msg = 'กรุณาเข้าสู่ระบบก่อนจึงจะบริจาคได้';
@@ -166,29 +164,11 @@ if (!isset($charge_response['id'])) {
 
 $charge_id = $charge_response['id'];
 $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($charge_response);
-if ($qr_image === '' && strpos((string) $charge_id, 'chrg_mock_') !== 0) {
-    $again = drawdream_omise_fetch_charge((string) $charge_id);
-    if ($again) {
-        $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($again);
-    }
-}
-
-$pendingDonateId = drawdream_insert_pending_child_donation(
-    $conn,
-    $child_id,
-    (int)$_SESSION['user_id'],
-    (float)$amount,
-    $charge_id
-);
-if ($pendingDonateId <= 0) {
-    $redirectBack('ไม่สามารถบันทึกรายการชำระเงินได้ กรุณาลองใหม่');
-}
 
 $_SESSION['pending_charge_id'] = $charge_id;
 $_SESSION['pending_amount'] = $amount;
 $_SESSION['pending_child_id'] = $child_id;
 $_SESSION['pending_child_name'] = $child['child_name'];
-$_SESSION['pending_donate_id'] = $pendingDonateId;
 $_SESSION['qr_image'] = $qr_image;
 
 header('Location: scan_qr.php?type=child&charge_id=' . rawurlencode($charge_id) . '&child_id=' . $child_id);

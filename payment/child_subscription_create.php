@@ -1,9 +1,9 @@
 <?php
-// payment/child_subscription_create.php — Omise Token→Customer→Charge Schedule (อุปการะเด็กรายรอบ)
-// สรุปสั้น: สร้างแผนอุปการะเด็กรายรอบผ่าน Omise และบันทึกข้อมูลแผนลงระบบ
+// payment/child_subscription_create.php — Omise Token→Customer→Charge รอบแรก (อุปการะเด็กรายรอบ)
+// สรุปสั้น: หักรอบแรกทันที + บันทึกแผน local_cron (รอบถัดไปผ่าน cron)
 declare(strict_types=1);
 
-require_once dirname(__DIR__) . '/db.php';
+require_once dirname(__DIR__) . '/includes/payment_bootstrap.php';
 require_once __DIR__ . '/config.php';
 require_once dirname(__DIR__) . '/includes/omise_api_client.php';
 require_once dirname(__DIR__) . '/includes/omise_user_messages.php';
@@ -30,6 +30,10 @@ function child_subscription_finalize_charge_for_test(array $charge): array
     if (child_subscription_charge_is_paid($charge)) {
         return $charge;
     }
+    $sourceType = strtolower(trim((string)($charge['source']['type'] ?? '')));
+    if ($sourceType === 'card') {
+        return $charge;
+    }
     if (!drawdream_omise_test_auto_mark_paid_enabled()) {
         return $charge;
     }
@@ -43,89 +47,140 @@ function child_subscription_finalize_charge_for_test(array $charge): array
 }
 
 /**
- * Omise ต้องการ on[days_of_month][]=N ไม่ใช่ on[days_of_month][0]=N
+ * หักรอบแรกด้วยบัตร — ถ้า customer ใน DB หมดอายุบน Omise จะสร้างใหม่แล้วลองอีกครั้ง
  *
- * @param array<string, string|int|float> $chargeFlat แบบ charge[customer], charge[amount], charge[metadata][k]
+ * @param array<string, string> $metaCharge
+ * @param callable(string): void $subAbort
+ * @param callable(string): array{ok: bool, msg: string, cust: string, card: string} $createCustomerWithCard
+ * @return array{charge: array<string, mixed>, card_id: string}
  */
-function drawdream_omise_build_schedule_body(
-    int $every,
-    string $period,
-    string $startDate,
-    string $endDate,
-    int $billDay,
-    array $chargeFlat
-): string {
-    $pairs = [
-        'every=' . (int)$every,
-        'period=' . rawurlencode($period),
-        'start_date=' . rawurlencode($startDate),
-        'end_date=' . rawurlencode($endDate),
-        'on[days_of_month][]=' . (int)$billDay,
-    ];
-    foreach ($chargeFlat as $k => $v) {
-        $pairs[] = rawurlencode($k) . '=' . rawurlencode((string)$v);
+function child_subscription_run_first_paid_charge(
+    mysqli $conn,
+    int $donorUid,
+    string &$custId,
+    string $token,
+    string $cardId,
+    int $amountSatang,
+    string $desc,
+    array $metaCharge,
+    callable $subAbort,
+    callable $createCustomerWithCard
+): array {
+    unset($conn, $donorUid, $custId, $cardId, $createCustomerWithCard);
+    $fcharge = drawdream_omise_create_token_charge($token, $amountSatang, $desc, $metaCharge);
+    if (($fcharge['object'] ?? '') === 'error') {
+        $m = drawdream_omise_error_message_for_user($fcharge, 'หักเงินรอบแรกไม่สำเร็จ');
+        $subAbort($m);
     }
-    return implode('&', $pairs);
+    $fcharge = child_subscription_finalize_charge_for_test($fcharge);
+    $cardId = drawdream_omise_charge_card_id($fcharge);
+
+    return ['charge' => $fcharge, 'card_id' => $cardId];
 }
 
-/** @param array<string, mixed> $charge */
-function drawdream_omise_post_schedule(
-    int $every,
-    string $period,
-    string $startDate,
-    string $endDate,
-    int $billDay,
-    array $charge
-): ?array {
-    $flat = [
-        'charge[customer]' => (string)($charge['customer'] ?? ''),
-        'charge[amount]' => (string)(int)($charge['amount'] ?? 0),
-        'charge[currency]' => strtolower((string)($charge['currency'] ?? 'thb')),
-        'charge[description]' => (string)($charge['description'] ?? ''),
-    ];
-    $cardRef = trim((string)($charge['card'] ?? ''));
-    if ($cardRef !== '') {
-        $flat['charge[card]'] = $cardRef;
-    }
-    $meta = $charge['metadata'] ?? [];
-    if (is_array($meta)) {
-        foreach ($meta as $mk => $mv) {
-            $flat['charge[metadata][' . $mk . ']'] = (string)$mv;
-        }
-    }
-    $body = drawdream_omise_build_schedule_body($every, $period, $startDate, $endDate, $billDay, $flat);
-    $url = rtrim(OMISE_API_URL, '/') . '/schedules';
-    $ch = curl_init($url);
-    drawdream_omise_curl_apply_omise_defaults($ch);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $body,
-    ]);
-    $response = curl_exec($ch);
-    $curlErr = curl_error($ch);
-    $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    if ($response === false || $response === '') {
-        $m = $curlErr !== '' ? $curlErr : ('เชื่อมต่อ Omise ไม่ได้ (HTTP ' . $httpCode . ')');
-        return ['object' => 'error', 'code' => 'curl', 'message' => $m];
-    }
-    $decoded = json_decode($response, true);
-    if (!is_array($decoded)) {
-        return [
-            'object' => 'error',
-            'code' => 'invalid_json',
-            'message' => 'คำตอบ Omise ไม่ใช่ JSON: ' . substr((string)$response, 0, 160),
-        ];
-    }
-    return $decoded;
-}
 require_once dirname(__DIR__) . '/includes/child_sponsorship.php';
 require_once dirname(__DIR__) . '/includes/child_omise_subscription.php';
 require_once __DIR__ . '/../includes/return_to.php';
 
-function child_subscription_redirect(string $msg, bool $ok, int $childId): void
+function child_subscription_public_redirect(string $relativeFromPayment): string
 {
-    $q = 'id=' . $childId . '&sub_msg=' . rawurlencode($msg) . '&sub_ok=' . ($ok ? '1' : '0');
-    header('Location: ../children_donate.php?' . $q);
+    $path = ltrim($relativeFromPayment, '/');
+    if (str_starts_with($path, '../')) {
+        $path = ltrim(substr($path, 3), '/');
+    }
+
+    return $path;
+}
+
+function child_subscription_redirect(string $msg, bool $ok, int $childId, int $donateId = 0): void
+{
+    global $conn;
+    $wantJson = ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+        && !empty($_POST['ajax']);
+
+    $respondJson = static function (bool $jsonOk, string $redirect, string $message, int $donateIdOut = 0) use ($wantJson): void {
+        if (!$wantJson) {
+            return;
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        $payload = [
+            'ok' => $jsonOk,
+            'status' => $jsonOk ? 'success' : 'error',
+            'redirect' => $redirect,
+            'message' => $message,
+        ];
+        if ($donateIdOut > 0) {
+            $payload['donate_id'] = $donateIdOut;
+        }
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        } else {
+            @flush();
+        }
+        exit;
+    };
+
+    $deferPostSuccess = static function (int $donateIdForReceipt, int $childIdForSync) use ($conn, $wantJson): void {
+        $run = static function () use ($conn, $donateIdForReceipt, $childIdForSync): void {
+            if ($donateIdForReceipt > 0) {
+                drawdream_send_e_receipt_notification_deferred($conn, $donateIdForReceipt);
+            }
+            if ($childIdForSync > 0 && function_exists('drawdream_child_sync_sponsorship_status')) {
+                try {
+                    drawdream_child_sync_sponsorship_status($conn, $childIdForSync, false);
+                } catch (Throwable $e) {
+                    error_log('[child_subscription_post_redirect] ' . $e->getMessage());
+                }
+            }
+            if ($childIdForSync > 0 && function_exists('drawdream_child_subscription_history_cleanup_stale_reservations')) {
+                drawdream_child_subscription_history_cleanup_stale_reservations($conn, $childIdForSync);
+            }
+        };
+        if ($wantJson) {
+            register_shutdown_function($run);
+            return;
+        }
+        $run();
+    };
+
+    if ($ok && $donateId > 0) {
+        $successTitle = 'อุปการะสำเร็จ';
+        $q = drawdream_payment_success_receipt_query(
+            $donateId,
+            $successTitle,
+            '../children_donate.php?id=' . $childId,
+            ''
+        );
+        if ($q !== '' && ($wantJson || drawdream_donation_eligible_for_e_receipt($conn, $donateId))) {
+            $target = '../' . $q;
+            $deferPostSuccess($donateId, $childId);
+            $respondJson(true, child_subscription_public_redirect($target), $msg, $donateId);
+            drawdream_payment_flush_redirect($target);
+            exit;
+        }
+        $fallback = '../children_donate.php?id=' . $childId . '&sub_msg=' . rawurlencode($msg) . '&sub_ok=1';
+        $deferPostSuccess($donateId, $childId);
+        $respondJson(true, child_subscription_public_redirect($fallback), $msg, $donateId);
+        drawdream_payment_flush_redirect($fallback);
+        exit;
+    }
+    if ($ok) {
+        $target = '../children_donate.php?id=' . $childId . '&sub_msg=' . rawurlencode($msg) . '&sub_ok=1';
+        $deferPostSuccess(0, $childId);
+        $respondJson(true, child_subscription_public_redirect($target), $msg);
+        drawdream_payment_flush_redirect($target);
+        exit;
+    }
+    $failTarget = '../children_donate.php?id=' . $childId . '&sub_msg=' . rawurlencode($msg) . '&sub_ok=0';
+    $respondJson(false, child_subscription_public_redirect($failTarget), $msg);
+    header('Location: ' . $failTarget);
     exit;
 }
 
@@ -163,51 +218,37 @@ if ($planSpec === null) {
     child_subscription_redirect('แพ็กเกอุปการะไม่ถูกต้อง', false, $childId);
 }
 
-drawdream_child_sponsorship_ensure_columns($conn);
-drawdream_child_omise_subscription_ensure_schema($conn);
+$categoryId = drawdream_get_or_create_child_donate_category_id($conn);
 
 $stmt = $conn->prepare(
-    'SELECT c.*, COALESCE(NULLIF(c.foundation_name, \'\'), fp.foundation_name) AS display_foundation_name
+    'SELECT c.child_id, c.child_name, c.approve_profile,
+            d.omise_customer_id, u.email
      FROM foundation_children c
-     LEFT JOIN foundation_profile fp ON c.foundation_id = fp.foundation_id
-     WHERE c.child_id = ? LIMIT 1'
+     CROSS JOIN donor d
+     JOIN `user` u ON u.user_id = d.user_id
+     WHERE c.child_id = ? AND d.user_id = ?
+     LIMIT 1'
 );
-$stmt->bind_param('i', $childId);
+$stmt->bind_param('ii', $childId, $donorUid);
 $stmt->execute();
-$child = $stmt->get_result()->fetch_assoc();
-if (!$child) {
-    child_subscription_redirect('ไม่พบข้อมูลเด็ก', false, $childId);
+$row = $stmt->get_result()->fetch_assoc();
+if (!$row) {
+    child_subscription_redirect('ไม่พบข้อมูลเด็กหรือผู้บริจาค', false, $childId);
 }
+$child = $row;
+$dnRow = $row;
+$email = trim((string)($dnRow['email'] ?? 'donor-' . $donorUid . '@drawdream.local'));
 
-$stMail = $conn->prepare('SELECT email FROM `user` WHERE user_id = ? LIMIT 1');
-$stMail->bind_param('i', $donorUid);
-$stMail->execute();
-$ur = $stMail->get_result()->fetch_assoc();
-$email = trim((string)($ur['email'] ?? 'donor-' . $donorUid . '@drawdream.local'));
-
-$stDn = $conn->prepare('SELECT donor_id, omise_customer_id FROM donor WHERE user_id = ? LIMIT 1');
-$stDn->bind_param('i', $donorUid);
-$stDn->execute();
-$dnRow = $stDn->get_result()->fetch_assoc();
-if (!$dnRow) {
-    child_subscription_redirect('ไม่พบโปรไฟล์ผู้บริจาค', false, $childId);
-}
-
-$slotReserved = false;
-$reserve = drawdream_child_subscription_reserve_slot($conn, $childId, $donorUid, $planSpec['plan_code']);
-if (!($reserve['ok'] ?? false)) {
+$preflight = drawdream_child_subscription_preflight_payment($conn, $childId, $donorUid, $child);
+if (!($preflight['ok'] ?? false)) {
     child_subscription_redirect(
-        (string)($reserve['message'] ?? 'ไม่สามารถจองสิทธิ์อุปการะได้'),
+        (string)($preflight['message'] ?? 'ไม่สามารถสมัครอุปการะได้'),
         false,
         $childId
     );
 }
-$slotReserved = true;
-$subAbort = static function (string $msg) use ($conn, $childId, $donorUid, &$slotReserved): void {
-    if ($slotReserved) {
-        drawdream_child_subscription_release_slot($conn, $childId, $donorUid, $msg);
-        $slotReserved = false;
-    }
+
+$subAbort = static function (string $msg) use ($childId): void {
     child_subscription_redirect($msg, false, $childId);
 };
 
@@ -239,241 +280,127 @@ $create_omise_customer_with_card = function (string $tok) use ($email, $donorUid
     return ['ok' => true, 'msg' => '', 'cust' => $cid, 'card' => $cr];
 };
 
-if ($custId === '') {
-    $r = $create_omise_customer_with_card($token);
-    if (!$r['ok']) {
-        $subAbort($r['msg']);
-    }
-    $custId = $r['cust'];
-    $cardId = $r['card'];
-    $upd = $conn->prepare('UPDATE donor SET omise_customer_id = ? WHERE user_id = ?');
-    $upd->bind_param('si', $custId, $donorUid);
-    $upd->execute();
-} else {
-    $cres = drawdream_omise_post_form('/customers/' . rawurlencode($custId) . '/cards', [
-        'card' => $token,
-    ]);
-    if (($cres['object'] ?? '') === 'error') {
-        if (drawdream_omise_is_not_found_error($cres)) {
-            $clr = $conn->prepare('UPDATE donor SET omise_customer_id = NULL WHERE user_id = ?');
-            $clr->bind_param('i', $donorUid);
-            $clr->execute();
-            $r = $create_omise_customer_with_card($token);
-            if (!$r['ok']) {
-                $subAbort(
-                    'รหัสลูกค้า Omise ในฐานข้อมูลไม่ตรงกับบัญชีปัจจุบัน ระบบสร้างลูกค้าใหม่แล้วแต่ยังไม่สำเร็จ: ' . $r['msg']
-                );
-            }
-            $custId = $r['cust'];
-            $cardId = $r['card'];
-            $upd = $conn->prepare('UPDATE donor SET omise_customer_id = ? WHERE user_id = ?');
-            $upd->bind_param('si', $custId, $donorUid);
-            $upd->execute();
-        } else {
-            $m = drawdream_omise_error_message_for_user($cres, 'ผูกบัตรไม่สำเร็จ');
-            $subAbort($m);
-        }
-    } else {
-        $cardId = (string)($cres['id'] ?? '');
-        if ($cardId === '') {
-            $subAbort('Omise ไม่คืน card id');
-        }
-    }
-}
+// ลูกค้า Omise ที่มีอยู่: ชาร์จด้วย token โดยตรง — ไม่เรียก POST /customers/{id}/cards
+// ลูกค้าใหม่: ชาร์จด้วย token ก่อน แล้วสร้าง customer หลังตอบ JSON (defer)
 
 $tz = new DateTimeZone('Asia/Bangkok');
 $now = new DateTimeImmutable('now', $tz);
-$startDate = $now->format('Y-m-d');
-$endDate = $now->modify('+10 years')->format('Y-m-d');
 $billDay = drawdream_subscription_safe_bill_day($now);
 
 $childName = (string)($child['child_name'] ?? '');
 $desc = 'อุปการะเด็ก ' . $childName . ' — ' . $planSpec['plan_code'] . ' (' . $planSpec['amount_thb'] . ' THB)';
 
-$chargePayload = [
-    'customer' => $custId,
-    'card' => $cardId,
-    'amount' => $planSpec['amount_satang'],
-    'currency' => 'thb',
-    'description' => $desc,
-    'metadata' => [
-        'child_id' => (string)$childId,
-        'donor_user_id' => (string)$donorUid,
-        'plan_code' => $planSpec['plan_code'],
-        'app' => 'drawdream_child_subscription',
-    ],
+$metaCharge = [
+    'child_id' => (string)$childId,
+    'donor_user_id' => (string)$donorUid,
+    'plan_code' => $planSpec['plan_code'],
+    'app' => 'drawdream_child_subscription',
 ];
-$sres = drawdream_omise_post_schedule(
-    $planSpec['every'],
-    $planSpec['period'],
-    $startDate,
-    $endDate,
-    $billDay,
-    $chargePayload
+
+$paidPack = child_subscription_run_first_paid_charge(
+    $conn,
+    $donorUid,
+    $custId,
+    $token,
+    $cardId,
+    (int)$planSpec['amount_satang'],
+    $desc,
+    $metaCharge,
+    $subAbort,
+    $create_omise_customer_with_card
 );
-if (($sres['object'] ?? '') === 'error' && drawdream_omise_is_not_found_error($sres) && $cardId !== '') {
-    $chargeNoCard = $chargePayload;
-    unset($chargeNoCard['card']);
-    $sres = drawdream_omise_post_schedule(
-        $planSpec['every'],
-        $planSpec['period'],
-        $startDate,
-        $endDate,
-        $billDay,
-        $chargeNoCard
+$fcharge = $paidPack['charge'];
+$cardId = $paidPack['card_id'];
+
+$firstChId = (string)($fcharge['id'] ?? '');
+$firstPaid = child_subscription_charge_is_paid($fcharge);
+$authUri = trim((string)($fcharge['authorize_uri'] ?? ''));
+if (!$firstPaid) {
+    if ($authUri !== '' && !drawdream_omise_test_auto_mark_paid_enabled()) {
+        header('Location: ' . $authUri);
+        exit;
+    }
+    $subAbort(
+        'การชำระรอบแรกยังไม่สำเร็จ (สถานะ: ' . (string)($fcharge['status'] ?? '') . ') กรุณาลองอีกครั้งหรือใช้บัตรอื่น'
     );
 }
-if (($sres['object'] ?? '') === 'error') {
-    // Schedule ไม่พร้อม (พบบ่อยใน Test) → หักรอบแรก + local_cron แทน (ไม่ล้าง customer)
-    $metaCharge = [
-        'child_id' => (string)$childId,
-        'donor_user_id' => (string)$donorUid,
-        'plan_code' => $planSpec['plan_code'],
-        'app' => 'drawdream_child_subscription',
-    ];
-    $fcharge = drawdream_omise_create_card_charge(
-        $custId,
-        $cardId,
-        (int)$planSpec['amount_satang'],
-        $desc,
-        $metaCharge
-    );
-    if (($fcharge['object'] ?? '') === 'error') {
-        $m = drawdream_omise_error_message_for_user(
-            $fcharge,
-            'หักเงินรอบแรกไม่สำเร็จ (โหมดสำรองเมื่อ Omise ไม่ให้สร้าง Charge Schedule)'
-        );
-        $subAbort($m);
-    }
-    $fcharge = child_subscription_finalize_charge_for_test($fcharge);
-    $firstChId = (string)($fcharge['id'] ?? '');
-    $firstPaid = child_subscription_charge_is_paid($fcharge);
-    $authUri = trim((string)($fcharge['authorize_uri'] ?? ''));
-    if (!$firstPaid) {
-        if ($authUri !== '' && !drawdream_omise_test_auto_mark_paid_enabled()) {
-            header('Location: ' . $authUri);
-            exit;
-        }
-        $subAbort(
-            'การชำระรอบแรกยังไม่สำเร็จ (สถานะ: ' . (string)($fcharge['status'] ?? '') . ') กรุณาลองอีกครั้งหรือใช้บัตรอื่น'
-        );
-    }
-    $amtSat = (int)($fcharge['amount'] ?? $planSpec['amount_satang']);
-    $firstAmountBaht = $amtSat / 100.0;
+$amtSat = (int)($fcharge['amount'] ?? $planSpec['amount_satang']);
+$firstAmountBaht = $amtSat / 100.0;
 
-    $localSchId = 'local_cron_' . bin2hex(random_bytes(12));
-    $nextAt = drawdream_subscription_next_charge_at($now, $planSpec, $billDay);
-    $nextSql = $nextAt->format('Y-m-d H:i:s');
-    $transferNowSql = drawdream_subscription_now_bangkok_sql();
-    $ins = $conn->prepare(
-        'INSERT INTO donation (
-            category_id, target_id, donor_id, amount, payment_status, transfer_datetime,
-            omise_charge_id, donate_type
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    $planCode = $planSpec['plan_code'];
-    $categoryId = drawdream_get_or_create_child_donate_category_id($conn);
-    $recurringType = 'child_subscription_charge';
-    $completed = 'completed';
-    $ins->bind_param(
-        'iiidssss',
-        $categoryId,
-        $childId,
-        $donorUid,
-        $firstAmountBaht,
-        $completed,
-        $transferNowSql,
-        $firstChId,
-        $recurringType
-    );
-    if (!$ins->execute()) {
-        $subAbort(
-            'หักเงินรอบแรกสำเร็จแล้ว แต่บันทึกแผนในระบบไม่สำเร็จ — กรุณาติดต่อผู้ดูแล (รหัส charge: ' . $firstChId . ')'
-        );
-    }
-    $firstDonateId = (int)$conn->insert_id;
-    if ($firstDonateId > 0) {
-        $updCard = $conn->prepare('UPDATE donor SET omise_card_id = ? WHERE user_id = ?');
-        if ($updCard) {
-            $updCard->bind_param('si', $cardId, $donorUid);
-            $updCard->execute();
-        }
-        drawdream_child_subscription_history_log(
-            $conn,
-            $childId,
-            $donorUid,
-            $firstDonateId,
-            $localSchId,
-            $firstChId !== '' ? $firstChId : null,
-            'subscription_created',
-            null,
-            'active',
-            $planCode,
-            $firstAmountBaht,
-            'web_create',
-            'local_cron_subscription_created',
-            [
-                'customer_id' => $custId,
-                'card_id' => $cardId,
-                'next_charge_at' => $nextSql,
-            ]
-        );
-        drawdream_send_e_receipt_notification_by_donate_id($conn, $firstDonateId);
-        drawdream_child_sync_sponsorship_status($conn, $childId);
-    }
-
-    $slotReserved = false;
-    $nextThai = $nextAt->format('d/m/Y') . ' เวลา 08:00 น. (เวลาไทย)';
-    child_subscription_redirect(
-        'สมัครอุปการะสำเร็จ รอบถัดไป ' . $nextThai,
-        true,
-        $childId
-    );
-}
-
-$schId = (string)($sres['id'] ?? '');
-if ($schId === '') {
-    $subAbort('Omise ไม่คืน schedule id');
-}
-
-$seedDonateId = 0;
+$localSchId = 'local_cron_' . bin2hex(random_bytes(12));
+$nextAt = drawdream_subscription_next_charge_at($now, $planSpec, $billDay);
+$nextSql = $nextAt->format('Y-m-d H:i:s');
+$transferNowSql = drawdream_subscription_now_bangkok_sql();
 $planCode = $planSpec['plan_code'];
-$nextScheduleSql = drawdream_subscription_next_charge_at($now, $planSpec, $billDay)->format('Y-m-d H:i:s');
-drawdream_child_subscription_history_log(
+
+$commit = drawdream_child_subscription_commit_paid_first_charge(
     $conn,
     $childId,
     $donorUid,
-    $seedDonateId > 0 ? $seedDonateId : null,
-    $schId,
-    null,
-    'subscription_created',
-    null,
-    'active',
+    $categoryId,
+    $firstAmountBaht,
+    $firstChId,
+    $localSchId,
+    $nextSql,
+    $transferNowSql,
     $planCode,
-    (float)$planSpec['amount_thb'],
-    'web_create',
-    'omise_schedule_created',
-    [
-        'customer_id' => $custId,
-        'card_id' => $cardId,
-        'schedule_id' => $schId,
-        'plan_every' => (int)$planSpec['every'],
-        'plan_period' => (string)$planSpec['period'],
-        'bill_day' => $billDay,
-        'next_charge_at' => $nextScheduleSql,
-    ]
+    $cardId
 );
-drawdream_child_sync_sponsorship_status($conn, $childId);
+if (!($commit['ok'] ?? false)) {
+    $reason = (string)($commit['reason'] ?? '');
+    if (in_array($reason, ['taken', 'reserving'], true)) {
+        $subAbort(
+            (string)($commit['message'] ?? 'ไม่สามารถบันทึกการอุปการะได้')
+            . ' (ระบบหักเงินแล้ว กรุณาติดต่อผู้ดูแลพร้อมรหัส charge: ' . $firstChId . ')'
+        );
+    }
+    $subAbort((string)($commit['message'] ?? 'บันทึกการอุปการะไม่สำเร็จ'));
+}
+$firstDonateId = (int)($commit['donate_id'] ?? 0);
 
-$updCard2 = $conn->prepare('UPDATE donor SET omise_card_id = ? WHERE user_id = ?');
-if ($updCard2) {
-    $updCard2->bind_param('si', $cardId, $donorUid);
-    $updCard2->execute();
+if ($custId === '' && $cardId !== '') {
+    $deferEmail = $email;
+    $deferCardId = $cardId;
+    register_shutdown_function(static function () use (
+        $conn,
+        $donorUid,
+        $deferEmail,
+        $deferCardId
+    ): void {
+        $st = $conn->prepare('SELECT omise_customer_id FROM donor WHERE user_id = ? LIMIT 1');
+        if (!$st) {
+            return;
+        }
+        $st->bind_param('i', $donorUid);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        if (is_array($row) && trim((string)($row['omise_customer_id'] ?? '')) !== '') {
+            return;
+        }
+        $cres = drawdream_omise_post_form('/customers', [
+            'email' => $deferEmail,
+            'description' => 'DrawDream donor user_id=' . $donorUid,
+            'card' => $deferCardId,
+        ]);
+        if (($cres['object'] ?? '') === 'error') {
+            error_log('[child_subscription_create] defer customer: ' . (string)($cres['message'] ?? ''));
+            return;
+        }
+        $newCust = trim((string)($cres['id'] ?? ''));
+        if ($newCust === '') {
+            return;
+        }
+        $upd = $conn->prepare('UPDATE donor SET omise_customer_id = ? WHERE user_id = ?');
+        if ($upd) {
+            $upd->bind_param('si', $newCust, $donorUid);
+            $upd->execute();
+        }
+    });
 }
 
-$slotReserved = false;
-child_subscription_redirect(
-    'สมัครอุปการะสำเร็จ รอบถัดไป ' . (drawdream_subscription_next_charge_at($now, $planSpec, $billDay)->format('d/m/Y') . ' เวลา 08:00 น. (เวลาไทย)'),
-    true,
-    $childId
-);
+$nextThai = $nextAt->format('d/m/Y') . ' เวลา 08:00 น. (เวลาไทย)';
+$planLabelMap = ['monthly' => 'รายเดือน', 'semiannual' => 'ราย 6 เดือน', 'yearly' => 'รายปี'];
+$planLabel = $planLabelMap[$planCode] ?? $planCode;
+$successDetail = 'อุปการะ ' . $childName . ' แบบ' . $planLabel
+    . ' — ' . number_format($firstAmountBaht, 0) . ' บาท · รอบถัดไป ' . $nextThai;
+child_subscription_redirect($successDetail, true, $childId, $firstDonateId);

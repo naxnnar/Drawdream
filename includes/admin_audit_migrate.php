@@ -6,6 +6,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/drawdream_schema_once.php';
+
 function drawdream_admin_try_query(mysqli $conn, string $sql): bool
 {
     try {
@@ -138,6 +140,9 @@ function drawdream_admin_notif_type_label_th(string $type): string
  */
 function drawdream_ensure_admin_audit_table(mysqli $conn): void
 {
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
     $exists = @$conn->query("SHOW TABLES LIKE 'admin'");
     if (!$exists || $exists->num_rows === 0) {
         return;

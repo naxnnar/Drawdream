@@ -2,16 +2,14 @@
 // payment/check_project_service_charge_payment.php — ยืนยันชำระค่าบริการระบบโครงการ
 declare(strict_types=1);
 
-include __DIR__ . '/../db.php';
+include __DIR__ . '/../includes/payment_bootstrap.php';
 include __DIR__ . '/config.php';
 require_once __DIR__ . '/../includes/drawdream_project_service_charge.php';
 require_once __DIR__ . '/../includes/escrow_funds_schema.php';
-require_once __DIR__ . '/../includes/donate_category_resolve.php';
-require_once __DIR__ . '/../includes/donate_type.php';
 require_once __DIR__ . '/../includes/qr_payment_abandon.php';
 require_once __DIR__ . '/../includes/notification_audit.php';
+require_once __DIR__ . '/../includes/e_receipt.php';
 require_once __DIR__ . '/omise_helpers.php';
-drawdream_ensure_foundation_project_service_charge_columns($conn);
 
 $wantJson = isset($_GET['format']) && $_GET['format'] === 'json';
 
@@ -26,11 +24,87 @@ function project_sc_respond(array $payload, bool $json, int $projectId = 0): voi
         exit();
     }
     if (!empty($payload['ok']) && $projectId > 0) {
-        header('Location: ../foundation_project_view.php?id=' . $projectId . '&sc_paid=1');
+        drawdream_payment_flush_redirect('../foundation_project_view.php?id=' . $projectId . '&sc_paid=1');
         exit();
     }
     header('Location: ../project.php?view=foundation');
     exit();
+}
+
+/** @param array<string, mixed> $charge */
+function project_sc_charge_is_success(array $charge, bool $isMock): bool
+{
+    $status = (string)($charge['status'] ?? 'unknown');
+    $paid = $charge['paid'] ?? false;
+
+    return ($paid === true) || ($status === 'successful') || $isMock;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function project_sc_resolve_charge(
+    string $chargeId,
+    int $projectId,
+    int $foundationId,
+    int $sessionAmount
+): array {
+    $isMock = (strpos($chargeId, 'chrg_mock_') === 0);
+    if ($isMock) {
+        return [
+            'status' => 'successful',
+            'paid' => true,
+            'amount' => max(0, $sessionAmount) * 100,
+            'metadata' => [
+                'type' => 'project_service_charge',
+                'project_id' => $projectId,
+                'foundation_id' => $foundationId,
+            ],
+        ];
+    }
+
+    $sessionMatches = $chargeId !== ''
+        && $chargeId === trim((string)($_SESSION['pending_psc_charge_id'] ?? ''))
+        && (int)($_SESSION['pending_psc_project_id'] ?? 0) === $projectId;
+
+    if ($sessionMatches && drawdream_omise_is_test_mode() && $sessionAmount > 0) {
+        return [
+            'status' => 'successful',
+            'paid' => true,
+            'amount' => $sessionAmount * 100,
+            'metadata' => [
+                'type' => 'project_service_charge',
+                'project_id' => $projectId,
+                'foundation_id' => $foundationId,
+            ],
+        ];
+    }
+
+    if ($sessionMatches && drawdream_omise_is_test_mode()) {
+        $marked = drawdream_omise_mark_charge_as_paid_for_test($chargeId, true);
+        if (is_array($marked) && project_sc_charge_is_success($marked, false)) {
+            return $marked;
+        }
+    }
+
+    $fetched = drawdream_omise_fetch_charge($chargeId, false, false);
+
+    return is_array($fetched) ? $fetched : [];
+}
+
+function project_sc_notify_admins_deferred(
+    mysqli $conn,
+    int $projectId,
+    string $projectName,
+    string $foundationName
+): void {
+    register_shutdown_function(static function () use ($conn, $projectId, $projectName, $foundationName): void {
+        try {
+            drawdream_notify_admins_project_service_charge_paid($conn, $projectId, $projectName, $foundationName);
+        } catch (Throwable $e) {
+            error_log('[drawdream_project_sc_deferred] ' . $e->getMessage());
+        }
+    });
 }
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
@@ -79,23 +153,9 @@ if (!empty($proj['service_charge_paid_at'])) {
     project_sc_respond(['ok' => true, 'already' => true], $wantJson, $projectId);
 }
 
+$sessionAmount = (int)($_SESSION['pending_psc_amount'] ?? 0);
 $is_mock = (strpos($charge_id, 'chrg_mock_') === 0);
-$charge = [];
-if ($is_mock) {
-    $charge = [
-        'status' => 'successful',
-        'paid' => true,
-        'amount' => ((int)($_SESSION['pending_psc_amount'] ?? 0)) * 100,
-        'metadata' => [
-            'type' => 'project_service_charge',
-            'project_id' => $projectId,
-            'foundation_id' => $foundationId,
-        ],
-    ];
-} else {
-    $fetched = drawdream_omise_fetch_charge($charge_id, false, true);
-    $charge = is_array($fetched) ? $fetched : [];
-}
+$charge = project_sc_resolve_charge($charge_id, $projectId, $foundationId, $sessionAmount);
 
 $metaType = (string)($charge['metadata']['type'] ?? '');
 $metaProj = (int)($charge['metadata']['project_id'] ?? 0);
@@ -105,8 +165,7 @@ if ($metaType !== 'project_service_charge' || $metaProj !== $projectId || $metaF
 }
 
 $status = (string)($charge['status'] ?? 'unknown');
-$paid = $charge['paid'] ?? false;
-$is_success = ($paid === true) || ($status === 'successful') || $is_mock;
+$is_success = project_sc_charge_is_success($charge, $is_mock);
 
 if (!$is_success) {
     if (in_array($status, ['failed', 'expired'], true)) {
@@ -190,7 +249,7 @@ if ($conn->begin_transaction()) {
 }
 
 if ($ok) {
-    drawdream_notify_admins_project_service_charge_paid(
+    project_sc_notify_admins_deferred(
         $conn,
         $projectId,
         (string)($proj['project_name'] ?? ''),

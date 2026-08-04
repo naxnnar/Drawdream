@@ -2,6 +2,13 @@
 // includes/utf8_helpers.php — ความยาว/ตัดสตริง UTF-8 โดยใช้ mbstring ถ้ามี ไม่งั้นใช้ iconv/pcre
 // สรุปสั้น: utility จัดการสตริง UTF-8 ให้แสดงผลภาษาไทยถูกต้องแม้เครื่องไม่มีบาง extension
 
+if (!function_exists('drawdream_normalize_email')) {
+    function drawdream_normalize_email(string $email): string
+    {
+        return strtolower(trim($email));
+    }
+}
+
 if (!function_exists('drawdream_utf8_strlen')) {
     function drawdream_utf8_strlen(string $str): int
     {

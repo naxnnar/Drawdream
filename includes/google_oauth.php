@@ -101,11 +101,17 @@ function drawdream_google_oauth_config(): array
     }
 
     $configuredRedirect = trim((string)($cfg['redirect_uri'] ?? ''));
+    $envRedirect = trim((string)(getenv('GOOGLE_REDIRECT_URI') ?: ''));
     $requestRedirect = drawdream_google_oauth_request_redirect_uri();
     $httpHost = (string)($_SERVER['HTTP_HOST'] ?? '');
 
-    // มือถือ/LAN: ต้องใช้ host เดียวกับที่เปิดหน้าเว็บ — 127.0.0.1 บนมือถือชี้ไปที่ตัวเครื่องเอง ทำให้ Google ตอบ 400
+    // ลำดับ redirect: dev ตาม host จริง → .env → host จริงบน production → ค่าใน local file
+    // ห้ามใช้ redirect 127.0.0.1 จาก local dev บน production (ทำให้ Google 400 redirect_uri_mismatch)
     if ($requestRedirect !== '' && drawdream_google_oauth_is_dev_host($httpHost)) {
+        $redirectUri = $requestRedirect;
+    } elseif ($envRedirect !== '') {
+        $redirectUri = $envRedirect;
+    } elseif ($requestRedirect !== '' && !drawdream_google_oauth_is_dev_host($httpHost)) {
         $redirectUri = $requestRedirect;
     } elseif ($configuredRedirect !== '') {
         $redirectUri = $configuredRedirect;

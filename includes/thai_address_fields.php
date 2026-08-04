@@ -7,7 +7,7 @@
  * Logic เติม option อยู่ที่ js/thai_address_select.js (โหลด raw_database.json จาก CDN)
  * บันทึกรวมเป็นข้อความ: includes/address_helpers.php drawdream_merge_foundation_address_from_post()
  *
- * ก่อน include: $thai_address_options = ['require' => true|false, 'line' => ['house_no'=>..., 'soi'=>..., 'road'=>...]]
+ * ก่อน include: $thai_address_options = ['require' => true|false, 'line' => [...], 'full_hidden' => '...']
  */
 $__ta = $thai_address_options ?? [];
 $__req = ($__ta['require'] ?? true) === true;
@@ -17,7 +17,9 @@ $__line = is_array($__ta['line'] ?? null) ? $__ta['line'] : [];
 $__house = htmlspecialchars(trim((string)($__line['house_no'] ?? '')), ENT_QUOTES, 'UTF-8');
 $__soi = htmlspecialchars(trim((string)($__line['soi'] ?? '')), ENT_QUOTES, 'UTF-8');
 $__road = htmlspecialchars(trim((string)($__line['road'] ?? '')), ENT_QUOTES, 'UTF-8');
+$__fullHidden = htmlspecialchars(trim((string)($__ta['full_hidden'] ?? '')), ENT_QUOTES, 'UTF-8');
 ?>
+<input type="hidden" name="addr_full_hidden" id="addr_full_hidden" value="<?= $__fullHidden ?>">
 <div class="thai-address-block">
     <div class="thai-address-line-grid">
         <div class="form-group">
@@ -37,25 +39,25 @@ $__road = htmlspecialchars(trim((string)($__line['road'] ?? '')), ENT_QUOTES, 'U
     <div class="thai-address-grid">
         <div class="form-group">
             <label class="form-label<?= $__lblReq ?>">จังหวัด</label>
-            <select name="addr_province" id="addr_province" class="form-input thai-addr-select"<?= $__reqAttr ?> disabled>
+            <select name="addr_province" id="addr_province" class="form-input thai-addr-select"<?= $__reqAttr ?>>
                 <option value="">กำลังโหลดข้อมูล...</option>
             </select>
         </div>
         <div class="form-group">
             <label class="form-label<?= $__lblReq ?>">อำเภอ / เขต</label>
-            <select name="addr_amphoe" id="addr_amphoe" class="form-input thai-addr-select"<?= $__reqAttr ?> disabled>
+            <select name="addr_amphoe" id="addr_amphoe" class="form-input thai-addr-select"<?= $__reqAttr ?>>
                 <option value="">— เลือกจังหวัดก่อน —</option>
             </select>
         </div>
         <div class="form-group">
             <label class="form-label<?= $__lblReq ?>">ตำบล / แขวง</label>
-            <select name="addr_tambon" id="addr_tambon" class="form-input thai-addr-select"<?= $__reqAttr ?> disabled>
+            <select name="addr_tambon" id="addr_tambon" class="form-input thai-addr-select"<?= $__reqAttr ?>>
                 <option value="">— เลือกอำเภอก่อน —</option>
             </select>
         </div>
         <div class="form-group">
             <label class="form-label<?= $__lblReq ?>">รหัสไปรษณีย์</label>
-            <select name="addr_zip" id="addr_zip" class="form-input thai-addr-select"<?= $__reqAttr ?> disabled>
+            <select name="addr_zip" id="addr_zip" class="form-input thai-addr-select"<?= $__reqAttr ?>>
                 <option value="">— เลือกตำบลก่อน —</option>
             </select>
         </div>

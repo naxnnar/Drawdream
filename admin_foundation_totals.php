@@ -1,7 +1,6 @@
 ﻿<?php
 // admin_foundation_totals.php — แอดมิน: ยอดบริจาครวมของมูลนิธิ (เด็ก / โครงการ / สิ่งของ) + ประวัติรายการ
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundation totals
-declare(strict_types=1);
 
 include 'db.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
@@ -96,7 +95,7 @@ if (!$stRows) {
     die('ไม่สามารถเตรียมคำสั่ง SQL');
 }
 $stRows->bind_param(
-    'iiiiisi',
+    'iiiisii',
     $childCat,
     $foundationId,
     $projCat,
@@ -175,7 +174,6 @@ $verifiedLabel = (int)($fp['account_verified'] ?? 0) === 1 ? 'ยืนยัน
             </div>
             <div class="admin-dir-actions" style="flex-shrink:0;">
                 <a class="admin-dir-btn admin-dir-btn--ghost" href="admin_foundations_overview.php">← มูลนิธิทั้งหมด</a>
-                <a class="admin-dir-btn admin-dir-btn--analytics" href="admin_foundation_analytics_view.php?foundation_id=<?= (int)$foundationId ?>">รายงานเชิงวิเคราะห์</a>
             </div>
         </div>
     </div>
@@ -237,7 +235,7 @@ $verifiedLabel = (int)($fp['account_verified'] ?? 0) === 1 ? 'ยืนยัน
                     } elseif ($catId === $projCat) {
                         $targetKind = 'โครงการ';
                         $targetDetail = $projectMap[$tid] ?? ('#' . $tid);
-                    } else                    if ($catId === $needCat) {
+                    } elseif ($catId === $needCat) {
                         $targetKind = 'สิ่งของ';
                         $targetDetail = 'ระดมมูลนิธิ (รวมรายการสิ่งของ)';
                     } else {

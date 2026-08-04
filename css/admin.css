@@ -228,6 +228,76 @@ body.admin-approve-needlist-page .admin-note {
     padding: 8px;
 }
 
+body.admin-approve-needlist-page .need-approve-card--focus {
+    outline: 3px solid #4A5BA8;
+    outline-offset: 2px;
+}
+
+body.admin-approve-needlist-page .need-approve-card__error {
+    margin: 0 20px 12px;
+}
+
+body.admin-approve-needlist-page .need-approve-success {
+    max-width: 640px;
+    margin: 40px auto;
+    padding: 32px 28px;
+    text-align: center;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.1);
+    border: 1px solid #d1fae5;
+}
+
+body.admin-approve-needlist-page .need-approve-success__icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: #22c55e;
+    color: #fff;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 64px;
+}
+
+body.admin-approve-needlist-page .need-approve-success__title {
+    margin: 0 0 8px;
+    font-size: 1.45rem;
+    color: #14532d;
+}
+
+body.admin-approve-needlist-page .need-approve-success__sub {
+    margin: 0 0 10px;
+    color: #374151;
+    font-weight: 600;
+}
+
+body.admin-approve-needlist-page .need-approve-success__hint {
+    margin: 0 0 20px;
+    color: #6b7280;
+    font-size: 0.95rem;
+}
+
+body.admin-approve-needlist-page .admin-btn--ghost {
+    background: #fff;
+    color: #4e3b84;
+    border: 1px solid #c4b5fd;
+    text-decoration: none;
+    display: inline-block;
+}
+
+body.admin-approve-needlist-page .need-approve-success__actions .admin-btn {
+    min-width: 180px;
+    text-align: center;
+}
+
+body.admin-approve-needlist-page .need-approve-success__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
 body.admin-approve-needlist-page .need-approve-card-list {
     display: grid;
     gap: 14px;
@@ -456,5 +526,37 @@ body.admin-approve-needlist-page .need-actions-row .admin-btn {
 @media (max-width: 640px) {
     body.admin-approve-needlist-page .need-approve-grid {
         grid-template-columns: 1fr;
+    }
+
+    body.admin-approve-needlist-page .need-line-item {
+        grid-template-columns: 28px 1fr;
+        gap: 6px;
+    }
+
+    body.admin-approve-needlist-page .need-line-item > :nth-child(3),
+    body.admin-approve-needlist-page .need-line-item > :nth-child(4) {
+        grid-column: 2;
+    }
+}
+
+@media (max-width: 480px) {
+    body.admin-projects-page .wrap,
+    body.admin-approve-projects-page .wrap,
+    body.admin-approve-needlist-page .wrap {
+        margin: 16px auto 28px;
+    }
+
+    body.admin-projects-page .btn,
+    body.admin-approve-projects-page .btn,
+    body.admin-approve-needlist-page .admin-btn {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    body.admin-approve-needlist-page .need-approve-card__head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 16px;
     }
 }

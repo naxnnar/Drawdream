@@ -437,6 +437,28 @@ body {
     .proj-header   { flex-direction: column; gap: 10px; }
     .delivery-items-head,
     .delivery-items-row { grid-template-columns: 1fr 0.7fr 0.9fr; }
+    .escrow-wrap {
+        margin: 16px auto;
+        padding: 0 0 40px;
+    }
+    .page-title {
+        font-size: 1.35rem;
+        margin-bottom: 14px;
+    }
+    .tab-bar {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+    }
+    .tab-btn {
+        padding: 10px 18px;
+        font-size: 13px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
 }
 .tab-bar {
             display: flex;
@@ -489,4 +511,15 @@ body {
     font-size: 14px;
     font-weight: 500;
     margin-top: 4px;
+}
+
+.notified-badge--updated {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #6ee7b7;
+}
+
+.notified-badge__time {
+    font-weight: 400;
+    color: #059669;
 }

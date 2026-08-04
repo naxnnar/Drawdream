@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // project_result.php — แสดงผลลัพธ์โครงการที่เสร็จสิ้น
 // แสดงผลลัพธ์โครงการที่เสร็จสิ้น (สำหรับผู้บริจาค/บุคคลทั่วไป)
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project result
@@ -94,6 +94,14 @@ function drawdream_project_result_images(array $update): array {
     return array_values(array_unique($images));
 }
 
+$hasOutcomePosted = false;
+if ($update !== null) {
+    $hasOutcomePosted = trim((string)($update['description'] ?? '')) !== ''
+        || drawdream_project_result_images($update) !== [];
+}
+$outcomeStatusLabel = $hasOutcomePosted ? 'โครงการเสร็จสิ้น' : 'โครงการกำลังดำเนินการ';
+$outcomeStatusClass = $hasOutcomePosted ? 'result-status--done' : 'result-status--progress';
+
 ?><!DOCTYPE html>
 <html lang="th">
 <head>
@@ -108,6 +116,8 @@ function drawdream_project_result_images(array $update): array {
         .result-wrap { max-width: 1120px; margin: 26px auto 30px; background: #fff; border-radius: 14px; box-shadow: 0 2px 12px #0001; padding: 22px 26px 26px; }
         .result-title { font-size: 2rem; font-weight: 700; margin-bottom: 0.25em; }
         .result-meta { color: #666; margin-bottom: 1.2em; font-size: 1.05rem; line-height: 1.55; }
+        .result-status--done { color: #597D57; font-weight: 600; }
+        .result-status--progress { color: #b45309; font-weight: 600; }
         .result-update-layout { display: grid; grid-template-columns: 1.15fr 0.95fr; gap: 22px; align-items: start; }
         .result-quote { color: #d8a83d; font-size: 2rem; line-height: 1; margin-bottom: 10px; font-weight: 800; }
         .result-update-desc { color:#222; font-size: 1.08rem; line-height: 1.95; margin-bottom: 12px; white-space: pre-line; }
@@ -160,9 +170,9 @@ function drawdream_project_result_images(array $update): array {
     <div class="result-title">ผลลัพธ์โครงการ: <?= htmlspecialchars($project['project_name']) ?></div>
     <div class="result-meta">
         ได้รับเงิน <?= number_format($projectRaisedAmount, 0) ?> / <?= number_format($projectGoalAmount, 0) ?> บาท<br>
-        สถานะ: <span style="color:#597D57;">โครงการเสร็จสิ้น</span>
+        สถานะ: <span class="<?= htmlspecialchars($outcomeStatusClass, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($outcomeStatusLabel, ENT_QUOTES, 'UTF-8') ?></span>
     </div>
-    <?php if (!$update): ?>
+    <?php if (!$hasOutcomePosted): ?>
         <div style="color:#aaa; text-align:center;">ยังไม่มีผลลัพธ์ที่มูลนิธิโพสต์ไว้</div>
     <?php else: ?>
         <?php $imageList = drawdream_project_result_images($update); ?>
@@ -199,7 +209,7 @@ function drawdream_project_result_images(array $update): array {
         </div>
     <?php endif; ?>
 </div>
-<?php if ($update && count($imageList ?? []) > 1): ?>
+<?php if ($hasOutcomePosted && count($imageList ?? []) > 1): ?>
 <script>
 (function () {
     var slider = document.getElementById('resultSlider');

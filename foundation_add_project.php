@@ -5,63 +5,54 @@
 
 include 'db.php';
 require_once __DIR__ . '/includes/address_helpers.php';
+require_once __DIR__ . '/includes/vendor_assets.php';
+require_once __DIR__ . '/includes/drawdream_upload.php';
+require_once __DIR__ . '/includes/drawdream_image_compress.php';
 
-// วันที่เสนอโครงการ / ช่วงแสดงใน UI
-$chkStart = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'start_date'");
-if ($chkStart && $chkStart->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_project ADD COLUMN start_date DATE NULL DEFAULT NULL");
-}
+$projectMaxUploadBytes = drawdream_child_photo_max_upload_bytes();
+$projectMaxUploadLabel = drawdream_format_bytes_mb_label($projectMaxUploadBytes);
 
-// เลิกใช้คอลัมน์ donation_start_date — ย้ายค่าไป start_date ก่อนลบคอลัมน์
-$chkDonStart = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'donation_start_date'");
-if ($chkDonStart && $chkDonStart->num_rows > 0) {
-    $conn->query('UPDATE foundation_project SET start_date = DATE(donation_start_date) WHERE start_date IS NULL AND donation_start_date IS NOT NULL');
-    $conn->query('ALTER TABLE foundation_project DROP COLUMN donation_start_date');
-}
-
-$chkFid = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'foundation_id'");
-if ($chkFid && $chkFid->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_project ADD COLUMN foundation_id INT UNSIGNED NULL DEFAULT NULL AFTER foundation_name");
+function drawdream_foundation_add_project_is_post_request(): bool
+{
+    return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST'
+        && (isset($_POST['foundation_project_save']) || isset($_POST['submit']));
 }
 
-$chkPe = $conn->query("SHOW COLUMNS FROM foundation_project WHERE Field = 'pending_edit_json'");
-if ($chkPe && $chkPe->num_rows > 0) {
-    $conn->query('ALTER TABLE foundation_project DROP COLUMN pending_edit_json');
+/**
+ * บันทึกข้อมูลฟอร์มชั่วคราวแล้ว redirect — ไม่ใช้ history.back() เพื่อไม่ให้ข้อมูลหาย
+ */
+function drawdream_foundation_add_project_fail(string $message, int $editId = 0): never
+{
+    $_SESSION['foundation_add_project_flash'] = $_POST;
+    $_SESSION['foundation_add_project_flash_error'] = $message;
+    $url = 'foundation_add_project.php';
+    if ($editId > 0) {
+        $url .= '?edit=' . $editId;
+    }
+    header('Location: ' . $url);
+    exit;
 }
 
-$chkNeed = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'need_info'");
-if ($chkNeed && $chkNeed->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_project ADD COLUMN need_info TEXT NULL DEFAULT NULL");
+/** @return array<string,string> */
+function drawdream_foundation_add_project_upload_error_message(int $code): array
+{
+    $map = [
+        UPLOAD_ERR_INI_SIZE => 'ไฟล์รูปใหญ่เกินกำหนดของเซิร์ฟเวอร์ — ลองบีบอัดรูปแล้วอัปโหลดใหม่',
+        UPLOAD_ERR_FORM_SIZE => 'ไฟล์รูปใหญ่เกินกำหนดของฟอร์ม — ลองบีบอัดรูปแล้วอัปโหลดใหม่',
+        UPLOAD_ERR_PARTIAL => 'อัปโหลดรูปไม่สมบูรณ์ — กรุณาลองใหม่',
+        UPLOAD_ERR_NO_FILE => 'กรุณาอัปโหลดรูปภาพโครงการ',
+        UPLOAD_ERR_NO_TMP_DIR => 'เซิร์ฟเวอร์ไม่พร้อมรับไฟล์ชั่วคราว — ติดต่อผู้ดูแลระบบ',
+        UPLOAD_ERR_CANT_WRITE => 'บันทึกไฟล์รูปไม่สำเร็จ — ลองใหม่อีกครั้ง',
+    ];
+
+    return ['msg' => $map[$code] ?? 'อัปโหลดรูปไม่สำเร็จ (รหัส ' . $code . ')'];
 }
 
-$chkProjLoc = $conn->query("SHOW COLUMNS FROM foundation_project WHERE Field = 'location'");
-if ($chkProjLoc && $chkProjLoc->num_rows === 0) {
-    $conn->query("ALTER TABLE foundation_project ADD COLUMN location TEXT NULL DEFAULT NULL AFTER need_info");
-}
-// ล้างคอลัมน์เก่าที่ไม่ใช้แล้ว
-$chkDropMrg = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'merged_into_project_id'");
-if ($chkDropMrg && $chkDropMrg->num_rows > 0) {
-    $conn->query("ALTER TABLE foundation_project DROP COLUMN merged_into_project_id");
-}
-$chkDropUpd = $conn->query("SHOW COLUMNS FROM foundation_project LIKE 'update_info'");
-if ($chkDropUpd && $chkDropUpd->num_rows > 0) {
-    $conn->query("ALTER TABLE foundation_project DROP COLUMN update_info");
-}
-
-$conn->query(
-    "UPDATE foundation_project p
-     INNER JOIN foundation_profile f ON f.foundation_name = p.foundation_name AND f.foundation_id IS NOT NULL
-     SET p.foundation_id = f.foundation_id
-     WHERE p.foundation_id IS NULL OR p.foundation_id = 0"
-);
-
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
-    header("Location: project.php");
-    exit();
-}
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
+drawdream_foundation_require_management_access();
 
 require_once __DIR__ . '/includes/foundation_account_verified.php';
-drawdream_foundation_require_account_verified($conn);
+drawdream_foundation_require_active_account($conn);
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
 $stmtFp = $conn->prepare("SELECT fp.*, u.email FROM foundation_profile fp JOIN `user` u ON u.user_id = fp.user_id WHERE fp.user_id = ? LIMIT 1");
@@ -72,11 +63,11 @@ $fp = $stmtFp->get_result()->fetch_assoc();
 $foundationName = trim((string)($fp['foundation_name'] ?? ''));
 $foundationId = (int)($fp['foundation_id'] ?? 0);
 if ($foundationName === '') {
-    echo "<script>alert('ไม่พบข้อมูลมูลนิธิ กรุณาอัปเดตโปรไฟล์ก่อน'); window.location='update_profile.php';</script>";
+    header('Location: update_profile.php?msg=' . rawurlencode('ไม่พบข้อมูลมูลนิธิ กรุณาอัปเดตโปรไฟล์ก่อน'));
     exit();
 }
 if ($foundationId <= 0) {
-    echo "<script>alert('ไม่พบรหัสมูลนิธิในระบบ กรุณาอัปเดตโปรไฟล์หรือติดต่อผู้ดูแล'); window.location='update_profile.php';</script>";
+    header('Location: update_profile.php?msg=' . rawurlencode('ไม่พบรหัสมูลนิธิในระบบ กรุณาอัปเดตโปรไฟล์หรือติดต่อผู้ดูแล'));
     exit();
 }
 
@@ -93,6 +84,28 @@ $targetGroupOptions = [
 
 $editProjectId = (int)($_GET['edit'] ?? 0);
 $isEditMode = false;
+$formFlashError = '';
+$formFlash = null;
+if (!empty($_SESSION['foundation_add_project_flash']) && is_array($_SESSION['foundation_add_project_flash'])) {
+    $formFlash = $_SESSION['foundation_add_project_flash'];
+    unset($_SESSION['foundation_add_project_flash']);
+}
+if (!empty($_SESSION['foundation_add_project_flash_error'])) {
+    $formFlashError = trim((string)$_SESSION['foundation_add_project_flash_error']);
+    unset($_SESSION['foundation_add_project_flash_error']);
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && !drawdream_foundation_add_project_is_post_request()
+    && $formFlashError === ''
+    && $_POST === []
+    && (!isset($_FILES['project_image']) || (int)($_FILES['project_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE)
+) {
+    $formFlashError = 'ส่งข้อมูลไม่สำเร็จ (ไฟล์อาจใหญ่เกินกำหนดของเซิร์ฟเวอร์) กรุณาบีบอัดรูปแล้วลองใหม่';
+}
+if (is_array($formFlash) && (int)($formFlash['edit_project_id'] ?? 0) > 0) {
+    $editProjectId = (int)$formFlash['edit_project_id'];
+}
+
 $editingProject = [
     'project_id' => 0,
     'project_name' => '',
@@ -119,7 +132,7 @@ if ($editProjectId > 0) {
     $editRow = $stmtEdit->get_result()->fetch_assoc();
 
     if (!$editRow) {
-        echo "<script>alert('ไม่พบโครงการที่ต้องการแก้ไข'); window.location='project.php?view=foundation';</script>";
+        header('Location: project.php?view=foundation&msg=' . rawurlencode('ไม่พบโครงการที่ต้องการแก้ไข'));
         exit();
     }
 
@@ -127,13 +140,37 @@ if ($editProjectId > 0) {
     $editingProject = array_merge($editingProject, $editRow);
 }
 
+if (is_array($formFlash)) {
+    $editingProject = array_merge($editingProject, [
+        'project_name' => trim((string)($formFlash['project_name'] ?? $editingProject['project_name'] ?? '')),
+        'project_desc' => trim((string)($formFlash['project_desc'] ?? $editingProject['project_desc'] ?? '')),
+        'project_quote' => trim((string)($formFlash['project_quote'] ?? $editingProject['project_quote'] ?? '')),
+        'goal_amount' => trim((string)($formFlash['goal_amount'] ?? $editingProject['goal_amount'] ?? '')),
+        'end_date' => trim((string)($formFlash['end_date'] ?? $editingProject['end_date'] ?? '')),
+        'category' => trim((string)($formFlash['category'] ?? $editingProject['category'] ?? '')),
+        'target_group' => trim((string)($formFlash['target_group'] ?? $editingProject['target_group'] ?? '')),
+        'need_info' => trim((string)($formFlash['need_info'] ?? $editingProject['need_info'] ?? '')),
+    ]);
+    if (!$isEditMode && $editProjectId > 0) {
+        $isEditMode = true;
+        $editingProject['project_id'] = $editProjectId;
+    }
+}
+
 $project_thai_addr_init_json = 'null';
 $project_addr_parsed = null;
+$project_addr_line = ['house_no' => '', 'soi' => '', 'road' => ''];
+$project_addr_full_hidden = '';
 $tzBangkok = new DateTimeZone('Asia/Bangkok');
 $todayProposalMin = (new DateTimeImmutable('now', $tzBangkok))->format('Y-m-d');
 if ($isEditMode && trim((string)($editingProject['location'] ?? '')) !== '') {
     $project_addr_parsed = drawdream_parse_saved_thai_address($editingProject['location']);
     if ($project_addr_parsed) {
+        $project_addr_line = [
+            'house_no' => $project_addr_parsed['house_no'] ?? '',
+            'soi' => $project_addr_parsed['soi'] ?? '',
+            'road' => $project_addr_parsed['road'] ?? '',
+        ];
         $project_thai_addr_init_json = json_encode([
             'province' => $project_addr_parsed['province'],
             'amphoe'   => $project_addr_parsed['amphoe'],
@@ -142,8 +179,36 @@ if ($isEditMode && trim((string)($editingProject['location'] ?? '')) !== '') {
         ], JSON_UNESCAPED_UNICODE);
     }
 }
+if (is_array($formFlash)) {
+    $project_addr_line = [
+        'house_no' => trim((string)($formFlash['addr_house_no'] ?? $project_addr_line['house_no'] ?? '')),
+        'soi' => trim((string)($formFlash['addr_soi'] ?? $project_addr_line['soi'] ?? '')),
+        'road' => trim((string)($formFlash['addr_road'] ?? $project_addr_line['road'] ?? '')),
+    ];
+    $flashProvince = trim((string)($formFlash['addr_province'] ?? ''));
+    $flashAmphoe = trim((string)($formFlash['addr_amphoe'] ?? ''));
+    $flashTambon = trim((string)($formFlash['addr_tambon'] ?? ''));
+    $flashZip = trim((string)($formFlash['addr_zip'] ?? ''));
+    $project_addr_full_hidden = trim((string)($formFlash['addr_full_hidden'] ?? ''));
+    if ($flashProvince !== '') {
+        $tambonLabel = $flashTambon;
+        if ($tambonLabel !== '' && strpos($tambonLabel, "\x1E") !== false) {
+            $parts = explode("\x1E", $tambonLabel, 2);
+            if ($flashZip === '' && ($parts[0] ?? '') !== '') {
+                $flashZip = $parts[0];
+            }
+            $tambonLabel = $parts[1] ?? $tambonLabel;
+        }
+        $project_thai_addr_init_json = json_encode([
+            'province' => $flashProvince,
+            'amphoe' => $flashAmphoe,
+            'tambon' => $tambonLabel,
+            'zip' => $flashZip,
+        ], JSON_UNESCAPED_UNICODE);
+    }
+}
 
-if (isset($_POST['submit'])) {
+if (drawdream_foundation_add_project_is_post_request()) {
     drawdream_csrf_require_valid('foundation_add_project.php');
     $editingId = (int)($_POST['edit_project_id'] ?? 0);
     $isEditSubmit = $editingId > 0;
@@ -159,41 +224,42 @@ if (isset($_POST['submit'])) {
 
     // ข้อมูลกล่องรายละเอียดหน้าโครงการ (พื้นที่ = คอลัมน์ location รูปแบบ ต./อ./จ. — ใช้ค้นกับตัวกรองจังหวัดในหน้าโครงการ)
     $needInfo = trim($_POST['need_info'] ?? '');
-    $projectLocation = drawdream_merge_foundation_address_from_post($_POST);
-
 
     if (!in_array($category, $categories, true)) {
-        echo "<script>alert('กรุณาเลือกประเภทโครงการ'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('กรุณาเลือกประเภทโครงการ', $editingId);
     }
 
     if (!in_array($targetGroup, $targetGroupOptions, true)) {
-        echo "<script>alert('กรุณาเลือกกลุ่มเป้าหมายที่ได้รับประโยชน์จากโครงการ'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('กรุณาเลือกกลุ่มเป้าหมายที่ได้รับประโยชน์จากโครงการ', $editingId);
     }
 
     if ($name === '' || $desc === '' || $quote === '' || $goal <= 0 || $enddate === '') {
-        echo "<script>alert('กรุณากรอกข้อมูลโครงการให้ครบ'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('กรุณากรอกข้อมูลโครงการให้ครบ', $editingId);
     }
 
     $dEndDt = DateTimeImmutable::createFromFormat('Y-m-d', $enddate, $tzBangkok);
     if (!$dEndDt || $dEndDt->format('Y-m-d') !== $enddate) {
-        echo "<script>alert('รูปแบบวันที่ไม่ถูกต้อง'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('รูปแบบวันที่ไม่ถูกต้อง', $editingId);
     }
     if ($dEndDt->format('Y-m-d') < $todayProposalMin) {
-        echo "<script>alert('วันสิ้นสุดรับบริจาคต้องเป็นวันนี้หรือหลังจากวันนี้เท่านั้น'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('วันสิ้นสุดรับบริจาคต้องเป็นวันนี้หรือหลังจากวันนี้เท่านั้น', $editingId);
     }
 
     if ($needInfo === '') {
-        echo "<script>alert('กรุณากรอกแผนการดำเนินงาน'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('กรุณากรอกแผนการดำเนินงาน', $editingId);
     }
-    if ($projectLocation === '') {
-        echo "<script>alert('กรุณากรอกพื้นที่ดำเนินโครงการ'); history.back();</script>";
-        exit();
+
+    $addrProvince = trim((string)($_POST['addr_province'] ?? ''));
+    $addrAmphoe = trim((string)($_POST['addr_amphoe'] ?? ''));
+    $addrTambon = trim((string)($_POST['addr_tambon'] ?? ''));
+    $addrZip = trim((string)($_POST['addr_zip'] ?? ''));
+    $addrHidden = trim((string)($_POST['addr_full_hidden'] ?? ''));
+    $projectLocation = drawdream_merge_foundation_address_from_post($_POST);
+    if ($projectLocation === '' || ($addrProvince === '' && $addrHidden === '') || ($addrAmphoe === '' && $addrHidden === '')) {
+        drawdream_foundation_add_project_fail('กรุณาเลือกจังหวัด อำเภอ ตำบล และรหัสไปรษณีย์ให้ครบ', $editingId);
+    }
+    if ($addrTambon === '' && $addrZip === '' && $addrHidden === '') {
+        drawdream_foundation_add_project_fail('กรุณาเลือกตำบลและรหัสไปรษณีย์ให้ครบ', $editingId);
     }
 
     $currentProjectImage = '';
@@ -205,7 +271,7 @@ if (isset($_POST['submit'])) {
         $currentProjectRow = $stmtCurrent->get_result()->fetch_assoc();
 
         if (!$currentProjectRow) {
-            echo "<script>alert('ไม่พบโครงการที่ต้องการแก้ไข'); window.location='project.php?view=foundation';</script>";
+            header('Location: project.php?view=foundation&msg=' . rawurlencode('ไม่พบโครงการที่ต้องการแก้ไข'));
             exit();
         }
         $currentProjectImage = (string)($currentProjectRow['project_image'] ?? '');
@@ -215,35 +281,38 @@ if (isset($_POST['submit'])) {
     $enddateNorm = $dEndDt->format('Y-m-d');
 
     $newName = $currentProjectImage;
-    if (isset($_FILES['project_image']) && $_FILES['project_image']['error'] === 0) {
-        $imageName = $_FILES['project_image']['name'];
-        $tmpName = $_FILES['project_image']['tmp_name'];
-        $ext = strtolower(pathinfo($imageName, PATHINFO_EXTENSION));
-        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (isset($_FILES['project_image']) && (int)($_FILES['project_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+        $imageName = (string)($_FILES['project_image']['name'] ?? '');
+        $tmpName = (string)($_FILES['project_image']['tmp_name'] ?? '');
+        $fileSize = (int)($_FILES['project_image']['size'] ?? 0);
 
-        if (!in_array($ext, $allowed, true)) {
-            echo "<script>alert('อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp เท่านั้น'); history.back();</script>";
-            exit();
+        if (!drawdream_upload_is_image_tmp($tmpName, $imageName)) {
+            drawdream_foundation_add_project_fail('อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp เท่านั้น', $editingId);
         }
 
-        $uploadDir = "uploads/project/";
+        $uploadDir = __DIR__ . '/uploads/project/';
         if (!is_dir($uploadDir)) {
             @mkdir($uploadDir, 0755, true);
         }
 
-        $newName = "project/project_" . time() . "_" . bin2hex(random_bytes(5)) . "." . $ext;
-        if (!move_uploaded_file($tmpName, "uploads/" . $newName)) {
-            echo "<script>alert('อัปโหลดรูปไม่สำเร็จ'); history.back();</script>";
-            exit();
+        $forceJpeg = drawdream_upload_needs_jpeg_output($tmpName, $imageName, $fileSize, $projectMaxUploadBytes);
+        $outExt = $forceJpeg ? 'jpg' : drawdream_upload_resolve_image_ext($tmpName, $imageName);
+        $newName = 'project/project_' . time() . '_' . bin2hex(random_bytes(5)) . '.' . $outExt;
+        $targetPath = __DIR__ . '/uploads/' . $newName;
+        if (!drawdream_store_compressed_upload($tmpName, $targetPath, $projectMaxUploadBytes, $forceJpeg)) {
+            drawdream_foundation_add_project_fail('บีบอัด/อัปโหลดรูปไม่สำเร็จ — ลองบันทึกเป็น JPG แล้วอัปโหลดใหม่', $editingId);
         }
     } elseif (!$isEditSubmit) {
-        echo "<script>alert('กรุณาอัปโหลดรูปภาพให้ถูกต้อง'); history.back();</script>";
-        exit();
+        $uploadErr = (int)($_FILES['project_image']['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($uploadErr !== UPLOAD_ERR_OK) {
+            $uploadMsg = drawdream_foundation_add_project_upload_error_message($uploadErr);
+            drawdream_foundation_add_project_fail($uploadMsg['msg'], $editingId);
+        }
+        drawdream_foundation_add_project_fail('กรุณาอัปโหลดรูปภาพโครงการ', $editingId);
     }
 
     if ($isEditSubmit && in_array($projectStatus, ['completed', 'done'], true)) {
-        echo "<script>alert('ไม่สามารถแก้ไขโครงการที่สำเร็จแล้ว'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('ไม่สามารถแก้ไขโครงการที่สำเร็จแล้ว', $editingId);
     }
 
     mysqli_begin_transaction($conn);
@@ -342,12 +411,11 @@ if (isset($_POST['submit'])) {
             drawdream_record_foundation_submitted_project($conn, $uid, $projectId, $name);
         }
 
-        echo "<script>alert('" . addslashes($successMessage) . "'); window.location='project.php?view=foundation';</script>";
+        header('Location: project.php?view=foundation&msg=' . rawurlencode($successMessage) . '&msg_icon=success');
         exit();
     } catch (Throwable $e) {
         mysqli_rollback($conn);
-        echo "<script>alert('บันทึกข้อมูลไม่สำเร็จ: " . addslashes($e->getMessage()) . "'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_project_fail('บันทึกข้อมูลไม่สำเร็จ: ' . $e->getMessage(), $editingId);
     }
 }
 
@@ -355,8 +423,8 @@ $missingContact = [];
 if (empty($fp['phone'])) $missingContact[] = 'เบอร์โทร';
 if (empty($fp['address'])) $missingContact[] = 'ที่อยู่';
 if (empty($fp['email'])) $missingContact[] = 'อีเมล';
-if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])) {
-    $missingContact[] = 'ช่องทางติดต่อออนไลน์ (เว็บไซต์/Facebook/Line)';
+if (empty($fp['website']) && empty($fp['facebook_url'])) {
+    $missingContact[] = 'ช่องทางติดต่อออนไลน์ (เว็บไซต์/Facebook)';
 }
 ?>
 <!DOCTYPE html>
@@ -381,7 +449,31 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
     </div>
 <?php endif; ?>
 
-<div class="form-container">
+<?php
+$pageFlashMsg = trim((string)($_GET['msg'] ?? ''));
+if ($pageFlashMsg === '' && $formFlashError !== '') {
+    $pageFlashMsg = $formFlashError;
+}
+$pageFlashIcon = 'error';
+if (isset($_GET['msg_icon'])) {
+    $pageFlashIcon = match ((string)$_GET['msg_icon']) {
+        'warning' => 'warning',
+        'success' => 'success',
+        default => 'error',
+    };
+}
+if ($pageFlashMsg !== '' && !isset($_GET['msg_icon']) && $formFlashError !== '') {
+    $pageFlashIcon = 'error';
+}
+?>
+
+<form method="POST" enctype="multipart/form-data" id="projectForm" class="form-container">
+        <input type="hidden" name="foundation_project_save" value="1">
+        <?= drawdream_csrf_field() ?>
+        <?php if ($isEditMode): ?>
+            <input type="hidden" name="edit_project_id" value="<?= (int)$editingProject['project_id'] ?>">
+        <?php endif; ?>
+
     <!-- ── ซ้าย: preview รูป + ข้อมูลติดต่อ ── -->
     <div class="left-box">
         <h2><?= $isEditMode ? 'แก้ไขโครงการ' : 'เสนอโครงการ' ?></h2>
@@ -393,29 +485,22 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
 
         <div class="left-info-card">
             <h3>ภาพโครงการ<?= $isEditMode ? '' : ' *' ?></h3>
-            <input type="file" name="project_image" id="projectImageInput" accept="image/*" form="projectForm" <?= $isEditMode ? '' : 'required' ?>>
+            <input type="file" name="project_image" id="projectImageInput" accept="image/*" <?= $isEditMode ? '' : 'required' ?>>
+            <p class="form-hint" style="margin:8px 0 0;font-size:0.88em;color:#555;">รองรับ JPG, PNG, GIF, WEBP — รูปใหญ่ระบบบีบอัดอัตโนมัติก่อนส่ง (ไม่เกิน <?= htmlspecialchars($projectMaxUploadLabel, ENT_QUOTES, 'UTF-8') ?>)</p>
         </div>
 
         <div class="left-info-card">
             <h3>ข้อมูลติดต่อที่จะโชว์ในหน้าโครงการ</h3>
-            <p>👤 ผู้ติดต่อ <?= htmlspecialchars($fp['contact_person'] ?? '-') ?></p>
             <p>📞 เบอร์หลัก <?= htmlspecialchars($fp['phone'] ?? '-') ?></p>
             <p>✉️ อีเมล <?= htmlspecialchars($fp['email'] ?? '-') ?></p>
             <p>🌐 เว็บไซต์ <?= htmlspecialchars($fp['website'] ?? '-') ?></p>
             <p>📘 Facebook <?= htmlspecialchars($fp['facebook_url'] ?? '-') ?></p>
-            <p>💬 Line <?= htmlspecialchars($fp['line_id'] ?? '-') ?></p>
             <p>📍 ที่อยู่ <?= htmlspecialchars($fp['address'] ?? '-') ?></p>
         </div>
     </div>
 
     <!-- ── ขวา: ฟอร์มกรอกข้อมูล ── -->
     <div class="right-box">
-        <form method="POST" enctype="multipart/form-data" id="projectForm">
-            <?= drawdream_csrf_field() ?>
-            <?php if ($isEditMode): ?>
-                <input type="hidden" name="edit_project_id" value="<?= (int)$editingProject['project_id'] ?>">
-            <?php endif; ?>
-
             <div class="form-group">
                 <label>ประเภทโครงการ </label>
                 <select name="category" required>
@@ -470,7 +555,11 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
             <div class="form-group">
                 <label>พื้นที่ดำเนินโครงการ</label>
                 <?php
-                $thai_address_options = ['require' => true];
+                $thai_address_options = [
+                    'require' => true,
+                    'line' => $project_addr_line,
+                    'full_hidden' => $project_addr_full_hidden,
+                ];
                 include __DIR__ . '/includes/thai_address_fields.php';
                 ?>
                 <?php if ($project_addr_parsed === null && $isEditMode && trim((string)($editingProject['location'] ?? '')) !== ''): ?>
@@ -478,12 +567,28 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
                 <?php endif; ?>
             </div>
 
-            <button type="submit" name="submit" class="btn-submit">บันทึกข้อมูล</button>
-        </form>
+            <button type="submit" class="btn-submit" id="projectSubmitBtn">บันทึกข้อมูล</button>
     </div>
-</div>
+</form>
 
+<?php if ($pageFlashMsg !== ''): ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        Swal.fire({
+            icon: <?= json_encode($pageFlashIcon, JSON_UNESCAPED_UNICODE) ?>,
+            title: <?= json_encode($pageFlashMsg, JSON_UNESCAPED_UNICODE) ?>,
+            confirmButtonText: 'ตกลง'
+        });
+    });
+    </script>
+<?php endif; ?>
+
+<script src="js/drawdream-swal.js?v=1"></script>
+<?= drawdream_sweetalert2_js_tag('', true) ?>
+<script src="js/drawdream-image-compress.js?v=3"></script>
 <script>
+const MAX_PROJECT_IMAGE_BYTES = <?= (int)$projectMaxUploadBytes ?>;
+const MAX_PROJECT_SERVER_BYTES = <?= (int)$projectMaxUploadBytes ?>;
 // แสดงตัวอย่างรูปในกล่องซ้ายเพื่อให้เห็นภาพก่อนส่ง
 (function() {
     var input = document.getElementById('projectImageInput');
@@ -503,8 +608,56 @@ if (empty($fp['website']) && empty($fp['facebook_url']) && empty($fp['line_id'])
     });
 })();
 
+(function () {
+    var form = document.getElementById('projectForm');
+    var submitBtn = document.getElementById('projectSubmitBtn');
+    var imageInput = document.getElementById('projectImageInput');
+    if (!form || !submitBtn) return;
+    var submitting = false;
+    form.addEventListener('submit', function (e) {
+        if (submitting) {
+            e.preventDefault();
+            return;
+        }
+        e.preventDefault();
+        form.querySelectorAll('.thai-address-block select[disabled]').forEach(function (el) {
+            el.removeAttribute('disabled');
+        });
+        var zipEl = document.getElementById('addr_zip');
+        if (zipEl) {
+            zipEl.dispatchEvent(new Event('change'));
+        }
+
+        (async function () {
+            var file = imageInput && imageInput.files && imageInput.files[0];
+            if (file && window.drawdreamImageCompress) {
+                submitBtn.textContent = 'กำลังบีบอัดรูป…';
+                try {
+                    var processed = await drawdreamImageCompress.ensureImageWithinLimit(
+                        file,
+                        MAX_PROJECT_IMAGE_BYTES,
+                        MAX_PROJECT_SERVER_BYTES
+                    );
+                    if (processed && processed !== file && imageInput) {
+                        var dt = new DataTransfer();
+                        dt.items.add(processed);
+                        imageInput.files = dt.files;
+                    }
+                } catch (err) {
+                    drawdreamAlert('รูปใหญ่เกินไป กรุณาบีบอัดแล้วลองใหม่');
+                    return;
+                }
+            }
+            submitting = true;
+            submitBtn.textContent = 'กำลังบันทึก…';
+            submitBtn.classList.add('is-busy');
+            form.submit();
+        })();
+    });
+})();
+
 </script>
-<script src="js/thai_address_select.js?v=1"></script>
+<script src="js/thai_address_select.js?v=2"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof ThaiAddressSelect !== 'undefined') {
@@ -513,11 +666,13 @@ document.addEventListener('DOMContentLoaded', function () {
             amphoe: '#addr_amphoe',
             tambon: '#addr_tambon',
             zip: '#addr_zip',
+            hiddenFull: '#addr_full_hidden',
             initial: <?= $project_thai_addr_init_json ?>
         });
     }
 });
 </script>
+
 
 </body>
 </html>

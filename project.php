@@ -3,10 +3,18 @@
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน project
 
+define('DRAWDREAM_DB_LIGHT', true);
 include 'db.php';
+require_once __DIR__ . '/includes/csrf.php';
+require_once __DIR__ . '/includes/drawdream_project_status.php';
+require_once __DIR__ . '/includes/drawdream_soft_delete.php';
+require_once __DIR__ . '/includes/vendor_assets.php';
 require_once __DIR__ . '/includes/project_donation_dates.php';
 require_once __DIR__ . '/includes/donate_category_resolve.php';
 require_once __DIR__ . '/includes/foundation_account_verified.php';
+require_once __DIR__ . '/includes/project_public_list_cache.php';
+require_once __DIR__ . '/includes/donation_stats_panel.php';
+require_once __DIR__ . '/includes/drawdream_project_service_charge.php';
 
 $is_verified = drawdream_foundation_account_is_verified($conn);
 
@@ -14,6 +22,9 @@ $role    = $_SESSION['role'] ?? 'guest';
 $viewMode = $_GET['view'] ?? (($role === 'foundation') ? 'foundation' : 'donor');
 if ($role !== 'foundation') $viewMode = 'donor';
 $isFoundationOwnView = ($role === 'foundation' && $viewMode === 'foundation');
+if ($role === 'foundation') {
+    drawdream_check_completed_foundation_projects($conn);
+}
 $keyword = trim($_GET['q'] ?? '');
 $location = trim($_GET['loc'] ?? 'all');
 $status = $_GET['status'] ?? 'all';
@@ -46,12 +57,12 @@ if ($role === 'foundation' && isset($_POST['delete_project_id'])) {
             }
 
             mysqli_commit($conn);
-            echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>";
+            echo drawdream_sweetalert2_js_tag('', false);
             echo "<script>Swal.fire({icon:'success',title:'ลบโครงการเรียบร้อยแล้ว',showConfirmButton:false,timer:1800}).then(()=>{window.location='project.php?view=foundation';});</script>";
             exit();
         } catch (Throwable $e) {
             mysqli_rollback($conn);
-            echo "<script src='https://cdn.jsdelivr.net/npm/sweetalert2@11'></script>";
+            echo drawdream_sweetalert2_js_tag('', false);
             echo "<script>Swal.fire({icon:'error',title:'ลบโครงการไม่สำเร็จ',text:'" . addslashes($e->getMessage()) . "',showConfirmButton:true}).then(()=>{window.location='project.php?view=foundation';});</script>";
             exit();
         }
@@ -91,9 +102,53 @@ if (isset($_GET['cat'])) {
 }
 
 $statusOptions = ['all', 'fundraising', 'completed'];
-$sortOptions = ['latest', 'popular_desc', 'popular_asc', 'no_donation_latest'];
+$sortOptions = ['latest', 'popular_desc', 'popular_asc', 'near_goal', 'near_closing', 'no_donation_latest'];
 if (!in_array($status, $statusOptions, true)) $status = 'all';
 if (!in_array($sort, $sortOptions, true)) $sort = 'latest';
+
+$statusLabelsUi = ['all' => 'ทั้งหมด', 'fundraising' => 'กำลังระดมทุน', 'completed' => 'เสร็จสิ้น'];
+$sortLabelsUi = [
+    'latest' => 'ล่าสุด',
+    'popular_desc' => 'ยอดบริจาค มาก→น้อย',
+    'popular_asc' => 'ยอดบริจาค น้อย→มาก',
+    'near_goal' => 'ใกล้ครบยอดบริจาค',
+    'near_closing' => 'ใกล้ปิดรับบริจาค',
+    'no_donation_latest' => 'ยังไม่มีผู้บริจาค (ล่าสุด)',
+];
+$projectFiltersActive = $keyword !== ''
+    || $location !== 'all'
+    || $status !== 'all'
+    || $sort !== 'latest'
+    || !empty($selectedCats);
+
+/** @return list<string> */
+function drawdream_project_active_filter_labels(
+    string $keyword,
+    array $selectedCats,
+    string $location,
+    string $status,
+    string $sort,
+    array $statusLabelsUi,
+    array $sortLabelsUi
+): array {
+    $parts = [];
+    if ($keyword !== '') {
+        $parts[] = 'คำค้นหา: 「' . $keyword . '」';
+    }
+    if (!empty($selectedCats)) {
+        $parts[] = 'หมวดหมู่: ' . implode(', ', $selectedCats);
+    }
+    if ($location !== 'all') {
+        $parts[] = 'ที่ตั้ง: ' . $location;
+    }
+    if ($status !== 'all') {
+        $parts[] = 'สถานะ: ' . ($statusLabelsUi[$status] ?? $status);
+    }
+    if ($sort !== 'latest') {
+        $parts[] = 'เรียงตาม: ' . ($sortLabelsUi[$sort] ?? $sort);
+    }
+    return $parts;
+}
 
 $thaiRegions = [
     'ภาคเหนือ' => ['เชียงใหม่', 'เชียงราย', 'ลำปาง', 'ลำพูน', 'น่าน', 'พะเยา', 'แพร่', 'แม่ฮ่องสอน', 'อุตรดิตถ์'],
@@ -152,7 +207,7 @@ function projectStatusThai($status) {
         'approved' => ['label' => 'กำลังระดมทุน', 'class' => 'st-approved'],
         'completed' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
         'done' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
-        'purchasing' => ['label' => 'กำลังจัดซื้อ', 'class' => 'st-purchasing'],
+        'purchasing' => ['label' => 'อัปเดตผลลัพธ์', 'class' => 'st-purchasing'],
         'rejected' => ['label' => 'ไม่ผ่านการอนุมัติ', 'class' => 'st-rejected'],
     ];
     return $map[$status] ?? ['label' => (string)$status, 'class' => 'st-pending'];
@@ -171,15 +226,7 @@ function foundation_project_allow_outcome_update(array $row): bool
 
 /** มีข้อมูลผลลัพธ์ใน foundation_project (update_text / update_images) แล้วหรือไม่ */
 function foundation_project_has_outcome_posted(array $row): bool {
-    if (trim((string)($row['update_text'] ?? '')) !== '') {
-        return true;
-    }
-    $raw = trim((string)($row['update_images'] ?? ''));
-    if ($raw === '') {
-        return false;
-    }
-    $arr = json_decode($raw, true);
-    return is_array($arr) && count($arr) > 0;
+    return drawdream_project_has_outcome_posted($row);
 }
 
 /**
@@ -187,40 +234,7 @@ function foundation_project_has_outcome_posted(array $row): bool {
  * DB status purchasing (กำลังจัดซื้อหลังแอดมิน escrow) นับเป็น completed ในมุมผู้บริจาค
  */
 function donorProjectEffectiveState(array $row): string {
-    $goal = !empty($row['goal_amount']) ? (float)$row['goal_amount'] : 0.0;
-    $raised = (float)($row['current_donate'] ?? 0);
-    $dbSt = (string)($row['project_status'] ?? '');
-
-    $half = ($goal > 0) ? ($goal * 0.5) : 0.0;
-
-    $endRaw = $row['end_date'] ?? null;
-    $ended = false;
-    if (!empty($endRaw)) {
-        try {
-            $today = (new DateTimeImmutable('now', new DateTimeZone('Asia/Bangkok')))->format('Y-m-d');
-            $endDay = substr((string)$endRaw, 0, 10);
-            $ended = ($endDay !== '' && $endDay < $today);
-        } catch (Exception $e) {
-            $ended = false;
-        }
-    }
-
-    if (in_array($dbSt, ['completed', 'done', 'purchasing'], true)) {
-        return 'completed';
-    }
-
-    if ($raised >= $goal && $goal > 0) {
-        return 'completed';
-    }
-
-    if ($ended) {
-        if ($raised >= $half) {
-            return 'completed';
-        }
-        return 'closed';
-    }
-
-    return 'fundraising';
+    return drawdream_donor_project_effective_state($row);
 }
 
 /** ยังรับบริจาคได้ (วันสิ้นสุดตามเขตเวลาไทย — สอดคล้องหน้าชำระเงิน) */
@@ -242,6 +256,94 @@ function donorProjectStillAcceptingDonations(array $row): bool {
 function donorProjectShowInBrowseList(array $row): bool
 {
     return donorProjectEffectiveState($row) === 'fundraising';
+}
+
+/** โครงการที่ยังเปิดรับบริจาคได้จริง (อนุมัติแล้ว + ระดมทุน + ยังไม่ครบเป้า + ยังไม่เลยวันปิด) */
+function donorProjectOpenForDonationBrowse(array $row): bool
+{
+    if ((string)($row['project_status'] ?? '') !== 'approved') {
+        return false;
+    }
+    if (donorProjectEffectiveState($row) !== 'fundraising') {
+        return false;
+    }
+
+    return donorProjectStillAcceptingDonations($row);
+}
+
+/** เรียงตามยอด/ใกล้ครบ/ใกล้ปิด — แสดงเฉพาะโครงการที่ยังเปิดรับบริจาค */
+function donorProjectSortRequiresOpenOnly(string $sort): bool
+{
+    return in_array($sort, ['popular_desc', 'popular_asc', 'near_goal', 'near_closing'], true);
+}
+
+/** จำนวนวันจนถึงวันปิดรับ (ไม่มีวันปิด = ไปท้ายสุด) */
+function donorProjectDaysRemainingForSort(array $row): int
+{
+    $endRaw = trim((string)($row['end_date'] ?? ''));
+    if ($endRaw === '') {
+        return PHP_INT_MAX;
+    }
+    try {
+        $tz = new DateTimeZone('Asia/Bangkok');
+        $today = new DateTimeImmutable('today', $tz);
+        $endDay = new DateTimeImmutable(substr($endRaw, 0, 10), $tz);
+        if ($endDay < $today) {
+            return PHP_INT_MAX;
+        }
+
+        return (int)$today->diff($endDay)->days;
+    } catch (Exception $e) {
+        return PHP_INT_MAX;
+    }
+}
+
+/** @param list<array<string,mixed>> $rows */
+function donorSortProjectRows(array $rows, string $sort): array
+{
+    if ($sort === 'popular_desc' || $sort === 'popular_asc') {
+        usort($rows, static function (array $a, array $b) use ($sort): int {
+            $ca = projectRaisedForDisplay($a);
+            $cb = projectRaisedForDisplay($b);
+            if ($ca === $cb) {
+                return ((int)($b['project_id'] ?? 0)) <=> ((int)($a['project_id'] ?? 0));
+            }
+
+            return $sort === 'popular_desc' ? ($cb <=> $ca) : ($ca <=> $cb);
+        });
+
+        return $rows;
+    }
+
+    if ($sort === 'near_goal') {
+        usort($rows, static function (array $a, array $b): int {
+            $pa = donorProjectProgressPct($a);
+            $pb = donorProjectProgressPct($b);
+            if ($pa === $pb) {
+                return ((int)($b['project_id'] ?? 0)) <=> ((int)($a['project_id'] ?? 0));
+            }
+
+            return $pb <=> $pa;
+        });
+
+        return $rows;
+    }
+
+    if ($sort === 'near_closing') {
+        usort($rows, static function (array $a, array $b): int {
+            $da = donorProjectDaysRemainingForSort($a);
+            $db = donorProjectDaysRemainingForSort($b);
+            if ($da === $db) {
+                return ((int)($b['project_id'] ?? 0)) <=> ((int)($a['project_id'] ?? 0));
+            }
+
+            return $da <=> $db;
+        });
+
+        return $rows;
+    }
+
+    return $rows;
 }
 
 /** แถบโครงการล่าสุด: แสดงทั้งที่ระดมทุนและที่ครบเป้า/กำลังจัดซื้อ (ซ่อนเฉพาะโครงการปิดเพราะยอดไม่ถึงครึ่งเป้า) */
@@ -325,12 +427,21 @@ $where  = [];
 
 $publicDonorStyle = (!$isFoundationOwnView && in_array($role, ['donor', 'foundation', 'guest'], true));
 
-// ปรับให้ค้นหาเฉพาะชื่อโครงการ (project_name) เท่านั้น
-$kwLike = "%{$keyword}%";
+// ค้นหา: ชื่อโครงการ มูลนิธิ หมวด คำอธิบายสั้น
+$kwLike = '%' . $keyword . '%';
 if ($keyword !== '') {
-    $where[]  = "p.project_name LIKE ?";
-    $params[] = $kwLike;
-    $types   .= "s";
+    $where[] = '(
+        p.project_name LIKE ?
+        OR COALESCE(p.foundation_name, \'\') LIKE ?
+        OR COALESCE(fp.foundation_name, \'\') LIKE ?
+        OR COALESCE(p.category, \'\') LIKE ?
+        OR COALESCE(p.project_desc, \'\') LIKE ?
+        OR COALESCE(p.project_quote, \'\') LIKE ?
+    )';
+    for ($i = 0; $i < 6; $i++) {
+        $params[] = $kwLike;
+        $types .= 's';
+    }
 }
 
 if ($publicDonorStyle) {
@@ -371,6 +482,25 @@ if ($sort === 'popular_desc') {
 $projects = [];
 $latestProjects = [];
 
+$projectPublicListCacheable = !$isFoundationOwnView
+    && $publicDonorStyle
+    && $keyword === ''
+    && $location === 'all'
+    && $status === 'all'
+    && $sort === 'latest'
+    && $selectedCats === [];
+
+$projectListFromCache = false;
+if ($projectPublicListCacheable) {
+    $cachedProjectList = drawdream_project_public_list_cache_get();
+    if ($cachedProjectList !== null) {
+        $projects = $cachedProjectList['projects'];
+        $latestProjects = $cachedProjectList['latestProjects'];
+        $projectListFromCache = true;
+    }
+}
+
+if (!$projectListFromCache) {
 if ($isFoundationOwnView) {
     $foundationSql = "
         SELECT p.*, fp.address AS foundation_address
@@ -409,15 +539,9 @@ if ($isFoundationOwnView) {
 
     if ($publicDonorStyle) {
         $projects = donorFilterProjectRows($projects, $status);
-        if (in_array($sort, ['popular_desc', 'popular_asc'], true)) {
-            usort($projects, static function (array $a, array $b) use ($sort): int {
-                $ca = (float)($a['current_donate'] ?? 0);
-                $cb = (float)($b['current_donate'] ?? 0);
-                if ($ca === $cb) {
-                    return ((int)($b['project_id'] ?? 0)) <=> ((int)($a['project_id'] ?? 0));
-                }
-                return $sort === 'popular_desc' ? ($cb <=> $ca) : ($ca <=> $cb);
-            });
+        if (donorProjectSortRequiresOpenOnly($sort)) {
+            $projects = array_values(array_filter($projects, 'donorProjectOpenForDonationBrowse'));
+            $projects = donorSortProjectRows($projects, $sort);
         }
     }
 
@@ -449,6 +573,10 @@ if ($isFoundationOwnView) {
         }
     }
 }
+    if ($projectPublicListCacheable) {
+        drawdream_project_public_list_cache_set($projects, $latestProjects);
+    }
+}
 $hasOutcomeCandidates = false;
 if ($isFoundationOwnView) {
     foreach ($projects as $projectRow) {
@@ -457,6 +585,23 @@ if ($isFoundationOwnView) {
             break;
         }
     }
+}
+
+$projectDonorCounts = [];
+$projectDonationCategoryId = 0;
+if ($publicDonorStyle && !$isFoundationOwnView) {
+    $projectDonationCategoryId = drawdream_donate_category_id_for_project($conn);
+    if ($projectDonationCategoryId <= 0) {
+        $projectDonationCategoryId = drawdream_get_or_create_project_donate_category_id($conn);
+    }
+    $allProjectIds = [];
+    foreach ($projects as $pr) {
+        $allProjectIds[] = (int)($pr['project_id'] ?? 0);
+    }
+    foreach ($latestProjects as $pr) {
+        $allProjectIds[] = (int)($pr['project_id'] ?? 0);
+    }
+    $projectDonorCounts = drawdream_project_donor_counts_batch($conn, $projectDonationCategoryId, $allProjectIds);
 }
 ?>
 <!DOCTYPE html>
@@ -468,7 +613,7 @@ if ($isFoundationOwnView) {
     
     <title>โครงการ | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=45">
+    <link rel="stylesheet" href="css/project.css?v=47">
 
 </head>
 <body class="projects-page">
@@ -476,6 +621,23 @@ if ($isFoundationOwnView) {
 <?php include 'navbar.php'; ?>
 
 <?php if ($isFoundationOwnView): ?>
+
+<?php
+$foundationProjectFlashMsg = trim((string)($_GET['msg'] ?? ''));
+$foundationProjectFlashIcon = (isset($_GET['msg_icon']) && $_GET['msg_icon'] === 'warning') ? 'warning' : 'success';
+if ($foundationProjectFlashMsg !== ''):
+    echo drawdream_sweetalert2_js_tag();
+?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Swal.fire({
+        icon: <?= json_encode($foundationProjectFlashIcon, JSON_UNESCAPED_UNICODE) ?>,
+        title: <?= json_encode($foundationProjectFlashMsg, JSON_UNESCAPED_UNICODE) ?>,
+        confirmButtonText: 'ตกลง'
+    });
+});
+</script>
+<?php endif; ?>
 
 <div class="foundation-view-wrap">
     <div class="foundation-view-head">
@@ -507,7 +669,9 @@ if ($isFoundationOwnView) {
                     $goal = (float)($row['goal_amount'] ?? 0);
                     $raised = projectRaisedForDisplay($row);
                     $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0;
-                    $statusMeta = projectStatusThai($row['project_status'] ?? 'pending');
+                    $statusMeta = $isFoundationOwnView
+                        ? drawdream_foundation_project_workflow_pill($row)
+                        : projectStatusThai($row['project_status'] ?? 'pending');
                     // ดึง remark กรณีถูกปฏิเสธ (ถ้ามี)
                     $remark = '';
                     if (($row['project_status'] ?? '') === 'rejected') {
@@ -617,16 +781,24 @@ if ($isFoundationOwnView) {
         <p class="hero-subtitle">บริจาคให้โครงการที่ใช่</p>
         <form method="get" class="search-box" id="project-filter-form">
             <div class="search-container">
-                <input class="search-input" type="text" name="q" placeholder="พิมพ์คำค้นหา" value="<?= htmlspecialchars($keyword) ?>">
-                <button type="submit" class="search-button" aria-label="ค้นหา">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#555" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input class="search-input" type="search" name="q" placeholder="ค้นหาชื่อโครงการ มูลนิธิ หรือหมวด…" value="<?= htmlspecialchars($keyword) ?>" autocomplete="off">
+                <button type="submit" class="search-button" aria-label="ค้นหาโครงการ">
+                    <svg class="search-button-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <span class="search-button-label">ค้นหา</span>
                 </button>
             </div>
 
+            <div class="filter-pills-wrap">
             <div class="filter-pills">
                 <?php
                     $statusLabels = ['all' => 'สถานะ', 'fundraising' => 'กำลังระดมทุน', 'completed' => 'เสร็จสิ้น'];
-                    $sortLabels   = ['latest' => 'เรียงตาม', 'popular_desc' => 'ยอดบริจาค มาก→น้อย', 'popular_asc' => 'ยอดบริจาค น้อย→มาก'];
+                    $sortLabels   = [
+                        'latest' => 'เรียงตาม',
+                        'popular_desc' => 'ยอดบริจาค มาก→น้อย',
+                        'popular_asc' => 'ยอดบริจาค น้อย→มาก',
+                        'near_goal' => 'ใกล้ครบยอดบริจาค',
+                        'near_closing' => 'ใกล้ปิดรับบริจาค',
+                    ];
                 ?>
 
                 <!-- หมวดหมู่: เลือกได้หลายหมวด ส่งฟอร์มทันทีเมื่อคลิก (ไม่มีปุ่มนำไปใช้) -->
@@ -700,8 +872,16 @@ if ($isFoundationOwnView) {
                         <div class="cust-option<?= $sort === 'latest' ? ' selected' : '' ?>" data-val="latest" data-label="เรียงตาม" data-default="1">ล่าสุด</div>
                         <div class="cust-option<?= $sort === 'popular_desc' ? ' selected' : '' ?>" data-val="popular_desc" data-label="ยอดบริจาค มาก→น้อย">ยอดบริจาค มาก→น้อย</div>
                         <div class="cust-option<?= $sort === 'popular_asc' ? ' selected' : '' ?>" data-val="popular_asc" data-label="ยอดบริจาค น้อย→มาก">ยอดบริจาค น้อย→มาก</div>
+                        <div class="cust-option<?= $sort === 'near_goal' ? ' selected' : '' ?>" data-val="near_goal" data-label="ใกล้ครบยอดบริจาค">ใกล้ครบยอดบริจาค</div>
+                        <div class="cust-option<?= $sort === 'near_closing' ? ' selected' : '' ?>" data-val="near_closing" data-label="ใกล้ปิดรับบริจาค">ใกล้ปิดรับบริจาค</div>
                     </div>
                 </div>
+            </div>
+            <?php if ($projectFiltersActive): ?>
+                <div class="filter-clear-row">
+                    <a href="project.php" class="filter-clear-all">ล้างทั้งหมด</a>
+                </div>
+            <?php endif; ?>
             </div>
         </form>
     </div>
@@ -717,13 +897,7 @@ if ($role === 'admin'):
 <?php endif; ?>
 
 <div class="container">
-    <?php
-    $projectDonationCategoryId = drawdream_donate_category_id_for_project($conn);
-    if ($projectDonationCategoryId <= 0) {
-        $projectDonationCategoryId = drawdream_get_or_create_project_donate_category_id($conn);
-    }
-    ?>
-    <?php if (!empty($latestProjects)): ?>
+    <?php if (!empty($latestProjects) && !$projectFiltersActive): ?>
         <section class="latest-projects-wrap">
             <button type="button" class="latest-nav latest-prev" id="latest-prev" aria-label="เลื่อนไปซ้าย">&#10094;</button>
             <div class="latest-track-outer">
@@ -740,16 +914,8 @@ if ($role === 'admin'):
                         if ($latestBlurb === '') {
                             $latestBlurb = trim((string)($latest['project_desc'] ?? ''));
                         }
-                        $latestDonorCount = 0;
+                        $latestDonorCount = $projectDonorCounts[(int)($latest['project_id'] ?? 0)] ?? 0;
                         $latestDaysLeft = null;
-                        $stmtLatestDonor = $conn->prepare("SELECT COUNT(DISTINCT donor_id) AS cnt FROM donation WHERE category_id=? AND target_id=? AND payment_status='completed'");
-                        $latestPid = (int)$latest['project_id'];
-                        $stmtLatestDonor->bind_param("ii", $projectDonationCategoryId, $latestPid);
-                        $stmtLatestDonor->execute();
-                        $latestDonorRow = $stmtLatestDonor->get_result()->fetch_assoc();
-                        if ($latestDonorRow) {
-                            $latestDonorCount = (int)$latestDonorRow['cnt'];
-                        }
                         $latestEnd = !empty($latest['end_date']) ? new DateTime($latest['end_date']) : null;
                         if ($latestEnd) {
                             $todayLatest = new DateTime('today');
@@ -840,16 +1006,8 @@ if ($role === 'admin'):
                     if ($blurb === '') {
                         $blurb = trim((string)($row['project_desc'] ?? ''));
                     }
-                    $donorCount = 0;
+                    $donorCount = $projectDonorCounts[(int)($row['project_id'] ?? 0)] ?? 0;
                     $daysLeft = null;
-                    $stmtDonor = $conn->prepare("SELECT COUNT(DISTINCT donor_id) AS cnt FROM donation WHERE category_id=? AND target_id=? AND payment_status='completed'");
-                    $pid = (int)$row['project_id'];
-                    $stmtDonor->bind_param("ii", $projectDonationCategoryId, $pid);
-                    $stmtDonor->execute();
-                    $donorRow = $stmtDonor->get_result()->fetch_assoc();
-                    if ($donorRow) {
-                        $donorCount = (int)$donorRow['cnt'];
-                    }
                     $endDate = !empty($row['end_date']) ? new DateTime($row['end_date']) : null;
                     if ($endDate) {
                         $today = new DateTime('today');
@@ -930,9 +1088,28 @@ if ($role === 'admin'):
                 </div>
             <?php endforeach; ?>
         <?php else: ?>
+            <?php
+                $activeFilterLabels = drawdream_project_active_filter_labels(
+                    $keyword,
+                    $selectedCats,
+                    $location,
+                    $status,
+                    $sort,
+                    $statusLabelsUi,
+                    $sortLabelsUi
+                );
+            ?>
             <div class="no-projects">
-                <div class="no-projects-icon"></div>
-                <p>ไม่พบโครงการ<?= !empty($selectedCats) ? ' ในหมวดที่เลือก' : '' ?></p>
+                <div class="no-projects-icon" aria-hidden="true">🔍</div>
+                <p class="no-projects-title">ไม่พบโครงการที่ตรงเงื่อนไข</p>
+                <?php if (!empty($activeFilterLabels)): ?>
+                    <ul class="no-projects-filters">
+                        <?php foreach ($activeFilterLabels as $fl): ?>
+                            <li><?= htmlspecialchars($fl, ENT_QUOTES, 'UTF-8') ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+                <a href="project.php" class="filter-clear-all filter-clear-all--empty">ล้างตัวกรอง</a>
             </div>
         <?php endif; ?>
     </div>
@@ -1181,21 +1358,32 @@ initSimpleDropdown('sort', 'latest');
     });
 
     document.querySelectorAll('.loc-region-item').forEach(function(item) {
-        item.addEventListener('mouseenter', function() {
-            document.querySelectorAll('.loc-region-item').forEach(r => r.classList.remove('active'));
-            this.classList.add('active');
-            const region = this.dataset.region;
-            if (region === '__all__') { rightCol.innerHTML = ''; return; }
+        function selectRegionRow() {
+            document.querySelectorAll('.loc-region-item').forEach(function(r) { r.classList.remove('active'); });
+            item.classList.add('active');
+            const region = item.dataset.region;
+            if (region === '__all__') {
+                rightCol.innerHTML = '';
+                return;
+            }
             populateProvinces(region, thaiRegionsData[region] || []);
-        });
+        }
+
+        item.addEventListener('mouseenter', selectRegionRow);
 
         if (item.dataset.region === '__all__') {
-            item.addEventListener('click', function() {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
                 locValue.value = 'all';
                 locLabel.textContent = 'ตำแหน่งที่ตั้ง';
                 trigger.classList.remove('pill-active');
                 panel.classList.remove('open');
                 mainForm.submit();
+            });
+        } else {
+            item.addEventListener('click', function(e) {
+                e.stopPropagation();
+                selectRegionRow();
             });
         }
     });

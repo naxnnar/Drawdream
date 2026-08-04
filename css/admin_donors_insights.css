@@ -187,6 +187,41 @@
     }
 }
 
+@media (max-width: 560px) {
+    .admin-insight-card {
+        padding: 16px 14px 18px;
+    }
+
+    .admin-insight-card__head {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .admin-compare-chart {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .admin-compare-legend {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .admin-compare-bars-area {
+        padding-left: 28px;
+        min-height: 180px;
+    }
+
+    .admin-compare-bar-wrap {
+        flex: 0 0 72px;
+    }
+
+    .admin-compare-bar {
+        width: 64px;
+    }
+}
+
 .admin-top-donor {
     border-radius: 16px;
     padding: 22px 16px 18px;

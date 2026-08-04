@@ -72,7 +72,7 @@ function drawdream_foundation_analytics_totals(mysqli $conn, int $foundationId, 
     $donationRowCount = 0;
     if ($st) {
         $st->bind_param(
-            'iiiiisi',
+            'iiiisii',
             $childCat,
             $foundationId,
             $projCat,
@@ -236,7 +236,7 @@ function drawdream_foundation_analytics_popular_categories(mysqli $conn, int $fo
  *   all_plans: array{cancelled:int,active:int,paused:int,other:int,denom:int,cancel_pct:?float}
  * }
  */
-function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundationId, int $childCat): array
+function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundationId, int $childCat, bool $monthlyOnly = false): array
 {
     $sqlMonthly = "
     SELECT LOWER(TRIM(COALESCE(h.current_status, ''))) AS rs, COUNT(*) AS c
@@ -301,6 +301,6 @@ function drawdream_foundation_analytics_sponsorship(mysqli $conn, int $foundatio
 
     return [
         'monthly' => $run($conn, $sqlMonthly, $foundationId),
-        'all_plans' => $run($conn, $sqlAll, $foundationId),
+        'all_plans' => $monthlyOnly ? [] : $run($conn, $sqlAll, $foundationId),
     ];
 }

@@ -1,7 +1,6 @@
 ﻿<?php
 // admin_foundations_overview.php — ภาพรวมมูลนิธิ
 // รายการมูลนิธิทั้งหมด — มุมมองแอดมิน
-// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน foundations overview
 include 'db.php';
 
 if (!isset($_SESSION['user_id']) || ($_SESSION['role'] ?? '') !== 'admin') {
@@ -34,14 +33,21 @@ $rows = $conn->query($sql);
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>มูลนิธิทั้งหมด | Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/admin_directory.css">
+    <link rel="stylesheet" href="css/admin_directory.css?v=8">
+    <link rel="prefetch" href="admin_foundations_chart.php">
+    <?php require_once __DIR__ . '/includes/vendor_assets.php'; echo drawdream_bootstrap_icons_link(); ?>
 </head>
 <body>
 <?php include 'navbar.php'; ?>
 
 <div class="admin-directory-page">
-    <div class="admin-directory-head">
+    <div class="admin-directory-head admin-foundations-overview-head">
         <h1 class="admin-directory-title">มูลนิธิทั้งหมด</h1>
+        <div class="admin-dir-actions">
+            <a class="admin-dir-btn admin-dir-btn--analytics" href="admin_foundations_chart.php" title="เปรียบเทียบยอดบริจาคทุกมูลนิธิ">
+                <i class="bi bi-pie-chart-fill" aria-hidden="true"></i> กราฟเปรียบเทียบ
+            </a>
+        </div>
     </div>
 
     <div class="admin-dir-table-wrap admin-dir-table-wrap--foundations">
@@ -74,6 +80,8 @@ $rows = $conn->query($sql);
                                 <span class="admin-pill admin-pill--success">ยืนยันแล้ว</span>
                             <?php elseif ($verifyVal === 2): ?>
                                 <span class="admin-pill admin-pill--danger">ไม่อนุมัติ (รอแก้ไข)</span>
+                            <?php elseif ($verifyVal === 3): ?>
+                                <span class="admin-pill admin-pill--warning">พัก (ไม่อัปเดตผล)</span>
                             <?php else: ?>
                                 <span class="admin-pill admin-pill--warning">รออนุมัติ</span>
                             <?php endif; ?>
@@ -87,10 +95,9 @@ $rows = $conn->query($sql);
                             <div class="admin-dir-actions admin-dir-actions--foundation">
                                 <a class="admin-dir-btn admin-dir-btn--primary"
                                    href="<?= htmlspecialchars($foundationDetailHref, ENT_QUOTES, 'UTF-8') ?>">มูลนิธิ</a>
-                                <a class="admin-dir-btn admin-dir-btn--ghost"
-                                   href="admin_foundation_totals.php?foundation_id=<?= $fid ?>">ยอดมูลนิธิ</a>
                                 <a class="admin-dir-btn admin-dir-btn--analytics"
-                                   href="admin_foundation_analytics_view.php?foundation_id=<?= $fid ?>">รายงานเชิงวิเคราะห์</a>
+                                   href="admin_foundation_totals.php?foundation_id=<?= $fid ?>"
+                                   title="ดูยอดบริจาคและประวัติรายการของมูลนิธินี้">ยอดมูลนิธิ</a>
                             </div>
                         </td>
                     </tr>

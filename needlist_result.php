@@ -1,9 +1,8 @@
-﻿<?php
+<?php
+declare(strict_types=1);
 // needlist_result.php — ผลลัพธ์การระดมสิ่งของมูลนิธิ (หลังครบเป้าหมาย) — UI เดียวกับ project_result.php
 
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน needlist result
-
-declare(strict_types=1);
 
 include 'db.php';
 
@@ -95,6 +94,7 @@ function drawdream_needlist_result_images_from_profile(string $raw): array
 $imageList = drawdream_needlist_result_images_from_profile($rawImg);
 $hasContent = $text !== '' || $imageList !== [];
 $goalMet = $goal > 0 && $current >= $goal;
+$statusLabel = $hasContent ? 'โครงการเสร็จสิ้น' : ($goalMet ? 'ครบเป้าหมายแล้ว — รอมูลนิธิโพสต์ผลลัพธ์' : 'กำลังระดมทุน');
 $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
 
 ?><!DOCTYPE html>
@@ -166,7 +166,7 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
     <div class="result-title">ผลลัพธ์ของมูลนิธิ: <?= htmlspecialchars($fname) ?></div>
     <div class="result-meta">
         ได้รับเงิน <?= number_format($current, 0) ?> / <?= number_format($goal, 0) ?> บาท<br>
-        สถานะ: <span style="color:#597D57;">โครงการเสร็จสิ้น</span>
+        สถานะ: <span style="color:#597D57;"><?= htmlspecialchars($statusLabel) ?></span>
     </div>
     <?php if (!$hasContent): ?>
         <div style="color:#aaa; text-align:center;">ยังไม่มีผลลัพธ์ที่มูลนิธิโพสต์ไว้</div>
@@ -209,7 +209,6 @@ $fname = (string)($fp['foundation_name'] ?? 'มูลนิธิ');
         </div>
     <?php endif; ?>
 </div>
-<?php include __DIR__ . '/includes/site_footer.php'; ?>
 <?php if ($hasContent && count($imageList) > 1): ?>
 <script>
 (function () {

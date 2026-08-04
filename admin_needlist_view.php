@@ -206,12 +206,6 @@ $createdLabel = ($createdRaw !== '' && strpos($createdRaw, '0000-00-00') !== 0)
                             <span class="label">ปิดรับบริจาคอัตโนมัติ (รอบ 1 เดือน)</span>
                             <span class="value"><?= htmlspecialchars($endStatLabel) ?></span>
                         </div>
-                        <?php if ($apLower !== 'pending' && trim((string)($row['review_note'] ?? '')) !== ''): ?>
-                        <div class="data-item full">
-                            <span class="label">หมายเหตุจากแอดมิน</span>
-                            <span class="value"><?= htmlspecialchars((string)$row['review_note']) ?></span>
-                        </div>
-                        <?php endif; ?>
                     </div>
 
                     <div class="donation-stats-panel" aria-label="สรุปตัวเลขรายการสิ่งของ">

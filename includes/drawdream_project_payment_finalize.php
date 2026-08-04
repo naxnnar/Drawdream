@@ -71,26 +71,7 @@ function drawdream_project_bump_and_maybe_complete(mysqli $conn, int $project_id
         $upd->bind_param('i', $project_id);
         $upd->execute();
 
-        $foundation_user_id = (int)$completed_proj['foundation_user_id'];
-        $proj_name = $completed_proj['project_name'];
-        $total = number_format((float)$completed_proj['current_donate'], 2);
-
-        $scRow = $conn->prepare(
-            'SELECT service_charge FROM foundation_project WHERE project_id = ? LIMIT 1'
-        );
-        $scAmt = 0.0;
-        if ($scRow) {
-            $scRow->bind_param('i', $project_id);
-            $scRow->execute();
-            $scAmt = (float)($scRow->get_result()->fetch_assoc()['service_charge'] ?? 0);
-        }
-        $scLabel = $scAmt > 0 ? number_format($scAmt, 2) : '0.00';
-        $notif_title = 'โครงการของคุณได้รับเงินครบแล้ว! 🎉';
-        $notif_msg = "โครงการ \"$proj_name\" ได้รับเงินบริจาครวม $total บาท "
-            . "กรุณาชำระค่าบริการระบบ {$scLabel} บาท (5%) จากหน้ารายละเอียดโครงการ "
-            . 'ก่อนแอดมินยืนยันโอนเงิน escrow';
-        $notif_link = 'foundation_post_update.php?project_id=' . $project_id;
-        drawdream_send_notification($conn, $foundation_user_id, '', $notif_title, $notif_msg, $notif_link);
+        drawdream_project_notify_service_charge_due($conn, $project_id);
     }
 
     return DRAWDREAM_PROJECT_FINALIZE_OK;

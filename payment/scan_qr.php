@@ -7,7 +7,7 @@
  * ตรวจสอบ charge_id + session (pending_*) ให้ตรงกันก่อนแสดง — กันป้อน URL ข้ามคน
  * ภาพ QR ควรมาจาก Omise (session / GET charge) — ไม่ใช้ภาพจำลองในโหมดทดสอบยกเว้นชาร์จ mock (OMISE_ALLOW_LOCAL_MOCK)
  */
-include '../db.php';
+require_once __DIR__ . '/../includes/payment_bootstrap.php';
 include 'config.php';
 
 $type = $_GET['type'] ?? 'project';
@@ -70,7 +70,6 @@ if ($type === 'project') {
     $receipt_target_label = 'ชื่อโครงการ';
     $receipt_target_value = $project_name;
     $return_payment_page = 'payment_project.php?project_id=' . $project_id;
-    $confirm_href = 'check_project_payment.php?charge_id=' . urlencode($charge_id) . '&project_id=' . $project_id;
     $back_aria = 'กลับไปหน้าชำระเงินโครงการ';
 } elseif ($type === 'child') {
     $child_id = (int)($_GET['child_id'] ?? ($_SESSION['pending_child_id'] ?? 0));
@@ -94,7 +93,6 @@ if ($type === 'project') {
     $receipt_target_label = 'ชื่อเด็ก';
     $receipt_target_value = $child_name;
     $return_payment_page = '../children_donate.php?id=' . $child_id;
-    $confirm_href = 'check_child_payment.php?charge_id=' . urlencode($charge_id) . '&child_id=' . $child_id;
     $back_aria = 'กลับไปหน้าโปรไฟล์เด็ก';
 } else {
     $fid = (int)($_GET['fid'] ?? ($_SESSION['pending_foundation_id'] ?? 0));
@@ -118,7 +116,6 @@ if ($type === 'project') {
     $receipt_target_label = 'มูลนิธิ';
     $receipt_target_value = $foundation_name;
     $return_payment_page = 'foundation_donate.php?fid=' . $fid;
-    $confirm_href = 'check_needlist_payment.php?charge_id=' . urlencode($charge_id) . '&fid=' . $fid;
     $back_aria = 'กลับไปหน้าบริจาคมูลนิธิ';
 }
 
@@ -141,8 +138,32 @@ if ($qr_image === '' && !$is_mock_charge) {
 }
 $qr_missing = ($qr_image === '');
 
+$auto_test_pay = $is_test_mode && drawdream_omise_test_auto_mark_paid_enabled();
+if ($auto_test_pay && !$is_mock_charge) {
+    drawdream_omise_ensure_test_charge_paid($charge_id);
+}
+
+$poll_ms = $auto_test_pay ? 800 : ($type === 'foundation' ? 1200 : 2000);
+$payment_poll_url = '';
+$goal_slot_poll_url = '';
+if ($type === 'child' && $child_id > 0) {
+    $payment_poll_url = 'check_child_payment.php?poll=1&charge_id=' . rawurlencode($charge_id)
+        . '&child_id=' . $child_id;
+} elseif ($type === 'project' && $project_id > 0) {
+    $payment_poll_url = 'check_project_payment.php?poll=1&charge_id=' . rawurlencode($charge_id)
+        . '&project_id=' . $project_id;
+    $goal_slot_poll_url = 'project_goal_slot_check.php?project_id=' . $project_id
+        . '&amount=' . $amount
+        . '&charge_id=' . rawurlencode($charge_id);
+} elseif ($type === 'foundation' && $fid > 0) {
+    $payment_poll_url = 'check_needlist_payment.php?poll=1&charge_id=' . rawurlencode($charge_id)
+        . '&fid=' . $fid;
+    $goal_slot_poll_url = 'needlist_goal_slot_check.php?fid=' . $fid
+        . '&amount=' . $amount
+        . '&charge_id=' . rawurlencode($charge_id);
+}
+
 $receipt_no = strtoupper(substr($charge_id, -10));
-$abandon_charge = $charge_id;
 $goal_closed_message = ($type === 'foundation')
     ? 'รายการสิ่งของครบเป้าหมายแล้ว'
     : 'โครงการครบเป้าหมายแล้ว';
@@ -175,18 +196,17 @@ $goal_closed_message = ($type === 'foundation')
         .qr-section img { max-width: 260px; width: 100%; background: #fff; padding: 16px; border-radius: 16px; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.08); }
         .qr-receipt { background: #f7f7f7; border-radius: 12px; padding: 18px 18px 10px 18px; margin-top: 18px; font-size: 1.08em; }
         .qr-receipt-row { margin-bottom: 8px; }
-        .qr-download-btn { margin: 18px auto 0 auto; display: block; background: #3C5099; color: #fff; font-size: 1.15em; font-weight: 700; border: none; border-radius: 10px; padding: 14px 0; width: 100%; max-width: none; box-sizing: border-box; cursor: pointer; transition: background 0.15s; }
-        .qr-download-btn:hover { background: #2d4580; }
-        .qr-download-btn:active { background: #243a6e; transform: scale(0.98); }
-        .qr-abandon-wrap { margin-top: 14px; }
-        .qr-abandon-btn {
-            width: 100%; margin: 0; display: block; box-sizing: border-box;
-            border: none; background: #CE573F; color: #fff;
-            cursor: pointer; padding: 14px 0; border-radius: 10px; font-weight: 700; font-size: 1.18em;
-            transition: filter 0.15s, background 0.15s;
+        .qr-test-auto-hint {
+            margin-top: 12px;
+            text-align: center;
+            line-height: 1.55;
+            padding: 12px 14px;
+            background: #fffbeb;
+            border-radius: 12px;
+            border: 1px solid #fcd34d;
+            color: #a16207;
+            font-size: 1.02em;
         }
-        .qr-abandon-btn:hover { filter: brightness(0.94); }
-        .qr-abandon-btn:active { filter: brightness(0.86); transform: scale(0.98); }
         .qr-goal-closed {
             display: none;
             text-align: left;
@@ -200,12 +220,6 @@ $goal_closed_message = ($type === 'foundation')
         }
         .qr-goal-closed.is-visible { display: block; }
         .qr-section.is-hidden { display: none; }
-        .qr-download-btn.is-disabled {
-            pointer-events: none;
-            opacity: 0.45;
-            background: #94a3b8 !important;
-            color: #fff !important;
-        }
     </style>
 </head>
 <body>
@@ -235,8 +249,8 @@ $goal_closed_message = ($type === 'foundation')
                 <p style="color:#b45309;text-align:left;line-height:1.5;padding:12px;background:#fffbeb;border-radius:12px;border:1px solid #fcd34d;">
                     ไม่สามารถโหลดภาพ QR จาก Omise ได้ (อาจเป็นเครือข่ายหรือคีย์ API)<br>
                     ลองกลับไปหน้าชำระเงินแล้วกดบริจาคใหม่
-                    <?php if ($is_test_mode && drawdream_omise_test_auto_mark_paid_enabled()): ?>
-                        — หรือกด <strong>ยืนยันการชำระ</strong> ด้านล่างเพื่อจำลองชำระสำเร็จ (โหมดทดสอบ)
+                    <?php if ($auto_test_pay): ?>
+                        — โหมดทดสอบจะยืนยันอัตโนมัติ รอสักครู่แล้วระบบพาไปใบเสร็จ
                     <?php elseif ($is_test_mode): ?>
                         หรือเปิด
                         <a href="https://dashboard.omise.co/test/charges" target="_blank" rel="noopener">Omise Dashboard (test)</a>
@@ -248,7 +262,11 @@ $goal_closed_message = ($type === 'foundation')
                 <img src="<?= htmlspecialchars($qr_image, ENT_QUOTES, 'UTF-8') ?>" alt="PromptPay QR">
             <?php endif; ?>
         </div>
-        <?php if ($is_test_mode && !$qr_missing): ?>
+        <?php if ($auto_test_pay): ?>
+            <p id="qrTestAutoHint" class="qr-test-auto-hint" role="status" aria-live="polite">
+                โหมดทดสอบ — ระบบยืนยันอัตโนมัติ กำลังพาไปใบเสร็จ...
+            </p>
+        <?php elseif ($is_test_mode && !$qr_missing): ?>
             <div style="margin-top:12px;text-align:left;"><?= drawdream_omise_test_pending_help_html($charge_id) ?></div>
         <?php endif; ?>
         <div class="qr-receipt">
@@ -257,56 +275,134 @@ $goal_closed_message = ($type === 'foundation')
             <div class="qr-receipt-row"><b><?= htmlspecialchars($receipt_target_label) ?></b> <?= htmlspecialchars($receipt_target_value) ?></div>
             <div class="qr-receipt-row"><b>วันที่</b> <?= date('d/m/Y H:i') ?></div>
         </div>
-        <a class="qr-download-btn" id="qrConfirmBtn"
-           href="<?= htmlspecialchars($confirm_href, ENT_QUOTES, 'UTF-8') ?>"
-           style="background:#F1CF54;color:#222;display:flex;align-items:center;justify-content:center;font-size:1.18em;text-decoration:none;">
-            ยืนยันการชำระ
-        </a>
-        <form method="post" action="abandon_qr.php" class="qr-abandon-wrap" id="qrAbandonForm">
-            <?= drawdream_csrf_field() ?>
-            <input type="hidden" name="charge_id" value="<?= htmlspecialchars($abandon_charge, ENT_QUOTES, 'UTF-8') ?>">
-            <button type="submit" class="qr-abandon-btn">ยกเลิกการชำระ</button>
-        </form>
     </div>
-<?php if (($type === 'project' && $project_id > 0) || ($type === 'foundation' && $fid > 0)): ?>
+<?php if ($payment_poll_url !== ''): ?>
 <script>
 (function () {
-    var amount = <?= (int)$amount ?>;
-    var chargeId = <?= json_encode($charge_id, JSON_UNESCAPED_UNICODE) ?>;
+    var pollMs = <?= (int)$poll_ms ?>;
+    var paymentPollUrl = <?= json_encode($payment_poll_url, JSON_UNESCAPED_UNICODE) ?>;
+    var goalSlotPollUrl = <?= json_encode($goal_slot_poll_url !== '' ? $goal_slot_poll_url : null, JSON_UNESCAPED_UNICODE) ?>;
     var closedBox = document.getElementById('qrGoalClosed');
     var imgSection = document.getElementById('qrImageSection');
-    var confirmBtn = document.getElementById('qrConfirmBtn');
-    var closed = false;
-    var pollUrl = <?php if ($type === 'project'): ?>
-        'project_goal_slot_check.php?project_id=' + encodeURIComponent(String(<?= (int)$project_id ?>))
-    <?php else: ?>
-        'needlist_goal_slot_check.php?fid=' + encodeURIComponent(String(<?= (int)$fid ?>))
-    <?php endif; ?>
-        + '&amount=' + encodeURIComponent(String(amount))
-        + '&charge_id=' + encodeURIComponent(chargeId);
+    var goalClosed = false;
+    var paymentStopped = false;
+    var paymentTimer = null;
+    var goalTimer = null;
+    var paymentFailUrl = <?= json_encode(
+        $type === 'foundation'
+            ? ('check_needlist_payment.php?charge_id=' . rawurlencode($charge_id) . '&fid=' . $fid)
+            : ($type === 'project'
+                ? ('check_project_payment.php?charge_id=' . rawurlencode($charge_id) . '&project_id=' . $project_id)
+                : ('check_child_payment.php?charge_id=' . rawurlencode($charge_id) . '&child_id=' . $child_id)),
+        JSON_UNESCAPED_UNICODE
+    ) ?>;
 
-    function applyClosed() {
-        if (closed) return;
-        closed = true;
-        if (closedBox) closedBox.classList.add('is-visible');
-        if (imgSection) imgSection.classList.add('is-hidden');
-        if (confirmBtn) confirmBtn.classList.add('is-disabled');
+    function clearPaymentTimer() {
+        if (paymentTimer) {
+            clearTimeout(paymentTimer);
+            paymentTimer = null;
+        }
     }
 
-    function poll() {
-        if (closed) return;
-        fetch(pollUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+    function clearGoalTimer() {
+        if (goalTimer) {
+            clearTimeout(goalTimer);
+            goalTimer = null;
+        }
+    }
+
+    function applyGoalClosed() {
+        if (goalClosed) {
+            return;
+        }
+        goalClosed = true;
+        clearGoalTimer();
+        if (closedBox) {
+            closedBox.classList.add('is-visible');
+        }
+        if (imgSection) {
+            imgSection.classList.add('is-hidden');
+        }
+    }
+
+    function schedulePaymentPoll() {
+        if (paymentStopped || document.hidden) {
+            return;
+        }
+        paymentTimer = setTimeout(pollPayment, pollMs);
+    }
+
+    function scheduleGoalPoll() {
+        if (goalClosed || document.hidden || !goalSlotPollUrl) {
+            return;
+        }
+        goalTimer = setTimeout(pollGoalSlot, pollMs);
+    }
+
+    function pollPayment() {
+        if (paymentStopped) {
+            return;
+        }
+        fetch(paymentPollUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data && data.redirect && (
+                    data.status === 'success'
+                    || data.status === 'paid_goal_late'
+                    || data.status === 'paid_goal_refunded'
+                    || data.status === 'failed'
+                )) {
+                    window.location.href = data.redirect;
+                    return;
+                }
+                if (!paymentStopped && !document.hidden) {
+                    schedulePaymentPoll();
+                }
+            })
+            .catch(function () {
+                if (!paymentStopped && !document.hidden) {
+                    paymentTimer = setTimeout(pollPayment, Math.min(pollMs + 1000, 8000));
+                }
+            });
+    }
+
+    function pollGoalSlot() {
+        if (goalClosed || !goalSlotPollUrl) {
+            return;
+        }
+        fetch(goalSlotPollUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (data && data.closed) {
-                    applyClosed();
+                    applyGoalClosed();
+                    return;
+                }
+                if (!goalClosed && !document.hidden) {
+                    scheduleGoalPoll();
                 }
             })
-            .catch(function () { /* ignore */ });
+            .catch(function () {
+                if (!goalClosed && !document.hidden) {
+                    goalTimer = setTimeout(pollGoalSlot, Math.min(pollMs + 1000, 6000));
+                }
+            });
     }
 
-    poll();
-    setInterval(poll, 2000);
+    pollPayment();
+    if (goalSlotPollUrl) {
+        pollGoalSlot();
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        clearPaymentTimer();
+        clearGoalTimer();
+        if (!document.hidden && !paymentStopped) {
+            pollPayment();
+        }
+        if (!document.hidden && !goalClosed && goalSlotPollUrl) {
+            pollGoalSlot();
+        }
+    });
 })();
 </script>
 <?php endif; ?>

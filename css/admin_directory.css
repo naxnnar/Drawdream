@@ -129,10 +129,104 @@ body.admin-sidebar-page .admin-directory-page {
     overflow: hidden;
     text-overflow: ellipsis;
     font-weight: 400;
+    text-decoration: none;
 }
 
 .admin-dir-actions--foundation .admin-dir-btn--analytics {
+    border: 1px solid #fdba74;
+}
+
+.admin-dir-actions--foundation .admin-dir-btn--vis {
     grid-column: 1 / -1;
+}
+
+.admin-overview-flash {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.admin-overview-flash--ok {
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    color: #047857;
+}
+
+.admin-overview-flash--err {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+}
+
+.admin-vis-dialog {
+    border: none;
+    border-radius: 14px;
+    padding: 0;
+    max-width: min(440px, calc(100vw - 24px));
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+}
+
+.admin-vis-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.admin-vis-dialog__form {
+    padding: 18px 18px 16px;
+}
+
+.admin-vis-dialog__title {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.admin-vis-dialog__sub {
+    margin: 0 0 12px;
+    font-size: 0.88rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.admin-vis-dialog__label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.admin-vis-dialog__input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+    font-size: 0.88rem;
+    resize: vertical;
+}
+
+.admin-vis-dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.admin-foundations-overview-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.admin-foundations-overview-head .admin-dir-actions .admin-dir-btn {
+    gap: 8px;
+    min-height: 44px;
 }
 
 /* หน้าภาพรวมมูลนิธิ: จัดระยะคอลัมน์ตัวเลขให้เท่ากัน */
@@ -285,6 +379,30 @@ body.admin-sidebar-page .admin-directory-page {
     color: #4b5563;
 }
 
+.admin-pill--muted {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+}
+
+.admin-dir-btn--warn {
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    color: #c2410c;
+}
+
+.admin-dir-btn--warn:hover {
+    background: #ffedd5;
+    border-color: #fb923c;
+    color: #9a3412;
+}
+
+.admin-dir-btn--current {
+    cursor: default;
+    pointer-events: none;
+    opacity: 0.92;
+}
+
 .admin-dir-thumb {
     width: 48px;
     height: 48px;
@@ -312,4 +430,105 @@ body.admin-sidebar-page .admin-directory-page {
 
 .admin-stat-card-wrap .stat-card {
     height: 100%;
+}
+
+/* ===== Mobile / narrow screens ===== */
+@media (max-width: 991px) {
+    .admin-directory-page {
+        margin: 10px 0 28px;
+        padding: 0 0 24px;
+    }
+
+    body.admin-sidebar-page .admin-directory-page {
+        margin: 10px 0 28px;
+        padding-right: 0;
+    }
+
+    .admin-directory-title {
+        font-size: 1.38rem;
+    }
+
+    .admin-directory-desc {
+        font-size: 0.98rem;
+    }
+
+    .admin-dir-table-wrap {
+        -webkit-overflow-scrolling: touch;
+        border-radius: 12px;
+    }
+
+    .admin-dir-table-wrap--foundations {
+        overflow-x: auto;
+    }
+
+    .admin-dir-table {
+        font-size: 0.9rem;
+    }
+
+    .admin-dir-table th,
+    .admin-dir-table td {
+        padding: 10px 10px;
+    }
+
+    .admin-dir-table--foundations {
+        table-layout: auto;
+        min-width: 680px;
+    }
+
+    .admin-dir-table--foundations th,
+    .admin-dir-table--foundations td {
+        padding: 10px 8px;
+        font-size: 0.88rem;
+        width: auto !important;
+        min-width: 0;
+    }
+
+    .admin-dir-actions--foundation {
+        max-width: none;
+        grid-template-columns: 1fr;
+    }
+
+    .admin-dir-actions--pair {
+        flex-direction: column;
+        flex-wrap: wrap;
+        align-items: stretch;
+    }
+
+    .admin-dir-actions--pair .admin-dir-btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .admin-dir-btn {
+        min-height: var(--nav-touch-target, 44px);
+        justify-content: center;
+    }
+
+    .admin-pill,
+    .badge-verified {
+        font-size: 0.82rem;
+        padding: 5px 10px;
+        white-space: normal;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-directory-title {
+        font-size: 1.2rem;
+    }
+
+    .admin-directory-actions-hint {
+        font-size: 0.9rem;
+        padding: 10px 12px;
+    }
+
+    .admin-dir-table {
+        font-size: 0.85rem;
+    }
+
+    .admin-dir-table th,
+    .admin-dir-table td {
+        padding: 8px 8px;
+    }
 }

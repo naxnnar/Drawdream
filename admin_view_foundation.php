@@ -1,7 +1,5 @@
 ﻿<?php
-// admin_view_foundation.php — ดูข้อมูลมูลนิธิ (จากไดเรกทอรี — ไม่มีอนุมัติ/ไม่อนุมัติ)
-
-// สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน view foundation
+// admin_view_foundation.php — ดูข้อมูลมูลนิธิ (จากไดเรกทอรี — อ่านอย่างเดียว)
 
 include 'db.php';
 require_once __DIR__ . '/includes/foundation_banks.php';
@@ -29,7 +27,7 @@ if (!$row) {
     exit();
 }
 
-$verified = (int)($row['account_verified'] ?? 0) === 1;
+$verifyVal = (int)($row['account_verified'] ?? 0);
 $bankKey = trim((string)($row['bank_name'] ?? ''));
 $bankList = drawdream_foundation_bank_list();
 $bankLabel = $bankKey !== '' ? ($bankList[$bankKey] ?? $bankKey) : '—';
@@ -48,7 +46,8 @@ $imgUrl = $imgFile !== '' ? ('uploads/profiles/' . htmlspecialchars($imgFile, EN
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ข้อมูลมูลนิธิ | DrawDream Admin</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/admin_record_view.css">
+    <link rel="stylesheet" href="css/admin_directory.css">
+    <link rel="stylesheet" href="css/admin_record_view.css?v=2">
 </head>
 <body class="admin-record-view-page">
 <?php include 'navbar.php'; ?>
@@ -57,6 +56,16 @@ $imgUrl = $imgFile !== '' ? ('uploads/profiles/' . htmlspecialchars($imgFile, EN
     <div class="admin-record-back">
         <a href="admin_foundations_overview.php">← กลับไปมูลนิธิทั้งหมด</a>
     </div>
+
+    <div class="admin-record-toolbar">
+        <div class="admin-dir-actions admin-dir-actions--foundation admin-record-toolbar__btns">
+            <span class="admin-dir-btn admin-dir-btn--primary admin-dir-btn--current" aria-current="page">มูลนิธิ</span>
+            <a class="admin-dir-btn admin-dir-btn--analytics"
+               href="admin_foundation_totals.php?foundation_id=<?= $id ?>"
+               title="ดูยอดบริจาคและประวัติรายการของมูลนิธินี้">ยอดมูลนิธิ</a>
+        </div>
+    </div>
+
     <article class="admin-record-sheet">
         <header class="admin-record-sheet__head">
             <h1>ข้อมูลมูลนิธิ</h1>
@@ -73,7 +82,17 @@ $imgUrl = $imgFile !== '' ? ('uploads/profiles/' . htmlspecialchars($imgFile, EN
             <div class="admin-record-grid">
                 <div class="admin-record-field">
                     <div class="admin-record-k">สถานะบัญชี</div>
-                    <div class="admin-record-v"><?= $verified ? 'ยืนยันแล้ว' : 'รออนุมัติ' ?></div>
+                    <div class="admin-record-v">
+                        <?php if ($verifyVal === 1): ?>
+                            <span class="admin-pill admin-pill--success">ยืนยันแล้ว</span>
+                        <?php elseif ($verifyVal === 2): ?>
+                            <span class="admin-pill admin-pill--danger">ไม่อนุมัติ (รอแก้ไข)</span>
+                        <?php elseif ($verifyVal === 3): ?>
+                            <span class="admin-pill admin-pill--warning">พักชั่วคราว (ไม่อัปเดตผลลัพธ์)</span>
+                        <?php else: ?>
+                            <span class="admin-pill admin-pill--warning">รออนุมัติ</span>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <div class="admin-record-field">
                     <div class="admin-record-k">รหัสมูลนิธิ</div>

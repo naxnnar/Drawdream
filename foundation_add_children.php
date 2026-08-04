@@ -4,15 +4,35 @@
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add children
 
 include 'db.php';
+require_once __DIR__ . '/includes/drawdream_upload.php';
+require_once __DIR__ . '/includes/drawdream_image_compress.php';
 
-// ให้เข้าได้เฉพาะ foundation
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'foundation') {
-    header("Location: login.php");
-    exit();
+function drawdream_foundation_add_children_fail(string $message): never
+{
+    $_SESSION['foundation_add_children_flash'] = $_POST;
+    $_SESSION['foundation_add_children_flash_error'] = $message;
+    $editId = (int)($_POST['child_id'] ?? 0);
+    $url = 'foundation_add_children.php';
+    if ($editId > 0) {
+        $url .= '?edit=' . $editId;
+    }
+    header('Location: ' . $url);
+    exit;
 }
 
+$childMaxUploadBytes = drawdream_child_photo_max_upload_bytes();
+$childMaxUploadLabel = drawdream_format_bytes_mb_label($childMaxUploadBytes);
+$childServerMaxBytes = min(
+    drawdream_parse_ini_size((string)ini_get('upload_max_filesize')),
+    drawdream_parse_ini_size((string)ini_get('post_max_size'))
+);
+
+// ให้เข้าได้เฉพาะ foundation
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
+drawdream_foundation_require_management_access();
+
 require_once __DIR__ . '/includes/foundation_account_verified.php';
-drawdream_foundation_require_account_verified($conn);
+drawdream_foundation_require_active_account($conn);
 
 $sql = "SELECT * FROM `foundation_profile` WHERE `user_id` = ?";
 $stmtFP = $conn->prepare($sql);
@@ -29,50 +49,28 @@ if ($fetchArr = $result->fetch_assoc()) {
     $f_name = "ไม่พบชื่อมูลนิธิ";
 }
 
-// ─── Auto-migrate: เพิ่มคอลัมน์ที่โค้ดใช้งานจริงในตาราง foundation_children ───────────────
-// หมายเหตุ: ไม่ใช้ AFTER เพื่อลดปัญหาเมื่อ schema เดิมไม่ตรงกัน
-$needed_columns = [
-    'foundation_name' => "ALTER TABLE foundation_children ADD COLUMN foundation_name VARCHAR(255) NULL",
-    'child_name' => "ALTER TABLE foundation_children ADD COLUMN child_name VARCHAR(255) NULL",
-    'birth_date' => "ALTER TABLE foundation_children ADD COLUMN birth_date DATE NULL",
-    'age' => "ALTER TABLE foundation_children ADD COLUMN age INT NULL",
-    'education' => "ALTER TABLE foundation_children ADD COLUMN education VARCHAR(255) NULL",
-    'dream' => "ALTER TABLE foundation_children ADD COLUMN dream VARCHAR(255) NULL",
-    'likes' => "ALTER TABLE foundation_children ADD COLUMN likes VARCHAR(100) NULL",
-    'wish' => "ALTER TABLE foundation_children ADD COLUMN wish VARCHAR(255) NULL",
-    'wish_cat' => "ALTER TABLE foundation_children ADD COLUMN wish_cat VARCHAR(100) NULL",
-    'bank_name' => "ALTER TABLE foundation_children ADD COLUMN bank_name VARCHAR(100) NULL",
-    'child_bank' => "ALTER TABLE foundation_children ADD COLUMN child_bank VARCHAR(100) NULL",
-    'status' => "ALTER TABLE foundation_children ADD COLUMN status VARCHAR(100) NULL",
-    'photo_child' => "ALTER TABLE foundation_children ADD COLUMN photo_child VARCHAR(255) NULL",
-    'approve_profile' => "ALTER TABLE foundation_children ADD COLUMN approve_profile VARCHAR(50) DEFAULT 'รอดำเนินการ'",
-    'approve_at' => "ALTER TABLE foundation_children ADD COLUMN approve_at DATETIME NULL",
-    'update_text' => "ALTER TABLE foundation_children ADD COLUMN update_text LONGTEXT NULL",
-    'update_at' => "ALTER TABLE foundation_children ADD COLUMN update_at DATETIME NULL",
-    'update_images' => "ALTER TABLE foundation_children ADD COLUMN update_images LONGTEXT NULL",
-];
-foreach ($needed_columns as $col => $ddl) {
-    $chk = $conn->query("SHOW COLUMNS FROM foundation_children LIKE '$col'");
-    if ($chk && $chk->num_rows === 0) {
-        $conn->query($ddl);
-    }
-}
-$childBankCol = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'child_bank'");
-if ($childBankCol && ($childBankRow = $childBankCol->fetch_assoc())) {
-    $childBankType = (string)($childBankRow['Type'] ?? '');
-    if (!preg_match('/varchar\((\d+)\)/i', $childBankType, $childBankMatch) || (int)$childBankMatch[1] < 32) {
-        @$conn->query('ALTER TABLE foundation_children MODIFY COLUMN child_bank VARCHAR(32) NULL');
-    }
-}
-$cDropReject = $conn->query("SHOW COLUMNS FROM foundation_children LIKE 'reject_reason'");
-if ($cDropReject && $cDropReject->num_rows > 0) {
-    @$conn->query('ALTER TABLE foundation_children DROP COLUMN reject_reason');
-}
-$has_birth_date_column = true; // migration ensures it exists
+$has_birth_date_column = true;
 $dreamChoices = ['คุณหมอ', 'คุณครู', 'พยาบาล', 'ทหาร', 'ตำรวจ', 'นักบิน', 'นักร้อง', 'นักเต้น', 'จิตรกร', 'แม่ค้า'];
+$formFlashError = '';
+$formFlash = null;
+if (!empty($_SESSION['foundation_add_children_flash']) && is_array($_SESSION['foundation_add_children_flash'])) {
+    $formFlash = $_SESSION['foundation_add_children_flash'];
+    unset($_SESSION['foundation_add_children_flash']);
+}
+if (!empty($_SESSION['foundation_add_children_flash_error'])) {
+    $formFlashError = trim((string)$_SESSION['foundation_add_children_flash_error']);
+    unset($_SESSION['foundation_add_children_flash_error']);
+}
+if (isset($_GET['msg']) && trim((string)$_GET['msg']) !== '' && $formFlashError === '') {
+    $formFlashError = trim((string)$_GET['msg']);
+}
 $editChildId = (int)($_GET['edit'] ?? $_POST['child_id'] ?? 0);
 $isEditForm = false;
 $editChild = null;
+
+if (is_array($formFlash) && (int)($formFlash['child_id'] ?? 0) > 0) {
+    $editChildId = (int)$formFlash['child_id'];
+}
 
 if ($editChildId > 0) {
     $stmtEdit = $conn->prepare("SELECT * FROM foundation_children WHERE child_id = ? AND foundation_id = ? LIMIT 1");
@@ -115,8 +113,18 @@ if ($isEditForm && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     $_POST['policy_consent'] = '1';
 }
 
+if (is_array($formFlash) && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    foreach ($formFlash as $key => $val) {
+        if (!is_string($key) || in_array($key, ['csrf', 'submit'], true)) {
+            continue;
+        }
+        $_POST[$key] = is_scalar($val) ? (string)$val : '';
+    }
+}
+
 if (isset($_POST['submit'])) {
     drawdream_csrf_require_valid('foundation_add_children.php');
+    require_once __DIR__ . '/includes/child_sponsorship.php';
     $child_name    = trim($_POST['child_name'] ?? '');
     $birth_date_raw = trim($_POST['birth_date'] ?? '');
     $age           = 0;
@@ -133,8 +141,7 @@ if (isset($_POST['submit'])) {
     $policy_consent = isset($_POST['policy_consent']) && $_POST['policy_consent'] === '1';
 
     if (!$policy_consent) {
-        echo "<script>alert('กรุณายินยอมนโยบายก่อนบันทึกข้อมูล'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('กรุณายินยอมนโยบายก่อนบันทึกข้อมูล');
     }
 
     // ถ้าเลือก "อื่นๆ" ให้บันทึกค่าที่ระบุเองแทน
@@ -143,59 +150,60 @@ if (isset($_POST['submit'])) {
     }
 
     if ($wish_cat === '') {
-        echo "<script>alert('กรุณาเลือกหมวดหมู่สิ่งที่ต้องการ'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('กรุณาเลือกหมวดหมู่สิ่งที่ต้องการ');
     }
     if ($wish === '') {
-        echo "<script>alert('กรุณาเลือกรายการสิ่งของ หรือระบุเอง'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('กรุณาเลือกรายการสิ่งของ หรือระบุเอง');
     }
 
     if (!preg_match('/^\d{9,12}$/', $child_bank)) {
-        echo "<script>alert('เลขบัญชีต้องเป็นตัวเลข 9-12 หลัก'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('เลขบัญชีต้องเป็นตัวเลข 9-12 หลัก');
     }
 
     // คำนวณอายุจากวันเกิด
     $dob = DateTime::createFromFormat('Y-m-d', $birth_date_raw);
     $today = new DateTime('today');
     if (!$dob || $dob->format('Y-m-d') !== $birth_date_raw) {
-        echo "<script>alert('กรุณาเลือกวันเกิดให้ถูกต้อง'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('กรุณาเลือกวันเกิดให้ถูกต้อง');
     }
     if ($dob > $today) {
-        echo "<script>alert('วันเกิดต้องไม่เป็นวันที่ในอนาคต'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('วันเกิดต้องไม่เป็นวันที่ในอนาคต');
     }
     $age = (int)$today->diff($dob)->y;
 
     if ($age < 6 || $age > 18) {
-        echo "<script>alert('อายุ {$age} ปี ไม่อยู่ในเกณฑ์ที่รับได้ (6-18 ปี) กรุณาตรวจสอบวันเกิด'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail("อายุ {$age} ปี ไม่อยู่ในเกณฑ์ที่รับได้ (6-18 ปี) กรุณาตรวจสอบวันเกิด");
     }
 
-    $allowed   = ['jpg','jpeg','png','gif','webp'];
     $newName = (string)($editChild['photo_child'] ?? '');
     if (isset($_FILES['photo_child']) && (int)($_FILES['photo_child']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
-        if ((int)$_FILES['photo_child']['error'] !== 0) {
-            echo "<script>alert('อัปโหลดรูปเด็กไม่สำเร็จ'); history.back();</script>";
-            exit();
+        $errCode = (int)($_FILES['photo_child']['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($errCode !== UPLOAD_ERR_OK) {
+            $uploadErr = drawdream_upload_error_message_th($errCode, 'รูปเด็ก');
+            drawdream_foundation_add_children_fail($uploadErr);
         }
-        $imageName = $_FILES['photo_child']['name'];
-        $tmpName   = $_FILES['photo_child']['tmp_name'];
-        $ext       = strtolower(pathinfo($imageName, PATHINFO_EXTENSION));
-        if (!in_array($ext, $allowed, true)) {
-            echo "<script>alert('อนุญาตเฉพาะไฟล์รูปภาพเท่านั้น'); history.back();</script>";
-            exit();
+
+        $imageName = (string)($_FILES['photo_child']['name'] ?? '');
+        $tmpName = (string)($_FILES['photo_child']['tmp_name'] ?? '');
+        $fileSize = (int)($_FILES['photo_child']['size'] ?? 0);
+        if (!drawdream_upload_is_image_tmp($tmpName, $imageName)) {
+            drawdream_foundation_add_children_fail('อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp');
         }
-        $newName = "child_" . time() . "." . $ext;
-        if (!move_uploaded_file($tmpName, "uploads/childern/" . $newName)) {
-            echo "<script>alert('อัปโหลดรูปไม่สำเร็จ'); history.back();</script>";
-            exit();
+
+        $uploadDir = __DIR__ . '/uploads/childern/';
+        if (!is_dir($uploadDir)) {
+            mkdir($uploadDir, 0777, true);
+        }
+
+        $forceJpeg = drawdream_upload_needs_jpeg_output($tmpName, $imageName, $fileSize, $childMaxUploadBytes);
+        $outExt = $forceJpeg ? 'jpg' : drawdream_upload_resolve_image_ext($tmpName, $imageName);
+        $newName = 'child_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $outExt;
+        $targetPath = $uploadDir . $newName;
+        if (!drawdream_store_compressed_upload($tmpName, $targetPath, $childMaxUploadBytes, $forceJpeg)) {
+            drawdream_foundation_add_children_fail('บีบอัด/อัปโหลดรูปไม่สำเร็จ — ลองบันทึกเป็น JPG แล้วอัปโหลดใหม่');
         }
     } elseif (!$isEditForm) {
-        echo "<script>alert('กรุณาอัปโหลดรูปภาพเด็ก'); history.back();</script>";
-        exit();
+        drawdream_foundation_add_children_fail('กรุณาอัปโหลดรูปภาพเด็ก');
     }
 
     if ($isEditForm && $editChildId > 0 && $editChild) {
@@ -205,7 +213,7 @@ if (isset($_POST['submit'])) {
              WHERE child_id=? AND foundation_id=?"
         );
         if (!$stEd) {
-            die("MySQL Error: " . $conn->error);
+            drawdream_foundation_add_children_fail('บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
         }
         $stEd->bind_param(
             'ssissssssssii',
@@ -224,11 +232,65 @@ if (isset($_POST['submit'])) {
             $f_id
         );
         if ($stEd->execute()) {
+            drawdream_cleanup_duplicate_child_profiles_for_foundation($conn, (int)$f_id);
             header('Location: children_.php?msg=' . urlencode('แก้ไขโปรไฟล์เด็กสำเร็จ'));
             exit();
         }
-        die("MySQL Error: " . $stEd->error);
+        drawdream_foundation_add_children_fail('บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
     } else {
+        require_once __DIR__ . '/includes/child_sponsorship.php';
+
+        $existingChild = drawdream_find_matching_child_profile(
+            $conn,
+            (int)$f_id,
+            $child_name,
+            $birth_date_raw,
+            $education,
+            $dream,
+            $likes,
+            $wish,
+            $wish_cat,
+            $bank_name,
+            $child_bank
+        );
+
+        if ($existingChild) {
+            $keepId = (int)($existingChild['child_id'] ?? 0);
+            if ($keepId > 0 && $newName !== '' && $newName !== (string)($existingChild['photo_child'] ?? '')) {
+                $oldPhoto = (string)($existingChild['photo_child'] ?? '');
+                $stPhoto = $conn->prepare(
+                    'UPDATE foundation_children SET photo_child = ? WHERE child_id = ? AND foundation_id = ? LIMIT 1'
+                );
+                if ($stPhoto) {
+                    $stPhoto->bind_param('sii', $newName, $keepId, $f_id);
+                    $stPhoto->execute();
+                    if ($oldPhoto !== '' && $oldPhoto !== $newName) {
+                        drawdream_delete_child_upload_files($oldPhoto, null);
+                    }
+                }
+            }
+
+            drawdream_remove_safe_duplicate_child_profiles(
+                $conn,
+                (int)$f_id,
+                $keepId,
+                $child_name,
+                $birth_date_raw,
+                $education,
+                $dream,
+                $likes,
+                $wish,
+                $wish_cat,
+                $bank_name,
+                $child_bank
+            );
+
+            drawdream_cleanup_duplicate_child_profiles_for_foundation($conn, (int)$f_id);
+
+            header('Location: children_.php?msg=' . rawurlencode('มีโปรไฟล์เด็กข้อมูลนี้อยู่แล้ว — แสดงรายการเดิม (ไม่สร้างซ้ำ)'));
+            exit();
+        }
+
         if ($has_birth_date_column) {
             $sql = "INSERT INTO foundation_children (foundation_id, foundation_name, child_name, birth_date, age, education, dream, likes, wish, wish_cat, bank_name, child_bank, status, photo_child, approve_profile)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -265,10 +327,11 @@ if (isset($_POST['submit'])) {
                 drawdream_record_foundation_submitted_child($conn, (int)$_SESSION['user_id'], $newChildId, $child_name);
                 drawdream_notify_admins_child_submitted($conn, $newChildId, $child_name, $f_name);
             }
-            echo "<script>alert('เพิ่มข้อมูลเด็กสำเร็จ'); window.location='children_.php';</script>";
+            drawdream_cleanup_duplicate_child_profiles_for_foundation($conn, (int)$f_id);
+            header('Location: children_.php?msg=' . rawurlencode('เพิ่มข้อมูลเด็กสำเร็จ'));
             exit();
         }
-        die("MySQL Error: " . $stmt->error);
+        drawdream_foundation_add_children_fail('บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
     }
 }
 ?>
@@ -304,7 +367,8 @@ if (isset($_POST['submit'])) {
         </div>
         <div class="left-info-card" style="text-align:left;">
             <h3>รูปภาพเด็ก</h3>
-            <input type="file" id="photo_child_input" name="photo_child" form="mainForm" accept="image/*" <?= $isEditForm ? '' : 'required' ?> onchange="previewImage(this)" style="display:block;">
+            <input type="file" id="photo_child_input" name="photo_child" form="mainForm" accept="image/*" <?= $isEditForm ? '' : 'required' ?> style="display:block;">
+            <p class="consent-note" style="margin-top:8px;">รูปจะถูกบีบอัดอัตโนมัติก่อนส่ง (ไม่เกิน <?= htmlspecialchars($childMaxUploadLabel) ?>)</p>
         </div>
         <div class="left-info-card">
             <h3>ยินยอมนโยบาย</h3>
@@ -466,10 +530,15 @@ if (isset($_POST['submit'])) {
     </div>
 </div>
 
+<script src="js/drawdream-image-compress.js?v=3"></script>
 <script>
 const IS_EDIT_FORM = <?= $isEditForm ? 'true' : 'false' ?>;
 const PRESET_WISH_CAT = <?= json_encode((string)($_POST['wish_cat'] ?? ''), JSON_UNESCAPED_UNICODE) ?>;
 const PRESET_WISH = <?= json_encode((string)($_POST['wish'] ?? ''), JSON_UNESCAPED_UNICODE) ?>;
+const MAX_CHILD_IMAGE_BYTES = <?= (int)$childMaxUploadBytes ?>;
+const MAX_CHILD_IMAGE_LABEL = <?= json_encode($childMaxUploadLabel, JSON_UNESCAPED_UNICODE) ?>;
+const MAX_CHILD_SERVER_BYTES = <?= (int)$childServerMaxBytes ?>;
+let selectedChildPhotoFile = null;
 
 function showTopAlert(message) {
     const alertEl = document.getElementById('topAlert');
@@ -524,15 +593,71 @@ const SHOE_ITEMS     = new Set(['รองเท้า']);
     }
 })();
 
-// ── Preview รูปภาพเมื่อเลือกไฟล์ ──────────────────────
-function previewImage(input) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = e => {
-            document.getElementById('preview-container').innerHTML = `<img src="${e.target.result}">`;
-        };
-        reader.readAsDataURL(input.files[0]);
+// ── Preview + บีบอัดรูปเมื่อเลือกไฟล์ ──────────────────────
+function syncChildPhotoInput() {
+    const input = document.getElementById('photo_child_input');
+    if (!input) return;
+    const dt = new DataTransfer();
+    if (selectedChildPhotoFile) {
+        dt.items.add(selectedChildPhotoFile);
     }
+    input.files = dt.files;
+}
+
+function showChildPhotoPreview(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        document.getElementById('preview-container').innerHTML = `<img src="${e.target.result}" alt="">`;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function processChildPhotoInput(input) {
+    const f = input.files && input.files[0];
+    if (!f) {
+        selectedChildPhotoFile = null;
+        return;
+    }
+    if (!drawdreamImageCompress.isImageFile(f)) {
+        drawdreamAlert('กรุณาเลือกไฟล์รูปเท่านั้น');
+        input.value = '';
+        selectedChildPhotoFile = null;
+        return;
+    }
+
+    let processed = f;
+    if (f.size > MAX_CHILD_IMAGE_BYTES) {
+        const preview = document.getElementById('preview-container');
+        if (preview) {
+            preview.innerHTML = '<span id="preview-text">กำลังบีบอัดรูป…</span>';
+        }
+        try {
+            processed = await drawdreamImageCompress.ensureImageWithinLimit(
+                f,
+                MAX_CHILD_IMAGE_BYTES,
+                MAX_CHILD_SERVER_BYTES
+            );
+        } catch (err) {
+            drawdreamAlert('บีบอัดรูปไม่สำเร็จ — ลองเลือกรูปเล็กลงหรือบันทึกเป็น JPG');
+            input.value = '';
+            selectedChildPhotoFile = null;
+            if (preview) {
+                preview.innerHTML = '<span id="preview-text">ตัวอย่างรูปภาพ</span>';
+            }
+            return;
+        }
+    }
+
+    selectedChildPhotoFile = processed;
+    syncChildPhotoInput();
+    showChildPhotoPreview(processed);
+}
+
+const photoChildInput = document.getElementById('photo_child_input');
+if (photoChildInput) {
+    photoChildInput.addEventListener('change', function () {
+        processChildPhotoInput(this);
+    });
 }
 
 function toggleDreamOther() {
@@ -971,8 +1096,70 @@ document.getElementById('catTags').addEventListener('click', function() {
     this.closest('.field-group').classList.remove('has-error');
 });
 
-document.getElementById('mainForm').addEventListener('submit', function(event) {
-    if (!validateForm()) event.preventDefault();
+document.getElementById('mainForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    if (!validateForm()) {
+        return;
+    }
+    if (window.__childFormSubmitting) {
+        return;
+    }
+    window.__childFormSubmitting = true;
+    const submitBtn = document.getElementById('submitBtn');
+    const form = this;
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'กำลังบีบอัดรูป…';
+    }
+
+    try {
+        const fd = new FormData(form);
+        if (selectedChildPhotoFile) {
+            fd.set('photo_child', selectedChildPhotoFile, selectedChildPhotoFile.name || 'child.jpg');
+        } else {
+            const photoInput = document.getElementById('photo_child_input');
+            const rawFile = photoInput && photoInput.files && photoInput.files[0];
+            if (rawFile && drawdreamImageCompress.isImageFile(rawFile)) {
+                const processed = rawFile.size > MAX_CHILD_IMAGE_BYTES
+                    ? await drawdreamImageCompress.ensureImageWithinLimit(
+                        rawFile,
+                        MAX_CHILD_IMAGE_BYTES,
+                        MAX_CHILD_SERVER_BYTES
+                    )
+                    : rawFile;
+                fd.set('photo_child', processed, processed.name || 'child.jpg');
+            }
+        }
+        if (!fd.has('submit')) {
+            fd.append('submit', '1');
+        }
+
+        if (submitBtn) {
+            submitBtn.textContent = 'กำลังบันทึก…';
+        }
+
+        const postUrl = form.getAttribute('action') || window.location.href;
+        const res = await fetch(postUrl, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+        });
+        if (res.redirected) {
+            window.location.assign(res.url);
+            return;
+        }
+        const html = await res.text();
+        document.open();
+        document.write(html);
+        document.close();
+    } catch (err) {
+        window.__childFormSubmitting = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = IS_EDIT_FORM ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล';
+        }
+        drawdreamAlert('บันทึกไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่');
+    }
 });
 
 document.getElementById('policy_consent').addEventListener('change', function() {
@@ -1110,6 +1297,21 @@ document.addEventListener('DOMContentLoaded', function () {
     </div>
   </div>
 </div>
+
+<?php require_once __DIR__ . '/includes/vendor_assets.php'; ?>
+<script src="js/drawdream-swal.js?v=1"></script>
+<?php echo drawdream_sweetalert2_js_tag('', true); ?>
+<?php if ($formFlashError !== ''): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Swal.fire({
+        icon: <?= json_encode(isset($_GET['msg_icon']) && $_GET['msg_icon'] === 'warning' ? 'warning' : 'error', JSON_UNESCAPED_UNICODE) ?>,
+        title: <?= json_encode($formFlashError, JSON_UNESCAPED_UNICODE) ?>,
+        confirmButtonText: 'ตกลง'
+    });
+});
+</script>
+<?php endif; ?>
 
 </body>
 </html>

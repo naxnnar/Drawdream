@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // admin_projects_directory.php — โครงการทั้งหมด (มุมมองแอดมิน)
 
 // สรุปสั้น: ไฟล์นี้จัดการหน้าแอดมินส่วน projects directory
@@ -25,7 +25,7 @@ function admin_project_status_label(string $st): string
         'approved' => 'อนุมัติแล้ว',
         'rejected' => 'ไม่อนุมัติ',
         'completed' => 'สำเร็จ',
-        'purchasing' => 'กำลังจัดซื้อ',
+        'purchasing' => 'อัปเดตผลลัพธ์',
         'done' => 'เสร็จสิ้น',
     ];
     if (isset($map[$t])) {

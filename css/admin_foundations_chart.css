@@ -1,0 +1,336 @@
+/* admin_foundations_chart.php — กราฟเปรียบเทียบยอดบริจาคทุกมูลนิธิ */
+
+.admin-foundations-chart-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.admin-foundations-chart-sub {
+    margin: 4px 0 0;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 0.95rem;
+    color: #64748b;
+}
+
+.admin-foundations-chart-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.admin-foundations-chart-summary__card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 14px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+}
+
+.admin-foundations-chart-summary__label {
+    display: block;
+    font-size: 0.82rem;
+    color: #64748b;
+    margin-bottom: 6px;
+}
+
+.admin-foundations-chart-summary__card strong {
+    font-family: 'Prompt', sans-serif;
+    font-size: 1.15rem;
+    color: #0f172a;
+}
+
+.admin-foundations-chart-panel {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+}
+
+.admin-foundations-chart-panel__title {
+    margin: 0 0 6px;
+    font-family: 'Prompt', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.admin-foundations-chart-panel__insight {
+    margin: 0 0 16px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 0.92rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.admin-foundations-pie-layout {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    align-items: flex-start;
+}
+
+.admin-foundations-pie-chart-box {
+    flex: 0 0 300px;
+    width: 100%;
+    max-width: 300px;
+    height: 300px;
+}
+
+.admin-foundations-pie-side {
+    flex: 1 1 220px;
+    min-width: 0;
+    display: grid;
+    gap: 10px;
+}
+
+.admin-foundations-pie-side-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 12px;
+    background: #f8fafc;
+}
+
+.admin-foundations-pie-side-card__label {
+    font-size: 0.86rem;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.admin-foundations-pie-side-card__value {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #0f172a;
+}
+
+.admin-foundations-pie-side-card__sub {
+    font-size: 0.88rem;
+    color: #475569;
+    margin-top: 2px;
+}
+
+.admin-foundations-pie-breakdown {
+    list-style: none;
+    margin: 8px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 6px;
+}
+
+.admin-foundations-pie-breakdown li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #334155;
+}
+
+.admin-foundations-bar-col {
+    flex: 1 1 280px;
+    min-width: 0;
+}
+
+.admin-foundations-bar-col__hint {
+    margin: 0 0 8px;
+    font-size: 0.86rem;
+    color: #64748b;
+}
+
+.admin-foundations-bar-canvas {
+    height: 280px;
+}
+
+.admin-foundations-chart-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.admin-foundations-chart-table-wrap {
+    margin-top: 4px;
+}
+
+.admin-foundations-chart-table-btn {
+    padding: 6px 12px !important;
+    font-size: 0.85rem !important;
+    min-height: 0 !important;
+}
+
+@media (max-width: 991px) {
+    .admin-foundations-pie-chart-box {
+        flex: 1 1 260px;
+        max-width: none;
+        height: 260px;
+    }
+
+    .admin-foundations-pie-layout {
+        flex-direction: column;
+    }
+
+    .admin-foundations-bar-canvas {
+        height: 240px;
+    }
+}
+
+@media (max-width: 575px) {
+    .admin-foundations-chart-panel {
+        padding: 14px;
+    }
+
+    .admin-foundations-pie-chart-box {
+        height: 240px;
+    }
+}
+
+/* —— ช่องทางบริจาคต่อมูลนิธิ (mini donut แบบกระชับ) —— */
+
+.admin-foundations-channel-panel {
+    margin-top: 0;
+}
+
+.admin-foundations-channel-panel .admin-foundations-chart-panel__insight {
+    margin-bottom: 10px;
+}
+
+.admin-foundations-channel-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    margin-bottom: 12px;
+    font-size: 0.82rem;
+    color: #475569;
+}
+
+.admin-foundations-channel-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-foundations-channel-legend__dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    font-style: normal;
+}
+
+.admin-foundations-channel-legend__dot--child { background: #4A5BA8; }
+.admin-foundations-channel-legend__dot--project { background: #22c55e; }
+.admin-foundations-channel-legend__dot--need { background: #f59e0b; }
+
+.admin-foundations-channel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+    gap: 10px;
+}
+
+.admin-foundations-channel-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 10px 8px;
+    background: #fafbfc;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.admin-foundations-channel-card__title {
+    margin: 0 0 6px;
+    font-family: 'Prompt', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.3;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-foundations-channel-card__chart {
+    width: 100%;
+    height: 88px;
+    margin: 0 auto 4px;
+    max-width: 88px;
+    align-self: center;
+    flex-shrink: 0;
+}
+
+.admin-foundations-channel-card__total {
+    margin: 0 0 4px;
+    text-align: center;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+}
+
+.admin-foundations-channel-card__lines {
+    list-style: none;
+    margin: 0 0 6px;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.admin-foundations-channel-card__line {
+    display: grid;
+    grid-template-columns: 8px 1fr auto;
+    gap: 4px;
+    align-items: center;
+    font-size: 0.72rem;
+    color: #475569;
+    line-height: 1.25;
+}
+
+.admin-foundations-channel-card__line-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: block;
+}
+
+.admin-foundations-channel-card__line-pct {
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    min-width: 2.8em;
+}
+
+.admin-foundations-channel-card__link {
+    display: block;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #3c5099;
+    text-decoration: none;
+    margin-top: auto;
+    padding-top: 2px;
+}
+
+.admin-foundations-channel-card__link:hover {
+    text-decoration: underline;
+}
+
+@media (min-width: 1200px) {
+    .admin-foundations-channel-grid {
+        grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    }
+}
+
+@media (max-width: 575px) {
+    .admin-foundations-channel-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

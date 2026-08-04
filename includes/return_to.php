@@ -9,11 +9,24 @@ declare(strict_types=1);
 /** @var list<string> */
 const DRAWDREAM_RETURN_TO_ALLOWED = [
     'children_donate.php',
+    'children_.php',
     'payment/child_donate.php',
     'payment/child_subscription_create.php',
     'payment/foundation_donate.php',
     'payment/payment_project.php',
     'foundation_donate_info.php',
+    'foundation.php',
+    'foundation_dashboard.php',
+    'foundation_children_directory.php',
+    'foundation_projects_directory.php',
+    'foundation_needlist_directory.php',
+    'foundation_add_children.php',
+    'foundation_add_project.php',
+    'foundation_add_need.php',
+    'foundation_need_view.php',
+    'foundation_need_wizard.php',
+    'profile.php',
+    'update_profile.php',
     'project.php',
 ];
 
@@ -52,7 +65,13 @@ function drawdream_return_to_is_allowed(string $path): bool
         return false;
     }
 
-    $base = strtok($path, '?') ?: $path;
+    $base = $path;
+    if (($qPos = strpos($base, '?')) !== false) {
+        $base = substr($base, 0, $qPos);
+    }
+    if (($hPos = strpos($base, '#')) !== false) {
+        $base = substr($base, 0, $hPos);
+    }
     foreach (DRAWDREAM_RETURN_TO_ALLOWED as $allowed) {
         if ($base === $allowed) {
             return true;
@@ -168,7 +187,7 @@ function drawdream_return_to_consume_after_login(string $role): ?string
     if ($path === null) {
         return null;
     }
-    if (!in_array($role, ['donor', 'admin'], true)) {
+    if (!in_array($role, ['donor', 'admin', 'foundation'], true)) {
         drawdream_return_to_clear();
 
         return null;

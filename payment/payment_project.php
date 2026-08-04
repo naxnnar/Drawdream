@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // payment/payment_project.php — หน้าชำระเงินโครงการ + Omise PromptPay
 // สรุปสั้น: หน้าเริ่มบริจาคโครงการ สร้าง charge และบันทึกรายการ pending ก่อนพาไป QR
 /**
@@ -7,7 +7,7 @@
  *
  * @see README.md
  */
-include '../db.php';
+include __DIR__ . '/../includes/payment_bootstrap.php';
 include 'config.php';
 require_once __DIR__ . '/omise_helpers.php';
 require_once __DIR__ . '/../includes/project_donation_dates.php';
@@ -250,37 +250,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
             } elseif (isset($charge_response['id'])) {
                 $charge_id = $charge_response['id'];
                 $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($charge_response);
-                if ($qr_image === '' && strpos((string) $charge_id, 'chrg_mock_') !== 0) {
-                    $again = drawdream_omise_fetch_charge((string) $charge_id);
-                    if ($again) {
-                        $qr_image = drawdream_omise_promptpay_qr_uri_from_charge($again);
-                    }
-                }
 
-                $categoryIdResolved = drawdream_get_or_create_project_donate_category_id($conn);
-                $pendingDonateId = drawdream_insert_pending_project_donation(
-                    $conn,
-                    $categoryIdResolved,
-                    $project_id,
-                    (int)$_SESSION['user_id'],
-                    (float)$amount,
-                    $charge_id
-                );
-                if ($pendingDonateId <= 0) {
-                    $error = 'ไม่สามารถบันทึกรายการบริจาคชั่วคราวได้ กรุณาลองใหม่';
-                } else {
-                    // เก็บ charge_id, qr_image, amount, project info ใน session
-                    $_SESSION['pending_charge_id']  = $charge_id;
-                    $_SESSION['pending_amount']     = $amount;
-                    $_SESSION['pending_project']    = $project['project_name'];
-                    $_SESSION['pending_project_id'] = $project_id;
-                    $_SESSION['qr_image']           = $qr_image;
-                    $_SESSION['pending_donate_id']  = $pendingDonateId;
+                $_SESSION['pending_charge_id']  = $charge_id;
+                $_SESSION['pending_amount']     = $amount;
+                $_SESSION['pending_project']    = $project['project_name'];
+                $_SESSION['pending_project_id'] = $project_id;
+                $_SESSION['qr_image']           = $qr_image;
 
-                    // redirect ไปหน้าสแกน QR ร่วม (โครงการ)
-                    header('Location: scan_qr.php?type=project&charge_id=' . urlencode($charge_id));
-                    exit();
-                }
+                header('Location: scan_qr.php?type=project&charge_id=' . urlencode($charge_id));
+                exit();
 
             } else {
                 $error = "เกิดข้อผิดพลาดที่ไม่คาดคิด";
@@ -367,7 +345,8 @@ function _omise_local_mock(string $path, array $data): array {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>ชำระเงิน | DrawDream</title>
-        <link rel="stylesheet" href="../css/payment.css?v=5">
+    <?php require_once __DIR__ . '/../includes/vendor_assets.php'; drawdream_public_navbar_assets_head('../'); ?>
+        <link rel="stylesheet" href="../css/payment.css?v=13">
         <style>
         .project-sdgs-benefit-wrap {
             display: flex;
@@ -443,6 +422,8 @@ function _omise_local_mock(string $path, array $data): array {
             color: #222;
         }
         </style>
+    <?php echo drawdream_sweetalert2_js_tag('../', false); ?>
+    <script src="../js/drawdream-swal.js?v=1"></script>
 </head>
 <body>
 
@@ -450,15 +431,15 @@ function _omise_local_mock(string $path, array $data): array {
 
 <div class="payment-container">
 
-<div class="payment-card">
+<div class="payment-card payment-card--project">
     <!-- ซ้าย: ภาพ ชื่อโครงการ โปรไฟล์ เป้าหมาย -->
     <div class="project-info">
-        <div style="position:relative;">
-            <a href="javascript:history.back()" style="position:absolute;top:18px;left:18px;z-index:2;background:#fff;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px 0 rgba(0,0,0,0.07);border:none;text-decoration:none;">
-                <span style="font-size:1.5em;color:#3C5099;">←</span>
+        <div class="donor-flow-back-wrap">
+            <a href="../project.php?project_id=<?= (int)$project_id ?>" class="donor-flow-back-circle" aria-label="กลับหน้าโครงการ">
+                <span aria-hidden="true">←</span>
             </a>
             <?php if (!empty($project['project_image'])): ?>
-                <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($project['project_image'] ?? ''), '../uploads/'), ENT_QUOTES, 'UTF-8') ?>" class="project-img" alt="" style="margin-top:0;padding-top:0;display:block;border-top-left-radius:24px;border-top-right-radius:0;">
+                <img src="<?= htmlspecialchars(drawdream_project_image_url((string)($project['project_image'] ?? ''), '../uploads/'), ENT_QUOTES, 'UTF-8') ?>" class="project-img" alt="" style="margin-top:0;padding-top:0;display:block;border-top-left-radius:24px;border-top-right-radius:0;" loading="lazy" decoding="async">
             <?php endif; ?>
         </div>
         <div class="project-info-inner">
@@ -540,27 +521,60 @@ function _omise_local_mock(string $path, array $data): array {
                             <img src="<?= htmlspecialchars($sdgImgPath) ?>" alt="SDG <?= (int)$sdgNum ?>" class="sdg-img" title="<?= htmlspecialchars($sdgTitle) ?>" id="sdg-img-clickable" style="cursor:zoom-in;">
                             <span class="sdg-title">เป้าหมาย SDGs<br>SDG <?= (int)$sdgNum ?> <?= htmlspecialchars(preg_replace('/^SDG ?\d+:? ?/', '', $sdgTitle)) ?></span>
                         </div>
+
+                        <div class="project-trust-panel" role="complementary" aria-label="ความน่าเชื่อถือในการบริจาค">
+                            <h4 class="project-trust-panel__title">บริจาคอย่างมั่นใจ</h4>
+                            <ul class="project-trust-list">
+                                <li class="project-trust-list__item">
+                                    <span class="project-trust-list__icon" aria-hidden="true"><i class="bi bi-building-check"></i></span>
+                                    <span class="project-trust-list__text">เงินเข้ามูลนิธิ <strong><?= $fdnName ?></strong> โดยตรง</span>
+                                </li>
+                                <li class="project-trust-list__item">
+                                    <span class="project-trust-list__icon" aria-hidden="true"><i class="bi bi-receipt"></i></span>
+                                    <span class="project-trust-list__text">มี <strong>ใบเสร็จอิเล็กทรอนิกส์</strong> ลดหย่อนภาษี</span>
+                                </li>
+                                <li class="project-trust-list__item">
+                                    <span class="project-trust-list__icon" aria-hidden="true"><i class="bi bi-graph-up-arrow"></i></span>
+                                    <span class="project-trust-list__text">ติดตามความคืบหน้าได้บน <strong>DrawDream</strong></span>
+                                </li>
+                            </ul>
+                        </div>
         </div>
     </div>
     <!-- ขวา: รายละเอียด ฟอร์ม ปุ่ม -->
     <div class="payment-box">
-        <div class="project-detail-summary" style="font-size:1.18em;background:none;border:none;box-shadow:none;padding:0;margin-bottom:28px;">
-            <div class="detail-row" style="font-size:1.13em;font-weight:400;margin-bottom:18px;">
+        <div class="project-detail-summary">
+            <div class="project-detail-lead">
                 <?= nl2br(htmlspecialchars($project['project_desc'])) ?>
             </div>
+            <dl class="project-detail-facts">
             <?php if (!empty($project['project_quote'])): ?>
-                <div class="detail-row"><strong>คำโปรย</strong> <?= htmlspecialchars($project['project_quote']) ?></div>
+                <div class="project-detail-fact">
+                    <dt>คำโปรย</dt>
+                    <dd><?= htmlspecialchars($project['project_quote']) ?></dd>
+                </div>
             <?php endif; ?>
-            <div class="detail-row"><strong>ระยะเวลาระดมทุน</strong> <?= htmlspecialchars($fundraisingPeriod) ?></div>
-            <div class="detail-row"><strong>พื้นที่ดำเนินโครงการ</strong> <?= htmlspecialchars($projectArea) ?></div>
-            <!-- <div class="detail-row"><strong>เป้าหมาย SDGs</strong> <?= htmlspecialchars($sdgGoal) ?></div> -->
-            <!-- <div class="detail-row"><strong>กลุ่มเป้าหมาย</strong> <?= htmlspecialchars($beneficiaryGroup) ?></div> -->
+                <div class="project-detail-fact">
+                    <dt>ระยะเวลาระดมทุน</dt>
+                    <dd><?= htmlspecialchars($fundraisingPeriod) ?></dd>
+                </div>
+                <div class="project-detail-fact">
+                    <dt>พื้นที่ดำเนินโครงการ</dt>
+                    <dd><?= htmlspecialchars($projectArea) ?></dd>
+                </div>
             <?php if (!empty($project['need_info'])): ?>
-                <div class="detail-row"><strong>กิจกรรมมูลนิธิ</strong> <?= htmlspecialchars($project['need_info']) ?></div>
+                <div class="project-detail-fact">
+                    <dt>กิจกรรมมูลนิธิ</dt>
+                    <dd><?= nl2br(htmlspecialchars($project['need_info'])) ?></dd>
+                </div>
             <?php endif; ?>
             <?php if (!empty($project['update_text'])): ?>
-                <div class="detail-row"><strong>สรุปผลลัพธ์ล่าสุดจากมูลนิธิ</strong> <?= nl2br(htmlspecialchars($project['update_text'])) ?></div>
+                <div class="project-detail-fact project-detail-fact--highlight">
+                    <dt>ผลลัพธ์ล่าสุด</dt>
+                    <dd><?= nl2br(htmlspecialchars($project['update_text'])) ?></dd>
+                </div>
             <?php endif; ?>
+            </dl>
         </div>
         <h3 style="margin-top:18px;">เลือกจำนวนเงินที่ต้องการบริจาค</h3>
         <?php if ($goalProj > 0 && $maxDonatePerChargeBaht > 0): ?>
@@ -589,33 +603,6 @@ function _omise_local_mock(string $path, array $data): array {
             <button type="submit" name="pay" class="btn-pay" id="donateBtn">บริจาค</button>
         </form>
         <style>
-        .sdg-row {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            margin: 4px 0 0 0;
-            max-width: 340px;
-        }
-        .sdg-row .sdg-img {
-            width: 36px !important;
-            height: 36px !important;
-            max-width: 36px !important;
-            max-height: 36px !important;
-            object-fit: contain !important;
-            border-radius: 8px;
-            background: #fff;
-            box-shadow: 0 1px 4px #0001;
-            padding: 1px;
-            display: block;
-        }
-        .sdg-title {
-            font-size: 1.13em;
-            font-weight: 700;
-            color: #222;
-            font-family: 'Prompt', sans-serif;
-            line-height: 1.2;
-            word-break: break-word;
-        }
         .amount-presets-grid .preset-btn.preset-selected {
             outline: 2px solid #3C5099;
             background: #f0f2fa;
@@ -674,7 +661,7 @@ function _omise_local_mock(string $path, array $data): array {
             if (inp && !isNaN(n) && n >= 20) {
                 if (maxB !== null && n > maxB) {
                     e.preventDefault();
-                    alert('จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' + maxB.toLocaleString('th-TH') + ' บาท)');
+                    drawdreamAlert('จำนวนบริจาคต้องไม่เกินยอดที่เหลือจะครบเป้าหมาย (' + maxB.toLocaleString('th-TH') + ' บาท)', 'warning');
                     inp.focus();
                     return;
                 }
@@ -682,7 +669,7 @@ function _omise_local_mock(string $path, array $data): array {
                 return;
             }
             e.preventDefault();
-            alert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท');
+            drawdreamAlert('กรุณาเลือกหรือระบุจำนวนเงินอย่างน้อย 20 บาท', 'warning');
             if (inp) inp.focus();
         });
         </script>

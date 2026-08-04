@@ -3,6 +3,7 @@
 // สรุปสั้น: ไฟล์นี้รับผิดชอบการทำงานส่วน homepage
 $homeFlashMsg = isset($_GET['msg']) ? trim((string) $_GET['msg']) : '';
 
+define('DRAWDREAM_DB_LIGHT', true);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/homepage_impact_stats.php';
 $homeImpactStats = drawdream_homepage_impact_stats($conn);
@@ -14,11 +15,9 @@ $homeImpactStats = drawdream_homepage_impact_stats($conn);
   <title>หน้าหลัก | DrawDream</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <?php require_once __DIR__ . '/includes/vendor_assets.php'; drawdream_foundation_page_assets_head(); ?>
   <link rel="stylesheet" href="css/navbar.css">
-  <link rel="stylesheet" href="css/homepage.css?v=2">
+  <link rel="stylesheet" href="css/homepage.css?v=5">
 </head>
 <body>
 
@@ -47,9 +46,23 @@ $homeImpactStats = drawdream_homepage_impact_stats($conn);
             ที่มุ่งสร้างความโปร่งใสและสร้างความเชื่อมั่นให้แก่ผู้บริจาค เราทำหน้าที่เป็นตัวกลางเชื่อมโยงผู้ให้เข้ากับมูลนิธิเด็กและมูลนิธิเพื่อสังคมโดยตรง
             เพื่อเปลี่ยนความฝันด้านโอกาสและการศึกษาของเด็กๆ ให้กลายเป็นความจริงที่ตรวจสอบได้ในทุกขั้นตอน
           </p>
-          <div class="hero-actions mt-4">
-            <a href="children_.php" class="btn btn-hero">อุปการะ</a>
-            <a href="project.php" class="btn btn-hero">โครงการ</a>
+          <div class="home-hero-impact mt-4" aria-label="สรุปผลกระทบบนแพลตฟอร์ม">
+            <div class="home-hero-impact__card home-impact__card text-center">
+              <span class="home-impact__card-icon home-impact__card-icon--coral" aria-hidden="true"><i class="bi bi-cash-coin"></i></span>
+              <p class="home-impact__label mb-2">ยอดบริจาคทั้งหมด</p>
+              <p class="home-impact__value mb-0">
+                <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display_baht($homeImpactStats['total_donation_baht']), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="home-impact__unit">บาท</span>
+              </p>
+            </div>
+            <div class="home-hero-impact__card home-impact__card text-center">
+              <span class="home-impact__card-icon home-impact__card-icon--green" aria-hidden="true"><i class="bi bi-people-fill"></i></span>
+              <p class="home-impact__label mb-2">จำนวนผู้บริจาคทั้งหมด</p>
+              <p class="home-impact__value mb-0">
+                <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['total_donors']), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="home-impact__unit">คน</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -124,7 +137,7 @@ $homeImpactStats = drawdream_homepage_impact_stats($conn);
       <div class="col-md-6">
         <img src="img/alin.png" alt="น้องอลิน" class="img-fluid rounded shadow">
       </div>
-      <div class="col-md-6 ps-md-5">
+      <div class="col-md-6 ps-md-5 story-feature__copy text-center text-md-start">
         <h3 class="mt-4 mt-md-0">น้องอลิน</h3>
         <p class="story-text">
           น้องอลินเป็นเด็กที่รักการอ่าน แต่หนังสือในห้องสมุดที่มีมักเป็นเล่มเก่าและไม่เพียงพอต่อใจรักการอ่านของเธอ
@@ -168,27 +181,7 @@ $homeImpactStats = drawdream_homepage_impact_stats($conn);
   <div class="container">
     <h2 id="home-impact-heading" class="home-impact__title text-center fw-bold">มาสร้างความเปลี่ยนแปลงไปด้วยกัน</h2>
     <p class="home-impact__lead text-center">ตัวเลขจากการให้และการส่งมอบจริงบนแพลตฟอร์ม DrawDream</p>
-    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-5 g-4 home-impact__stats justify-content-center">
-      <div class="col">
-        <div class="home-impact__card text-center">
-          <span class="home-impact__card-icon home-impact__card-icon--coral" aria-hidden="true"><i class="bi bi-cash-coin"></i></span>
-          <p class="home-impact__label mb-2">ยอดบริจาคทั้งหมด</p>
-          <p class="home-impact__value mb-0">
-            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display_baht($homeImpactStats['total_donation_baht']), ENT_QUOTES, 'UTF-8') ?></span>
-            <span class="home-impact__unit">บาท</span>
-          </p>
-        </div>
-      </div>
-      <div class="col">
-        <div class="home-impact__card text-center">
-          <span class="home-impact__card-icon home-impact__card-icon--green" aria-hidden="true"><i class="bi bi-people-fill"></i></span>
-          <p class="home-impact__label mb-2">จำนวนผู้บริจาคทั้งหมด</p>
-          <p class="home-impact__value mb-0">
-            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['total_donors']), ENT_QUOTES, 'UTF-8') ?></span>
-            <span class="home-impact__unit">คน</span>
-          </p>
-        </div>
-      </div>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4 home-impact__stats justify-content-center">
       <div class="col">
         <div class="home-impact__card text-center">
           <span class="home-impact__card-icon home-impact__card-icon--coral" aria-hidden="true"><i class="bi bi-person-hearts"></i></span>
@@ -206,6 +199,16 @@ $homeImpactStats = drawdream_homepage_impact_stats($conn);
           <p class="home-impact__value mb-0">
             <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['projects_completed']), ENT_QUOTES, 'UTF-8') ?></span>
             <span class="home-impact__unit">โครงการ</span>
+          </p>
+        </div>
+      </div>
+      <div class="col">
+        <div class="home-impact__card text-center">
+          <span class="home-impact__card-icon home-impact__card-icon--yellow" aria-hidden="true"><i class="bi bi-building-fill"></i></span>
+          <p class="home-impact__label mb-2">มูลนิธิทั้งหมด</p>
+          <p class="home-impact__value mb-0">
+            <span class="home-impact__number"><?= htmlspecialchars(drawdream_homepage_impact_stat_display($homeImpactStats['total_foundations']), ENT_QUOTES, 'UTF-8') ?></span>
+            <span class="home-impact__unit">มูลนิธิ</span>
           </p>
         </div>
       </div>

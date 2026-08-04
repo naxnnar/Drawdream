@@ -399,7 +399,7 @@ button {
     color: #b83226;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .navbar {
         padding: max(10px, env(safe-area-inset-top, 0px)) max(15px, env(safe-area-inset-right, 0px)) 10px max(15px, env(safe-area-inset-left, 0px));
         gap: 10px;
@@ -547,6 +547,127 @@ button {
         min-height: var(--nav-touch-target);
         touch-action: manipulation;
     }
+
+    /* แท็บเล็ต / iPad: ใช้เมนู drawer แทนลิงก์แนวนอนที่แออัด */
+    .navbar-public .nav-mobile-menu-btn {
+        display: inline-flex;
+        flex-shrink: 0;
+        margin-right: 0;
+    }
+
+    .nav-mobile-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 998;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.2s ease, visibility 0.2s;
+    }
+
+    body.nav-public-drawer-open .nav-mobile-overlay {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    .navbar-public .nav-main-links {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: min(320px, 88vw);
+        margin: 0;
+        padding: max(16px, env(safe-area-inset-top, 0px)) 0 max(24px, env(safe-area-inset-bottom, 0px));
+        background: #fff;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+        z-index: 1001;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.nav-public-drawer-open .navbar-public .nav-main-links {
+        transform: translateX(0);
+    }
+
+    .navbar-public .nav-main-links a {
+        font-size: 1rem !important;
+        min-height: var(--nav-touch-target);
+        padding: 12px 20px;
+        width: 100%;
+        text-align: left;
+        box-sizing: border-box;
+        border-bottom: 1px solid #eee;
+        touch-action: manipulation;
+    }
+
+    .navbar-public .nav-main-links a.active::after {
+        display: none;
+    }
+
+    .navbar-public .nav-main-links a.active {
+        border-left: 4px solid #E74C3C;
+        padding-left: 16px;
+        color: #E74C3C;
+        font-weight: 600;
+    }
+
+    .navbar-public .nav-about-dropdown {
+        width: 100%;
+        border-bottom: 1px solid #eee;
+    }
+
+    .navbar-public .nav-about-dropdown__trigger {
+        width: 100%;
+        justify-content: space-between;
+        text-align: left;
+        font-size: 1rem !important;
+        padding: 14px 20px;
+        box-sizing: border-box;
+    }
+
+    .navbar-public .nav-about-dropdown__trigger.active::after {
+        display: none;
+    }
+
+    .navbar-public .nav-about-dropdown__trigger.active {
+        border-left: 4px solid #E74C3C;
+        padding-left: 16px;
+        color: #E74C3C;
+        font-weight: 600;
+    }
+
+    .navbar-public .nav-about-dropdown__menu {
+        position: static;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0 0 8px;
+        background: #f8fafc;
+    }
+
+    .navbar-public .nav-about-dropdown__menu[hidden] {
+        display: none !important;
+    }
+
+    .navbar-public .nav-about-dropdown__menu a {
+        padding: 12px 20px 12px 28px;
+        border-radius: 0;
+        border-bottom: 1px solid #eef2f7;
+        font-size: 0.95rem !important;
+    }
+
+    .navbar-public .nav-about-dropdown__menu a.active {
+        border-left: 4px solid #E74C3C;
+        padding-left: 24px;
+    }
 }
 .nav-icon {
     width: 28px !important;
@@ -689,12 +810,6 @@ button {
         font-size: 11px;
     }
 
-    .navbar-public .nav-mobile-menu-btn {
-        display: inline-flex;
-        flex-shrink: 0;
-        margin-right: 0;
-    }
-
     @media (max-width: 400px) {
         .navbar.navbar-public {
             column-gap: 4px;
@@ -719,121 +834,6 @@ button {
         .navbar-public .nav-right {
             gap: 2px !important;
         }
-    }
-
-    /* ต้องต่ำกว่า .navbar (1000) — มิฉะนั้น overlay ทับแผงเมนู fixed ภายใน nav จะกดลิงก์เปลี่ยนหน้าไม่ได้ */
-    .nav-mobile-overlay {
-        display: block;
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: 998;
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-        transition: opacity 0.2s ease, visibility 0.2s;
-    }
-
-    body.nav-public-drawer-open .nav-mobile-overlay {
-        opacity: 1;
-        visibility: visible;
-        pointer-events: auto;
-    }
-
-    .navbar-public .nav-main-links {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        width: min(300px, 86vw);
-        margin: 0;
-        padding: max(16px, env(safe-area-inset-top, 0px)) 0 max(24px, env(safe-area-inset-bottom, 0px));
-        background: #fff;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
-        z-index: 1;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0;
-        transform: translateX(-100%);
-        transition: transform 0.25s ease;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    body.nav-public-drawer-open .navbar-public .nav-main-links {
-        transform: translateX(0);
-    }
-
-    .navbar-public .nav-main-links a {
-        font-size: 1rem !important;
-        min-height: var(--nav-touch-target);
-        padding: 12px 20px;
-        width: 100%;
-        text-align: left;
-        box-sizing: border-box;
-        border-bottom: 1px solid #eee;
-        touch-action: manipulation;
-    }
-
-    .navbar-public .nav-main-links a.active::after {
-        display: none;
-    }
-
-    .navbar-public .nav-main-links a.active {
-        border-left: 4px solid #E74C3C;
-        padding-left: 16px;
-        color: #E74C3C;
-        font-weight: 600;
-    }
-
-    .navbar-public .nav-about-dropdown {
-        width: 100%;
-        border-bottom: 1px solid #eee;
-    }
-
-    .navbar-public .nav-about-dropdown__trigger {
-        width: 100%;
-        justify-content: space-between;
-        text-align: left;
-        font-size: 1rem !important;
-        padding: 14px 20px;
-        box-sizing: border-box;
-    }
-
-    .navbar-public .nav-about-dropdown__trigger.active::after {
-        display: none;
-    }
-
-    .navbar-public .nav-about-dropdown__trigger.active {
-        border-left: 4px solid #E74C3C;
-        padding-left: 16px;
-        color: #E74C3C;
-        font-weight: 600;
-    }
-
-    .navbar-public .nav-about-dropdown__menu {
-        position: static;
-        border: none;
-        border-radius: 0;
-        box-shadow: none;
-        padding: 0 0 8px;
-        background: #f8fafc;
-    }
-
-    .navbar-public .nav-about-dropdown__menu[hidden] {
-        display: none !important;
-    }
-
-    .navbar-public .nav-about-dropdown__menu a {
-        padding: 12px 20px 12px 28px;
-        border-radius: 0;
-        border-bottom: 1px solid #eef2f7;
-        font-size: 0.95rem !important;
-    }
-
-    .navbar-public .nav-about-dropdown__menu a.active {
-        border-left: 4px solid #E74C3C;
-        padding-left: 24px;
     }
 
     .navbar-public .nav-logo {
@@ -985,7 +985,7 @@ body.admin-sidebar-collapsed .admin-sidebar-nav {
 }
 
 /* ให้ทุกหน้าที่อยู่ภายใต้ sidebar เว้นพื้นที่แบบคงที่ */
-body.admin-sidebar-page > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(script):not(.donor-preview-banner) {
+body.admin-sidebar-page > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(.admin-sidebar-backdrop):not(script):not(.donor-preview-banner) {
     margin-left: calc(var(--admin-sidebar-width) + var(--admin-layout-gutter)) !important;
     margin-right: 0 !important;
     width: calc(100vw - var(--admin-sidebar-width) - (var(--admin-layout-gutter) * 2)) !important;
@@ -994,10 +994,14 @@ body.admin-sidebar-page > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):
     overflow-x: hidden;
 }
 
-body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(script):not(.donor-preview-banner) {
+body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(.admin-sidebar-backdrop):not(script):not(.donor-preview-banner) {
     margin-left: 0 !important;
     width: calc(100vw - (var(--admin-layout-gutter) * 2)) !important;
     max-width: calc(100vw - (var(--admin-layout-gutter) * 2)) !important;
+}
+
+.admin-sidebar-backdrop {
+    display: none;
 }
 
 .admin-sidebar-head-actions {
@@ -1205,62 +1209,137 @@ body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.
 @media (max-width: 991px) {
     body.admin-sidebar-page {
         padding-left: 0 !important;
-        padding-top: 110px !important;
-        padding-right: 14px !important;
+        padding-right: 0 !important;
+        padding-top: calc(56px + env(safe-area-inset-top, 0px)) !important;
     }
 
     body.admin-sidebar-page.admin-sidebar-collapsed {
         padding-left: 0 !important;
     }
 
-    body.admin-sidebar-page > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(script):not(.donor-preview-banner),
-    body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(script):not(.donor-preview-banner) {
-        margin-left: 0 !important;
-        width: calc(100vw - 28px) !important;
-        max-width: calc(100vw - 28px) !important;
+    body.admin-sidebar-page.admin-sidebar-drawer-open {
+        overflow: hidden;
     }
 
+    body.admin-sidebar-page > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(.admin-sidebar-backdrop):not(script):not(.donor-preview-banner),
+    body.admin-sidebar-page.admin-sidebar-collapsed > :not(.admin-sidebar-nav):not(.admin-sidebar-show-btn):not(.admin-sidebar-backdrop):not(script):not(.donor-preview-banner) {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding-left: 14px;
+        padding-right: 14px;
+        box-sizing: border-box;
+    }
+
+    /* เมนูแบบ drawer เลื่อนจากซ้าย — ใช้งานบนมือถือได้สะดวกกว่าแถบเลื่อนแนวนอน */
     .admin-sidebar-nav {
-        width: 100%;
-        height: auto;
-        bottom: auto;
-        flex-direction: row;
-        align-items: center;
-        gap: 12px;
-        padding: 14px;
-        overflow-x: auto;
+        width: min(300px, 88vw);
+        height: 100%;
+        bottom: 0;
+        top: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: calc(12px + env(safe-area-inset-top, 0px)) 14px calc(16px + env(safe-area-inset-bottom, 0px));
+        overflow-x: hidden;
+        overflow-y: auto;
+        transform: translateX(-110%);
+        opacity: 1;
+        pointer-events: none;
+    }
+
+    body.admin-sidebar-page:not(.admin-sidebar-collapsed) .admin-sidebar-nav {
+        transform: translateX(0);
+        pointer-events: auto;
     }
 
     body.admin-sidebar-collapsed .admin-sidebar-nav {
-        transform: translateY(-120%);
+        transform: translateX(-110%);
+        opacity: 1;
+        pointer-events: none;
+    }
+
+    .admin-sidebar-head-actions {
+        display: flex;
+        margin-bottom: 10px;
     }
 
     .admin-brand-card {
-        min-width: 150px;
-        margin-bottom: 0;
+        min-width: auto;
+        margin-bottom: 16px;
+        flex-shrink: 0;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .admin-brand-logo {
+        height: 64px;
+        max-width: 120px;
+        margin: 0;
         flex-shrink: 0;
     }
 
+    .admin-brand-text {
+        align-items: center;
+        text-align: center;
+    }
+
+    .admin-brand-text strong {
+        font-size: 1.12rem;
+    }
+
+    .admin-brand-text span {
+        font-size: 0.9rem;
+    }
+
     .admin-nav-links {
-        flex-direction: row;
+        flex-direction: column;
         flex-wrap: nowrap;
-        gap: 10px;
+        gap: 6px;
     }
 
     .admin-nav-link {
-        min-width: max-content;
+        min-width: 0;
+        padding: 14px 16px;
     }
 
     .admin-sidebar-footer {
-        margin-top: 0;
-        margin-left: auto;
-        flex-direction: row;
-        padding-top: 0;
+        margin-top: auto;
+        margin-left: 0;
+        flex-direction: column;
+        padding-top: 14px;
     }
 
     .admin-sidebar-show-btn {
-        top: 14px;
-        left: 14px;
+        display: inline-flex !important;
+        top: calc(10px + env(safe-area-inset-top, 0px));
+        left: 12px;
+        width: var(--nav-touch-target);
+        height: var(--nav-touch-target);
+        z-index: 1300;
+    }
+
+    body.admin-sidebar-page:not(.admin-sidebar-collapsed) .admin-sidebar-show-btn {
+        display: none !important;
+    }
+
+    .admin-sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1190;
+        background: rgba(15, 23, 42, 0.42);
+        border: none;
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body.admin-sidebar-page:not(.admin-sidebar-collapsed) .admin-sidebar-backdrop {
+        display: block;
     }
 }
 

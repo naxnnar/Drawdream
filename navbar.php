@@ -12,6 +12,9 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/includes/brand_logo.php';
 require_once __DIR__ . '/includes/navbar_cache.php';
 
+$_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
+$_nav_base  = str_repeat('../', max(0, $_nav_depth));
+
 // นับรายการรออนุมัติ (เฉพาะ admin)
 $pending_count    = 0;
 $pending_children = 0;
@@ -58,171 +61,48 @@ $total_pending = $pending_count + $pending_children + $pending_projects + $pendi
 // ===== แจ้งเตือนสำหรับ foundation และ donor =====
 $user_notif_count = 0;
 $user_notifs      = [];
+$user_notifs_html = '';
+$notif_ssr_fresh  = false;
 $is_logged_in = isset($_SESSION['user_id']);
+$_nav_csrf_token = '';
+if ($is_logged_in) {
+  require_once __DIR__ . '/includes/csrf.php';
+  $_nav_csrf_token = drawdream_csrf_token();
+}
 if (isset($_SESSION['user_id']) && in_array($_SESSION['role'] ?? '', ['foundation', 'donor'])) {
   $uid = (int)$_SESSION['user_id'];
-  $notifCacheKey = 'user_notifs_' . ($_SESSION['role'] ?? '') . '_' . $uid;
-  $notifCache = drawdream_navbar_cache_get($notifCacheKey, 60);
+  $userRoleNav = (string)($_SESSION['role'] ?? '');
+  $notifCacheKey = 'user_notifs_' . $userRoleNav . '_' . $uid;
+  $notifCache = drawdream_navbar_cache_get($notifCacheKey, 90);
   if ($notifCache !== null) {
+    $notif_ssr_fresh = true;
     $user_notifs = is_array($notifCache['notifs'] ?? null) ? $notifCache['notifs'] : [];
     $user_notif_count = (int)($notifCache['count'] ?? 0);
+    $user_notifs_html = (string)($notifCache['html'] ?? '');
   } else {
-  include_once 'db.php';
-  require_once __DIR__ . '/includes/notification_audit.php';
-  try {
-    $tableCheck = mysqli_query($conn, "SHOW TABLES LIKE 'notifications'");
-    $hasNotificationsTable = $tableCheck && mysqli_num_rows($tableCheck) > 0;
-
-    if ($hasNotificationsTable) {
-      $stmtNotif = $conn->prepare(
-        "SELECT notif_id, title, message, link, created_at, is_read
-         FROM notifications
-         WHERE user_id = ?
-         ORDER BY created_at DESC
-         LIMIT 10"
-      );
-
-      if ($stmtNotif) {
-        $stmtNotif->bind_param("i", $uid);
-        $stmtNotif->execute();
-        $notifResult = $stmtNotif->get_result();
-        while ($n = mysqli_fetch_assoc($notifResult)) {
-          $user_notifs[] = $n;
-        }
-        $user_notif_count = drawdream_notifications_unread_count($conn, $uid);
-      }
+    include_once 'db.php';
+    require_once __DIR__ . '/includes/navbar_notifications.php';
+    try {
+      $bundle = drawdream_navbar_notifications_bundle($conn, $uid, $userRoleNav, $_nav_base, false);
+      $user_notifs = $bundle['notifs'];
+      $user_notif_count = (int)$bundle['count'];
+      $user_notifs_html = (string)$bundle['html'];
+      drawdream_navbar_cache_set($notifCacheKey, [
+        'notifs' => $user_notifs,
+        'count' => $user_notif_count,
+        'html' => $user_notifs_html,
+      ]);
+    } catch (Throwable $e) {
+      $user_notifs = [];
+      $user_notif_count = 0;
+      $user_notifs_html = '';
     }
-
-    // แจ้งเตือนเสริมสำหรับมูลนิธิ: เด็กมีผู้อุปการะแล้ว แต่ยังไม่อัปเดตผลลัพธ์ให้ผู้บริจาค
-    if (($_SESSION['role'] ?? '') === 'foundation') {
-      require_once __DIR__ . '/includes/donate_category_resolve.php';
-      $stmtFid = $conn->prepare("SELECT foundation_id FROM foundation_profile WHERE user_id = ? LIMIT 1");
-      if ($stmtFid) {
-        $stmtFid->bind_param("i", $uid);
-        $stmtFid->execute();
-        $fidRow = $stmtFid->get_result()->fetch_assoc();
-        $fid = (int)($fidRow['foundation_id'] ?? 0);
-        if ($fid > 0) {
-            $dismissNeedRoundAuto = (int)($_SESSION['dismiss_auto_need_round_open'] ?? 0) === 1;
-            $dismissChildOutcomeAuto = (int)($_SESSION['dismiss_auto_child_outcome'] ?? 0) === 1;
-            // แจ้งเตือนรอบรายการสิ่งของใหม่: ระบบปิดรับอัตโนมัติที่ 1 เดือน และเปิดให้เสนอรอบถัดไป
-            $openRoundCount = 0;
-            $stOpenRound = $conn->prepare(
-              "SELECT COUNT(*) AS cnt
-               FROM foundation_needlist
-               WHERE foundation_id = ?
-                 AND approve_item = 'approved'
-                 AND donate_window_end_at IS NOT NULL
-                 AND donate_window_end_at > NOW()"
-            );
-            if ($stOpenRound) {
-              $stOpenRound->bind_param("i", $fid);
-              $stOpenRound->execute();
-              $openRoundCount = (int)(($stOpenRound->get_result()->fetch_assoc()['cnt'] ?? 0));
-            }
-            $pendingNeedCount = 0;
-            $stPendingNeed = $conn->prepare("SELECT COUNT(*) AS cnt FROM foundation_needlist WHERE foundation_id = ? AND approve_item = 'pending'");
-            if ($stPendingNeed) {
-              $stPendingNeed->bind_param("i", $fid);
-              $stPendingNeed->execute();
-              $pendingNeedCount = (int)(($stPendingNeed->get_result()->fetch_assoc()['cnt'] ?? 0));
-            }
-            $latestClosedNeed = null;
-            $stClosedNeed = $conn->prepare(
-              "SELECT donate_window_end_at
-               FROM foundation_needlist
-               WHERE foundation_id = ?
-                 AND approve_item = 'approved'
-                 AND donate_window_end_at IS NOT NULL
-                 AND donate_window_end_at <= NOW()
-               ORDER BY donate_window_end_at DESC
-               LIMIT 1"
-            );
-            if ($stClosedNeed) {
-              $stClosedNeed->bind_param("i", $fid);
-              $stClosedNeed->execute();
-              $latestClosedNeed = $stClosedNeed->get_result()->fetch_assoc();
-            }
-            $closedNeedRaw = trim((string)($latestClosedNeed['donate_window_end_at'] ?? ''));
-            if ($openRoundCount === 0 && $pendingNeedCount === 0 && $closedNeedRaw !== '') {
-              $closedNeedTs = strtotime($closedNeedRaw);
-              if ($closedNeedTs !== false) {
-                $entityKey = 'fdn_need_round_open:' . date('YmdHis', $closedNeedTs);
-                $alreadyHas = false;
-                $titleNeedRound = 'ถึงเวลาเสนอรายการสิ่งของรอบใหม่';
-                $linkNeedRound = 'foundation_add_need.php';
-                $stHasNotif = $conn->prepare("SELECT notif_id FROM notifications WHERE user_id = ? AND title = ? AND link = ? LIMIT 1");
-                if ($stHasNotif) {
-                  $stHasNotif->bind_param("iss", $uid, $titleNeedRound, $linkNeedRound);
-                  $stHasNotif->execute();
-                  $alreadyHas = (bool)$stHasNotif->get_result()->fetch_assoc();
-                }
-                if (!$alreadyHas && !$dismissNeedRoundAuto) {
-                  drawdream_send_notification(
-                    $conn,
-                    $uid,
-                    'need_round_open',
-                    $titleNeedRound,
-                    'รอบก่อนหน้าปิดรับครบ 1 เดือนแล้ว ตอนนี้คุณสามารถเสนอรายการสิ่งของรอบใหม่ได้',
-                    $linkNeedRound,
-                    $entityKey
-                  );
-                }
-              }
-            } else {
-              // เงื่อนไขหมดไปแล้ว: reset dismissal เพื่อให้รอบถัดไปแจ้งเตือนได้อีก
-              unset($_SESSION['dismiss_auto_need_round_open']);
-            }
-
-            $childCategoryId = drawdream_get_or_create_child_donate_category_id($conn);
-            $existExpr = "(EXISTS (SELECT 1 FROM donation d WHERE d.category_id = {$childCategoryId} AND d.target_id = c.child_id AND d.payment_status = 'completed' AND d.donor_id IS NOT NULL)
-              OR EXISTS (SELECT 1 FROM child_subscription_history hs WHERE hs.child_id = c.child_id AND hs.current_status = 'active' AND hs.donor_user_id IS NOT NULL))";
-            $stmtPending = $conn->prepare("
-              SELECT COUNT(*) AS cnt
-              FROM foundation_children c
-              WHERE c.foundation_id = ?
-               
-                AND ({$existExpr})
-                AND COALESCE(TRIM(c.update_text), '') = ''
-                AND COALESCE(NULLIF(c.update_images, ''), '[]') IN ('[]', '')
-            ");
-          if ($stmtPending) {
-            $stmtPending->bind_param("i", $fid);
-            $stmtPending->execute();
-            $pendingCnt = (int)(($stmtPending->get_result()->fetch_assoc()['cnt'] ?? 0));
-            if ($pendingCnt > 0) {
-              if (!$dismissChildOutcomeAuto) {
-                array_unshift($user_notifs, [
-                  'notif_id' => 0,
-                  'title' => 'อัปเดตผลลัพธ์เด็ก',
-                  'message' => "มีเด็กที่มีผู้อุปการะแล้ว {$pendingCnt} รายการ รออัปเดตผลลัพธ์",
-                  'link' => 'children_.php',
-                  'created_at' => date('Y-m-d H:i:s'),
-                  'is_read' => 0,
-                ]);
-                $user_notif_count += 1;
-              }
-            } else {
-              // เงื่อนไขหมดไปแล้ว: reset dismissal เพื่อให้สถานะใหม่แจ้งเตือนได้อีก
-              unset($_SESSION['dismiss_auto_child_outcome']);
-            }
-          }
-        }
-      }
-    }
-  } catch (Throwable $e) {
-    $user_notifs = [];
-    $user_notif_count = 0;
   }
-  drawdream_navbar_cache_set($notifCacheKey, [
-    'notifs' => $user_notifs,
-    'count' => $user_notif_count,
-  ]);
+  if ($user_notifs_html === '' && $user_notifs !== []) {
+    require_once __DIR__ . '/includes/navbar_notifications.php';
+    $user_notifs_html = drawdream_navbar_notification_list_html($user_notifs, $_nav_base);
   }
 }
-
-$_nav_depth = substr_count(str_replace(dirname(str_replace('\\','/',__FILE__)), '', str_replace('\\','/',dirname($_SERVER['SCRIPT_FILENAME']))), '/');
-$_nav_base  = str_repeat('../', max(0, $_nav_depth));
 
 // รูปโปรไฟล์มุมขวาบน (ผู้บริจาค / มูลนิธิ)
 $nav_profile_img = $_nav_base . 'img/donor-avatar-placeholder.svg';
@@ -285,7 +165,7 @@ if (isset($_SESSION['user_id']) && ($_SESSION['role'] ?? '') === 'foundation') {
 }
 $is_admin_mode = ($_SESSION['role'] ?? '') === 'admin';
 $current_page = basename($_SERVER['PHP_SELF']);
-$aboutNavActive = in_array($current_page, ['about.php', 'about_how_it_works.php', 'about_support.php'], true);
+$aboutNavActive = in_array($current_page, ['about.php', 'about_support.php'], true);
 $adminDashboardActive = in_array($current_page, [
     'admin_dashboard.php',
     'admin_donors.php',
@@ -317,14 +197,16 @@ $adminNeedlistActive = in_array($current_page, [
 ], true);
 $adminEscrowActive = in_array($current_page, ['admin_escrow.php'], true);
 ?>
-<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=14">
-<link rel="stylesheet" href="<?= $_nav_base ?>css/notif.css?v=5">
+<link rel="stylesheet" href="<?= $_nav_base ?>css/navbar.css?v=17">
+<link rel="stylesheet" href="<?= htmlspecialchars($_nav_base . 'css/brand_logo.css?v=2', ENT_QUOTES, 'UTF-8') ?>">
+<link rel="stylesheet" href="<?= htmlspecialchars($_nav_base . 'css/notif.css?v=7', ENT_QUOTES, 'UTF-8') ?>">
 <script>
 document.addEventListener('touchstart', function () {}, { passive: true });
 </script>
 <?php if ($is_admin_mode): ?>
 <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
 <button type="button" class="admin-sidebar-show-btn" id="adminSidebarShowBtn" aria-label="แสดงเมนูแอดมิน">☰</button>
+<button type="button" class="admin-sidebar-backdrop" id="adminSidebarBackdrop" aria-label="ปิดเมนูแอดมิน" tabindex="-1"></button>
 <aside class="admin-sidebar-nav">
   <div class="admin-sidebar-head-actions">
     <button type="button" class="admin-sidebar-toggle" id="adminSidebarToggle" aria-label="ซ่อนเมนูแอดมิน">✕</button>
@@ -380,16 +262,31 @@ document.addEventListener('touchstart', function () {}, { passive: true });
     const sidebar = document.querySelector('.admin-sidebar-nav');
     const toggleBtn = document.getElementById('adminSidebarToggle');
     const showBtn = document.getElementById('adminSidebarShowBtn');
+    const backdrop = document.getElementById('adminSidebarBackdrop');
     const storageKey = 'drawdream-admin-sidebar-collapsed';
+    const mqAdminMobile = window.matchMedia('(max-width: 991px)');
+
+    function isAdminMobile() {
+      return mqAdminMobile.matches;
+    }
 
     function setCollapsed(collapsed) {
       document.body.classList.toggle('admin-sidebar-collapsed', collapsed);
-      if (showBtn) showBtn.style.display = collapsed ? 'inline-flex' : 'none';
-      localStorage.setItem(storageKey, collapsed ? '1' : '0');
+      document.body.classList.toggle('admin-sidebar-drawer-open', isAdminMobile() && !collapsed);
+      if (showBtn) {
+        showBtn.style.display = collapsed ? 'inline-flex' : 'none';
+      }
+      if (!isAdminMobile()) {
+        localStorage.setItem(storageKey, collapsed ? '1' : '0');
+      }
     }
 
     const saved = localStorage.getItem(storageKey) === '1';
-    setCollapsed(saved);
+    setCollapsed(isAdminMobile() ? true : saved);
+
+    mqAdminMobile.addEventListener('change', function () {
+      setCollapsed(isAdminMobile() ? true : (localStorage.getItem(storageKey) === '1'));
+    });
 
     if (toggleBtn) {
       toggleBtn.addEventListener('click', function () {
@@ -401,10 +298,29 @@ document.addEventListener('touchstart', function () {}, { passive: true });
         setCollapsed(false);
       });
     }
+    if (backdrop) {
+      backdrop.addEventListener('click', function () {
+        setCollapsed(true);
+      });
+    }
+    if (sidebar) {
+      sidebar.querySelectorAll('.admin-nav-link, .admin-side-utility, .admin-brand-card').forEach(function (el) {
+        el.addEventListener('click', function () {
+          if (isAdminMobile()) {
+            setCollapsed(true);
+          }
+        });
+      });
+    }
   });
 </script>
 <?php else: ?>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+<?php
+if (!function_exists('drawdream_bootstrap_icons_link')) {
+    require_once __DIR__ . '/includes/vendor_assets.php';
+}
+echo drawdream_bootstrap_icons_link($_nav_base);
+?>
 <?php if ($is_donor_preview): ?>
 <div class="donor-preview-banner">
   <span>&#128065; กำลังดูในโหมด <strong>มุมมองผู้บริจาค</strong> &mdash; เห็นเหมือนผู้บริจาคทั่วไป</span>
@@ -423,7 +339,7 @@ document.addEventListener('touchstart', function () {}, { passive: true });
     </button>
     <div class="nav-main-links" id="navMainLinks" role="navigation" aria-label="เมนูหลัก">
       <a href="<?= $_nav_base ?>homepage.php" <?= basename($_SERVER['PHP_SELF']) == 'homepage.php' ? 'class="active"' : '' ?>>หน้าแรก</a>
-      <a href="<?= $_nav_base ?>children_.php" <?= in_array(basename($_SERVER['PHP_SELF']), ['children_.php', 'children_donate.php'], true) ? 'class="active"' : '' ?>>อุปการะเด็ก</a>
+      <a href="<?= $_nav_base ?>children_.php" <?= in_array(basename($_SERVER['PHP_SELF']), ['children_.php', 'children_donate.php'], true) ? 'class="active"' : '' ?>>อุปการะ</a>
       <a href="<?= $_nav_base ?>project.php" <?= basename($_SERVER['PHP_SELF']) == 'project.php' ? 'class="active"' : '' ?>>โครงการ</a>
       <a href="<?= $_nav_base ?>foundation.php" <?= basename($_SERVER['PHP_SELF']) == 'foundation.php' ? 'class="active"' : '' ?>>มูลนิธิ</a>
       <div class="nav-about-dropdown<?= $aboutNavActive ? ' is-active' : '' ?>" id="navAboutDropdown">
@@ -462,61 +378,27 @@ document.addEventListener('touchstart', function () {}, { passive: true });
           </a>
         <?php endif; ?>
         <!-- ระฆังแจ้งเตือน -->
-        <div class="notif-wrap" id="notifWrap">
-          <button type="button" class="notif-btn" onclick="toggleNotif(event)" aria-label="แจ้งเตือน">
+        <div class="notif-wrap" id="notifWrap" data-feed-url="<?= htmlspecialchars($_nav_base . 'notifications_feed.php', ENT_QUOTES, 'UTF-8') ?>" data-feed-fresh="<?= $notif_ssr_fresh ? '1' : '0' ?>">
+          <button type="button" class="notif-btn" onclick="toggleNotif(event)" aria-label="แจ้งเตือน" aria-expanded="false" aria-controls="notifDropdown">
             <i class="bi bi-bell-fill nav-bell-icon" aria-hidden="true"></i>
-            <?php if ($user_notif_count > 0): ?>
-              <span class="notif-badge"><?= $user_notif_count ?></span>
-            <?php endif; ?>
+            <span class="notif-badge" id="notifBadge"<?= $user_notif_count <= 0 ? ' hidden' : '' ?>><?= $user_notif_count ?></span>
           </button>
           <div class="notif-dropdown" id="notifDropdown" onclick="event.stopPropagation()">
             <div class="notif-header">
               <span class="notif-header-title">การแจ้งเตือน</span>
               <div class="notif-header-actions">
                 <?php if ($user_notif_count > 0): ?>
-                  <a href="<?= $_nav_base ?>mark_notif_read.php?all=1" class="notif-mark-all">อ่านทั้งหมด</a>
+                  <button type="button" class="notif-mark-all" id="notifMarkAll">อ่านทั้งหมด</button>
+                <?php else: ?>
+                  <button type="button" class="notif-mark-all" id="notifMarkAll" hidden>อ่านทั้งหมด</button>
                 <?php endif; ?>
                 <?php if (in_array(($_SESSION['role'] ?? ''), ['foundation', 'donor'], true)): ?>
                   <a href="<?= $_nav_base ?>notifications.php" class="notif-see-all-header">ดูทั้งหมด</a>
                 <?php endif; ?>
               </div>
             </div>
-            <div class="notif-body-scroll">
-            <?php if (empty($user_notifs)): ?>
-              <div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>
-            <?php else: ?>
-              <?php foreach ($user_notifs as $n): ?>
-                <?php
-                  $rawNotifLink = trim((string)($n['link'] ?? ''));
-                  if ($rawNotifLink === '') {
-                      $rawNotifLink = 'notifications.php';
-                  }
-                  $rawNotifLink = drawdream_normalize_child_donate_notification_link(
-                      $rawNotifLink,
-                      (string)($n['title'] ?? '')
-                  );
-                  $notifIdNav = (int)($n['notif_id'] ?? 0);
-                  $isChildLetterNav = drawdream_is_child_letter_notification((string)($n['title'] ?? ''))
-                      && preg_match('~^/?children_donate\.php\?~i', $rawNotifLink);
-                  if ($notifIdNav > 0 && $isChildLetterNav) {
-                      $sepNav = str_contains($rawNotifLink, '?') ? '&' : '?';
-                      $notifItemHref = $_nav_base . $rawNotifLink . $sepNav . 'notif_read=' . $notifIdNav;
-                  } elseif ($notifIdNav > 0) {
-                      $notifItemHref = $_nav_base . 'mark_notif_read.php?id=' . $notifIdNav
-                          . '&goto=' . rawurlencode($rawNotifLink);
-                  } else {
-                      $notifItemHref = $_nav_base . $rawNotifLink;
-                  }
-                  $notifUnread = (int)($n['is_read'] ?? 0) === 0;
-                ?>
-                <a href="<?= htmlspecialchars($notifItemHref, ENT_QUOTES, 'UTF-8') ?>"
-                   class="notif-item<?= $notifUnread ? ' unread' : '' ?>">
-                  <div class="notif-item-title"><?= htmlspecialchars((string)($n['title'] ?? '')) ?></div>
-                  <div class="notif-item-msg"><?= htmlspecialchars((string)($n['message'] ?? '')) ?></div>
-                  <div class="notif-item-time"><?= date('d/m/Y H:i', strtotime((string)($n['created_at'] ?? 'now'))) ?></div>
-                </a>
-              <?php endforeach; ?>
-            <?php endif; ?>
+            <div class="notif-body-scroll" id="notifBody">
+            <?= $user_notifs_html !== '' ? $user_notifs_html : '<div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>' ?>
             </div>
           </div>
         </div>
@@ -528,6 +410,13 @@ document.addEventListener('touchstart', function () {}, { passive: true });
         </button>
         <div class="nav-profile-menu" id="navProfileMenu" role="menu" hidden>
           <a href="<?= $_nav_base ?>profile.php" class="nav-profile-menu-item" role="menuitem">โปรไฟล์</a>
+          <?php if (($_SESSION['role'] ?? '') === 'foundation' && !$is_donor_preview): ?>
+          <?php if (empty($foundation_account_pending)): ?>
+          <a href="<?= $_nav_base ?>foundation_dashboard.php" class="nav-profile-menu-item" role="menuitem">แดชบอร์ดมูลนิธิ</a>
+          <?php else: ?>
+          <span class="nav-profile-menu-item nav-profile-menu-item--disabled" role="menuitem" title="รอแอดมินอนุมัติบัญชีก่อน">แดชบอร์ดมูลนิธิ (รออนุมัติ)</span>
+          <?php endif; ?>
+          <?php endif; ?>
           <a href="<?= $_nav_base ?>logout.php" class="nav-profile-menu-item nav-profile-menu-logout" role="menuitem">ออกจากระบบ</a>
         </div>
       </div>
@@ -574,7 +463,7 @@ document.addEventListener('touchstart', function () {}, { passive: true });
       });
     }
     window.addEventListener('resize', function () {
-      if (window.innerWidth > 600) close();
+      if (window.innerWidth > 1024) close();
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') close();
@@ -641,6 +530,13 @@ document.addEventListener('touchstart', function () {}, { passive: true });
       btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       if (open) {
         menu.removeAttribute('hidden');
+        var dashLink = menu.querySelector('a[href*="foundation_dashboard.php"]');
+        if (dashLink && !document.querySelector('link[rel="prefetch"][href*="foundation_dashboard.php"]')) {
+          var pf = document.createElement('link');
+          pf.rel = 'prefetch';
+          pf.href = dashLink.getAttribute('href') || 'foundation_dashboard.php';
+          document.head.appendChild(pf);
+        }
       } else {
         menu.setAttribute('hidden', '');
       }
@@ -653,7 +549,7 @@ document.addEventListener('touchstart', function () {}, { passive: true });
       });
     });
     window.addEventListener('resize', function () {
-      if (window.innerWidth > 768 && typeof closeNavProfileMenu === 'function') closeNavProfileMenu();
+      if (window.innerWidth > 1024 && typeof closeNavProfileMenu === 'function') closeNavProfileMenu();
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && typeof closeNavProfileMenu === 'function') closeNavProfileMenu();
@@ -667,7 +563,15 @@ document.addEventListener('touchstart', function () {}, { passive: true });
 function toggleNotif(e) {
   e.stopPropagation();
   const w = document.getElementById('notifWrap');
-  if (w) w.classList.toggle('open');
+  const btn = w ? w.querySelector('.notif-btn') : null;
+  if (w) {
+    const open = !w.classList.contains('open');
+    w.classList.toggle('open', open);
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open && typeof window.drawdreamRefreshNotifFeed === 'function') {
+      window.drawdreamRefreshNotifFeed();
+    }
+  }
   closeNavProfileMenu();
 }
 function closeNavProfileMenu() {
@@ -681,7 +585,120 @@ function closeNavProfileMenu() {
 }
 document.addEventListener('click', function() {
   const w = document.getElementById('notifWrap');
-  if (w) w.classList.remove('open');
+  const btn = w ? w.querySelector('.notif-btn') : null;
+  if (w) {
+    w.classList.remove('open');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
   closeNavProfileMenu();
 });
+
+(function () {
+  var wrap = document.getElementById('notifWrap');
+  if (!wrap) return;
+  var feedUrl = wrap.getAttribute('data-feed-url') || 'notifications_feed.php';
+  var feedFresh = wrap.getAttribute('data-feed-fresh') === '1';
+  var bodyEl = document.getElementById('notifBody');
+  var badgeEl = document.getElementById('notifBadge');
+  var markAllEl = document.getElementById('notifMarkAll');
+  var markReadBase = <?= json_encode($_nav_base . 'mark_notif_read.php', JSON_UNESCAPED_SLASHES) ?>;
+  var csrfToken = <?= json_encode($_nav_csrf_token, JSON_UNESCAPED_UNICODE) ?>;
+  var feedLoaded = feedFresh;
+
+  function updateBadge(count) {
+    if (!badgeEl) return;
+    var n = parseInt(count, 10) || 0;
+    if (n > 0) {
+      badgeEl.textContent = String(n);
+      badgeEl.hidden = false;
+      if (markAllEl) markAllEl.hidden = false;
+    } else {
+      badgeEl.hidden = true;
+      if (markAllEl) markAllEl.hidden = true;
+    }
+  }
+
+  function bindNotifClicks(root) {
+    if (!root) return;
+    root.querySelectorAll('.notif-item[data-notif-id]').forEach(function (item) {
+      if (item.dataset.bound === '1') return;
+      item.dataset.bound = '1';
+      item.addEventListener('click', function (e) {
+        var id = parseInt(item.getAttribute('data-notif-id') || '0', 10);
+        var href = item.getAttribute('data-notif-link') || item.getAttribute('href') || '';
+        if (id > 0) {
+          var markUrl = markReadBase + '?id=' + encodeURIComponent(String(id));
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(markUrl);
+          } else {
+            fetch(markUrl, { credentials: 'same-origin', keepalive: true }).catch(function () {});
+          }
+        }
+        if (href) {
+          e.preventDefault();
+          window.location.href = href;
+        }
+      });
+    });
+  }
+
+  function applyFeedData(data) {
+    if (!data || typeof data.html !== 'string') return;
+    if (bodyEl) {
+      bodyEl.innerHTML = data.html;
+      bindNotifClicks(bodyEl);
+    }
+    if (typeof data.count !== 'undefined') updateBadge(data.count);
+    feedLoaded = true;
+  }
+
+  window.drawdreamRefreshNotifFeed = function () {
+    return fetch(feedUrl, { credentials: 'same-origin' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        applyFeedData(data);
+        return data;
+      })
+      .catch(function () { return null; });
+  };
+
+  bindNotifClicks(bodyEl);
+
+  if (!feedFresh) {
+    window.drawdreamRefreshNotifFeed();
+  }
+
+  if (markAllEl) {
+    markAllEl.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (markAllEl.disabled) return;
+      markAllEl.disabled = true;
+      fetch(markReadBase, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: 'mark_all=1&ajax=1&csrf=' + encodeURIComponent(csrfToken || '')
+      })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (data) {
+          if (data && data.ok) {
+            updateBadge(0);
+            if (bodyEl) {
+              bodyEl.innerHTML = '<div class="notif-empty">ยังไม่มีการแจ้งเตือน</div>';
+            }
+          } else {
+            window.drawdreamRefreshNotifFeed();
+          }
+        })
+        .catch(function () {})
+        .finally(function () {
+          markAllEl.disabled = false;
+        });
+    });
+  }
+})();
 </script>
+<?php if (($_SESSION['role'] ?? '') === 'foundation'): ?>
+<script src="<?= htmlspecialchars(($_nav_base ?? '') . 'js/foundation_manage_nav.js?v=2', ENT_QUOTES, 'UTF-8') ?>" defer></script>
+<?php endif; ?>

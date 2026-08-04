@@ -1,35 +1,49 @@
-﻿<?php
+<?php
 // foundation_add_need.php — มูลนิธิเสนอรายการสิ่งของ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน add need
 
 include 'db.php';
 require_once __DIR__ . '/includes/drawdream_needlist_schema.php';
+drawdream_ensure_needlist_schema($conn);
 require_once __DIR__ . '/includes/needlist_donate_window.php';
+require_once __DIR__ . '/includes/drawdream_upload.php';
+require_once __DIR__ . '/includes/drawdream_image_compress.php';
+require_once __DIR__ . '/includes/foundation_donor_preview.php';
+require_once __DIR__ . '/includes/foundation_need_flash.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
-}
+$needMaxUploadBytes = drawdream_needlist_max_upload_bytes();
+$needMaxUploadLabel = drawdream_format_bytes_mb_label($needMaxUploadBytes);
+$needServerUploadBytes = drawdream_parse_ini_size((string)ini_get('upload_max_filesize'));
 
-if (($_SESSION['role'] ?? '') !== 'foundation') {
-    header("Location: homepage.php");
-    exit();
-}
+drawdream_foundation_require_management_access();
 
 require_once __DIR__ . '/includes/foundation_account_verified.php';
-drawdream_foundation_require_account_verified($conn);
+drawdream_foundation_require_active_account($conn);
+
+require_once __DIR__ . '/includes/drawdream_user_error.php';
 
 $uid = (int)($_SESSION['user_id'] ?? 0);
-if ($uid <= 0) die("ไม่พบ user_id ใน session");
+if ($uid <= 0) {
+    header('Location: login.php');
+    exit;
+}
 
 // ดึง foundation_id + ชื่อมูลนิธิ (ใช้แจ้งเตือน)
 $stmt = $conn->prepare("SELECT foundation_id, foundation_name FROM foundation_profile WHERE user_id=? LIMIT 1");
-if (!$stmt) die("Prepare failed: " . $conn->error);
+if (!$stmt) {
+    drawdream_user_error_redirect(
+        'โหลดข้อมูลมูลนิธิไม่สำเร็จ กรุณาลองใหม่ภายหลัง',
+        'foundation.php',
+        'foundation_add_need prepare foundation: ' . $conn->error
+    );
+}
 $stmt->bind_param("i", $uid);
 $stmt->execute();
 $fp = $stmt->get_result()->fetch_assoc();
-if (!$fp) die("ยังไม่มีโปรไฟล์มูลนิธิ กรุณาสร้างก่อน");
+if (!$fp) {
+    drawdream_user_error_redirect('ยังไม่มีโปรไฟล์มูลนิธิ กรุณาสร้างก่อน', 'update_profile.php');
+}
 $foundation_id = (int)$fp['foundation_id'];
 $foundation_display_name = trim((string)($fp['foundation_name'] ?? ''));
 $needProposeBlock = drawdream_foundation_needlist_propose_blocked($conn, $foundation_id);
@@ -45,7 +59,7 @@ if ($editItemPg > 0) {
     }
     if (!$editRow) {
         $editItemPg = 0;
-    } elseif (!in_array(strtolower(trim((string)($editRow['approve_item'] ?? ''))), ['pending', 'rejected'], true)) {
+    } elseif (!drawdream_foundation_needlist_may_edit($editRow)) {
         header('Location: foundation.php?need_edit_locked=1#my-needlist-section');
         exit;
     }
@@ -62,8 +76,13 @@ if ($isCreateModeLocked && ($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     exit;
 }
 
+$needReturnTo = drawdream_foundation_need_return_to_resolve(false);
+
 $error   = "";
 $success = "";
+if (isset($_GET['msg']) && trim((string)$_GET['msg']) !== '') {
+    $error = trim((string)$_GET['msg']);
+}
 
 require_once __DIR__ . '/includes/needlist_category_catalog.php';
 
@@ -276,8 +295,8 @@ if (isset($_POST['submit'])) {
             $existingNeedRow = $chkOwn->get_result()->fetch_assoc();
             if (!$existingNeedRow) {
                 $error = 'ไม่พบรายการสิ่งของหรือไม่มีสิทธิแก้ไข';
-            } elseif (!in_array(strtolower(trim((string)($existingNeedRow['approve_item'] ?? ''))), ['pending', 'rejected'], true)) {
-                $error = 'รายการนี้อนุมัติแล้ว ไม่สามารถแก้ไขได้';
+            } elseif (!drawdream_foundation_needlist_may_edit($existingNeedRow)) {
+                $error = 'รายการนี้มีผู้บริจาคแล้วหรืออยู่ขั้นตอนถัดไป จึงแก้ไขไม่ได้';
             }
         }
     }
@@ -359,7 +378,7 @@ if (isset($_POST['submit'])) {
     $urgent      = isset($_POST['urgent']) ? 1 : 0;
     $note        = trim($_POST['note'] ?? '');
     $qty         = 0.0;
-    $item_name = implode(', ', $itemNames);
+    $item_name = foundation_needlist_build_item_name_label($itemNames);
     $needItemsJson = '';
     $needItemsPricingJson = '';
     foreach ($lineItems as $li) {
@@ -412,7 +431,7 @@ if (isset($_POST['submit'])) {
         }
     }
 
-    // อัปโหลดรูป (ไม่บังคับ, สูงสุด 3 รูป)
+    // อัปโหลดรูป (บังคับอย่างน้อย 1 รูปสิ่งของ + รูปมูลนิธิ — หรือคงรูปเดิมตอนแก้ไข)
     $uploadedImages = [];
     if ($error === "" && isset($_FILES['item_image']) && is_array($_FILES['item_image']['name'])) {
         $uploadDir = drawdream_needlist_upload_dir();
@@ -420,7 +439,6 @@ if (isset($_POST['submit'])) {
             mkdir($uploadDir, 0777, true);
         }
 
-        $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
         $names = $_FILES['item_image']['name'];
         $tmpNames = $_FILES['item_image']['tmp_name'];
         $sizes = $_FILES['item_image']['size'];
@@ -440,26 +458,26 @@ if (isset($_POST['submit'])) {
                 $errCode = (int)$errors[$idx];
                 if ($errCode === UPLOAD_ERR_NO_FILE) continue;
                 if ($errCode !== UPLOAD_ERR_OK) {
-                    $error = "ข้อผิดพลาดการอัปโหลด (Error code: " . $errCode . ")";
+                    $error = drawdream_upload_error_message_th($errCode, 'รูปสิ่งของ');
                     break;
                 }
 
                 $fileSize = (int)$sizes[$idx];
-                if ($fileSize > 5 * 1024 * 1024) {
-                    $error = "แต่ละไฟล์ต้องไม่เกิน 5MB";
-                    break;
-                }
-
-                $ext = strtolower(pathinfo((string)$imageName, PATHINFO_EXTENSION));
-                if (!in_array($ext, $allowed, true)) {
+                $tmpPath = (string)$tmpNames[$idx];
+                if (!drawdream_upload_is_image_tmp($tmpPath, (string)$imageName)) {
                     $error = "อนุญาตเฉพาะไฟล์รูป jpg/jpeg/png/gif/webp";
                     break;
                 }
 
-                $safeName = time() . "_" . uniqid() . "_" . $idx . "." . $ext;
+                $resolvedExt = drawdream_upload_resolve_image_ext($tmpPath, (string)$imageName);
+                $forceJpeg = drawdream_upload_needs_jpeg_output($tmpPath, (string)$imageName, $fileSize, $needMaxUploadBytes);
+                $outExt = $forceJpeg ? 'jpg' : $resolvedExt;
+                $safeName = time() . "_" . uniqid() . "_" . $idx . "." . $outExt;
                 $targetPath = $uploadDir . $safeName;
-                if (!move_uploaded_file((string)$tmpNames[$idx], $targetPath)) {
-                    $error = "อัปโหลดรูปไม่สำเร็จ";
+                if (!drawdream_store_compressed_upload($tmpPath, $targetPath, $needMaxUploadBytes, $forceJpeg)) {
+                    $error = $forceJpeg
+                        ? "บีบอัด/แปลงรูปไม่สำเร็จ — ลองบันทึกเป็น JPG แล้วอัปโหลดใหม่"
+                        : "อัปโหลดรูปไม่สำเร็จ";
                     break;
                 }
 
@@ -477,33 +495,68 @@ if (isset($_POST['submit'])) {
             if (!is_dir($uploadDir)) {
                 mkdir($uploadDir, 0777, true);
             }
-            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             $imgName = (string)($ff['name'] ?? '');
             $tmpF = (string)($ff['tmp_name'] ?? '');
             $sizeF = (int)($ff['size'] ?? 0);
-            if ($sizeF > 5 * 1024 * 1024) {
-                $error = "รูปมูลนิธิต้องไม่เกิน 5MB";
+            if (!drawdream_upload_is_image_tmp($tmpF, $imgName)) {
+                $error = "รูปมูลนิธิ อนุญาตเฉพาะไฟล์รูป";
+            } elseif ($tmpF === '' || !is_uploaded_file($tmpF)) {
+                $error = "อัปโหลดรูปมูลนิธิไม่สำเร็จ";
             } else {
-                $ext = strtolower(pathinfo($imgName, PATHINFO_EXTENSION));
-                if (!in_array($ext, $allowed, true)) {
-                    $error = "รูปมูลนิธิ อนุญาตเฉพาะ jpg/jpeg/png/gif/webp";
-                } elseif ($tmpF === '' || !is_uploaded_file($tmpF)) {
-                    $error = "อัปโหลดรูปมูลนิธิไม่สำเร็จ";
+                $forceJpeg = drawdream_upload_needs_jpeg_output($tmpF, $imgName, $sizeF, $needMaxUploadBytes);
+                $outExt = $forceJpeg ? 'jpg' : drawdream_upload_resolve_image_ext($tmpF, $imgName);
+                $safeF = time() . "_" . uniqid('', true) . "_fdn." . $outExt;
+                if (!drawdream_store_compressed_upload($tmpF, $uploadDir . $safeF, $needMaxUploadBytes, $forceJpeg)) {
+                    $error = $forceJpeg
+                        ? "บีบอัด/แปลงรูปมูลนิธิไม่สำเร็จ — ลองบันทึกเป็น JPG แล้วอัปโหลดใหม่"
+                        : "บันทึกไฟล์รูปมูลนิธิไม่สำเร็จ";
                 } else {
-                    $safeF = time() . "_" . uniqid('', true) . "_fdn." . $ext;
-                    if (!move_uploaded_file($tmpF, $uploadDir . $safeF)) {
-                        $error = "บันทึกไฟล์รูปมูลนิธิไม่สำเร็จ";
-                    } else {
-                        $needFoundationImageDb = $safeF;
-                    }
+                    $needFoundationImageDb = $safeF;
                 }
             }
         } elseif ($errF !== UPLOAD_ERR_NO_FILE) {
-            $error = "ข้อผิดพลาดอัปโหลดรูปมูลนิธิ (รหัส " . $errF . ")";
+            $error = drawdream_upload_error_message_th($errF, 'รูปมูลนิธิ');
         }
     }
 
     } // end skip validation when $error set early
+
+    if ($error === '') {
+        $checkIm0 = $uploadedImages[0] ?? '';
+        $checkIm1 = $uploadedImages[1] ?? '';
+        $checkIm2 = $uploadedImages[2] ?? '';
+        $checkFdn = $needFoundationImageDb;
+        if ($itemIdEdit > 0 && $existingNeedRow) {
+            $mergedCheck = foundation_needlist_item_filenames_from_row($existingNeedRow);
+            while (count($mergedCheck) < 3) {
+                $mergedCheck[] = '';
+            }
+            if ($checkIm0 === '' && trim((string)($mergedCheck[0] ?? '')) !== '') {
+                $checkIm0 = (string)$mergedCheck[0];
+            }
+            if ($checkIm1 === '' && trim((string)($mergedCheck[1] ?? '')) !== '') {
+                $checkIm1 = (string)$mergedCheck[1];
+            }
+            if ($checkIm2 === '' && trim((string)($mergedCheck[2] ?? '')) !== '') {
+                $checkIm2 = (string)$mergedCheck[2];
+            }
+            if ($checkFdn === '') {
+                $checkFdn = foundation_needlist_normalize_filename((string)($existingNeedRow['need_foundation_image'] ?? ''));
+            }
+        }
+        $checkRow = [
+            'need_items_json' => $needItemsJson,
+            'need_items_pricing_json' => $needItemsPricingJson,
+            'item_name' => $item_name,
+            'item_image' => $checkIm0,
+            'item_image_2' => $checkIm1,
+            'item_image_3' => $checkIm2,
+            'need_foundation_image' => $checkFdn,
+        ];
+        if (!foundation_needlist_is_donation_ready($checkRow)) {
+            $error = 'ข้อมูลยังไม่ครบสำหรับส่งให้แอดมิน: ' . foundation_needlist_readiness_message_th($checkRow);
+        }
+    }
 
     // บันทึก
     if ($error === "") {
@@ -537,34 +590,102 @@ if (isset($_POST['submit'])) {
                 $nfFinal = $needFoundationImageDb;
             }
 
+            $hasSubmittedNeedItemsJson = false;
+            $chkSubmittedItemsJson = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'submitted_need_items_json'");
+            if ($chkSubmittedItemsJson && $chkSubmittedItemsJson->num_rows > 0) {
+                $hasSubmittedNeedItemsJson = true;
+            }
+            $hasFoundationOriginal = false;
+            $chkFoundationOriginal = $conn->query("SHOW COLUMNS FROM foundation_needlist LIKE 'foundation_original_total_price'");
+            if ($chkFoundationOriginal && $chkFoundationOriginal->num_rows > 0) {
+                $hasFoundationOriginal = true;
+            }
+
             $sqlU = "UPDATE foundation_needlist SET
                 item_name = ?, desired_brand = ?, allow_other_brand = ?,
                 qty_needed = ?, urgent = ?,
                 item_image = ?, item_image_2 = ?, item_image_3 = ?, need_foundation_image = ?,
-                note = ?, total_price = ?, submitted_total_price = COALESCE(submitted_total_price, ?),
-                need_items_json = ?, need_items_pricing_json = ?, submitted_need_items_pricing_json = ?
-                WHERE item_id = ? AND foundation_id = ?";
+                note = ?, total_price = ?, submitted_total_price = ?,
+                need_items_json = ?, need_items_pricing_json = ?, submitted_need_items_pricing_json = ?";
+            if ($hasSubmittedNeedItemsJson) {
+                $sqlU .= ", submitted_need_items_json = ?";
+            }
+            if ($hasFoundationOriginal) {
+                $sqlU .= ", foundation_original_total_price = COALESCE(foundation_original_total_price, ?),
+                    foundation_original_need_items_pricing_json = COALESCE(foundation_original_need_items_pricing_json, ?)";
+                if ($hasSubmittedNeedItemsJson) {
+                    $sqlU .= ", foundation_original_need_items_json = COALESCE(foundation_original_need_items_json, ?)";
+                }
+            }
+            $sqlU .= " WHERE item_id = ? AND foundation_id = ?";
             $stmt = $conn->prepare($sqlU);
 
             if (!$stmt) {
                 $error = "Prepare failed: " . $conn->error;
             } else {
-                $updTypes = 'ss' . 'idi' . str_repeat('s', 5) . 'sddsss' . 'ii';
-                $stmt->bind_param(
-                    $updTypes,
-                    $item_name, $desiredBrand,
-                    $allow_other, $qty, $urgent,
-                    $im0, $im1, $im2, $nfFinal,
-                    $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson,
-                    $itemIdEdit, $foundation_id
-                );
+                if ($hasSubmittedNeedItemsJson && $hasFoundationOriginal) {
+                    $updTypes = 'ssidisssssddssssdssii';
+                    $stmt->bind_param(
+                        $updTypes,
+                        $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent,
+                        $im0, $im1, $im2, $nfFinal,
+                        $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson,
+                        $needItemsJson,
+                        $total_price, $needItemsPricingJson, $needItemsJson,
+                        $itemIdEdit, $foundation_id
+                    );
+                } elseif ($hasSubmittedNeedItemsJson) {
+                    $updTypes = 'ssidisssssddssssii';
+                    $stmt->bind_param(
+                        $updTypes,
+                        $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent,
+                        $im0, $im1, $im2, $nfFinal,
+                        $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson,
+                        $needItemsJson,
+                        $itemIdEdit, $foundation_id
+                    );
+                } elseif ($hasFoundationOriginal) {
+                    $updTypes = 'ssidisssssddsssdsii';
+                    $stmt->bind_param(
+                        $updTypes,
+                        $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent,
+                        $im0, $im1, $im2, $nfFinal,
+                        $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson,
+                        $total_price, $needItemsPricingJson,
+                        $itemIdEdit, $foundation_id
+                    );
+                } else {
+                    $updTypes = 'ssidisssssddsssii';
+                    $stmt->bind_param(
+                        $updTypes,
+                        $item_name, $desiredBrand,
+                        $allow_other, $qty, $urgent,
+                        $im0, $im1, $im2, $nfFinal,
+                        $note, $total_price, $total_price, $needItemsJson, $needItemsPricingJson, $needItemsPricingJson,
+                        $itemIdEdit, $foundation_id
+                    );
+                }
 
-                if ($stmt->execute()) {
-                    $prevApproveItem = strtolower(trim((string)($existingNeedRow['approve_item'] ?? '')));
-                    if ($prevApproveItem === 'rejected') {
+                try {
+                    $saved = $stmt->execute();
+                } catch (mysqli_sql_exception $e) {
+                    $saved = false;
+                    if (str_contains($e->getMessage(), 'item_name')) {
+                        $error = 'ชื่อรายการสิ่งของรวมยาวเกินไป — ลองใช้ชื่อสั้นลงหรือลดจำนวนรายการ';
+                    } else {
+                        $error = 'บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง';
+                    }
+                }
+
+                if ($error === '' && !empty($saved) && is_array($existingNeedRow)) {
+                    $resubmit = drawdream_foundation_needlist_resubmit_on_save($existingNeedRow);
+                    if ($resubmit) {
                         $stPend = $conn->prepare(
                             "UPDATE foundation_needlist
-                             SET approve_item='pending', review_note=NULL
+                             SET approve_item='pending', donate_window_end_at=NULL
                              WHERE item_id = ? AND foundation_id = ?"
                         );
                         if ($stPend) {
@@ -581,27 +702,12 @@ if (isset($_POST['submit'])) {
                             (int)$urgent === 1
                         );
                     }
-                    if (($existingNeedRow['approve_item'] ?? '') === 'approved') {
-                        require_once __DIR__ . '/includes/needlist_donate_window.php';
-                        try {
-                            $from = new DateTimeImmutable('now');
-                        } catch (Throwable $e) {
-                            $from = new DateTimeImmutable('now');
-                        }
-                        $end = drawdream_needlist_compute_donate_window_end('', $from);
-                        $eid = (int)$itemIdEdit;
-                        if ($end !== null) {
-                            $stE = $conn->prepare('UPDATE foundation_needlist SET donate_window_end_at = ? WHERE item_id = ? AND foundation_id = ?');
-                            if ($stE) {
-                                $stE->bind_param('sii', $end, $eid, $foundation_id);
-                                $stE->execute();
-                            }
-                        }
-                    }
-                    header('Location: foundation.php?need_updated=1#my-needlist-section');
-                    exit;
+                    $flashKey = $resubmit ? 'resubmitted' : 'updated';
+                    drawdream_foundation_need_save_redirect($flashKey, trim((string)($_POST['return_to'] ?? '')));
                 }
-                $error = "บันทึกไม่สำเร็จ: " . $stmt->error;
+                if ($error === '') {
+                    $error = 'บันทึกไม่สำเร็จ: ' . $stmt->error;
+                }
             }
         } else {
             $im0 = $slot0;
@@ -670,7 +776,18 @@ if (isset($_POST['submit'])) {
                     );
                 }
 
-                if ($stmt->execute()) {
+                try {
+                    $saved = $stmt->execute();
+                } catch (mysqli_sql_exception $e) {
+                    $saved = false;
+                    if (str_contains($e->getMessage(), 'item_name')) {
+                        $error = 'ชื่อรายการสิ่งของรวมยาวเกินไป — ลองใช้ชื่อสั้นลงหรือลดจำนวนรายการ';
+                    } else {
+                        $error = 'บันทึกไม่สำเร็จ กรุณาตรวจสอบข้อมูลอีกครั้ง';
+                    }
+                }
+
+                if ($error === '' && !empty($saved)) {
                     $newItemId = (int)$conn->insert_id;
                     if ($newItemId > 0) {
                         require_once __DIR__ . '/includes/notification_audit.php';
@@ -678,10 +795,10 @@ if (isset($_POST['submit'])) {
                         drawdream_record_foundation_submitted_need($conn, $uid, $newItemId, $item_name, $total_price, $foundation_display_name, $urgent === 1);
                         drawdream_notify_admins_need_submitted($conn, $newItemId, $item_name, $foundation_display_name, $total_price, $urgent === 1);
                     }
-                    header('Location: foundation.php?need_created=1#my-needlist-section');
-                    exit;
-                } else {
-                    $error = "บันทึกไม่สำเร็จ: " . $stmt->error;
+                    drawdream_foundation_need_save_redirect('created', trim((string)($_POST['return_to'] ?? '')));
+                }
+                if ($error === '') {
+                    $error = 'บันทึกไม่สำเร็จ: ' . $stmt->error;
                 }
             }
         }
@@ -690,6 +807,16 @@ if (isset($_POST['submit'])) {
 
 $hiddenItemId = (int)($_POST['item_id'] ?? $editItemPg);
 $isEditForm = $hiddenItemId > 0;
+$needWizardInitialStep = 1;
+if ($error !== '') {
+    if (preg_match('/แบรนด์|รูป|อัปโหลด|มูลนิธิ|ไฟล์/u', $error)) {
+        $needWizardInitialStep = 2;
+    } elseif (preg_match('/รายการ|ช่อง|หมวด|จำนวน|เป้าหมาย|กรอกอย่างน้อย/u', $error)) {
+        $needWizardInitialStep = 1;
+    } else {
+        $needWizardInitialStep = 2;
+    }
+}
 $thumbRow = null;
 if ($hiddenItemId > 0) {
     $trTh = $conn->prepare('SELECT item_image, item_image_2, item_image_3, need_foundation_image FROM foundation_needlist WHERE item_id = ? AND foundation_id = ? LIMIT 1');
@@ -700,6 +827,9 @@ if ($hiddenItemId > 0) {
     }
 }
 $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งของมูลนิธิ' : 'เสนอสิ่งของมูลนิธิ';
+$editResubmitApproved = $isEditForm
+    && is_array($editRow)
+    && strtolower(trim((string)($editRow['approve_item'] ?? ''))) === 'approved';
 ?>
 <!DOCTYPE html>
 <html lang="th">
@@ -709,15 +839,45 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title><?= htmlspecialchars($pageTitle) ?> | DrawDream</title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/foundation.css?v=30">
+    <link rel="stylesheet" href="css/foundation.css?v=31">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=2">
+    <style>
+        .need-wizard-banner { background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px 14px;margin:0 0 14px;color:#9a3412;font-size:.9rem;line-height:1.5; }
+        .need-wizard-tabs { display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;padding:0;list-style:none; }
+        .need-wizard-tabs li { padding:8px 14px;border-radius:999px;border:1px solid #e5e7eb;background:#f8fafc;font-size:.85rem;color:#64748b; }
+        .need-wizard-tabs li.need-wizard-tabs__active { background:#4A5BA8;border-color:#4A5BA8;color:#fff;font-weight:600; }
+        .need-wizard-tabs li.need-wizard-tabs__warn { box-shadow: inset 0 0 0 2px #f87171; }
+        .need-checklist { margin:0 0 16px;padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#f8fafc;list-style:none;display:grid;gap:6px; }
+        .need-checklist li { font-size:.86rem;color:#64748b; }
+        .need-checklist li.need-checklist__ok { color:#166534; }
+        .need-checklist li.need-checklist__ok::before { content:'✓ '; font-weight:700; }
+        .need-checklist li.need-checklist__no::before { content:'○ '; }
+        .need-form-steps { position:relative; }
+        .need-form-step { visibility:hidden;height:0;overflow:hidden;opacity:0;pointer-events:none; }
+        .need-form-step.need-form-step--active { visibility:visible;height:auto;overflow:visible;opacity:1;pointer-events:auto; }
+        .need-wizard-nav { display:flex;gap:10px;justify-content:flex-end;margin:16px 0 8px; }
+        .need-wizard-nav button { padding:10px 18px;border-radius:10px;border:1px solid #d1d5db;background:#fff;cursor:pointer;font-size:.9rem; }
+        .need-wizard-nav .need-step-next { background:#4A5BA8;color:#fff;border-color:#4A5BA8; }
+        .need-preview-summary { border:1px dashed #cbd5e1;border-radius:12px;padding:14px;background:#fff;font-size:.9rem;line-height:1.55; }
+        .need-preview-modal { display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;align-items:center;justify-content:center;padding:16px; }
+        .need-preview-modal.need-preview-modal--open { display:flex; }
+        .need-preview-modal__box { max-width:520px;width:100%;background:#fff;border-radius:14px;padding:18px 20px;max-height:85vh;overflow:auto; }
+        .need-form-file-sink { position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;opacity:0;z-index:-1; }
+        .need-form-file-sink .need-image-file-input { width:1px;height:1px;font-size:0; }
+    </style>
 </head>
 <body class="foundation-add-need-page">
 
 <?php include 'navbar.php'; ?>
 
 <div class="add-need-container">
-    <p class="add-need-back"><a href="foundation.php" class="add-need-back-link">← กลับหน้ามูลนิธิ</a></p>
+    <p class="add-need-back"><a href="<?= htmlspecialchars($needReturnTo, ENT_QUOTES, 'UTF-8') ?>" class="add-need-back-link" data-foundation-back>← กลับ</a></p>
     <h2><?= htmlspecialchars($pageTitle) ?></h2>
+    <?php if ($editResubmitApproved): ?>
+        <div class="alert alert-warning needlist-flash" role="status">
+            รายการนี้อนุมัติแล้วแต่ยังไม่มียอดบริจาค — เมื่อบันทึก ระบบจะส่งให้แอดมินตรวจอนุมัติใหม่
+        </div>
+    <?php endif; ?>
     <?php if (!$isEditForm): ?>
         <div class="alert alert-success" style="background:#eef6ff;border:1px solid #cfe1ff;color:#23417c;">
             รอบรับบริจาครายการสิ่งของจะปิดอัตโนมัติเมื่อครบ 1 เดือนนับจากวันที่แอดมินอนุมัติรายการ
@@ -725,18 +885,53 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
     <?php endif; ?>
 
     <?php if ($error): ?>
-        <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
+        <div class="alert alert-error" id="needFormError" role="alert">
+            <?= htmlspecialchars($error) ?>
+            <?php if ($needWizardInitialStep === 2): ?>
+                <p class="need-form-error-hint" style="margin:8px 0 0;font-size:.9rem;">กรุณาไปที่แท็บ <strong>2. รูปและแบรนด์</strong> ด้านล่างเพื่อแก้ไข (ยังกรอกขั้นที่ 1 ต่อได้ตามปกติ)</p>
+            <?php elseif ($needWizardInitialStep === 1): ?>
+                <p class="need-form-error-hint" style="margin:8px 0 0;font-size:.9rem;">แก้ไขได้ที่แท็บ <strong>1. รายการสิ่งของ</strong></p>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 
     <?php if ($success): ?>
         <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
     <?php endif; ?>
 
-    <form method="post" enctype="multipart/form-data">
+    <div class="need-wizard-banner" role="note">
+        <strong>สำคัญ:</strong> ถ้าไม่กรอกรายการย่อยครบ (ชื่อ · ราคา · จำนวน · รูป) ผู้บริจาคจะเลือกสิ่งของไม่ได้ และรายการจะไม่ผ่านการอนุมัติ
+    </div>
+    <ol class="need-wizard-tabs" id="needWizardTabs" aria-label="ขั้นตอนฟอร์ม">
+        <li<?= $needWizardInitialStep === 1 ? ' class="need-wizard-tabs__active"' : '' ?> data-step-tab="1">1. รายการสิ่งของ</li>
+        <?php
+        $tab2Class = [];
+        if ($needWizardInitialStep === 2) {
+            $tab2Class[] = 'need-wizard-tabs__active';
+        }
+        if ($error !== '' && $needWizardInitialStep === 2) {
+            $tab2Class[] = 'need-wizard-tabs__warn';
+        }
+        $tab2ClassAttr = $tab2Class !== [] ? ' class="' . implode(' ', $tab2Class) . '"' : '';
+        ?>
+        <li<?= $tab2ClassAttr ?> data-step-tab="2">2. รูปและแบรนด์</li>
+        <li<?= $needWizardInitialStep === 3 ? ' class="need-wizard-tabs__active"' : '' ?> data-step-tab="3">3. สรุปก่อนส่ง</li>
+    </ol>
+    <ul class="need-checklist" id="needChecklist" aria-live="polite">
+        <li class="need-checklist__no" data-check="items">รายการย่อยอย่างน้อย 1 รายการ</li>
+        <li class="need-checklist__no" data-check="item-img">รูปสิ่งของอย่างน้อย 1 รูป</li>
+        <li class="need-checklist__no" data-check="fdn-img">รูปมูลนิธิ</li>
+        <li class="need-checklist__no" data-check="total">ยอดรวมตรงกับผลรวมรายการ</li>
+    </ul>
+
+    <form method="post" enctype="multipart/form-data" id="needMainForm">
         <?= drawdream_csrf_field() ?>
+        <input type="hidden" name="return_to" value="<?= htmlspecialchars($needReturnTo, ENT_QUOTES, 'UTF-8') ?>">
         <?php if ($hiddenItemId > 0): ?>
         <input type="hidden" name="item_id" value="<?= (int)$hiddenItemId ?>">
         <?php endif; ?>
+
+        <div class="need-form-step<?= $needWizardInitialStep === 1 ? ' need-form-step--active' : '' ?>" data-step="1">
         <div class="form-row">
             <div class="form-col">
 
@@ -781,7 +976,11 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                 </div>
 
             </div>
+        </div>
+        </div><!-- step 1 -->
 
+        <div class="need-form-step<?= $needWizardInitialStep === 2 ? ' need-form-step--active' : '' ?>" data-step="2">
+        <div class="form-row">
             <div class="form-col">
 
                 <div class="total-box" id="totalBox">
@@ -818,14 +1017,13 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                 <div class="foundation-need-images form-group foundation-need-images--prominent">
                     <div class="need-images-duo">
                         <div class="need-images-duo__col">
-                            <label class="need-images-duo__label">รูปสิ่งของ <span class="need-img-optional">(ไม่บังคับ · สูงสุด 3 รูป)</span></label>
+                            <label class="need-images-duo__label">รูปสิ่งของ <span class="need-img-required">(บังคับ · สูงสุด 3 รูป)</span></label>
                             <p class="need-img-lead need-img-lead--compact">สินค้า / แพ็กที่ต้องการให้ผู้บริจาคเห็น</p>
                             <div class="image-upload-box">
-                                <input type="file" name="item_image[]" id="fileInput" class="need-image-file-input" accept="image/*" multiple>
                                 <div class="upload-label" id="uploadLabel">
                                     <div class="upload-icon">📷</div>
                                     <div>เลือกรูปได้สูงสุด 3 รูป</div>
-                                    <div class="upload-hint">JPG, PNG, GIF, WEBP — ไฟล์ละไม่เกิน 5MB</div>
+                                    <div class="upload-hint">เลือกรูปใหญ่ได้ ระบบบีบอัดอัตโนมัติก่อนส่ง (ไม่เกิน <?= htmlspecialchars($needMaxUploadLabel, ENT_QUOTES, 'UTF-8') ?>)</div>
                                 </div>
                                 <div class="image-upload-toolbar">
                                     <button type="button" class="btn-need-pick-img" id="btnNeedPickImg">เลือก / เพิ่มรูป</button>
@@ -834,13 +1032,12 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                             <div id="imagePreviewList" class="upload-preview-list"></div>
                         </div>
                         <div class="need-images-duo__col need-images-duo__col--fdn">
-                            <label class="need-images-duo__label">รูปมูลนิธิ <span class="need-img-optional">(ไม่บังคับ · 1 รูป)</span></label>
+                            <label class="need-images-duo__label">รูปมูลนิธิ <span class="need-img-required">(บังคับ · 1 รูป)</span></label>
                             <p class="need-img-lead need-img-lead--compact">แยกจากรูปสิ่งของ — โลโก้ ทีมงาน หรือภาพกิจกรรม</p>
                             <div class="image-upload-box image-upload-box--compact">
-                                <input type="file" name="foundation_need_image" id="foundationNeedImageInput" class="need-image-file-input" accept="image/*">
                                 <div class="upload-label upload-label--compact" id="foundationUploadLabel">
                                     <div class="upload-icon upload-icon--sm">🏛️</div>
-                                    <div class="upload-hint">ไฟล์ละไม่เกิน 5MB</div>
+                                    <div class="upload-hint">เลือกรูปใหญ่ได้ ระบบบีบอัดอัตโนมัติก่อนส่ง (ไม่เกิน <?= htmlspecialchars($needMaxUploadLabel, ENT_QUOTES, 'UTF-8') ?>)</div>
                                 </div>
                                 <div class="image-upload-toolbar">
                                     <button type="button" class="btn-need-pick-img btn-need-pick-img--secondary" id="btnFoundationNeedImg">เลือกรูปมูลนิธิ</button>
@@ -860,6 +1057,14 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                     <input type="text" name="desired_brand" id="desiredBrandInput" value="<?= htmlspecialchars((string)($_POST['desired_brand'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="กรอกแบรนด์ที่ต้องการ">
                 </div>
 
+            </div>
+        </div>
+        </div><!-- step 2 -->
+
+        <div class="need-form-step<?= $needWizardInitialStep === 3 ? ' need-form-step--active' : '' ?>" data-step="3">
+        <div class="form-row">
+            <div class="form-col">
+
                 <div class="form-group">
                     <label>หมายเหตุ</label>
                     <textarea name="note" rows="3" placeholder="เช่น: รายละเอียดเพิ่มเติมเกี่ยวกับสิ่งของหรือการจัดส่ง"><?= htmlspecialchars($_POST['note'] ?? '') ?></textarea>
@@ -870,13 +1075,39 @@ $pageTitle = $isEditForm ? 'แก้ไขรายการสิ่งขอ�
                     <label for="urgent">ต้องการด่วน</label>
                 </div>
 
+                <div class="form-group" style="margin-top:14px;">
+                    <label>สรุปก่อนส่ง</label>
+                    <div class="need-preview-summary" id="needPreviewSummary">กรอกข้อมูลในขั้นที่ 1–2 แล้วกด «ดูตัวอย่าง»</div>
+                    <button type="button" class="btn-need-pick-img" id="btnNeedPreview" style="margin-top:10px;">ดูตัวอย่างหน้าบริจาค</button>
+                </div>
+
             </div>
         </div>
+        </div><!-- step 3 -->
 
-        <button type="submit" name="submit" class="btn-submit"><?= $isEditForm ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล' ?></button>
+        <div class="need-wizard-nav">
+            <button type="button" id="needStepPrev" style="display:none;">ย้อนกลับ</button>
+            <button type="button" class="need-step-next" id="needStepNext">ถัดไป</button>
+        </div>
+
+        <button type="submit" name="submit" class="btn-submit" id="needSubmitBtn" style="display:none;"><?= $isEditForm ? 'บันทึกการแก้ไข' : 'บันทึกข้อมูล' ?></button>
+
+        <div class="need-form-file-sink" aria-hidden="true">
+            <input type="file" name="item_image[]" id="fileInput" class="need-image-file-input" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif" multiple tabindex="-1">
+            <input type="file" name="foundation_need_image" id="foundationNeedImageInput" class="need-image-file-input" accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif" tabindex="-1">
+        </div>
     </form>
+
+    <div class="need-preview-modal" id="needPreviewModal" role="dialog" aria-modal="true" aria-labelledby="needPreviewTitle">
+        <div class="need-preview-modal__box">
+            <h3 id="needPreviewTitle" style="margin:0 0 10px;">ตัวอย่างที่ผู้บริจาคจะเห็น</h3>
+            <div id="needPreviewBody"></div>
+            <button type="button" class="btn-need-pick-img" id="needPreviewClose" style="margin-top:14px;">ปิด</button>
+        </div>
+    </div>
 </div>
 
+<script src="js/drawdream-image-compress.js?v=3"></script>
 <script>
 const goalAmount  = document.getElementById('goalAmount');
 const goalAmountDisplay = document.getElementById('goalAmountDisplay');
@@ -887,8 +1118,11 @@ const desiredBrandInput = document.getElementById('desiredBrandInput');
 const fileInput = document.getElementById('fileInput');
 const btnNeedPickImg = document.getElementById('btnNeedPickImg');
 const previewList = document.getElementById('imagePreviewList');
+const needForm = document.getElementById('needMainForm');
 const MAX_NEED_IMAGES = 3;
-const MAX_NEED_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_NEED_IMAGE_BYTES = <?= (int)$needMaxUploadBytes ?>;
+const MAX_NEED_SERVER_BYTES = <?= (int)$needServerUploadBytes ?>;
+const MAX_NEED_IMAGE_LABEL = <?= json_encode($needMaxUploadLabel, JSON_UNESCAPED_UNICODE) ?>;
 const slotCategoryEls = Array.from(document.querySelectorAll('.need-slot-category'));
 const slotItemEls = Array.from(document.querySelectorAll('.need-slot-item'));
 const slotPriceEls = Array.from(document.querySelectorAll('.need-slot-price'));
@@ -898,6 +1132,7 @@ const slotCustomEls = Array.from(document.querySelectorAll('.need-slot-custom'))
 const categoryItemsMap = <?= json_encode($categoryItems, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 /** @type {File[]} */
 let selectedFiles = [];
+let needImagePickBusy = false;
 
 function needImageSignature(file) {
     return `${file.name}|${file.size}|${file.lastModified}`;
@@ -913,7 +1148,7 @@ function defaultNeedUploadLabelHtml() {
     return `
             <div class="upload-icon">📷</div>
             <div>เลือกรูปได้สูงสุด 3 รูป</div>
-            <div class="upload-hint">รองรับ JPG, PNG, GIF, WEBP (ไฟล์ละไม่เกิน 5MB) · กด «เพิ่มรูป» เพื่อเลือกต่อโดยไม่ล้างรูปเดิม</div>`;
+            <div class="upload-hint">รองรับ JPG, PNG, GIF, WEBP — เลือกรูปใหญ่ได้ ระบบบีบอัดอัตโนมัติก่อนส่ง (ไม่เกิน ${MAX_NEED_IMAGE_LABEL})</div>`;
 }
 
 function updateNeedUploadChrome() {
@@ -945,53 +1180,105 @@ function updateNeedUploadChrome() {
 
 function addNeedFilesFromPicker(incoming) {
     const arr = Array.from(incoming || []);
-    if (!arr.length) return;
+    if (!arr.length) return Promise.resolve();
 
     const room = MAX_NEED_IMAGES - selectedFiles.length;
     if (room <= 0) {
-        alert('อัปโหลดได้สูงสุด 3 รูป\nกด «นำออก» บนรูปเพื่อลบแล้วเลือกใหม่');
+        drawdreamAlert('อัปโหลดได้สูงสุด 3 รูป\nกด «นำออก» บนรูปเพื่อลบแล้วเลือกใหม่');
         fileInput.value = '';
-        return;
+        return Promise.resolve();
     }
 
     const existing = new Set(selectedFiles.map(needImageSignature));
     const toPush = [];
     let skipped = 0;
-
-    for (const f of arr) {
-        if (toPush.length >= room) {
-            break;
-        }
-        if (!f.type.startsWith('image/')) {
-            alert('ข้ามไฟล์ที่ไม่ใช่รูป: ' + f.name);
-            skipped++;
-            continue;
-        }
-        if (f.size > MAX_NEED_IMAGE_BYTES) {
-            alert('ไฟล์เกิน 5MB: ' + f.name);
-            skipped++;
-            continue;
-        }
-        const sig = needImageSignature(f);
-        if (existing.has(sig)) {
-            skipped++;
-            continue;
-        }
-        existing.add(sig);
-        toPush.push(f);
+    let compressed = 0;
+    needImagePickBusy = true;
+    if (btnNeedPickImg) {
+        btnNeedPickImg.disabled = true;
+        btnNeedPickImg.textContent = 'กำลังบีบอัดรูป…';
     }
 
-    if (arr.length > room) {
-        alert('เลือกครั้งนี้มีมากกว่าที่เหลือ — เพิ่มได้อีกสูงสุด ' + room + ' รูป (รวมไม่เกิน 3 รูป)');
-    } else if (skipped > 0 && toPush.length === 0) {
-        alert('ไม่มีไฟล์ที่เพิ่มได้ (ซ้ำ ชนิดไฟล์ หรือเกินขนาด)');
-    }
+    const work = (async () => {
+        try {
+            for (const f of arr) {
+                if (toPush.length >= room) {
+                    break;
+                }
+                if (!drawdreamImageCompress.isImageFile(f)) {
+                    drawdreamAlert('ข้ามไฟล์ที่ไม่ใช่รูป: ' + f.name);
+                    skipped++;
+                    continue;
+                }
 
-    selectedFiles = selectedFiles.concat(toPush);
+                let fileToAdd = f;
+                if (f.size > MAX_NEED_IMAGE_BYTES) {
+                    try {
+                        const before = f.size;
+                        fileToAdd = await drawdreamImageCompress.ensureImageWithinLimit(f, MAX_NEED_IMAGE_BYTES, MAX_NEED_SERVER_BYTES);
+                        if (fileToAdd.size < before) compressed++;
+                    } catch (err) {
+                        drawdreamAlert('บีบอัดรูปไม่สำเร็จ: ' + f.name);
+                        skipped++;
+                        continue;
+                    }
+                }
+
+                const sig = needImageSignature(fileToAdd);
+                if (existing.has(sig)) {
+                    skipped++;
+                    continue;
+                }
+                existing.add(sig);
+                toPush.push(fileToAdd);
+            }
+
+            if (arr.length > room) {
+                drawdreamAlert('เลือกครั้งนี้มีมากกว่าที่เหลือ — เพิ่มได้อีกสูงสุด ' + room + ' รูป (รวมไม่เกิน 3 รูป)');
+            } else if (skipped > 0 && toPush.length === 0) {
+                drawdreamAlert('ไม่มีไฟล์ที่เพิ่มได้ (ซ้ำ ชนิดไฟล์ หรือบีบอัดไม่สำเร็จ)');
+            } else if (compressed > 0) {
+                drawdreamAlert('บีบอัดรูปอัตโนมัติ ' + compressed + ' ไฟล์ให้ไม่เกิน ' + MAX_NEED_IMAGE_LABEL);
+            }
+
+            selectedFiles = selectedFiles.concat(toPush);
+            syncNeedFileInput();
+            updateNeedUploadChrome();
+            renderPreviews();
+            if (typeof updateNeedChecklist === 'function') updateNeedChecklist();
+        } finally {
+            needImagePickBusy = false;
+            updateNeedUploadChrome();
+        }
+    })();
+
+    return work;
+}
+
+async function ensureAllNeedImagesWithinLimit() {
+    const next = [];
+    for (const f of selectedFiles) {
+        if (f.size <= MAX_NEED_IMAGE_BYTES) {
+            next.push(f);
+            continue;
+        }
+        next.push(await drawdreamImageCompress.ensureImageWithinLimit(f, MAX_NEED_IMAGE_BYTES, MAX_NEED_SERVER_BYTES));
+    }
+    selectedFiles = next;
     syncNeedFileInput();
-    updateNeedUploadChrome();
-    renderPreviews();
-    /* ห้าม fileInput.value = '' — จะล้างรายการไฟล์ก่อน submit ทำให้ item_image[] ไม่ถูกส่งขึ้นเซิร์ฟเวอร์ */
+
+    if (selectedFoundationFile) {
+        if (selectedFoundationFile.size <= MAX_NEED_IMAGE_BYTES) {
+            syncFoundationNeedFileInput();
+            return;
+        }
+        selectedFoundationFile = await drawdreamImageCompress.ensureImageWithinLimit(
+            selectedFoundationFile,
+            MAX_NEED_IMAGE_BYTES,
+            MAX_NEED_SERVER_BYTES
+        );
+        syncFoundationNeedFileInput();
+    }
 }
 
 function removeNeedFileAt(index) {
@@ -1000,6 +1287,7 @@ function removeNeedFileAt(index) {
     syncNeedFileInput();
     updateNeedUploadChrome();
     renderPreviews();
+    if (typeof updateNeedChecklist === 'function') updateNeedChecklist();
 }
 
 function updateTotal() {
@@ -1180,6 +1468,55 @@ if (btnNeedPickImg) {
 const foundationNeedImageInput = document.getElementById('foundationNeedImageInput');
 const btnFoundationNeedImg = document.getElementById('btnFoundationNeedImg');
 const foundationNeedPreview = document.getElementById('foundationNeedPreview');
+/** @type {File|null} */
+let selectedFoundationFile = null;
+
+function syncFoundationNeedFileInput() {
+    if (!foundationNeedImageInput) return;
+    const dt = new DataTransfer();
+    if (selectedFoundationFile) {
+        dt.items.add(selectedFoundationFile);
+    }
+    foundationNeedImageInput.files = dt.files;
+}
+
+function buildNeedFormData() {
+    if (!needForm) throw new Error('no form');
+    const fd = new FormData(needForm);
+    if (typeof fd.delete === 'function') {
+        fd.delete('item_image[]');
+        fd.delete('foundation_need_image');
+    }
+    selectedFiles.forEach((file) => {
+        fd.append('item_image[]', file, file.name || 'item.jpg');
+    });
+    if (selectedFoundationFile) {
+        fd.append('foundation_need_image', selectedFoundationFile, selectedFoundationFile.name || 'foundation.jpg');
+    }
+    if (!fd.has('submit')) {
+        fd.append('submit', '1');
+    }
+    return fd;
+}
+
+async function submitNeedFormViaFetch() {
+    if (!needForm) throw new Error('no form');
+    const fd = buildNeedFormData();
+    const postUrl = needForm.getAttribute('action') || window.location.href;
+    const res = await fetch(postUrl, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+    });
+    if (res.redirected) {
+        window.location.assign(res.url);
+        return;
+    }
+    const html = await res.text();
+    document.open();
+    document.write(html);
+    document.close();
+}
 
 function clearFoundationNeedPreview() {
     if (foundationNeedPreview) {
@@ -1192,21 +1529,48 @@ if (btnFoundationNeedImg && foundationNeedImageInput) {
 }
 
 if (foundationNeedImageInput) {
-    foundationNeedImageInput.addEventListener('change', function() {
+    foundationNeedImageInput.addEventListener('change', async function() {
         clearFoundationNeedPreview();
         const f = this.files && this.files[0];
         if (!f) {
+            selectedFoundationFile = null;
+            syncFoundationNeedFileInput();
             return;
         }
-        if (!f.type.startsWith('image/')) {
-            alert('กรุณาเลือกไฟล์รูปเท่านั้น');
+        if (!drawdreamImageCompress.isImageFile(f)) {
+            drawdreamAlert('กรุณาเลือกไฟล์รูปเท่านั้น');
             this.value = '';
             return;
         }
+
+        if (btnFoundationNeedImg) {
+            btnFoundationNeedImg.disabled = true;
+            btnFoundationNeedImg.textContent = 'กำลังประมวลผลรูป…';
+        }
+        let processed = f;
         if (f.size > MAX_NEED_IMAGE_BYTES) {
-            alert('รูปมูลนิธิต้องไม่เกิน 5MB');
-            this.value = '';
-            return;
+            try {
+                const before = f.size;
+                processed = await drawdreamImageCompress.ensureImageWithinLimit(f, MAX_NEED_IMAGE_BYTES, MAX_NEED_SERVER_BYTES);
+                if (processed.size < before) {
+                    drawdreamAlert('บีบอัดรูปมูลนิธิอัตโนมัติจาก ' + Math.round(before / 1024) + ' KB เป็น ' + Math.round(processed.size / 1024) + ' KB');
+                }
+            } catch (err) {
+                drawdreamAlert('บีบอัดรูปไม่สำเร็จ — ลองเลือกไฟล์อื่น');
+                this.value = '';
+                selectedFoundationFile = null;
+                syncFoundationNeedFileInput();
+                if (btnFoundationNeedImg) {
+                    btnFoundationNeedImg.disabled = false;
+                    btnFoundationNeedImg.textContent = 'เลือกรูปมูลนิธิ';
+                }
+                return;
+            }
+        }
+
+        selectedFoundationFile = processed;
+        if (processed !== f) {
+            syncFoundationNeedFileInput();
         }
         const wrap = document.createElement('div');
         wrap.className = 'upload-preview-item foundation-fdn-preview-item';
@@ -1220,31 +1584,221 @@ if (foundationNeedImageInput) {
         rm.setAttribute('aria-label', 'นำรูปมูลนิธิออก');
         rm.textContent = '×';
         rm.addEventListener('click', () => {
+            selectedFoundationFile = null;
             foundationNeedImageInput.value = '';
+            syncFoundationNeedFileInput();
             clearFoundationNeedPreview();
+            if (typeof updateNeedChecklist === 'function') updateNeedChecklist();
         });
         const reader = new FileReader();
         reader.onload = (evt) => { img.src = evt.target.result; };
-        reader.readAsDataURL(f);
+        reader.readAsDataURL(processed);
         wrap.appendChild(img);
         wrap.appendChild(rm);
         foundationNeedPreview.appendChild(wrap);
+        if (typeof updateNeedChecklist === 'function') updateNeedChecklist();
+        if (btnFoundationNeedImg) {
+            btnFoundationNeedImg.disabled = false;
+            btnFoundationNeedImg.textContent = 'เลือกรูปมูลนิธิ';
+        }
     });
 }
 
 urgentCheckbox.addEventListener('change', renderPreviews);
 
-const needForm = document.querySelector('form[method="post"][enctype="multipart/form-data"]');
-if (needForm && fileInput) {
-    needForm.addEventListener('submit', function() {
-        if (selectedFiles.length) syncNeedFileInput();
-    });
-}
-
 updateNeedUploadChrome();
 updateTotal();
 syncDesiredBrandState();
-</script>
 
+(function needFormWizard() {
+    const NEED_WIZARD_INITIAL_STEP = <?= (int)$needWizardInitialStep ?>;
+    const HAS_EXISTING_ITEM_IMGS = <?= json_encode($thumbRow && foundation_needlist_item_filenames_from_row($thumbRow) !== []) ?>;
+    const HAS_EXISTING_FDN_IMG = <?= json_encode($currentFoundationNeedImage !== '') ?>;
+    let currentStep = 1;
+    const maxStep = 3;
+    const steps = Array.from(document.querySelectorAll('.need-form-step'));
+    const tabs = Array.from(document.querySelectorAll('#needWizardTabs [data-step-tab]'));
+    const btnPrev = document.getElementById('needStepPrev');
+    const btnNext = document.getElementById('needStepNext');
+    const btnSubmit = document.getElementById('needSubmitBtn');
+    const previewSummary = document.getElementById('needPreviewSummary');
+    const previewModal = document.getElementById('needPreviewModal');
+    const previewBody = document.getElementById('needPreviewBody');
+    const btnPreview = document.getElementById('btnNeedPreview');
+    const btnPreviewClose = document.getElementById('needPreviewClose');
+
+    function countValidItems() {
+        let n = 0;
+        slotPriceEls.forEach((pEl, idx) => {
+            const qEl = slotQtyEls[idx];
+            const catEl = slotCategoryEls[idx];
+            const itemEl = slotItemEls[idx];
+            const price = parseFloat((pEl && pEl.value) || '0');
+            const qty = parseFloat((qEl && qEl.value) || '0');
+            const hasCat = catEl && catEl.value;
+            const hasItem = itemEl && itemEl.value;
+            if (hasCat && hasItem && price > 0 && qty > 0) n++;
+        });
+        return n;
+    }
+
+    function updateChecklist() {
+        const itemsOk = countValidItems() >= 1;
+        const itemImgOk = HAS_EXISTING_ITEM_IMGS || selectedFiles.length >= 1;
+        const fdnOk = HAS_EXISTING_FDN_IMG || selectedFoundationFile !== null;
+        let sum = 0;
+        slotPriceEls.forEach((pEl, idx) => {
+            const qEl = slotQtyEls[idx];
+            const price = parseFloat((pEl && pEl.value) || '0');
+            const qty = parseFloat((qEl && qEl.value) || '0');
+            if (price > 0 && qty > 0) sum += price * qty;
+        });
+        const goal = parseFloat((goalAmount && goalAmount.value) || '0');
+        const totalOk = sum > 0 && Math.abs(sum - goal) < 0.02;
+        const map = { items: itemsOk, 'item-img': itemImgOk, 'fdn-img': fdnOk, total: totalOk };
+        document.querySelectorAll('#needChecklist [data-check]').forEach((li) => {
+            const key = li.getAttribute('data-check');
+            const ok = map[key];
+            li.classList.toggle('need-checklist__ok', ok);
+            li.classList.toggle('need-checklist__no', !ok);
+        });
+        if (previewSummary) {
+            previewSummary.innerHTML = itemsOk
+                ? ('รายการ ' + countValidItems() + ' ช่อง · เป้าหมาย ' + goal.toLocaleString('th-TH', { minimumFractionDigits: 0 }) + ' บาท' + (itemImgOk && fdnOk ? ' · พร้อมส่ง' : ' · ยังขาดรูป'))
+                : 'กรอกรายการสิ่งของในขั้นที่ 1';
+        }
+    }
+
+    function showStep(n) {
+        currentStep = Math.max(1, Math.min(maxStep, n));
+        steps.forEach((el) => {
+            el.classList.toggle('need-form-step--active', parseInt(el.getAttribute('data-step') || '0', 10) === currentStep);
+        });
+        tabs.forEach((tab) => {
+            tab.classList.toggle('need-wizard-tabs__active', parseInt(tab.getAttribute('data-step-tab') || '0', 10) === currentStep);
+        });
+        if (btnPrev) btnPrev.style.display = currentStep > 1 ? '' : 'none';
+        if (btnNext) btnNext.style.display = currentStep < maxStep ? '' : 'none';
+        if (btnSubmit) btnSubmit.style.display = currentStep === maxStep ? '' : 'none';
+        updateChecklist();
+    }
+
+    if (btnPrev) btnPrev.addEventListener('click', () => showStep(currentStep - 1));
+    if (btnNext) btnNext.addEventListener('click', () => showStep(currentStep + 1));
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => showStep(parseInt(tab.getAttribute('data-step-tab') || '1', 10)));
+    });
+
+    function buildPreviewHtml() {
+        const lines = [];
+        slotItemEls.forEach((itemEl, idx) => {
+            const catEl = slotCategoryEls[idx];
+            const pEl = slotPriceEls[idx];
+            const qEl = slotQtyEls[idx];
+            const customEl = slotCustomEls[idx];
+            if (!catEl || !catEl.value || !itemEl || !itemEl.value) return;
+            let name = itemEl.value === '__other__' && customEl ? customEl.value : itemEl.value;
+            const price = parseFloat((pEl && pEl.value) || '0');
+            const qty = parseFloat((qEl && qEl.value) || '0');
+            if (price > 0 && qty > 0) {
+                lines.push('<li>' + name + ' — ' + qty + ' ชิ้น × ' + price.toLocaleString('th-TH') + ' บาท</li>');
+            }
+        });
+        return '<p><strong>รายการที่ผู้บริจาคจะเลือกได้:</strong></p><ul>' + (lines.length ? lines.join('') : '<li>ยังไม่มีรายการครบ</li>') + '</ul>';
+    }
+
+    if (btnPreview) {
+        btnPreview.addEventListener('click', () => {
+            if (previewBody) previewBody.innerHTML = buildPreviewHtml();
+            if (previewModal) previewModal.classList.add('need-preview-modal--open');
+        });
+    }
+    if (btnPreviewClose && previewModal) {
+        btnPreviewClose.addEventListener('click', () => previewModal.classList.remove('need-preview-modal--open'));
+        previewModal.addEventListener('click', (e) => {
+            if (e.target === previewModal) previewModal.classList.remove('need-preview-modal--open');
+        });
+    }
+
+    slotPriceEls.forEach((el) => el.addEventListener('input', updateChecklist));
+    slotQtyEls.forEach((el) => el.addEventListener('input', updateChecklist));
+    slotCategoryEls.forEach((el) => el.addEventListener('change', updateChecklist));
+    slotItemEls.forEach((el) => el.addEventListener('change', updateChecklist));
+    if (foundationNeedImageInput) foundationNeedImageInput.addEventListener('change', updateChecklist);
+
+    if (needForm) {
+        needForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const itemsOk = countValidItems() >= 1;
+            const itemImgOk = HAS_EXISTING_ITEM_IMGS || selectedFiles.length >= 1;
+            const fdnOk = HAS_EXISTING_FDN_IMG || selectedFoundationFile !== null;
+            if (!itemsOk || !itemImgOk || !fdnOk) {
+                const missing = [];
+                if (!itemsOk) missing.push('รายการสิ่งของ');
+                if (!itemImgOk) missing.push('รูปสิ่งของ');
+                if (!fdnOk) missing.push('รูปมูลนิธิ');
+                drawdreamAlert('ยังส่งไม่ได้ — กรุณาเพิ่ม: ' + missing.join(', '));
+                if (!itemsOk) showStep(1);
+                else if (!itemImgOk || !fdnOk) showStep(2);
+                return;
+            }
+
+            if (needImagePickBusy) {
+                drawdreamAlert('กำลังบีบอัดรูปอยู่ — รอสักครู่แล้วกดส่งอีกครั้ง');
+                return;
+            }
+
+            if (allowAnyBrandCheckbox && desiredBrandInput) {
+                if (!allowAnyBrandCheckbox.checked && desiredBrandInput.value.trim() === '') {
+                    drawdreamAlert('กรุณากรอกแบรนด์ที่ต้องการ หรือเลือกว่ายอมรับแบรนด์ไหนก็ได้');
+                    showStep(2);
+                    desiredBrandInput.focus();
+                    return;
+                }
+            }
+
+            const submitBtn = btnSubmit;
+            const prevLabel = submitBtn ? submitBtn.textContent : '';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'กำลังส่ง…';
+            }
+
+            try {
+                const needsCompress = selectedFiles.some((f) => f.size > MAX_NEED_IMAGE_BYTES)
+                    || (selectedFoundationFile && selectedFoundationFile.size > MAX_NEED_IMAGE_BYTES);
+                if (needsCompress) {
+                    if (submitBtn) submitBtn.textContent = 'กำลังบีบอัดรูปก่อนส่ง…';
+                    await ensureAllNeedImagesWithinLimit();
+                }
+
+                await submitNeedFormViaFetch();
+            } catch (err) {
+                drawdreamAlert('ส่งข้อมูลไม่สำเร็จ — ลองใหม่อีกครั้ง (รูปของคุณไม่ได้ใหญ่เกิน ขนาด ' + Math.round((selectedFoundationFile ? selectedFoundationFile.size : 0) / 1024) + ' KB)');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = prevLabel || 'ส่งรายการ';
+                }
+            }
+        });
+    }
+
+    window.updateNeedChecklist = updateChecklist;
+    showStep(NEED_WIZARD_INITIAL_STEP);
+    if (NEED_WIZARD_INITIAL_STEP === 2 && desiredBrandInput) {
+        window.setTimeout(function () {
+            desiredBrandInput.focus();
+        }, 120);
+    }
+    const errBanner = document.getElementById('needFormError');
+    if (errBanner && errBanner.scrollIntoView) {
+        errBanner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+})();
+</script>
+<?php require_once __DIR__ . '/includes/vendor_assets.php'; ?>
+<script src="js/drawdream-swal.js?v=1"></script>
+<?php echo drawdream_sweetalert2_js_tag('', true); ?>
 </body>
 </html>

@@ -6,8 +6,24 @@
 (function (global) {
   'use strict';
 
-  var DB_URL =
+  var DB_URL_CDN =
     'https://cdn.jsdelivr.net/gh/earthchie/jquery.Thailand.js@master/jquery.Thailand.js/database/raw_database/raw_database.json';
+  var DB_URL_LOCAL = 'vendor/thai_address/raw_database.json';
+
+  function fetchAddressDb(localUrl) {
+    var local = localUrl || DB_URL_LOCAL;
+    return fetch(local)
+      .then(function (r) {
+        if (!r.ok) throw new Error('local fail');
+        return r.json();
+      })
+      .catch(function () {
+        return fetch(DB_URL_CDN).then(function (r) {
+          if (!r.ok) throw new Error('cdn fail');
+          return r.json();
+        });
+      });
+  }
 
   function sortThai(arr) {
     return arr.slice().sort(function (a, b) {
@@ -56,6 +72,10 @@
 
     var index = null;
     var hiddenFull = opts.hiddenFull ? document.querySelector(opts.hiddenFull) : null;
+
+    [provinceEl, amphoeEl, tambonEl, zipEl].forEach(function (el) {
+      el.removeAttribute('disabled');
+    });
 
     function syncHidden() {
       if (!hiddenFull) return;
@@ -136,11 +156,7 @@
       syncHidden();
     });
 
-    fetch(DB_URL)
-      .then(function (r) {
-        if (!r.ok) throw new Error('load fail');
-        return r.json();
-      })
+    fetchAddressDb(opts.dbUrl)
       .then(function (rows) {
         index = buildIndex(rows);
         var provinces = sortThai(Array.from(index.keys()));
@@ -151,10 +167,6 @@
           }),
           '— จังหวัด —'
         );
-
-        [provinceEl, amphoeEl, tambonEl, zipEl].forEach(function (el) {
-          el.removeAttribute('disabled');
-        });
 
         if (opts.initial && opts.initial.province) {
           var ini = opts.initial;
@@ -185,5 +197,5 @@
       });
   }
 
-  global.ThaiAddressSelect = { mount: mount, DB_URL: DB_URL };
+  global.ThaiAddressSelect = { mount: mount, DB_URL: DB_URL_CDN, DB_URL_LOCAL: DB_URL_LOCAL };
 })(typeof window !== 'undefined' ? window : this);

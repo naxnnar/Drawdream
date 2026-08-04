@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // foundation_project_view.php — มูลนิธิดูรายละเอียดโครงการ (อ่านอย่างเดียว) ข้อมูลที่กรอกครบเหมือนหน้าเสนอโครงการ
 
 // สรุปสั้น: ไฟล์นี้จัดการงานมูลนิธิส่วน project view
@@ -44,22 +44,10 @@ if (!$p) {
 }
 
 /** @return array{label:string,class:string} */
-function foundation_project_view_status_meta(string $status): array
+function foundation_project_view_status_meta(array $row): array
 {
-    $map = [
-        'pending' => ['label' => 'รอดำเนินการ', 'class' => 'st-pending'],
-        'approved' => ['label' => 'กำลังระดมทุน', 'class' => 'st-approved'],
-        'completed' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
-        'done' => ['label' => 'โครงการสำเร็จแล้ว', 'class' => 'st-completed'],
-        'purchasing' => ['label' => 'กำลังจัดซื้อ', 'class' => 'st-purchasing'],
-        'rejected' => ['label' => 'ไม่ผ่านการอนุมัติ', 'class' => 'st-rejected'],
-    ];
-    $k = strtolower(trim($status));
-
-    return $map[$k] ?? ['label' => $status !== '' ? $status : '—', 'class' => 'st-pending'];
+    return drawdream_foundation_project_workflow_pill($row);
 }
-
-$statusMeta = foundation_project_view_status_meta((string)($p['project_status'] ?? 'pending'));
 $remark = '';
 if (($p['project_status'] ?? '') === 'rejected') {
     $stmtR = $conn->prepare(
@@ -74,8 +62,10 @@ $goal = !empty($p['goal_amount']) ? (float)$p['goal_amount'] : 0.0;
 $raised = (float)($p['current_donate'] ?? 0);
 $progress = ($goal > 0) ? min(100, ($raised / $goal) * 100) : 0.0;
 $remainingToGoal = ($goal > 0) ? max(0.0, $goal - $raised) : 0.0;
+$goalMet = drawdream_project_goal_met($raised, $goal);
+$serviceChargeDue = drawdream_project_service_charge_due_from_row($p);
 
-if ($goal > 0 && $raised >= $goal - 1e-6) {
+if ($serviceChargeDue) {
     drawdream_project_sync_service_charge_for_project($conn, $projectId);
     $stRefresh = $conn->prepare(
         'SELECT service_charge, service_charge_paid_at FROM foundation_project WHERE project_id = ? LIMIT 1'
@@ -91,19 +81,16 @@ if ($goal > 0 && $raised >= $goal - 1e-6) {
     }
 }
 $serviceChargeItem = (float)($p['service_charge'] ?? 0);
-if ($serviceChargeItem <= 0 && $goal > 0 && $raised >= $goal - 1e-6) {
+if ($serviceChargeItem <= 0 && $serviceChargeDue) {
     $serviceChargeItem = drawdream_needlist_compute_service_charge($raised);
 }
-$goalMet = drawdream_project_goal_met($raised, $goal);
 $serviceChargePaid = !empty($p['service_charge_paid_at']);
 $serviceChargePayAmount = (int) round($serviceChargeItem);
-$showServiceChargeBlock = $goalMet && ($serviceChargeItem > 0 || $serviceChargePaid);
-$canPayServiceCharge = $goalMet && !$serviceChargePaid && $serviceChargeItem > 0 && $serviceChargePayAmount >= 20;
-$waitingAdminAfterScPaid = $goalMet && $serviceChargePaid && !in_array(
-    strtolower(trim((string)($p['project_status'] ?? ''))),
-    ['purchasing', 'done', 'completed'],
-    true
-);
+$adminEscrowReleased = drawdream_foundation_project_admin_escrow_released($p);
+$statusMeta = foundation_project_view_status_meta($p);
+$showServiceChargeBlock = $serviceChargeDue && ($serviceChargeItem > 0 || $serviceChargePaid);
+$canPayServiceCharge = $serviceChargeDue && !$serviceChargePaid && $serviceChargeItem > 0 && $serviceChargePayAmount >= 20;
+$waitingAdminAfterScPaid = $serviceChargeDue && $serviceChargePaid && !$adminEscrowReleased;
 $serviceChargePctLabel = (int) round(drawdream_needlist_service_charge_rate() * 100);
 $scFlash = '';
 if (isset($_GET['sc_paid'])) {
@@ -113,7 +100,7 @@ if (isset($_GET['sc_paid'])) {
     $scFlash = match ($scErr) {
         'min' => 'ยอดค่าบริการต่ำกว่าขั้นต่ำการชำระ (20 บาท) — ติดต่อแอดมิน',
         'no_amount' => 'ยังไม่มียอดค่าบริการให้ชำระ',
-        'not_ready' => 'ชำระค่าบริการได้เมื่อผู้บริจาคบริจาคครบเป้าหมายแล้วเท่านั้น',
+        'not_ready' => 'ชำระค่าบริการได้เมื่อโครงการครบเป้าหมายหรือปิดรับบริจาคตามวันที่แล้วเท่านั้น',
         default => 'ไม่สามารถเริ่มชำระค่าบริการได้ กรุณาลองใหม่',
     };
 }
@@ -144,7 +131,8 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>รายละเอียดโครงการ — <?= $pageTitle ?></title>
     <link rel="stylesheet" href="css/navbar.css">
-    <link rel="stylesheet" href="css/project.css?v=41">
+    <link rel="stylesheet" href="css/project.css?v=46">
+    <link rel="stylesheet" href="css/foundation_manage.css?v=1">
     <style>
         .fnv-sc-section { margin: 20px 0 0; padding: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
         .fnv-sc-section__title { margin: 0 0 8px; font-size: 1.1rem; font-weight: 700; color: #0f172a; }
@@ -161,12 +149,12 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
         .fnv-delivery__sc-flash--err { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     </style>
 </head>
-<body class="foundation-project-view-page">
+<body class="foundation-project-view-page foundation-manage-page">
 
 <?php include 'navbar.php'; ?>
 
 <div class="foundation-project-view-wrap">
-    <a href="project.php?view=foundation" class="foundation-project-view-back">← กลับไปรายการโครงการ</a>
+    <a href="foundation_projects_directory.php" class="foundation-project-view-back" data-foundation-back>← กลับ</a>
 
     <article class="foundation-project-view-panel">
     <header class="foundation-project-view-hero">
@@ -194,10 +182,12 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
             <span>เป้าหมาย <?= number_format($goal, 0) ?> บาท (<?= (int)round($progress) ?>%)</span>
         </div>
         <?php if ($goal > 0): ?>
-            <?php if ($remainingToGoal > 0): ?>
+            <?php if ($remainingToGoal > 0 && !$serviceChargeDue): ?>
                 <p class="foundation-project-view-remaining">เหลืออีก <?= number_format($remainingToGoal, 0) ?> บาทจะครบเป้าหมาย</p>
-            <?php else: ?>
+            <?php elseif ($goalMet): ?>
                 <p class="foundation-project-view-remaining foundation-project-view-remaining--done">ครบเป้าหมายตามยอดที่ตั้งไว้แล้ว</p>
+            <?php elseif ($serviceChargeDue): ?>
+                <p class="foundation-project-view-remaining foundation-project-view-remaining--done">ปิดรับบริจาคตามวันที่แล้ว</p>
             <?php endif; ?>
         <?php endif; ?>
         <div class="foundation-progress-bar foundation-progress-bar--view">
@@ -214,7 +204,8 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
         <?php endif; ?>
         <h2 id="fpv-sc-title" class="fnv-sc-section__title">💳 ค่าบริการระบบ (<?= $serviceChargePctLabel ?>%)</h2>
         <p class="fnv-sc-section__lead">
-            ชำระหลังจากผู้บริจาคบริจาคครบยอดเป้าหมายโครงการแล้ว
+            ชำระหลังโครงการครบเป้าหมายหรือปิดรับบริจาคตามวันที่แล้ว
+            — คิด <?= $serviceChargePctLabel ?>% จากยอดบริจาคที่ได้รับจริง
             — แอดมินจะยืนยันโอนเงิน escrow ให้หลังมูลนิธิชำระค่าบริการเรียบร้อย
         </p>
         <div class="fnv-delivery__fee" style="margin:0;">
@@ -233,7 +224,7 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
                 <span><?= number_format($serviceChargeItem, 2) ?> บาท</span>
             </div>
             <?php if ($serviceChargePaid): ?>
-            <p class="fnv-delivery__fee-paid">✅ ชำระค่าบริการระบบแล้ว<?= $scPaidFmt !== '' ? ' — ' . htmlspecialchars($scPaidFmt, ENT_QUOTES, 'UTF-8') : '' ?> — รอแอดมินยืนยันโอนเงิน</p>
+            <p class="fnv-delivery__fee-paid">✅ ชำระค่าบริการระบบแล้ว<?= $scPaidFmt !== '' ? ' — ' . htmlspecialchars($scPaidFmt, ENT_QUOTES, 'UTF-8') : '' ?> — <?= $adminEscrowReleased ? 'รออัปเดตผลลัพธ์' : 'รอแอดมินยืนยันโอนเงิน' ?></p>
             <?php elseif ($canPayServiceCharge): ?>
             <a href="payment/project_service_charge.php?project_id=<?= (int) $projectId ?>" class="fnv-delivery__pay-btn">
                 💳 ชำระค่าบริการ <?= number_format($serviceChargeItem, 2) ?> บาท
@@ -242,6 +233,8 @@ $pageTitle = htmlspecialchars((string)($p['project_name'] ?? 'โครงกา
         </div>
         <?php if ($waitingAdminAfterScPaid): ?>
         <p class="fnv-sc-section__wait">แอดมินได้รับแจ้งแล้วว่าคุณชำระค่าบริการ — จะดำเนินการยืนยันโอนเงินให้ในลำดับถัดไป</p>
+        <?php elseif ($serviceChargePaid && $adminEscrowReleased): ?>
+        <p class="fnv-sc-section__wait">แอดมินยืนยันโอนเงินแล้ว — กรุณาอัปเดตผลลัพธ์โครงการ</p>
         <?php endif; ?>
     </section>
     <?php endif; ?>

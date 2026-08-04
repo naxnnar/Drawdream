@@ -38,25 +38,53 @@ function drawdream_escrow_ensure_target_type_enum(mysqli $conn): void
 
 function drawdream_escrow_funds_ensure_schema(mysqli $conn): void
 {
+    if (!drawdream_schema_migrations_allowed()) {
+        return;
+    }
+    static $ready = false;
+    if ($ready) {
+        return;
+    }
+
     $r = @$conn->query("SHOW TABLES LIKE 'escrow_funds'");
     if (!$r || $r->num_rows === 0) {
-        $sql = "CREATE TABLE IF NOT EXISTS `escrow_funds` (
+        drawdream_escrow_funds_bootstrap_table($conn);
+        drawdream_escrow_funds_run_migrations($conn);
+    }
+
+    $ready = true;
+}
+
+/** สร้างตาราง escrow_funds ครั้งแรก (ไม่รัน backfill บน hot path) */
+function drawdream_escrow_funds_bootstrap_table(mysqli $conn): void
+{
+    $sql = "CREATE TABLE IF NOT EXISTS `escrow_funds` (
             `escrow_id` INT NOT NULL AUTO_INCREMENT,
             `target_type` ENUM('project','need_item','need_foundation') NOT NULL DEFAULT 'project',
             `target_id` INT NOT NULL DEFAULT 0,
             `donate_id` INT NOT NULL DEFAULT 0,
-            `omise_charge_id` VARCHAR(100) NOT NULL DEFAULT '',
             `amount` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
             `status` ENUM('holding','released','refunded') NOT NULL DEFAULT 'holding',
-            `created_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
             `released_at` TIMESTAMP NULL DEFAULT NULL,
             PRIMARY KEY (`escrow_id`),
             UNIQUE KEY `uq_escrow_target` (`target_type`, `target_id`),
             KEY `idx_escrow_target_status` (`target_type`, `target_id`, `status`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
-        @$conn->query($sql);
-    }
+    @$conn->query($sql);
+}
 
+/** migration/backfill หนัก — เรียกจาก db.php boot เท่านั้น ไม่ใช่ทุก request */
+function drawdream_escrow_funds_run_migrations(mysqli $conn): void
+{
+    require_once __DIR__ . '/drawdream_schema_once.php';
+    drawdream_schema_once('escrow_funds_migrations', static function (mysqli $c): void {
+        drawdream_escrow_funds_run_migrations_inner($c);
+    }, $conn);
+}
+
+/** @internal */
+function drawdream_escrow_funds_run_migrations_inner(mysqli $conn): void
+{
     drawdream_escrow_ensure_target_type_enum($conn);
 
     if (($c = @$conn->query("SHOW COLUMNS FROM escrow_funds LIKE 'target_id'")) && $c->num_rows === 0) {
@@ -79,6 +107,12 @@ function drawdream_escrow_funds_ensure_schema(mysqli $conn): void
     }
     if (drawdream_escrow_has_column($conn, 'escrow_funds', 'project_id')) {
         @$conn->query("ALTER TABLE escrow_funds DROP COLUMN project_id");
+    }
+    if (drawdream_escrow_has_column($conn, 'escrow_funds', 'created_at')) {
+        @$conn->query('ALTER TABLE escrow_funds DROP COLUMN created_at');
+    }
+    if (drawdream_escrow_has_column($conn, 'escrow_funds', 'omise_charge_id')) {
+        @$conn->query('ALTER TABLE escrow_funds DROP COLUMN omise_charge_id');
     }
 }
 
@@ -243,8 +277,8 @@ function drawdream_escrow_upsert_summary_holding(
 
     $donateId = DRAWDREAM_ESCROW_SUMMARY_DONATE_ID;
     $ins = $conn->prepare(
-        "INSERT INTO escrow_funds (target_type, target_id, donate_id, omise_charge_id, amount, status, created_at)
-         VALUES (?, ?, ?, '', ?, 'holding', NOW())
+        "INSERT INTO escrow_funds (target_type, target_id, donate_id, amount, status)
+         VALUES (?, ?, ?, ?, 'holding')
          ON DUPLICATE KEY UPDATE
             amount = VALUES(amount),
             donate_id = VALUES(donate_id),
