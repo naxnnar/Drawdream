@@ -1,0 +1,3 @@
+# Optional: tools/test_mysql_connection.py (not used by PHP)
+mysql-connector-python>=8.0.33
+aiomysql>=0.2.0
